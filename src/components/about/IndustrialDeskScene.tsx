@@ -3,13 +3,34 @@
 import { useRef, useEffect, useState } from 'react'
 import type * as THREE from 'three'
 
+// Mobile fallback — renders about content directly (no 3D)
+function MobileAbout() {
+  return (
+    <div className="min-h-screen pt-20 pb-8" style={{ background: 'oklch(0.08 0 0)' }}>
+      <iframe
+        src="/about/content"
+        className="w-full border-0"
+        style={{ height: 'calc(100vh - 5rem)', background: 'oklch(0.1 0.005 240)' }}
+        title="About NotRealSmart Agency"
+      />
+    </div>
+  )
+}
+
 export function IndustrialDeskScene() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loaded, setLoaded] = useState(false)
   const [zoomedIn, setZoomedIn] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const zoomedRef = useRef(false)
 
   useEffect(() => {
+    const mobile = window.matchMedia('(hover: none)').matches || window.innerWidth < 768
+    setIsMobile(mobile)
+  }, [])
+
+  useEffect(() => {
+    if (isMobile) return
     const container = containerRef.current
     if (!container) return
 
@@ -245,7 +266,9 @@ export function IndustrialDeskScene() {
     let cleanup: (() => void) | undefined
     init().then((c) => { cleanup = c })
     return () => { cleanup?.() }
-  }, [])
+  }, [isMobile])
+
+  if (isMobile) return <MobileAbout />
 
   return (
     <div ref={containerRef} className="relative h-svh w-full" style={{ background: 'oklch(0.06 0 0)' }}>
