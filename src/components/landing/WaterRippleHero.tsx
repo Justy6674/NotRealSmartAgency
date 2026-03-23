@@ -235,7 +235,7 @@ export function WaterRippleHero() {
           tex.magFilter = THREE.LinearFilter
           resolve(tex)
         }
-        bgImg.src = '/hero-bg.jpg'
+        bgImg.src = '/hero-bg.png'
       })
 
       if (disposed) return
@@ -390,7 +390,7 @@ export function WaterRippleHero() {
       {isMobile && (
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: 'url(/hero-bg.jpg)', filter: 'brightness(0.4)' }}
+          style={{ backgroundImage: 'url(/hero-bg.png)', filter: 'brightness(0.4)' }}
         />
       )}
 
