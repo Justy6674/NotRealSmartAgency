@@ -282,38 +282,75 @@ export function WaterRippleHero() {
 
       {/* Content overlay */}
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
-        <Image
-          src="/Logo.png"
-          alt="NotRealSmart Agency"
-          width={600}
-          height={300}
-          className="w-[min(80vw,600px)] drop-shadow-2xl"
-          priority
-        />
-
-        <p className="mt-6 max-w-lg text-lg font-light tracking-wide"
-          style={{ color: 'oklch(0.75 0 0)' }}
+        {/* Hero title — metallic industrial typography */}
+        <h1 className="font-bold uppercase tracking-wider leading-none drop-shadow-2xl"
+          style={{
+            fontSize: 'clamp(2.5rem, 8vw, 6rem)',
+            color: 'oklch(0.7 0.02 80)',
+            textShadow: '0 2px 8px oklch(0 0 0 / 0.6), 0 0 40px oklch(0.4 0.05 60 / 0.3)',
+            backgroundImage: 'linear-gradient(180deg, oklch(0.78 0.03 75), oklch(0.5 0.02 60))',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}
         >
-          10 AI agents. Your brands. Finished marketing.
+          NotReal{' '}
+          <span
+            className="font-normal italic"
+            style={{
+              fontSize: '0.45em',
+              WebkitTextFillColor: 'oklch(0.55 0.08 55)',
+              verticalAlign: 'middle',
+            }}
+          >
+            (Artificial)
+          </span>{' '}
+          Smart
+          <br />
+          <span
+            className="font-normal italic"
+            style={{
+              fontSize: '0.45em',
+              WebkitTextFillColor: 'oklch(0.55 0.08 55)',
+            }}
+          >
+            (Intelligence)
+          </span>
+        </h1>
+
+        {/* Sub heading */}
+        <p
+          className="mt-8 text-xl font-semibold uppercase tracking-[0.2em] md:text-2xl"
+          style={{ color: 'oklch(0.72 0.1 65)' }}
+        >
+          Agentic Marketing Agency
+        </p>
+
+        <p
+          className="mt-4 max-w-xl text-base font-light leading-relaxed md:text-lg"
+          style={{ color: 'oklch(0.6 0 0)' }}
+        >
+          In the fast-changing world of AI — we aim to use tomorrow&apos;s AI to market your business or idea.
         </p>
 
         <div className="mt-10 flex gap-4">
           <Link
             href="/agency/chat"
-            className="inline-flex h-12 items-center justify-center rounded-lg px-8 text-sm font-semibold tracking-wide transition-all"
+            className="inline-flex h-12 items-center justify-center rounded-lg px-8 text-sm font-semibold uppercase tracking-widest transition-all hover:brightness-110"
             style={{
-              background: 'oklch(0.75 0.15 75)',
-              color: 'oklch(0.1 0 0)',
+              background: 'linear-gradient(135deg, oklch(0.65 0.12 65), oklch(0.5 0.08 55))',
+              color: 'oklch(0.95 0 0)',
+              boxShadow: '0 0 20px oklch(0.5 0.1 60 / 0.3)',
             }}
           >
             Enter the Agency
           </Link>
           <Link
             href="/login"
-            className="inline-flex h-12 items-center justify-center rounded-lg border px-8 text-sm font-medium tracking-wide transition-all hover:bg-white/5"
+            className="inline-flex h-12 items-center justify-center rounded-lg border px-8 text-sm font-medium uppercase tracking-widest transition-all hover:bg-white/5"
             style={{
-              borderColor: 'oklch(0.4 0 0)',
-              color: 'oklch(0.7 0 0)',
+              borderColor: 'oklch(0.35 0.05 60)',
+              color: 'oklch(0.6 0.03 70)',
             }}
           >
             Log In
