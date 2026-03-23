@@ -23,6 +23,10 @@ export function constructMetadata({
   return {
     title: fullTitle,
     description,
+    icons: {
+      icon: '/Favicon.png',
+      apple: '/Favicon.png',
+    },
     openGraph: {
       title: fullTitle,
       description,
