@@ -1,5 +1,7 @@
 import type { Brand, AgentConfig } from '@/types/database'
 import { getComplianceRules } from './compliance-rules'
+import { memorySearch } from '@/lib/ruflo/client'
+import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
 
 export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig): string {
   const sections: string[] = []
@@ -79,4 +81,66 @@ function buildBrandContext(brand: Brand): string {
   }
 
   return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Memory-enhanced prompt builder
+// ---------------------------------------------------------------------------
+
+export async function buildSystemPromptWithMemory(
+  brand: Brand,
+  agentConfig: AgentConfig,
+  latestMessage: string
+): Promise<{ prompt: string; memoryCount: number }> {
+  const basePrompt = buildSystemPrompt(brand, agentConfig)
+
+  try {
+    const namespace = getNamespace(brand.slug, agentConfig.agent_type)
+    const memories = await memorySearch(latestMessage, namespace, 10)
+
+    // Director also gets global agency memory
+    let globalMemories: typeof memories = []
+    if (agentConfig.agent_type === 'overall') {
+      globalMemories = await memorySearch(latestMessage, getGlobalNamespace(), 5)
+    }
+
+    const allMemories = [...memories, ...globalMemories]
+
+    if (allMemories.length === 0) {
+      return { prompt: basePrompt, memoryCount: 0 }
+    }
+
+    // Format memories into a prompt section
+    const memoryLines = allMemories.map((m, i) => {
+      const val = typeof m.value === 'string' ? m.value : JSON.stringify(m.value)
+      // Truncate individual memories to keep total under control
+      const truncated = val.length > 300 ? val.slice(0, 300) + '...' : val
+      return `${i + 1}. ${truncated}`
+    })
+
+    const memorySection = `## Context from Previous Sessions
+
+You have worked with this brand before. Here are relevant memories from past conversations:
+
+${memoryLines.join('\n')}
+
+Use this context to provide continuity. Reference past work where relevant. Do not repeat information the user has already provided.`
+
+    // Insert memory section between brand context and agent instructions
+    const sections = basePrompt.split('\n\n---\n\n')
+    // Insert after brand context (index 1), before agent instructions
+    if (sections.length >= 3) {
+      sections.splice(2, 0, memorySection)
+    } else {
+      sections.push(memorySection)
+    }
+
+    return {
+      prompt: sections.join('\n\n---\n\n'),
+      memoryCount: allMemories.length,
+    }
+  } catch (error) {
+    console.error('[prompt-builder] Memory retrieval failed, using base prompt:', error)
+    return { prompt: basePrompt, memoryCount: 0 }
+  }
 }

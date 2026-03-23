@@ -42,12 +42,16 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     competitor: { save_output: saveOutput, scan_website: scanWebsite },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite },
     compliance: { save_output: saveOutput, scan_website: scanWebsite },
-    martech: { save_output: saveOutput, scan_github: scanGithub },
-    // Archived agents — still functional for old conversations
-    seo: { save_output: saveOutput, word_count: wordCount },
+    // Reactivated departments
+    seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite },
     paid_ads: { save_output: saveOutput, word_count: wordCount },
     email: { save_output: saveOutput, word_count: wordCount },
     brand: { save_output: saveOutput },
+    // New departments
+    analytics: { save_output: saveOutput, scan_website: scanWebsite },
+    automation: { save_output: saveOutput, scan_github: scanGithub },
+    // Archived
+    martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 
   return (toolSets[agentType] ?? { save_output: saveOutput }) as Record<string, typeof saveOutput>

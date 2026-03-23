@@ -4,8 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import type { AgentType } from '@/types/database'
 
 const VALID_AGENT_TYPES: AgentType[] = [
-  'content', 'seo', 'paid_ads', 'strategy', 'email',
+  'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
   'growth', 'brand', 'competitor', 'website', 'compliance',
+  'analytics', 'automation',
+  // Archived
+  'martech',
 ]
 
 const CreateSchema = z.object({

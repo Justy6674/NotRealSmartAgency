@@ -5,14 +5,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  UserCircle,
-  PenLine,
-  TrendingUp,
-  Target,
-  Eye,
-  Globe,
-  ShieldCheck,
-  Plug,
   Plus,
   ChevronDown,
   ChevronRight,
@@ -23,37 +15,15 @@ import { useAgencyStore } from '@/stores/agency-store'
 import { createClient } from '@/lib/supabase/client'
 import { ACTIVE_AGENT_TYPES, AGENT_LABELS } from '@/types/database'
 import type { Brand, Conversation, AgentType } from '@/types/database'
+import { AGENT_ICONS, AGENT_COLOURS } from '@/components/agency/AgentAvatar'
 
-// ─── Agent icon map ───────────────────────────────────────────────────────────
-
-const AGENT_ICONS: Record<AgentType, React.ElementType> = {
-  overall: UserCircle,
-  content: PenLine,
-  growth: TrendingUp,
-  strategy: Target,
-  competitor: Eye,
-  website: Globe,
-  compliance: ShieldCheck,
-  martech: Plug,
-  // Archived — kept for type completeness
-  seo: Globe,
-  paid_ads: TrendingUp,
-  email: PenLine,
-  brand: Target,
-}
-
-// ─── Agent type badge colours ─────────────────────────────────────────────────
-
-const AGENT_BADGE_CLASSES: Partial<Record<AgentType, string>> = {
-  overall: 'bg-violet-500/10 text-violet-400',
-  content: 'bg-blue-500/10 text-blue-400',
-  growth: 'bg-emerald-500/10 text-emerald-400',
-  strategy: 'bg-orange-500/10 text-orange-400',
-  competitor: 'bg-rose-500/10 text-rose-400',
-  website: 'bg-sky-500/10 text-sky-400',
-  compliance: 'bg-amber-500/10 text-amber-400',
-  martech: 'bg-pink-500/10 text-pink-400',
-}
+// Badge classes derived from AGENT_COLOURS (just the bg + text parts)
+const AGENT_BADGE_CLASSES: Partial<Record<AgentType, string>> = Object.fromEntries(
+  Object.entries(AGENT_COLOURS).map(([key, val]) => [
+    key,
+    val.split(' ').slice(0, 2).join(' '), // e.g. "bg-amber-500/15 text-amber-400"
+  ])
+)
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
