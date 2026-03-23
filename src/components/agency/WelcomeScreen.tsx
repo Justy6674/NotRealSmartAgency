@@ -3,6 +3,9 @@
 import { ExternalLink } from 'lucide-react'
 import { QuickActions } from './QuickActions'
 import { ComplianceBadge } from './ComplianceBadge'
+import { AgentAvatar } from './AgentAvatar'
+import { AGENT_LABELS } from '@/types/database'
+import { useAgencyStore } from '@/stores/agency-store'
 import type { Brand } from '@/types/database'
 
 interface WelcomeScreenProps {
@@ -11,15 +14,25 @@ interface WelcomeScreenProps {
 }
 
 export function WelcomeScreen({ brand, onAction }: WelcomeScreenProps) {
+  const { activeAgentType } = useAgencyStore()
+
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-12">
-      {/* Heading */}
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          What would you like to work on?
-        </h1>
+      {/* Agent identity */}
+      <div className="flex flex-col items-center gap-3 text-center">
+        <AgentAvatar agentType={activeAgentType} size="lg" />
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {AGENT_LABELS[activeAgentType]}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {activeAgentType === 'overall'
+              ? 'I oversee all departments. How can I help?'
+              : `What would you like to work on?`}
+          </p>
+        </div>
         {!brand && (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Select a brand from the sidebar to get started.
           </p>
         )}

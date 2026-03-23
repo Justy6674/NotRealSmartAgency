@@ -2,6 +2,7 @@
 
 import { useAgencyStore } from '@/stores/agency-store'
 import { AGENT_LABELS } from '@/types/database'
+import { AgentAvatar } from './AgentAvatar'
 import { ComplianceBadge } from './ComplianceBadge'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -28,13 +29,14 @@ export function AgencyHeader() {
   }, [activeBrandId])
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+    <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
+      <AgentAvatar agentType={activeAgentType} size="sm" />
       <span className="text-sm font-medium text-foreground">
         {AGENT_LABELS[activeAgentType]}
       </span>
       {brand && (
         <>
-          <span className="text-muted-foreground">|</span>
+          <span className="text-muted-foreground/50">|</span>
           <span className="text-sm text-muted-foreground">{brand.name}</span>
           <ComplianceBadge
             ahpra={brand.compliance_flags?.ahpra}
