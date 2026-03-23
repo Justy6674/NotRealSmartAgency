@@ -401,6 +401,14 @@ export function WaterRippleHero() {
         </div>
       )}
 
+      {/* Dark radial gradient — darkest at centre for text, transparent at edges for vivid image */}
+      <div
+        className="absolute inset-0 z-[5] pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 70% 65% at 50% 50%, oklch(0.05 0 0 / 0.85) 0%, oklch(0.05 0 0 / 0.55) 50%, transparent 100%)',
+        }}
+      />
+
       {/* Content overlay */}
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
         <h1 className="flex flex-col items-center gap-2 leading-none">
@@ -411,7 +419,7 @@ export function WaterRippleHero() {
               style={{
                 fontSize: 'clamp(2.8rem, 9vw, 7rem)',
                 letterSpacing: '0.08em',
-                backgroundImage: 'linear-gradient(170deg, oklch(0.75 0.04 70) 0%, oklch(0.55 0.03 60) 35%, oklch(0.35 0.02 50) 65%, oklch(0.5 0.04 65) 100%)',
+                backgroundImage: 'linear-gradient(170deg, oklch(0.82 0.04 70) 0%, oklch(0.62 0.04 65) 30%, oklch(0.42 0.03 55) 65%, oklch(0.58 0.05 68) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -438,7 +446,7 @@ export function WaterRippleHero() {
               style={{
                 fontSize: 'clamp(2.8rem, 9vw, 7rem)',
                 letterSpacing: '0.08em',
-                backgroundImage: 'linear-gradient(170deg, oklch(0.75 0.04 70) 0%, oklch(0.55 0.03 60) 35%, oklch(0.35 0.02 50) 65%, oklch(0.5 0.04 65) 100%)',
+                backgroundImage: 'linear-gradient(170deg, oklch(0.82 0.04 70) 0%, oklch(0.62 0.04 65) 30%, oklch(0.42 0.03 55) 65%, oklch(0.58 0.05 68) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
