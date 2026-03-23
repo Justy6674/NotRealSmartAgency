@@ -1,15 +1,6 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  typescript: {
-    // base-ui/shadcn v4 has a known prerendering issue with _global-error in Next.js 16
-    // Type checking is handled by `npm run lint` separately
-    ignoreBuildErrors: false,
-  },
-  experimental: {
-    // base-ui components fail static prerendering (useContext outside providers)
-    staticGenerationRetryCount: 0,
-  },
   images: {
     remotePatterns: [
       {

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { constructMetadata } from '@/lib/seo'
 import { LoginForm } from '@/components/auth/LoginForm'

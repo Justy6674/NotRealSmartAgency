@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { OutputLibrary } from '@/components/agency/OutputLibrary'
 
 export default function OutputsPage() {
