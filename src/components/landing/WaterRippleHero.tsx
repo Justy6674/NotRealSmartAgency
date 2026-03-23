@@ -419,7 +419,7 @@ export function WaterRippleHero() {
               style={{
                 fontSize: 'clamp(2.8rem, 9vw, 7rem)',
                 letterSpacing: '0.08em',
-                backgroundImage: 'linear-gradient(170deg, oklch(0.82 0.04 70) 0%, oklch(0.62 0.04 65) 30%, oklch(0.42 0.03 55) 65%, oklch(0.58 0.05 68) 100%)',
+                backgroundImage: 'linear-gradient(170deg, oklch(0.9 0.005 250) 0%, oklch(0.7 0.008 240) 25%, oklch(0.4 0.005 240) 60%, oklch(0.65 0.008 250) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -432,7 +432,7 @@ export function WaterRippleHero() {
               className="font-light italic tracking-wide"
               style={{
                 fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
-                color: 'oklch(0.5 0.1 50)',
+                color: 'oklch(0.55 0.01 240)',
                 textShadow: '0 1px 3px oklch(0 0 0 / 0.5)',
               }}
             >
@@ -446,7 +446,7 @@ export function WaterRippleHero() {
               style={{
                 fontSize: 'clamp(2.8rem, 9vw, 7rem)',
                 letterSpacing: '0.08em',
-                backgroundImage: 'linear-gradient(170deg, oklch(0.82 0.04 70) 0%, oklch(0.62 0.04 65) 30%, oklch(0.42 0.03 55) 65%, oklch(0.58 0.05 68) 100%)',
+                backgroundImage: 'linear-gradient(170deg, oklch(0.9 0.005 250) 0%, oklch(0.7 0.008 240) 25%, oklch(0.4 0.005 240) 60%, oklch(0.65 0.008 250) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -459,7 +459,7 @@ export function WaterRippleHero() {
               className="font-light italic tracking-wide"
               style={{
                 fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
-                color: 'oklch(0.5 0.1 50)',
+                color: 'oklch(0.55 0.01 240)',
                 textShadow: '0 1px 3px oklch(0 0 0 / 0.5)',
               }}
             >
@@ -468,7 +468,7 @@ export function WaterRippleHero() {
           </div>
         </h1>
 
-        <p className="mt-8 text-xl font-semibold uppercase tracking-[0.2em] md:text-2xl" style={{ color: 'oklch(0.72 0.1 65)' }}>
+        <p className="mt-8 text-xl font-semibold uppercase tracking-[0.2em] md:text-2xl" style={{ color: 'oklch(0.7 0.01 240)' }}>
           Agentic Marketing Agency
         </p>
 
@@ -481,9 +481,9 @@ export function WaterRippleHero() {
             href="/agency/chat"
             className="inline-flex h-12 items-center justify-center rounded-lg px-8 text-sm font-semibold uppercase tracking-widest transition-all hover:brightness-110"
             style={{
-              background: 'linear-gradient(135deg, oklch(0.65 0.12 65), oklch(0.5 0.08 55))',
-              color: 'oklch(0.95 0 0)',
-              boxShadow: '0 0 20px oklch(0.5 0.1 60 / 0.3)',
+              background: 'linear-gradient(135deg, oklch(0.75 0.01 240), oklch(0.5 0.01 240))',
+              color: 'oklch(0.05 0 0)',
+              boxShadow: '0 0 20px oklch(0.5 0.01 240 / 0.3)',
             }}
           >
             Enter the Agency
@@ -491,7 +491,7 @@ export function WaterRippleHero() {
           <Link
             href="/login"
             className="inline-flex h-12 items-center justify-center rounded-lg border px-8 text-sm font-medium uppercase tracking-widest transition-all hover:bg-white/5"
-            style={{ borderColor: 'oklch(0.35 0.05 60)', color: 'oklch(0.6 0.03 70)' }}
+            style={{ borderColor: 'oklch(0.35 0.005 240)', color: 'oklch(0.6 0.01 240)' }}
           >
             Log In
           </Link>

@@ -16,7 +16,7 @@ export function LandingNav() {
         />
         <span
           className="text-sm font-bold uppercase tracking-widest"
-          style={{ color: 'oklch(0.65 0.05 65)' }}
+          style={{ color: 'oklch(0.65 0.01 240)' }}
         >
           NRS Agency
         </span>
@@ -33,8 +33,8 @@ export function LandingNav() {
           href="/agency/chat"
           className="rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-widest transition-all hover:brightness-110"
           style={{
-            background: 'linear-gradient(135deg, oklch(0.55 0.1 60), oklch(0.4 0.06 50))',
-            color: 'oklch(0.9 0 0)',
+            background: 'linear-gradient(135deg, oklch(0.7 0.01 240), oklch(0.45 0.01 240))',
+            color: 'oklch(0.05 0 0)',
           }}
         >
           Enter
