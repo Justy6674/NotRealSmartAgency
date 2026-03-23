@@ -401,100 +401,106 @@ export function WaterRippleHero() {
         </div>
       )}
 
-      {/* Dark radial gradient — darkest at centre for text, transparent at edges for vivid image */}
-      <div
-        className="absolute inset-0 z-[5] pointer-events-none"
-        style={{
-          background: 'radial-gradient(ellipse 70% 65% at 50% 50%, oklch(0.05 0 0 / 0.85) 0%, oklch(0.05 0 0 / 0.55) 50%, transparent 100%)',
-        }}
-      />
-
-      {/* Content overlay */}
+      {/* Content overlay — frosted glass panel */}
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
-        <h1 className="flex flex-col items-center gap-2 leading-none">
-          {/* Line 1: NOTREAL (Artificial) */}
-          <div className="flex items-baseline gap-3 md:gap-5">
-            <span
-              className="font-extrabold uppercase"
+        <div
+          className="rounded-2xl border px-10 py-12 md:px-16 md:py-16"
+          style={{
+            background: 'oklch(0.08 0.005 240 / 0.7)',
+            backdropFilter: 'blur(20px) saturate(1.2)',
+            WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
+            borderColor: 'oklch(0.35 0.01 240 / 0.4)',
+            boxShadow: '0 8px 32px oklch(0 0 0 / 0.5), inset 0 1px 0 oklch(0.5 0.01 240 / 0.1)',
+          }}
+        >
+          <h1 className="flex flex-col items-center gap-2 leading-none">
+            {/* Line 1: NOTREAL (Artificial) */}
+            <div className="flex items-baseline gap-3 md:gap-5">
+              <span
+                className="font-extrabold uppercase"
+                style={{
+                  fontSize: 'clamp(2.8rem, 9vw, 7rem)',
+                  letterSpacing: '0.08em',
+                  backgroundImage: 'linear-gradient(170deg, oklch(0.92 0.005 250) 0%, oklch(0.75 0.008 245) 25%, oklch(0.45 0.005 240) 65%, oklch(0.7 0.008 250) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  filter: 'drop-shadow(0 2px 0 oklch(0.15 0 0)) drop-shadow(0 4px 12px oklch(0 0 0 / 0.8))',
+                }}
+              >
+                NotReal
+              </span>
+              <span
+                className="font-light italic tracking-wide"
+                style={{
+                  fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
+                  color: 'oklch(0.6 0.01 240)',
+                  textShadow: '0 1px 4px oklch(0 0 0 / 0.6)',
+                }}
+              >
+                (Artificial)
+              </span>
+            </div>
+            {/* Line 2: SMART (Intelligence) */}
+            <div className="flex items-baseline gap-3 md:gap-5">
+              <span
+                className="font-extrabold uppercase"
+                style={{
+                  fontSize: 'clamp(2.8rem, 9vw, 7rem)',
+                  letterSpacing: '0.08em',
+                  backgroundImage: 'linear-gradient(170deg, oklch(0.92 0.005 250) 0%, oklch(0.75 0.008 245) 25%, oklch(0.45 0.005 240) 65%, oklch(0.7 0.008 250) 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  filter: 'drop-shadow(0 2px 0 oklch(0.15 0 0)) drop-shadow(0 4px 12px oklch(0 0 0 / 0.8))',
+                }}
+              >
+                Smart
+              </span>
+              <span
+                className="font-light italic tracking-wide"
+                style={{
+                  fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
+                  color: 'oklch(0.6 0.01 240)',
+                  textShadow: '0 1px 4px oklch(0 0 0 / 0.6)',
+                }}
+              >
+                (Intelligence)
+              </span>
+            </div>
+          </h1>
+
+          <div className="mt-6 h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, oklch(0.4 0.01 240 / 0.5), transparent)' }} />
+
+          <p className="mt-6 text-xl font-semibold uppercase tracking-[0.25em] md:text-2xl" style={{ color: 'oklch(0.75 0.01 245)' }}>
+            Agentic Marketing Agency
+          </p>
+
+          <p className="mt-3 max-w-lg text-sm font-light leading-relaxed md:text-base" style={{ color: 'oklch(0.55 0 0)' }}>
+            In the fast-changing world of AI — we aim to use tomorrow&apos;s AI to market your business or idea.
+          </p>
+
+          <div className="mt-8 flex justify-center gap-4">
+            <Link
+              href="/agency/chat"
+              className="inline-flex h-11 items-center justify-center rounded-lg border px-8 text-xs font-semibold uppercase tracking-widest transition-all hover:brightness-125"
               style={{
-                fontSize: 'clamp(2.8rem, 9vw, 7rem)',
-                letterSpacing: '0.08em',
-                backgroundImage: 'linear-gradient(170deg, oklch(0.9 0.005 250) 0%, oklch(0.7 0.008 240) 25%, oklch(0.4 0.005 240) 60%, oklch(0.65 0.008 250) 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                filter: 'drop-shadow(0 2px 0 oklch(0.2 0 0)) drop-shadow(0 4px 8px oklch(0 0 0 / 0.7))',
+                background: 'linear-gradient(135deg, oklch(0.8 0.005 250), oklch(0.55 0.008 240))',
+                color: 'oklch(0.08 0 0)',
+                borderColor: 'oklch(0.6 0.01 240 / 0.3)',
+                boxShadow: '0 0 15px oklch(0.6 0.01 240 / 0.2)',
               }}
             >
-              NotReal
-            </span>
-            <span
-              className="font-light italic tracking-wide"
-              style={{
-                fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
-                color: 'oklch(0.55 0.01 240)',
-                textShadow: '0 1px 3px oklch(0 0 0 / 0.5)',
-              }}
+              Enter the Agency
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex h-11 items-center justify-center rounded-lg border px-8 text-xs font-medium uppercase tracking-widest transition-all hover:bg-white/5"
+              style={{ borderColor: 'oklch(0.3 0.005 240)', color: 'oklch(0.55 0.01 240)' }}
             >
-              (Artificial)
-            </span>
+              Log In
+            </Link>
           </div>
-          {/* Line 2: SMART (Intelligence) */}
-          <div className="flex items-baseline gap-3 md:gap-5">
-            <span
-              className="font-extrabold uppercase"
-              style={{
-                fontSize: 'clamp(2.8rem, 9vw, 7rem)',
-                letterSpacing: '0.08em',
-                backgroundImage: 'linear-gradient(170deg, oklch(0.9 0.005 250) 0%, oklch(0.7 0.008 240) 25%, oklch(0.4 0.005 240) 60%, oklch(0.65 0.008 250) 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                filter: 'drop-shadow(0 2px 0 oklch(0.2 0 0)) drop-shadow(0 4px 8px oklch(0 0 0 / 0.7))',
-              }}
-            >
-              Smart
-            </span>
-            <span
-              className="font-light italic tracking-wide"
-              style={{
-                fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
-                color: 'oklch(0.55 0.01 240)',
-                textShadow: '0 1px 3px oklch(0 0 0 / 0.5)',
-              }}
-            >
-              (Intelligence)
-            </span>
-          </div>
-        </h1>
-
-        <p className="mt-8 text-xl font-semibold uppercase tracking-[0.2em] md:text-2xl" style={{ color: 'oklch(0.7 0.01 240)' }}>
-          Agentic Marketing Agency
-        </p>
-
-        <p className="mt-4 max-w-xl text-base font-light leading-relaxed md:text-lg" style={{ color: 'oklch(0.6 0 0)' }}>
-          In the fast-changing world of AI — we aim to use tomorrow&apos;s AI to market your business or idea.
-        </p>
-
-        <div className="mt-10 flex gap-4">
-          <Link
-            href="/agency/chat"
-            className="inline-flex h-12 items-center justify-center rounded-lg px-8 text-sm font-semibold uppercase tracking-widest transition-all hover:brightness-110"
-            style={{
-              background: 'linear-gradient(135deg, oklch(0.75 0.01 240), oklch(0.5 0.01 240))',
-              color: 'oklch(0.05 0 0)',
-              boxShadow: '0 0 20px oklch(0.5 0.01 240 / 0.3)',
-            }}
-          >
-            Enter the Agency
-          </Link>
-          <Link
-            href="/login"
-            className="inline-flex h-12 items-center justify-center rounded-lg border px-8 text-sm font-medium uppercase tracking-widest transition-all hover:bg-white/5"
-            style={{ borderColor: 'oklch(0.35 0.005 240)', color: 'oklch(0.6 0.01 240)' }}
-          >
-            Log In
-          </Link>
         </div>
       </div>
 
