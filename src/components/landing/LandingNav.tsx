@@ -11,7 +11,14 @@ const NAV_LINKS = [
 
 export function LandingNav() {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4">
+    <nav
+      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4"
+      style={{
+        background: 'linear-gradient(180deg, oklch(0.05 0 0 / 0.9) 0%, oklch(0.05 0 0 / 0.6) 70%, transparent 100%)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}
+    >
       <Link href="/" className="flex items-center gap-3">
         <Image
           src="/Favicon.png"
@@ -34,7 +41,7 @@ export function LandingNav() {
             key={href}
             href={href}
             className="text-xs font-medium uppercase tracking-widest transition-colors hover:text-white"
-            style={{ color: 'oklch(0.45 0 0)' }}
+            style={{ color: 'oklch(0.6 0 0)' }}
           >
             {label}
           </Link>
@@ -45,7 +52,7 @@ export function LandingNav() {
         <Link
           href="/login"
           className="text-xs font-medium uppercase tracking-widest transition-colors hover:text-white"
-          style={{ color: 'oklch(0.45 0 0)' }}
+          style={{ color: 'oklch(0.6 0 0)' }}
         >
           Log In
         </Link>
