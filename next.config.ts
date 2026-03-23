@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   experimental: {
-    // Skip static prerendering of global error page (base-ui useContext issue)
+    // base-ui components fail static prerendering (useContext outside providers)
     staticGenerationRetryCount: 0,
   },
   images: {
