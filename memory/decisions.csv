@@ -1,0 +1,10 @@
+date,decision,reasoning,expected_outcome,review_date,status
+2026-03-23,Pivot from lifecycle map to agentic marketing agency,Founder runs 8 brands and needs AI agents not a static map,Internal tool first then agency service,2026-04-22,ACTIVE
+2026-03-23,Next.js 15 not 16,Next.js 16 has .rsc file bug on Vercel deployment pipeline,Clean Vercel builds,2026-04-22,ACTIVE
+2026-03-23,Flat routes no route groups,Vercel static generation ENOENT errors with route groups,Clean builds on Vercel,2026-04-22,ACTIVE
+2026-03-23,Vercel AI Gateway not direct Anthropic,AI Gateway auto-injected on all Vercel projects,No manual API key management,2026-04-22,ACTIVE
+2026-03-23,zod/v3 for AI SDK tool schemas,zod v4 types incompatible with AI SDK tool() function,Working tool definitions,2026-04-22,ACTIVE
+2026-03-23,Water ripple hero extracted from vararoha,Exact GLSL shaders from live site via Playwright,Working water effect on homepage,2026-04-22,ACTIVE
+2026-03-23,3D About page needs GLTF model not box primitives,Box geometries look amateur — need real 3D model,Professional looking 3D scene,2026-04-22,ACTIVE
+2026-03-23,Must test locally before ANY push,Multiple failed deploys from untested 3D code,No more broken production deploys,2026-04-22,ACTIVE
+2026-03-23,Installed CloudAI-X Three.js skills (10 skills),Proper API references needed for 3D development,Better 3D code quality,2026-04-22,ACTIVE
