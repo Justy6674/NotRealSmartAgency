@@ -23,6 +23,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-AU" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/Favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/Favicon.png" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

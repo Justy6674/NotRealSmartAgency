@@ -403,17 +403,19 @@ export function WaterRippleHero() {
 
       {/* Content overlay */}
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
-        <h1 className="flex flex-col items-center gap-1 leading-none drop-shadow-2xl">
+        <h1 className="flex flex-col items-center gap-2 leading-none">
           {/* Line 1: NOTREAL (Artificial) */}
-          <div className="flex items-baseline gap-4">
+          <div className="flex items-baseline gap-3 md:gap-5">
             <span
-              className="font-bold uppercase tracking-wider"
+              className="font-extrabold uppercase"
               style={{
-                fontSize: 'clamp(3rem, 10vw, 7.5rem)',
-                backgroundImage: 'linear-gradient(180deg, oklch(0.78 0.03 75), oklch(0.5 0.02 60))',
+                fontSize: 'clamp(2.8rem, 9vw, 7rem)',
+                letterSpacing: '0.08em',
+                backgroundImage: 'linear-gradient(170deg, oklch(0.75 0.04 70) 0%, oklch(0.55 0.03 60) 35%, oklch(0.35 0.02 50) 65%, oklch(0.5 0.04 65) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                filter: 'drop-shadow(0 2px 0 oklch(0.2 0 0)) drop-shadow(0 4px 8px oklch(0 0 0 / 0.7))',
               }}
             >
               NotReal
@@ -421,23 +423,26 @@ export function WaterRippleHero() {
             <span
               className="font-light italic tracking-wide"
               style={{
-                fontSize: 'clamp(1rem, 3vw, 2.2rem)',
-                color: 'oklch(0.55 0.08 55)',
+                fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
+                color: 'oklch(0.5 0.1 50)',
+                textShadow: '0 1px 3px oklch(0 0 0 / 0.5)',
               }}
             >
               (Artificial)
             </span>
           </div>
           {/* Line 2: SMART (Intelligence) */}
-          <div className="flex items-baseline gap-4">
+          <div className="flex items-baseline gap-3 md:gap-5">
             <span
-              className="font-bold uppercase tracking-wider"
+              className="font-extrabold uppercase"
               style={{
-                fontSize: 'clamp(3rem, 10vw, 7.5rem)',
-                backgroundImage: 'linear-gradient(180deg, oklch(0.78 0.03 75), oklch(0.5 0.02 60))',
+                fontSize: 'clamp(2.8rem, 9vw, 7rem)',
+                letterSpacing: '0.08em',
+                backgroundImage: 'linear-gradient(170deg, oklch(0.75 0.04 70) 0%, oklch(0.55 0.03 60) 35%, oklch(0.35 0.02 50) 65%, oklch(0.5 0.04 65) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                filter: 'drop-shadow(0 2px 0 oklch(0.2 0 0)) drop-shadow(0 4px 8px oklch(0 0 0 / 0.7))',
               }}
             >
               Smart
@@ -445,8 +450,9 @@ export function WaterRippleHero() {
             <span
               className="font-light italic tracking-wide"
               style={{
-                fontSize: 'clamp(1rem, 3vw, 2.2rem)',
-                color: 'oklch(0.55 0.08 55)',
+                fontSize: 'clamp(0.9rem, 2.5vw, 1.8rem)',
+                color: 'oklch(0.5 0.1 50)',
+                textShadow: '0 1px 3px oklch(0 0 0 / 0.5)',
               }}
             >
               (Intelligence)
