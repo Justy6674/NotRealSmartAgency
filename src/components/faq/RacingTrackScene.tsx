@@ -9,8 +9,8 @@ const FAQ_ITEMS = [
   { q: 'What brands do you work with?', a: 'Currently managing 8 brands across health, skincare, SaaS, fragrance, and education. Built to scale to any industry.' },
   { q: 'Is the content ready to publish?', a: 'Yes. Each agent produces finished outputs — not drafts, not outlines. Copy, paste, publish.' },
   { q: 'What about healthcare compliance?', a: 'AHPRA and TGA advertising rules are built into every health brand output. The compliance agent checks everything.' },
-  { q: 'What AI model powers the agents?', a: 'Claude Sonnet 4 via Vercel AI Gateway. Each agent has a specialised system prompt with your brand context injected.' },
-  { q: 'Can I add my own brand?', a: 'Yes. Create a brand profile with tone, audience, competitors, and compliance flags. The agents adapt automatically.' },
+  { q: 'What AI powers the agents?', a: 'Claude Sonnet 4 via Vercel AI Gateway. Each agent has a specialised system prompt with your brand context.' },
+  { q: 'Can I add my own brand?', a: 'Yes. Create a brand profile with tone, audience, competitors, and compliance flags. Agents adapt automatically.' },
   { q: 'What does it cost?', a: 'Currently in private beta. Pricing coming soon.' },
 ]
 
@@ -33,178 +33,218 @@ export function RacingTrackScene() {
       const width = window.innerWidth
       const height = window.innerHeight
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
+      const renderer = new THREE.WebGLRenderer({ antialias: true })
       renderer.setSize(width, height)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-      renderer.setClearColor(0x050508, 1)
+      renderer.setClearColor(0x0a0a12, 1)
+      renderer.toneMapping = THREE.ACESFilmicToneMapping
+      renderer.toneMappingExposure = 1.2
       container.appendChild(renderer.domElement)
       renderer.domElement.style.position = 'fixed'
       renderer.domElement.style.inset = '0'
       renderer.domElement.style.zIndex = '1'
 
-      const camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 200)
+      const camera = new THREE.PerspectiveCamera(84, width / height, 0.1, 2000)
       const scene = new THREE.Scene()
-      scene.fog = new THREE.Fog(0x050508, 5, 30)
+      scene.fog = new THREE.FogExp2(0x0a0a12, 0.008)
 
-      // === Track curve ===
-      const curvePoints = [
+      // === Track curve — more dramatic with wider turns ===
+      const curve = new THREE.CatmullRomCurve3([
         new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, -10),
-        new THREE.Vector3(3, 1, -20),
-        new THREE.Vector3(0, 2, -30),
-        new THREE.Vector3(-3, 1.5, -40),
-        new THREE.Vector3(0, 0.5, -50),
-        new THREE.Vector3(2, 2, -60),
-        new THREE.Vector3(0, 1, -70),
-        new THREE.Vector3(-2, 0, -80),
-        new THREE.Vector3(0, 1, -90),
-      ]
-      const curve = new THREE.CatmullRomCurve3(curvePoints)
+        new THREE.Vector3(0, 5, -30),
+        new THREE.Vector3(20, 10, -60),
+        new THREE.Vector3(40, 5, -90),
+        new THREE.Vector3(20, 15, -130),
+        new THREE.Vector3(-10, 10, -170),
+        new THREE.Vector3(-30, 20, -210),
+        new THREE.Vector3(-10, 15, -250),
+        new THREE.Vector3(20, 10, -290),
+        new THREE.Vector3(40, 5, -330),
+        new THREE.Vector3(10, 15, -370),
+        new THREE.Vector3(-20, 10, -410),
+      ])
 
-      // === Tunnel ===
-      const tubeGeo = new THREE.TubeGeometry(curve, 200, 3, 12, false)
+      // === Tunnel (tube geometry, rendered from inside) ===
+      const tubeGeo = new THREE.TubeGeometry(curve, 300, 12, 16, false)
       const tubeMat = new THREE.MeshStandardMaterial({
-        color: 0x1a1a2e,
+        color: 0x2a2a3a,
         metalness: 0.7,
         roughness: 0.4,
         side: THREE.BackSide,
-        wireframe: false,
       })
-      const tube = new THREE.Mesh(tubeGeo, tubeMat)
-      scene.add(tube)
+      scene.add(new THREE.Mesh(tubeGeo, tubeMat))
 
-      // === Wireframe overlay for industrial look ===
-      const wireGeo = new THREE.TubeGeometry(curve, 200, 3.01, 12, false)
+      // === Wireframe grid overlay ===
+      const wireGeo = new THREE.TubeGeometry(curve, 300, 12.1, 16, false)
       const wireMat = new THREE.MeshBasicMaterial({
-        color: 0x222244,
+        color: 0x4455aa,
         wireframe: true,
         transparent: true,
-        opacity: 0.15,
+        opacity: 0.08,
         side: THREE.BackSide,
       })
       scene.add(new THREE.Mesh(wireGeo, wireMat))
 
-      // === Billboard planes at intervals ===
-      const billboards: THREE.Mesh[] = []
-      const billboardData: { t: number; mesh: THREE.Mesh }[] = []
+      // === Edge glow lines along the track ===
+      const edgeCurveL = new THREE.CatmullRomCurve3(
+        curve.getPoints(100).map(p => new THREE.Vector3(p.x - 10, p.y - 8, p.z))
+      )
+      const edgeCurveR = new THREE.CatmullRomCurve3(
+        curve.getPoints(100).map(p => new THREE.Vector3(p.x + 10, p.y - 8, p.z))
+      )
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x3366cc, transparent: true, opacity: 0.5 })
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(edgeCurveL.getPoints(200)), edgeMat))
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(edgeCurveR.getPoints(200)), edgeMat))
 
+      // === Billboard signs at intervals ===
+      const billboardTs: number[] = []
       FAQ_ITEMS.forEach((faq, i) => {
-        const t = (i + 1) / (FAQ_ITEMS.length + 1)
+        const t = (i + 0.8) / (FAQ_ITEMS.length + 1)
+        billboardTs.push(t)
+
         const pos = curve.getPointAt(t)
         const tangent = curve.getTangentAt(t)
 
-        // Create billboard canvas
+        // Canvas texture for billboard
         const canvas = document.createElement('canvas')
         canvas.width = 1024
         canvas.height = 512
         const ctx = canvas.getContext('2d')!
 
-        // Dark metallic background
-        ctx.fillStyle = '#0d0d15'
+        // Dark panel with border
+        ctx.fillStyle = '#0c0c18'
         ctx.fillRect(0, 0, 1024, 512)
-        ctx.strokeStyle = '#334'
-        ctx.lineWidth = 3
-        ctx.strokeRect(10, 10, 1004, 492)
+        ctx.strokeStyle = '#3355aa'
+        ctx.lineWidth = 4
+        ctx.strokeRect(8, 8, 1008, 496)
 
-        // Question
-        ctx.fillStyle = '#b0b8c8'
-        ctx.font = 'bold 36px system-ui, sans-serif'
-        ctx.fillText(`Q${i + 1}`, 40, 60)
+        // Question number badge
+        ctx.fillStyle = '#3366cc'
+        ctx.fillRect(30, 30, 60, 40)
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 24px system-ui'
+        ctx.fillText(`Q${i + 1}`, 40, 58)
 
-        ctx.fillStyle = '#e0e4ec'
-        ctx.font = 'bold 30px system-ui, sans-serif'
-        wrapText(ctx, faq.q, 40, 110, 940, 36)
+        // Question text
+        ctx.fillStyle = '#e0e4f0'
+        ctx.font = 'bold 32px system-ui'
+        wrapText(ctx, faq.q, 110, 60, 880, 38)
 
-        // Answer
-        ctx.fillStyle = '#667088'
-        ctx.font = '24px system-ui, sans-serif'
-        wrapText(ctx, faq.a, 40, 220, 940, 32)
+        // Divider line
+        ctx.strokeStyle = '#334488'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(30, 160)
+        ctx.lineTo(994, 160)
+        ctx.stroke()
 
-        const texture = new THREE.CanvasTexture(canvas)
-        const billboardGeo = new THREE.PlaneGeometry(4, 2)
-        const billboardMat = new THREE.MeshBasicMaterial({
-          map: texture,
-          transparent: true,
-          opacity: 0.95,
-          side: THREE.DoubleSide,
-        })
-        const billboard = new THREE.Mesh(billboardGeo, billboardMat)
+        // Answer text
+        ctx.fillStyle = '#8899bb'
+        ctx.font = '24px system-ui'
+        wrapText(ctx, faq.a, 30, 200, 960, 32)
 
-        // Position billboard on the right side of the tunnel
-        const normal = new THREE.Vector3()
-        normal.crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize()
-        billboard.position.copy(pos).add(normal.multiplyScalar(2.2))
-        billboard.lookAt(pos)
+        const tex = new THREE.CanvasTexture(canvas)
+        tex.minFilter = THREE.LinearFilter
+        const bbGeo = new THREE.PlaneGeometry(16, 8)
+        const bbMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+        const billboard = new THREE.Mesh(bbGeo, bbMat)
+
+        // Position on right wall
+        const right = new THREE.Vector3()
+        right.crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize()
+        billboard.position.copy(pos).add(right.multiplyScalar(8))
+        billboard.position.y += 3
+        billboard.lookAt(pos.clone().add(new THREE.Vector3(0, 3, 0)))
 
         scene.add(billboard)
-        billboards.push(billboard)
-        billboardData.push({ t, mesh: billboard })
       })
 
-      // === Lighting along the track ===
-      for (let i = 0; i < 15; i++) {
-        const t = i / 15
+      // === Lights along the track ===
+      scene.add(new THREE.AmbientLight(0x222233, 1))
+      for (let i = 0; i < 20; i++) {
+        const t = i / 20
         const pos = curve.getPointAt(t)
-        const light = new THREE.PointLight(0x445577, 0.6, 8)
+        const light = new THREE.PointLight(0x4466aa, 2, 40)
         light.position.copy(pos)
-        light.position.y += 2
+        light.position.y += 8
         scene.add(light)
       }
 
-      const ambient = new THREE.AmbientLight(0x222233, 0.5)
-      scene.add(ambient)
-
-      // === Particles (sparks flying past) ===
-      const sparkCount = 500
-      const sparkPositions = new Float32Array(sparkCount * 3)
+      // === Spark particles scattered through tunnel ===
+      const sparkCount = 800
+      const sparkPos = new Float32Array(sparkCount * 3)
       for (let i = 0; i < sparkCount; i++) {
         const t = Math.random()
-        const pos = curve.getPointAt(t)
-        sparkPositions[i * 3] = pos.x + (Math.random() - 0.5) * 5
-        sparkPositions[i * 3 + 1] = pos.y + (Math.random() - 0.5) * 5
-        sparkPositions[i * 3 + 2] = pos.z + (Math.random() - 0.5) * 5
+        const p = curve.getPointAt(t)
+        sparkPos[i * 3] = p.x + (Math.random() - 0.5) * 20
+        sparkPos[i * 3 + 1] = p.y + (Math.random() - 0.5) * 20
+        sparkPos[i * 3 + 2] = p.z + (Math.random() - 0.5) * 20
       }
       const sparkGeo = new THREE.BufferGeometry()
-      sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3))
-      const sparkMat = new THREE.PointsMaterial({
-        size: 0.03,
-        color: 0x6688aa,
-        transparent: true,
-        opacity: 0.5,
-        sizeAttenuation: true,
-      })
-      scene.add(new THREE.Points(sparkGeo, sparkMat))
+      sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3))
+      scene.add(new THREE.Points(sparkGeo, new THREE.PointsMaterial({
+        size: 0.15, color: 0x6688cc, transparent: true, opacity: 0.6, sizeAttenuation: true,
+      })))
 
       if (disposed) return
       setLoaded(true)
 
       // === Scroll handler ===
       const onScroll = () => {
-        const scrollHeight = document.documentElement.scrollHeight - window.innerHeight
-        scrollRef.current = Math.max(0, Math.min(1, window.scrollY / scrollHeight))
+        const scrollMax = document.documentElement.scrollHeight - window.innerHeight
+        scrollRef.current = Math.max(0, Math.min(1, window.scrollY / scrollMax))
       }
       window.addEventListener('scroll', onScroll, { passive: true })
 
-      // === Animation loop ===
-      const lookAtTarget = new THREE.Vector3()
+      // === Camera fly-through using Frenet frames (from Three.js official example) ===
+      const position = new THREE.Vector3()
+      const lookAt = new THREE.Vector3()
+      const direction = new THREE.Vector3()
+      const binormal = new THREE.Vector3()
+      const normal = new THREE.Vector3()
 
       const animate = () => {
         if (disposed) return
 
-        const t = scrollRef.current * 0.95 + 0.02 // Keep camera slightly off the edges
-        const pos = curve.getPointAt(t)
-        const lookT = Math.min(t + 0.01, 1)
-        lookAtTarget.copy(curve.getPointAt(lookT))
+        const t = Math.max(0.001, Math.min(0.999, scrollRef.current * 0.95 + 0.01))
 
-        camera.position.copy(pos)
-        camera.lookAt(lookAtTarget)
+        // Get position on curve
+        curve.getPointAt(t, position)
 
-        // Determine which FAQ is closest
+        // Get tangent for direction
+        curve.getTangentAt(t, direction)
+
+        // Use tubeGeometry Frenet frames for stable orientation
+        const segments = tubeGeo.tangents.length
+        const pickt = t * segments
+        const pick = Math.floor(pickt)
+        const pickNext = (pick + 1) % segments
+
+        // Interpolate binormal
+        binormal.subVectors(tubeGeo.binormals[pickNext], tubeGeo.binormals[pick])
+        binormal.multiplyScalar(pickt - pick).add(tubeGeo.binormals[pick])
+
+        // Normal = binormal x tangent
+        normal.copy(binormal).cross(direction)
+
+        // Offset camera slightly above centre
+        camera.position.copy(position)
+        camera.position.add(normal.clone().multiplyScalar(2))
+
+        // Look ahead on the curve
+        const lookAheadT = Math.min(t + 15 / curve.getLength(), 0.999)
+        curve.getPointAt(lookAheadT, lookAt)
+
+        // Stable orientation using matrix lookAt with normal as up
+        camera.matrix.lookAt(camera.position, lookAt, normal)
+        camera.quaternion.setFromRotationMatrix(camera.matrix)
+
+        // Determine closest FAQ
         let closest = -1
         let closestDist = Infinity
-        billboardData.forEach(({ t: bt }, i) => {
+        billboardTs.forEach((bt, i) => {
           const dist = Math.abs(t - bt)
-          if (dist < 0.05 && dist < closestDist) {
+          if (dist < 0.04 && dist < closestDist) {
             closest = i
             closestDist = dist
           }
@@ -219,11 +259,9 @@ export function RacingTrackScene() {
       // === Resize ===
       const onResize = () => {
         if (disposed) return
-        const w = window.innerWidth
-        const h = window.innerHeight
-        camera.aspect = w / h
+        camera.aspect = window.innerWidth / window.innerHeight
         camera.updateProjectionMatrix()
-        renderer.setSize(w, h)
+        renderer.setSize(window.innerWidth, window.innerHeight)
       }
       window.addEventListener('resize', onResize)
 
@@ -234,15 +272,6 @@ export function RacingTrackScene() {
         window.removeEventListener('resize', onResize)
         renderer.domElement.remove()
         renderer.dispose()
-        tubeGeo.dispose()
-        tubeMat.dispose()
-        sparkGeo.dispose()
-        sparkMat.dispose()
-        billboards.forEach((b) => {
-          (b.material as THREE.MeshBasicMaterial).map?.dispose()
-          ;(b.material as THREE.MeshBasicMaterial).dispose()
-          b.geometry.dispose()
-        })
       }
     }
 
@@ -253,7 +282,7 @@ export function RacingTrackScene() {
 
   return (
     <>
-      <div ref={containerRef} className="fixed inset-0" style={{ background: 'oklch(0.04 0 0)' }}>
+      <div ref={containerRef} className="fixed inset-0" style={{ background: 'oklch(0.05 0.005 240)' }}>
         {!loaded && (
           <div className="absolute inset-0 z-30 flex items-center justify-center">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-t-transparent" style={{ borderColor: 'oklch(0.4 0.01 240)', borderTopColor: 'transparent' }} />
@@ -261,31 +290,18 @@ export function RacingTrackScene() {
         )}
       </div>
 
-      {/* Current FAQ overlay */}
       {loaded && currentFaq >= 0 && (
         <div className="fixed bottom-24 left-1/2 z-20 -translate-x-1/2 max-w-lg px-6 text-center pointer-events-none">
-          <div
-            className="rounded-xl border px-6 py-4"
-            style={{
-              background: 'oklch(0.08 0.005 240 / 0.85)',
-              backdropFilter: 'blur(12px)',
-              borderColor: 'oklch(0.25 0.01 240)',
-            }}
-          >
-            <p className="text-sm font-semibold" style={{ color: 'oklch(0.85 0.005 240)' }}>
-              {FAQ_ITEMS[currentFaq].q}
-            </p>
-            <p className="mt-2 text-xs leading-relaxed" style={{ color: 'oklch(0.55 0 0)' }}>
-              {FAQ_ITEMS[currentFaq].a}
-            </p>
+          <div className="rounded-xl border px-6 py-4" style={{ background: 'oklch(0.08 0.005 240 / 0.85)', backdropFilter: 'blur(12px)', borderColor: 'oklch(0.25 0.01 240)' }}>
+            <p className="text-sm font-semibold" style={{ color: 'oklch(0.85 0.005 240)' }}>{FAQ_ITEMS[currentFaq].q}</p>
+            <p className="mt-2 text-xs leading-relaxed" style={{ color: 'oklch(0.55 0 0)' }}>{FAQ_ITEMS[currentFaq].a}</p>
           </div>
         </div>
       )}
 
-      {/* Scroll indicator */}
       {loaded && (
         <div className="fixed bottom-8 left-1/2 z-20 -translate-x-1/2 pointer-events-none">
-          <p className="text-[10px] uppercase tracking-widest animate-pulse" style={{ color: 'oklch(0.35 0 0)' }}>
+          <p className="text-[10px] uppercase tracking-widest animate-pulse" style={{ color: 'oklch(0.4 0 0)' }}>
             Scroll to fly through
           </p>
         </div>
@@ -294,20 +310,19 @@ export function RacingTrackScene() {
   )
 }
 
-// Helper: wrap text on canvas
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lh: number) {
   const words = text.split(' ')
   let line = ''
-  let currentY = y
+  let cy = y
   for (const word of words) {
-    const testLine = line + word + ' '
-    if (ctx.measureText(testLine).width > maxWidth && line) {
-      ctx.fillText(line.trim(), x, currentY)
+    const test = line + word + ' '
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line.trim(), x, cy)
       line = word + ' '
-      currentY += lineHeight
+      cy += lh
     } else {
-      line = testLine
+      line = test
     }
   }
-  ctx.fillText(line.trim(), x, currentY)
+  ctx.fillText(line.trim(), x, cy)
 }
