@@ -5,133 +5,120 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (default port 3000)
-npm run build        # Production build (Turbopack)
+npm run dev          # Start dev server with Turbopack (port 3000)
+npm run build        # Production build (Webpack — NOT Turbopack, due to Vercel .rsc compat)
 npm run start        # Start production server
-npm run lint         # ESLint (flat config v9, next/core-web-vitals + next/typescript)
+npm run lint         # ESLint
 ```
 
 ## What This App Is
 
-**NotRealSmart Agency** — an agentic AI marketing agency platform. Claude-style dashboard where 10 specialised AI agents produce finished marketing deliverables across 8 brands.
+**NotRealSmart Agency** — an agentic AI marketing agency platform. Internal tool for the founder's 8 brands, with plans to sell as an agency service.
 
-**This is NOT SaaS.** Internal tool for the founder's businesses first. Agency offering later if it proves out. No Stripe billing for MVP.
+**Not SaaS.** No Stripe billing for now. One authenticated user. Claude-style chat dashboard where 10 specialised AI agents produce finished marketing deliverables.
 
-**Name:** Not(Artificial) Real(Intelligence) Smart — tongue-in-cheek. The product IS the agency platform.
+**Name:** Not(Artificial) Real(Intelligence) Smart — tongue-in-cheek. The product IS the agency.
 
 **Owner:** Justin Black (NP), Black Health Intelligence Pty Ltd, ABN 23 693 026 112.
 
 ### The 8 Brands
-1. **Downscale Weight Loss** — telehealth weight loss ($45/consult), AHPRA+TGA
-2. **DownscaleDerm** — telehealth tretinoin prescribing, TGA
+1. **Downscale Weight Loss** — telehealth ($45/consult), AHPRA+TGA
+2. **DownscaleDerm** — tretinoin prescribing, TGA
 3. **TeleCheck** — Medicare telehealth eligibility SaaS
-4. **TeleScribe** — AI clinical documentation tool
+4. **TeleScribe** — AI clinical scribe
 5. **NotRealSmart** — this platform
-6. **Downscale Diary** — agentic AI health diary via messenger
-7. **Scent Sell** — second-hand fragrance marketplace
-8. **EndorseMe** — NP endorsement pathway app
+6. **Downscale Diary** — AI health diary via messenger
+7. **Scent Sell** — fragrance marketplace
+8. **EndorseMe** — NP endorsement app
 
 ### The 10 Agent Departments
 Content & Copy | SEO | Paid Ads | Strategy & Launch | Email Marketing | Partnerships & Growth | Brand Building | Competitor Intel | Website | Compliance (AHPRA/TGA)
 
 ## Architecture
 
+See `docs/ARCHITECTURE.md` for full details.
+
+### Stack
+- **Next.js 15.3.3** (NOT 16 — Vercel .rsc file bug)
+- **React 19.2+**
+- **Tailwind CSS 4** + oklch colours
+- **shadcn/ui v4** (base-ui, NOT Radix — use `render` prop, NOT `asChild`)
+- **Supabase** (auth, DB, RLS)
+- **Vercel AI SDK v6** + Vercel AI Gateway
+- **Three.js** (WebGL water ripple hero)
+- **zustand** (client state)
+
+### Route Structure (flat — no route groups)
+```
+/                      → Landing page (water ripple hero)
+/login                 → Login
+/signup                → Sign up
+/forgot-password       → Password reset
+/auth/callback         → OAuth callback
+/agency/               → Dashboard (auth guarded in layout)
+/agency/chat           → New conversation
+/agency/chat/[id]      → Existing conversation
+/agency/brands         → Brand management
+/agency/brands/[slug]  → Brand editor
+/agency/outputs        → Output library
+/api/chat              → Streaming chat (Claude via AI Gateway)
+/api/conversations     → CRUD
+/api/brands            → CRUD
+/api/outputs           → Read
+```
+
 ### How Agents Work
-Each agent = **system prompt assembly** + **tool set**, streamed via Vercel AI SDK v6's `streamText()`. No separate services, no MCP.
+Each agent = system prompt assembly + tool set, streamed via `streamText()`.
 
 ```
-User → ChatInterface (useChat) → /api/chat → prompt-builder → Vercel AI Gateway → Claude → stream back
+User → ChatInterface (useChat) → /api/chat → prompt-builder → AI Gateway → Claude → stream
                                      ↕
                               Supabase (brands, conversations, messages, outputs)
 ```
 
-**Prompt assembly** (server-side, `lib/agents/prompt-builder.ts`):
-1. Base agency rules (Australian English, markdown, deliverable formatting)
-2. Brand context from `brands` table (tone, audience, competitors, pillars)
-3. Agent instructions from `agent_configs` table
-4. Compliance layer (AHPRA/TGA) — only injected if `brand.compliance_flags.ahpra` or `.tga` is true
-
-### Route Structure
-- `(auth)/` — login, signup, forgot-password. Centred form layout.
-- `(dashboard)/` — auth guarded at layout RSC level. Wraps agency routes.
-- `(dashboard)/agency/` — the main app. Three-column: AgentSidebar | ConversationList | Chat.
-- `api/chat/` — streaming chat endpoint (POST).
-- `api/conversations/` — CRUD for conversations.
-- `api/brands/` — CRUD for brands.
-- `api/outputs/` — saved deliverables.
-
-### Three Supabase Clients (don't mix them)
-- **`lib/supabase/client.ts`** — browser. Used in AuthProvider and client components.
-- **`lib/supabase/server.ts`** — server (RSC + API routes). Reads cookies via `next/headers`.
-- **`lib/supabase/admin.ts`** — service role. Webhooks only. Never expose.
-
 ### AI SDK v6 Patterns (CRITICAL)
-This project uses AI SDK v6 (`ai@6.x`). These patterns differ from v5:
-
-- **useChat**: `import { useChat } from '@ai-sdk/react'` — NOT `ai/react`
-- **Transport**: `new DefaultChatTransport({ api, body })` — NOT `api` option directly
-- **Messages**: `UIMessage` type with `parts` array — NOT `content` string
-- **Chat API response**: `result.toUIMessageStreamResponse()` — NOT `toDataStreamResponse()`
-- **Message conversion**: `await convertToModelMessages(uiMessages)` (async)
-- **Step control**: `stopWhen: stepCountIs(5)` — NOT `maxSteps: 5`
-- **Usage tracking**: `usage.inputTokens` / `usage.outputTokens`
-- **Tool definitions**: Use `inputSchema` — NOT `parameters`
-- **Zod for tools**: Must use `zod/v3` (v4 types incompatible with `tool()`)
-- **AI Gateway**: `gateway('anthropic/claude-sonnet-4')` from `@ai-sdk/gateway` — NOT direct Anthropic
+- `import { useChat } from '@ai-sdk/react'`
+- Transport: `new DefaultChatTransport({ api, body })`
+- Messages: `UIMessage` with `parts[]`, not `content` string
+- Response: `result.toUIMessageStreamResponse()`
+- Messages conversion: `await convertToModelMessages(messages)`
+- Steps: `stopWhen: stepCountIs(5)`, not `maxSteps`
+- Usage: `usage.inputTokens` / `usage.outputTokens`
+- Tool definitions: `inputSchema`, not `parameters`
+- Zod: must use `zod/v3` for tool schemas (v4 types incompatible)
+- Model: `gateway('anthropic/claude-sonnet-4')` from `@ai-sdk/gateway`
 
 ### Vercel AI Gateway
-AI Gateway is attached to all Vercel projects. `AI_GATEWAY_API_KEY` is auto-injected on deployment. For local dev, use `vercel env pull`. Never manually configure AI keys.
+Auto-injected on deployment. For local dev: `vercel env pull`. Never manually configure AI keys.
 
-### Middleware
-`src/middleware.ts` → calls `updateSession()` from `lib/supabase/middleware.ts`. Refreshes auth session on every request. Unauthenticated `/agency/*` access redirects to login.
+### Three Supabase Clients (don't mix)
+- `lib/supabase/client.ts` — browser
+- `lib/supabase/server.ts` — RSC + API routes
+- `lib/supabase/admin.ts` — service role (webhooks only)
 
-### State Management
-Zustand store at `src/stores/agency-store.ts`:
-- `activeBrandId` — currently selected brand
-- `activeAgentType` — currently selected agent department
-- `activeConversationId` — current chat thread
-- Persisted to localStorage via `zustand/persist`
+### Water Ripple Hero
+Three.js WebGL with two-pass GLSL shader pipeline extracted from vararohaperfumery.com:
+- **Simulation shader**: wave equation (delta=1.4), boundary conditions, cursor pressure injection, gradient calculation
+- **Render shader**: UV distortion (0.3), 9-point blur, specular highlights via normal mapping
+- Background loaded via canvas cover-fit
+- Mobile: static fallback (no WebGL)
 
 ## Database
 
-Supabase (Seoul, ap-northeast-2): `https://uyhtrwlotoriblicqqrl.supabase.co`
+Supabase: `https://uyhtrwlotoriblicqqrl.supabase.co`
 
-Migrations in `supabase/migrations/`:
-- `001_initial_schema.sql` — base tables (users, phases, tools, regulations, etc.)
-- `002_seed_phases.sql` — legacy phase data
-- `003_agency_schema.sql` — agency tables (brands, conversations, messages, outputs, agent_configs)
-- `004_seed_brands_and_agents.sql` — 8 brands + 10 agent configs with full system prompts
+Key tables: `brands`, `conversations`, `messages`, `outputs`, `agent_configs`, `users`, `ai_usage`
 
-**Key agency tables:** `brands`, `conversations`, `messages`, `outputs`, `agent_configs`
-**RLS on all tables** — own rows only, agent_configs public read, service role bypass for webhooks.
+RLS on all tables. Service role bypass for webhooks only.
 
 ## Critical Gotchas
 
-### shadcn/ui v4 uses base-ui, NOT Radix
-Use `render` prop for composition, NOT `asChild`:
-```tsx
-// CORRECT
-<Button render={<Link href="/foo" />}>Click me</Button>
-
-// WRONG — will not compile
-<Button asChild><Link href="/foo">Click me</Link></Button>
-```
-
-### base-ui prerendering issue
-`error.tsx` and `not-found.tsx` must NOT import base-ui components — they render outside providers. Use plain HTML elements. Handled via `experimental.staticGenerationRetryCount: 0` in next.config.ts.
-
-### CSS colours use oklch
-All theme colours in `globals.css` use oklch colour space. New colours must use oklch format.
-
-## Key Conventions
-
-- **Australian English** throughout: colour, behaviour, organisation, optimisation, analyse, licence (noun), license (verb), practise (verb), practice (noun)
-- **ABN:** 23 693 026 112. **Company:** Black Health Intelligence Pty Ltd
-- **Disclaimers required on:** AI output, compliance checks, site footer
-- **RLS on all tables** — service role bypass for webhooks only
-- **No patient data stored** — only brand profiles and marketing content
-- **AHPRA/TGA compliance** — no testimonials, no prescription drug names in consumer content, no guaranteed outcomes
-- **No Microsoft Clarity** — banned for healthcare websites
-- **AHPRA uses AI to proactively scan websites** (not complaint-driven, from Sep 2025)
-- **AI-generated content carries same legal accountability** as manual (from Sep 2025)
-- **Penalties:** $60K individual, $120K body corporate per offence
+- **Next.js 15, NOT 16** — 16 has .rsc file bug on Vercel
+- **No route groups** — flattened to avoid Vercel static generation issues
+- **`force-dynamic`** on all pages using base-ui components (prerender fails)
+- **`render` prop**, NOT `asChild` for base-ui composition
+- **oklch colours only** in globals.css
+- **Australian English** throughout
+- **error.tsx / not-found.tsx / global-error.tsx** must NOT import base-ui
+- **No Microsoft Clarity** for healthcare sites
+- **AHPRA/TGA compliance** — no testimonials, no drug names in consumer content, penalties $60K/$120K

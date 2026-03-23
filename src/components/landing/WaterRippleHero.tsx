@@ -403,26 +403,55 @@ export function WaterRippleHero() {
 
       {/* Content overlay */}
       <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 text-center">
-        <h1
-          className="font-bold uppercase tracking-wider leading-none drop-shadow-2xl"
-          style={{
-            fontSize: 'clamp(2.5rem, 8vw, 6rem)',
-            backgroundImage: 'linear-gradient(180deg, oklch(0.78 0.03 75), oklch(0.5 0.02 60))',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            textShadow: '0 2px 20px oklch(0 0 0 / 0.8)',
-          }}
-        >
-          NotReal{' '}
-          <span className="font-normal italic" style={{ fontSize: '0.45em', WebkitTextFillColor: 'oklch(0.55 0.08 55)', verticalAlign: 'middle' }}>
-            (Artificial)
-          </span>{' '}
-          Smart
-          <br />
-          <span className="font-normal italic" style={{ fontSize: '0.45em', WebkitTextFillColor: 'oklch(0.55 0.08 55)' }}>
-            (Intelligence)
-          </span>
+        <h1 className="flex flex-col items-center gap-1 leading-none drop-shadow-2xl">
+          {/* Line 1: NOTREAL (Artificial) */}
+          <div className="flex items-baseline gap-4">
+            <span
+              className="font-bold uppercase tracking-wider"
+              style={{
+                fontSize: 'clamp(3rem, 10vw, 7.5rem)',
+                backgroundImage: 'linear-gradient(180deg, oklch(0.78 0.03 75), oklch(0.5 0.02 60))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              NotReal
+            </span>
+            <span
+              className="font-light italic tracking-wide"
+              style={{
+                fontSize: 'clamp(1rem, 3vw, 2.2rem)',
+                color: 'oklch(0.55 0.08 55)',
+              }}
+            >
+              (Artificial)
+            </span>
+          </div>
+          {/* Line 2: SMART (Intelligence) */}
+          <div className="flex items-baseline gap-4">
+            <span
+              className="font-bold uppercase tracking-wider"
+              style={{
+                fontSize: 'clamp(3rem, 10vw, 7.5rem)',
+                backgroundImage: 'linear-gradient(180deg, oklch(0.78 0.03 75), oklch(0.5 0.02 60))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              Smart
+            </span>
+            <span
+              className="font-light italic tracking-wide"
+              style={{
+                fontSize: 'clamp(1rem, 3vw, 2.2rem)',
+                color: 'oklch(0.55 0.08 55)',
+              }}
+            >
+              (Intelligence)
+            </span>
+          </div>
         </h1>
 
         <p className="mt-8 text-xl font-semibold uppercase tracking-[0.2em] md:text-2xl" style={{ color: 'oklch(0.72 0.1 65)' }}>
