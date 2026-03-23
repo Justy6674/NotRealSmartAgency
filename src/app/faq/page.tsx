@@ -1,16 +1,18 @@
-export const dynamic = 'force-dynamic'
-
 import { LandingNav } from '@/components/landing/LandingNav'
-import { RacingTrackLoader } from '@/components/faq/RacingTrackLoader'
+import { TerminalFaq } from '@/components/faq/TerminalFaq'
 import { AgencyFooter } from '@/components/landing/AgencyFooter'
+
+export const metadata = {
+  title: 'FAQ | NotRealSmart Agency',
+  description:
+    'Frequently asked questions about NotRealSmart Agency — AI-powered marketing for Australian health businesses.',
+}
 
 export default function FaqPage() {
   return (
     <>
       <LandingNav />
-      <RacingTrackLoader />
-      {/* Scroll spacer — the 3D canvas is fixed, this div gives scroll room */}
-      <div style={{ minHeight: '400vh' }} />
+      <TerminalFaq />
       <AgencyFooter />
     </>
   )
