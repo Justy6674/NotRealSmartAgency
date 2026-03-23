@@ -6,6 +6,7 @@ export const SITE_CONFIG = {
   abn: '23 693 026 112',
   company: 'Black Health Intelligence Pty Ltd',
   tagline: 'Your AI Marketing Agency',
+  contactEmail: 'office@blackhealthintelligence.com',
 } as const
 
 export const DISCLAIMER = {
