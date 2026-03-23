@@ -77,9 +77,9 @@ export function LoginPageClient() {
       cvs.height = simH
       const ctx = cvs.getContext('2d')!
       const grad = ctx.createRadialGradient(simW / 2, simH / 2, 0, simW / 2, simH / 2, simW * 0.7)
-      grad.addColorStop(0, '#1a1a2e')
-      grad.addColorStop(0.5, '#0f0f1a')
-      grad.addColorStop(1, '#050508')
+      grad.addColorStop(0, '#222222')
+      grad.addColorStop(0.5, '#141414')
+      grad.addColorStop(1, '#080808')
       ctx.fillStyle = grad
       ctx.fillRect(0, 0, simW, simH)
       const bgTexture = new THREE.CanvasTexture(cvs)
@@ -223,7 +223,7 @@ void main() {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false) }
-    else router.push(redirect)
+    else { window.location.href = redirect }
   }
 
   return (
@@ -237,7 +237,7 @@ void main() {
       {/* Mobile fallback — dark gradient */}
       {isMobile && (
         <div className="absolute inset-0" style={{
-          background: 'radial-gradient(ellipse at center, oklch(0.12 0.005 240) 0%, oklch(0.06 0 0) 70%)',
+          background: 'radial-gradient(ellipse at center, oklch(0.12 0 0) 0%, oklch(0.06 0 0) 70%)',
         }} />
       )}
 
@@ -272,11 +272,11 @@ void main() {
           <div
             className="rounded-2xl border p-8"
             style={{
-              background: 'oklch(0.1 0.005 240 / 0.4)',
+              background: 'oklch(0.1 0 0 / 0.4)',
               backdropFilter: 'blur(16px) saturate(1.3)',
               WebkitBackdropFilter: 'blur(16px) saturate(1.3)',
-              borderColor: 'oklch(0.25 0.01 240 / 0.3)',
-              boxShadow: '0 8px 32px oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(0.4 0.01 240 / 0.08)',
+              borderColor: 'oklch(0.25 0 0 / 0.3)',
+              boxShadow: '0 8px 32px oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(0.4 0 0 / 0.08)',
             }}
           >
             {error && (
@@ -289,10 +289,10 @@ void main() {
 
             {/* Divider */}
             <div className="relative my-6">
-              <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, oklch(0.3 0.01 240 / 0.5), transparent)' }} />
+              <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, oklch(0.3 0 0 / 0.5), transparent)' }} />
               <span
                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-3 text-xs"
-                style={{ background: 'oklch(0.1 0.005 240 / 0.6)', color: 'oklch(0.45 0 0)' }}
+                style={{ background: 'oklch(0.1 0 0 / 0.6)', color: 'oklch(0.45 0 0)' }}
               >
                 or continue with email
               </span>
@@ -310,10 +310,10 @@ void main() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[oklch(0.5_0.01_240)]"
+                  className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[oklch(0.5_0_0)]"
                   style={{
                     background: 'oklch(0.08 0 0 / 0.6)',
-                    borderColor: 'oklch(0.2 0.005 240 / 0.4)',
+                    borderColor: 'oklch(0.2 0 0 / 0.4)',
                     color: 'oklch(0.9 0 0)',
                   }}
                 />
@@ -334,10 +334,10 @@ void main() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[oklch(0.5_0.01_240)]"
+                  className="w-full rounded-lg border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[oklch(0.5_0_0)]"
                   style={{
                     background: 'oklch(0.08 0 0 / 0.6)',
-                    borderColor: 'oklch(0.2 0.005 240 / 0.4)',
+                    borderColor: 'oklch(0.2 0 0 / 0.4)',
                     color: 'oklch(0.9 0 0)',
                   }}
                 />
@@ -348,9 +348,9 @@ void main() {
                 disabled={loading}
                 className="w-full rounded-lg py-2.5 text-xs font-semibold uppercase tracking-widest transition-all hover:brightness-125 disabled:opacity-50"
                 style={{
-                  background: 'linear-gradient(135deg, oklch(0.75 0.005 250), oklch(0.5 0.008 240))',
+                  background: 'linear-gradient(135deg, oklch(0.75 0 0), oklch(0.45 0 0))',
                   color: 'oklch(0.06 0 0)',
-                  boxShadow: '0 0 20px oklch(0.5 0.01 240 / 0.2)',
+                  boxShadow: '0 0 20px oklch(0.5 0 0 / 0.2)',
                 }}
               >
                 {loading ? 'Signing in...' : 'Enter the Agency'}
@@ -359,7 +359,7 @@ void main() {
 
             <p className="mt-5 text-center text-xs" style={{ color: 'oklch(0.4 0 0)' }}>
               Don&apos;t have an account?{' '}
-              <Link href="/signup" className="font-medium transition-colors hover:text-white" style={{ color: 'oklch(0.6 0.01 240)' }}>
+              <Link href="/signup" className="font-medium transition-colors hover:text-white" style={{ color: 'oklch(0.6 0 0)' }}>
                 Sign up
               </Link>
             </p>
