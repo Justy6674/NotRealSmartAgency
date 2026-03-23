@@ -1,19 +1,5 @@
-import { LandingNav } from '@/components/landing/LandingNav'
-import { TerminalFaq } from '@/components/faq/TerminalFaq'
-import { AgencyFooter } from '@/components/landing/AgencyFooter'
-
-export const metadata = {
-  title: 'FAQ | NotRealSmart Agency',
-  description:
-    'Frequently asked questions about NotRealSmart Agency — AI-powered marketing for Australian health businesses.',
-}
+import { redirect } from 'next/navigation'
 
 export default function FaqPage() {
-  return (
-    <>
-      <LandingNav />
-      <TerminalFaq />
-      <AgencyFooter />
-    </>
-  )
+  redirect('/about#faq')
 }
