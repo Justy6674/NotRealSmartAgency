@@ -1,6 +1,8 @@
 import { constructMetadata } from '@/lib/seo'
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata = constructMetadata({
   title: 'Reset Password',
   description: 'Reset your NotRealSmart Agency password',
