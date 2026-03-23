@@ -1,8 +1,7 @@
 export const dynamic = 'force-dynamic'
 
-import Link from 'next/link'
 import { constructMetadata } from '@/lib/seo'
-import { LoginForm } from '@/components/auth/LoginForm'
+import { LoginPageClient } from '@/components/auth/LoginPageClient'
 
 export const metadata = constructMetadata({
   title: 'Log In',
@@ -11,16 +10,5 @@ export const metadata = constructMetadata({
 })
 
 export default function LoginPage() {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-muted/30 px-4">
-      <div className="mb-8">
-        <Link href="/" className="text-2xl font-bold tracking-tight">
-          NRS<span className="text-muted-foreground font-normal text-lg ml-1.5">Agency</span>
-        </Link>
-      </div>
-      <div className="w-full max-w-md">
-        <LoginForm />
-      </div>
-    </div>
-  )
+  return <LoginPageClient />
 }
