@@ -1,15 +1,24 @@
+import { redirect } from 'next/navigation'
 import Image from 'next/image'
+import { createClient } from '@/lib/supabase/server'
 import { AgentSidebar } from '@/components/agency/AgentSidebar'
 import { BrandSelector } from '@/components/agency/BrandSelector'
 import { ConversationList } from '@/components/agency/ConversationList'
 
-export default function AgencyLayout({
+export default async function AgencyLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login?redirect=/agency')
+  }
+
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden">
       {/* Top bar with brand selector */}
       <div className="flex h-14 items-center gap-3 border-b px-4">
         <Image
