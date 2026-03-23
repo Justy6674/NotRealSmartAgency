@@ -406,11 +406,11 @@ export function WaterRippleHero() {
         <div
           className="rounded-2xl border px-10 py-12 md:px-16 md:py-16"
           style={{
-            background: 'oklch(0.08 0.005 240 / 0.7)',
-            backdropFilter: 'blur(20px) saturate(1.2)',
-            WebkitBackdropFilter: 'blur(20px) saturate(1.2)',
-            borderColor: 'oklch(0.35 0.01 240 / 0.4)',
-            boxShadow: '0 8px 32px oklch(0 0 0 / 0.5), inset 0 1px 0 oklch(0.5 0.01 240 / 0.1)',
+            background: 'oklch(0.08 0.005 240 / 0.35)',
+            backdropFilter: 'blur(12px) saturate(1.3)',
+            WebkitBackdropFilter: 'blur(12px) saturate(1.3)',
+            borderColor: 'oklch(0.35 0.01 240 / 0.25)',
+            boxShadow: '0 8px 32px oklch(0 0 0 / 0.3), inset 0 1px 0 oklch(0.5 0.01 240 / 0.08)',
           }}
         >
           <h1 className="flex flex-col items-center gap-2 leading-none">
