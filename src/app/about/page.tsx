@@ -1,10 +1,15 @@
-import { ComingSoon } from '@/components/landing/ComingSoon'
+export const dynamic = 'force-dynamic'
+
+import { LandingNav } from '@/components/landing/LandingNav'
+import { IndustrialDeskLoader } from '@/components/about/IndustrialDeskLoader'
+import { AgencyFooter } from '@/components/landing/AgencyFooter'
 
 export default function AboutPage() {
   return (
-    <ComingSoon
-      title="About"
-      description="10 departments. One agency. Zero headcount. Learn how our AI agents work."
-    />
+    <>
+      <LandingNav />
+      <IndustrialDeskLoader />
+      <AgencyFooter />
+    </>
   )
 }
