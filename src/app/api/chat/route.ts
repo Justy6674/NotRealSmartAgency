@@ -7,8 +7,10 @@ import { getToolsForAgent } from '@/lib/agents/tools'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
 
 const VALID_AGENT_TYPES: AgentType[] = [
-  'content', 'seo', 'paid_ads', 'strategy', 'email',
-  'growth', 'brand', 'competitor', 'website', 'compliance',
+  'overall', 'content', 'growth', 'strategy', 'competitor',
+  'website', 'compliance', 'martech',
+  // Archived but still valid for loading old conversations
+  'seo', 'paid_ads', 'email', 'brand',
 ]
 
 const RequestSchema = z.object({

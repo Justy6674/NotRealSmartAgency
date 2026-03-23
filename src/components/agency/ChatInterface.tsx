@@ -7,10 +7,9 @@ import { useAgencyStore } from '@/stores/agency-store'
 import { createClient } from '@/lib/supabase/client'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
-import { ComplianceBadge } from './ComplianceBadge'
-import { AGENT_LABELS } from '@/types/database'
 import type { Brand } from '@/types/database'
 import { Bot } from 'lucide-react'
+import { WelcomeScreen } from './WelcomeScreen'
 
 interface ChatInterfaceProps {
   conversationId?: string
@@ -107,53 +106,12 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     }
   }
 
-  if (!activeBrandId) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-muted-foreground">
-        <p>Select a brand to get started</p>
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Header bar */}
-      <div className="flex items-center gap-3 border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Bot className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium">
-            {AGENT_LABELS[activeAgentType]}
-          </span>
-        </div>
-        {brand && (
-          <ComplianceBadge
-            ahpra={brand.compliance_flags?.ahpra}
-            tga={brand.compliance_flags?.tga}
-          />
-        )}
-        {brand && (
-          <span className="ml-auto text-xs text-muted-foreground">
-            {brand.name}
-          </span>
-        )}
-      </div>
-
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4">
         {messages.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Bot className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <p className="font-medium">
-                {AGENT_LABELS[activeAgentType]} Agent
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Ready to work on {brand?.name ?? 'your brand'}. What would you like to create?
-              </p>
-            </div>
-          </div>
+          <WelcomeScreen brand={brand} onAction={handleSend} />
         ) : (
           <div className="mx-auto max-w-3xl divide-y divide-border/50">
             {messages.map((message) => (

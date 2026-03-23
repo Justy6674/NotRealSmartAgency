@@ -14,6 +14,10 @@ interface ToolCallDisplayProps {
 const TOOL_LABELS: Record<string, string> = {
   save_output: 'Saving to output library',
   word_count: 'Checking word/character count',
+  scan_website: 'Scanning website...',
+  scan_github: 'Scanning GitHub repository...',
+  scan_social: 'Checking social media presence...',
+  marketing_audit: 'Running marketing audit...',
 }
 
 export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDisplayProps) {

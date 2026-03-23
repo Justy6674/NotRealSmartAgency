@@ -222,16 +222,25 @@ export const AU_STATES = [
 // ─── Agency Platform Types ───
 
 export type AgentType =
+  | 'overall'
   | 'content'
-  | 'seo'
-  | 'paid_ads'
-  | 'strategy'
-  | 'email'
   | 'growth'
-  | 'brand'
+  | 'strategy'
   | 'competitor'
   | 'website'
   | 'compliance'
+  | 'martech'
+  // Archived (kept for backward compat with existing conversations)
+  | 'seo'
+  | 'paid_ads'
+  | 'email'
+  | 'brand'
+
+/** Active agent types shown in the UI */
+export const ACTIVE_AGENT_TYPES: AgentType[] = [
+  'overall', 'content', 'growth', 'strategy',
+  'competitor', 'website', 'compliance', 'martech',
+]
 
 export type OutputType =
   | 'social_post'
@@ -279,6 +288,8 @@ export interface Brand {
   tagline: string | null
   description: string | null
   website_url: string | null
+  github_url: string | null
+  social_urls: Record<string, string>
   niche: string
   tone_of_voice: ToneOfVoice
   target_audience: TargetAudience
@@ -288,6 +299,18 @@ export interface Brand {
   content_pillars: string[]
   extra_context: string | null
   is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectScan {
+  id: string
+  brand_id: string
+  user_id: string
+  scan_type: 'github' | 'website' | 'social' | 'marketing_audit'
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  results: Record<string, unknown>
+  error: string | null
   created_at: string
   updated_at: string
 }
@@ -345,16 +368,19 @@ export interface AgentConfig {
 }
 
 export const AGENT_LABELS: Record<AgentType, string> = {
-  content: 'Content & Copy',
+  overall: 'Account Manager',
+  content: 'Write My Content',
+  growth: 'Get More Customers',
+  strategy: 'Plan My Brand',
+  competitor: 'Research Competitors',
+  website: 'Improve My Website',
+  compliance: 'Check Compliance',
+  martech: 'Connect My Tools',
+  // Archived — kept for display in old conversations
   seo: 'SEO',
   paid_ads: 'Paid Ads',
-  strategy: 'Strategy & Launch',
   email: 'Email Marketing',
-  growth: 'Partnerships & Growth',
   brand: 'Brand Building',
-  competitor: 'Competitor Intel',
-  website: 'Website',
-  compliance: 'Compliance',
 }
 
 export const OUTPUT_LABELS: Record<OutputType, string> = {

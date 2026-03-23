@@ -61,8 +61,24 @@ Review decisions older than 30 days when the user asks about past choices.
 ### The 8 Brands
 Downscale Weight Loss (AHPRA+TGA) | DownscaleDerm (TGA) | TeleCheck | TeleScribe | NotRealSmart | Downscale Diary | Scent Sell | EndorseMe (AHPRA)
 
-### The 10 Agent Departments
-Content & Copy | SEO | Paid Ads | Strategy & Launch | Email Marketing | Partnerships & Growth | Brand Building | Competitor Intel | Website | Compliance (AHPRA/TGA)
+### Agency Structure — 7 Departments + Account Manager
+
+**Branded House model** — everything is NRS Agency. Users talk to it like ChatGPT/Claude.
+
+| What users see | Agent type (code) | What it does |
+|---------------|-------------------|-------------|
+| **Account Manager** | `overall` | First contact. Scans business, runs audits, routes to teams |
+| **Write My Content** | `content` | Social posts, blogs, landing pages, video scripts |
+| **Get More Customers** | `growth` | SEO, ads, email, referrals, PR (merged from seo+paid_ads+email+growth) |
+| **Plan My Brand** | `strategy` | Brand voice, positioning, GTM, campaigns (merged from strategy+brand) |
+| **Research Competitors** | `competitor` | SWOT, gap analysis, pricing analysis |
+| **Improve My Website** | `website` | Copy, UX, conversion optimisation |
+| **Check Compliance** | `compliance` | AHPRA/TGA advertising checks |
+| **Connect My Tools** | `martech` | Stack advice, automation, integrations |
+
+**Archived agent types** (is_active=false, conversations preserved): `seo`, `paid_ads`, `email`, `brand`
+
+**Scanning tools** (available to Account Manager): `scan_website`, `scan_github`, `scan_social`, `marketing_audit`
 
 ## Architecture
 
@@ -96,8 +112,8 @@ See `docs/ARCHITECTURE.md` for full system diagrams, shader pipeline, styling gu
 ### Route Structure (flat — no route groups)
 ```
 /                        → Landing page (water ripple hero — WORKS)
-/about                   → 3D desk scene (IN PROGRESS — needs GLTF + local testing)
-/faq                     → Racing track (IN PROGRESS — needs camera fix + local testing)
+/about                   → "The Machine" GSAP scroll-animated process flow
+/faq                     → Terminal-styled FAQ (CSS animations, no WebGL)
 /pricing                 → Coming Soon
 /login, /signup          → Auth pages
 /forgot-password         → Password reset
