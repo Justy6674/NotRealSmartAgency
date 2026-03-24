@@ -16,19 +16,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'www.notrealsmart.com.au',
-      },
-      {
-        protocol: 'https',
-        hostname: 'www.telecheck.com.au',
-      },
-      {
-        protocol: 'https',
-        hostname: 'www.telescribe.com.au',
-      },
-      {
-        protocol: 'https',
-        hostname: 'www.downscale.com.au',
+        hostname: '**.com.au',
       },
     ],
   },
