@@ -222,24 +222,28 @@ export const AU_STATES = [
 // ─── Agency Platform Types ───
 
 export type AgentType =
-  | 'overall'
-  | 'content'
-  | 'growth'
-  | 'strategy'
-  | 'competitor'
-  | 'website'
-  | 'compliance'
-  | 'martech'
+  | 'overall'     // NRS Director
+  | 'content'     // Content & Copy
+  | 'seo'         // SEO & GEO
+  | 'paid_ads'    // Paid Ads
+  | 'strategy'    // Strategy & Launch
+  | 'email'       // Email Marketing
+  | 'growth'      // Growth & Partnerships
+  | 'brand'       // Brand
+  | 'competitor'  // Market Intelligence
+  | 'website'     // Web & CRO
+  | 'compliance'  // Compliance
+  | 'analytics'   // Analytics & Reporting
+  | 'automation'  // Automation & AI
   // Archived (kept for backward compat with existing conversations)
-  | 'seo'
-  | 'paid_ads'
-  | 'email'
-  | 'brand'
+  | 'martech'
 
-/** Active agent types shown in the UI */
+/** Active agent types shown in the UI — 1 Director + 12 departments */
 export const ACTIVE_AGENT_TYPES: AgentType[] = [
-  'overall', 'content', 'growth', 'strategy',
-  'competitor', 'website', 'compliance', 'martech',
+  'overall',
+  'content', 'seo', 'paid_ads', 'strategy', 'email', 'growth',
+  'brand', 'competitor', 'website', 'compliance',
+  'analytics', 'automation',
 ]
 
 export type OutputType =
@@ -253,6 +257,8 @@ export type OutputType =
   | 'competitor_report'
   | 'compliance_check'
   | 'brand_guide'
+  | 'analytics_report'
+  | 'automation_workflow'
   | 'other'
 
 export interface ToneOfVoice {
@@ -368,19 +374,21 @@ export interface AgentConfig {
 }
 
 export const AGENT_LABELS: Record<AgentType, string> = {
-  overall: 'Account Manager',
-  content: 'Write My Content',
-  growth: 'Get More Customers',
-  strategy: 'Plan My Brand',
-  competitor: 'Research Competitors',
-  website: 'Improve My Website',
-  compliance: 'Check Compliance',
-  martech: 'Connect My Tools',
-  // Archived — kept for display in old conversations
-  seo: 'SEO',
+  overall: 'NRS Director',
+  content: 'Content & Copy',
+  seo: 'SEO & GEO',
   paid_ads: 'Paid Ads',
+  strategy: 'Strategy & Launch',
   email: 'Email Marketing',
-  brand: 'Brand Building',
+  growth: 'Growth & Partnerships',
+  brand: 'Brand',
+  competitor: 'Market Intelligence',
+  website: 'Web & CRO',
+  compliance: 'Compliance',
+  analytics: 'Analytics & Reporting',
+  automation: 'Automation & AI',
+  // Archived
+  martech: 'Connect My Tools',
 }
 
 export const OUTPUT_LABELS: Record<OutputType, string> = {
@@ -391,8 +399,10 @@ export const OUTPUT_LABELS: Record<OutputType, string> = {
   landing_page: 'Landing Page',
   seo_audit: 'SEO Audit',
   strategy_doc: 'Strategy Document',
-  competitor_report: 'Competitor Report',
+  competitor_report: 'Market Intelligence Report',
   compliance_check: 'Compliance Check',
   brand_guide: 'Brand Guide',
+  analytics_report: 'Analytics Report',
+  automation_workflow: 'Automation Workflow',
   other: 'Other',
 }
