@@ -61,7 +61,10 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
       .select('*')
       .eq('is_active', true)
       .order('name')
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[sidebar] Brand fetch error:', error.message, error.code)
+        }
         if (data) {
           setBrands(data as Brand[])
           if (!activeBrandId && data.length > 0) {

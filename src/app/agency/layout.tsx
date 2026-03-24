@@ -4,6 +4,7 @@ import { ProjectSidebar } from '@/components/agency/ProjectSidebar'
 import { AgencyHeader } from '@/components/agency/AgencyHeader'
 import { MobileSidebar } from '@/components/agency/MobileSidebar'
 import { SidebarToggle } from '@/components/agency/SidebarToggle'
+import { UserMenu } from '@/components/agency/UserMenu'
 
 export default async function AgencyLayout({
   children,
@@ -40,6 +41,9 @@ export default async function AgencyLayout({
           {/* Active agent / brand / compliance — client component */}
           <div className="flex-1">
             <AgencyHeader />
+          </div>
+          <div className="shrink-0 px-2">
+            <UserMenu />
           </div>
         </header>
 
