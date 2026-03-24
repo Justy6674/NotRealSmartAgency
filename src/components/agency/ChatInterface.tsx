@@ -20,6 +20,11 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const [brand, setBrandLocal] = useState<Brand | null>(null)
   const { activeBrandId, activeAgentType, setConversation, setBrand, setAgent } = useAgencyStore()
 
+  // Refs so the transport always reads the LATEST values at send time
+  // (not stale values captured when useMemo ran)
+  const brandIdRef = useRef(activeBrandId)
+  brandIdRef.current = activeBrandId
+
   // Fetch active brand for compliance badge and context display
   useEffect(() => {
     setBrandLocal(null) // Clear immediately to prevent stale brand showing
@@ -40,12 +45,12 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       new DefaultChatTransport({
         api: '/api/chat',
         body: {
-          brandId: activeBrandId,
+          get brandId() { return brandIdRef.current },
           agentType: activeAgentType,
           conversationId: conversationId ?? null,
         },
       }),
-    [activeBrandId, activeAgentType, conversationId]
+    [activeAgentType, conversationId]
   )
 
   const { messages, sendMessage, setMessages, status, error, regenerate, clearError } = useChat({
@@ -173,10 +178,12 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
           </p>
           <button
             onClick={() => {
+              if (!activeBrandId) return
               clearError()
               regenerate()
             }}
-            className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+            disabled={!activeBrandId}
+            className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40"
           >
             Retry
           </button>
