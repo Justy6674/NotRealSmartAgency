@@ -22,6 +22,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
 
   // Fetch active brand for compliance badge and context display
   useEffect(() => {
+    setBrand(null) // Clear immediately to prevent stale brand showing
     if (!activeBrandId) return
     const supabase = createClient()
     supabase
