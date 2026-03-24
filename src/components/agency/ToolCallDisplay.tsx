@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { Wrench, ChevronDown, Loader2, Check } from 'lucide-react'
+import { Wrench, ChevronDown, ChevronRight, Loader2, Check, Users } from 'lucide-react'
 import { AGENT_LABELS } from '@/types/database'
 import type { AgentType } from '@/types/database'
 
@@ -29,6 +29,7 @@ const TOOL_LABELS: Record<string, string> = {
   create_task: 'Creating task',
   request_approval: 'Requesting approval',
   handoff_to_department: 'Handing off to department',
+  convene_meeting: 'Convening department meeting',
   web_search: 'Searching the web',
 }
 
@@ -184,6 +185,113 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
   )
 }
 
+// ─── Meeting Progress ───────────────────────────────────────────────────────
+
+function MeetingProgress({ departments, isComplete }: { departments: string[]; isComplete: boolean }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (isComplete) return
+    const interval = setInterval(() => setElapsed((e) => e + 1), 1000)
+    return () => clearInterval(interval)
+  }, [isComplete])
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+        <Users className="h-3 w-3" />
+        <span>{departments.length} departments in meeting</span>
+      </div>
+      {departments.map((dept) => {
+        const name = AGENT_LABELS[dept as AgentType] ?? dept
+        return (
+          <div key={dept} className="flex items-center gap-2 text-xs">
+            {isComplete ? (
+              <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+            ) : (
+              <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
+            )}
+            <span className={isComplete ? 'text-muted-foreground' : 'text-foreground'}>
+              {name} {isComplete ? '— done' : '— working...'}
+            </span>
+          </div>
+        )
+      })}
+      {isComplete && (
+        <div className="flex items-center gap-2 text-xs mt-1">
+          <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+          <span className="text-emerald-500 font-medium">Meeting complete</span>
+        </div>
+      )}
+      {!isComplete && elapsed > 0 && (
+        <div className="mt-1 text-[10px] text-muted-foreground/60">
+          {elapsed}s elapsed — departments working in parallel
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Meeting Result Renderer ────────────────────────────────────────────────
+
+interface MeetingResult {
+  type: 'meeting'
+  brief: string
+  departments: { department: string; name: string; result: string; costCents: number }[]
+  errors?: { department: string; error: string }[]
+  totalCostCents: number
+}
+
+function MeetingResultDisplay({ data }: { data: MeetingResult }) {
+  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set())
+
+  const toggleDept = (dept: string) => {
+    setExpandedDepts(prev => {
+      const next = new Set(prev)
+      if (next.has(dept)) next.delete(dept)
+      else next.add(dept)
+      return next
+    })
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="text-xs text-muted-foreground">
+        {data.departments.length} departments contributed
+      </div>
+      {data.departments.map(({ department, name, result }) => (
+        <div key={department} className="rounded-md border border-border overflow-hidden">
+          <button
+            onClick={() => toggleDept(department)}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-muted/50 transition-colors"
+          >
+            {expandedDepts.has(department) ? (
+              <ChevronDown className="h-3 w-3 shrink-0" />
+            ) : (
+              <ChevronRight className="h-3 w-3 shrink-0" />
+            )}
+            <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+            <span>{name}</span>
+            <span className="ml-auto text-[10px] text-muted-foreground font-normal">
+              {result.length.toLocaleString()} chars
+            </span>
+          </button>
+          {expandedDepts.has(department) && (
+            <div className="border-t px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground max-h-96 overflow-y-auto">
+              {result}
+            </div>
+          )}
+        </div>
+      ))}
+      {data.errors && data.errors.length > 0 && (
+        <div className="text-xs text-red-400">
+          {data.errors.map(e => `${e.department}: ${e.error}`).join('; ')}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Tool Label Logic ───────────────────────────────────────────────────────
 
 function getToolLabel(toolName: string, args: Record<string, unknown>, state: string): string {
@@ -193,6 +301,15 @@ function getToolLabel(toolName: string, args: Record<string, unknown>, state: st
     return state === 'result'
       ? `${deptName} completed`
       : `${deptName} is working...`
+  }
+
+  // For meeting, show department count
+  if (toolName === 'convene_meeting' && args?.departments) {
+    const depts = args.departments as string[]
+    const count = depts.length
+    return state === 'result'
+      ? `Meeting complete — ${count} departments`
+      : `Meeting in progress — ${count} departments...`
   }
 
   // For handoff, show target department
@@ -225,6 +342,7 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
   const [expanded, setExpanded] = useState(false)
   const label = getToolLabel(toolName, args, state)
   const isDelegation = toolName === 'delegate_to_agent'
+  const isMeeting = toolName === 'convene_meeting'
   const isComplete = state === 'result'
 
   return (
@@ -257,6 +375,22 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
           />
         </div>
       )}
+
+      {/* Meeting progress — shows all departments working simultaneously */}
+      {isMeeting ? (
+        !isComplete ? (
+          <div className="px-3 pb-2">
+            <MeetingProgress
+              departments={(args?.departments as string[]) ?? []}
+              isComplete={isComplete}
+            />
+          </div>
+        ) : result && (result as MeetingResult).type === 'meeting' ? (
+          <div className="px-3 pb-2">
+            <MeetingResultDisplay data={result as MeetingResult} />
+          </div>
+        ) : null
+      ) : null}
 
       {expanded && (
         <div className="border-t px-3 py-2 space-y-2">

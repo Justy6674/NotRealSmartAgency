@@ -7,8 +7,9 @@ import { createClient } from '@/lib/supabase/server'
 import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
 import { getToolsForAgent } from '@/lib/agents/tools'
 import { createDelegateTool } from '@/lib/agents/tools/delegate'
+import { createConveneMeetingTool } from '@/lib/agents/tools/convene-meeting'
 import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
-import { classifyIntent, buildRoutingContext } from '@/lib/agents/intent-router'
+import { classifyIntent, classifyIntentMulti, buildRoutingContext } from '@/lib/agents/intent-router'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
@@ -121,9 +122,11 @@ export async function POST(request: Request) {
   )
 
   // Intent classification + auto-routing for Director
+  let multiRouting: ReturnType<typeof classifyIntentMulti> | undefined
   if (agentType === 'overall' && lastMessageText) {
     const routing = classifyIntent(lastMessageText)
-    const routingContext = buildRoutingContext(routing)
+    multiRouting = classifyIntentMulti(lastMessageText)
+    const routingContext = buildRoutingContext(routing, multiRouting)
     if (routingContext) {
       systemPrompt = systemPrompt + '\n\n---\n\n' + routingContext
     }
@@ -138,16 +141,17 @@ export async function POST(request: Request) {
     agentRegistryId: registry?.id ?? null,
   })
 
-  // Add delegation tool for Director only
+  // Add delegation + meeting tools for Director only
   if (agentType === 'overall') {
-    const delegateTool = createDelegateTool({
+    const delegateCtx = {
       supabase,
       userId: user.id,
       brandId,
       brand: brand as Brand,
       conversationId: conversationId ?? null,
-    })
-    ;(tools as Record<string, unknown>).delegate_to_agent = delegateTool
+    }
+    ;(tools as Record<string, unknown>).delegate_to_agent = createDelegateTool(delegateCtx)
+    ;(tools as Record<string, unknown>).convene_meeting = createConveneMeetingTool(delegateCtx)
   }
 
   const typedBrand = brand as Brand

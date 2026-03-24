@@ -1,8 +1,9 @@
+import { AGENT_LABELS } from '@/types/database'
 import type { AgentType } from '@/types/database'
 
 /**
  * Intent classification — analyses user message and determines
- * which department should handle it. Returns routing hints that
+ * which department(s) should handle it. Returns routing hints that
  * get injected into the Director's context.
  *
  * This is rule-based (fast, free) with LLM fallback for ambiguous cases.
@@ -14,6 +15,12 @@ interface RoutingResult {
   reason: string
   shouldScanUrl: string | null
   shouldDelegate: boolean
+}
+
+export interface MultiRoutingResult {
+  departments: { agent: AgentType; reason: string }[]
+  shouldConvene: boolean // true if 2+ departments matched
+  shouldScanUrl: string | null
 }
 
 // URL detection
@@ -64,12 +71,52 @@ const INTENT_PATTERNS: { pattern: RegExp; agent: AgentType; reason: string }[] =
   { pattern: /\b(pric|pricing|subscription|billing|cost|revenue model|freemium|tier)\b/i, agent: 'strategy', reason: 'Pricing analysis requested' },
 ]
 
+// ─── Compound patterns: common multi-department briefs ────────────────────────
+
+const COMPOUND_PATTERNS: { pattern: RegExp; departments: AgentType[]; reason: string }[] = [
+  {
+    pattern: /\b(comprehensive|full|complete)\b.*\b(marketing audit|audit|review)\b/i,
+    departments: ['competitor', 'seo', 'content', 'analytics', 'compliance'],
+    reason: 'Comprehensive marketing audit — requires multiple department perspectives',
+  },
+  {
+    pattern: /\b(launch|go-to-market|gtm)\b.*\b(plan|strategy|campaign)\b/i,
+    departments: ['strategy', 'content', 'seo', 'paid_ads', 'email'],
+    reason: 'Launch plan — requires coordinated strategy across channels',
+  },
+  {
+    pattern: /\b(campaign)\b.*\b(plan|create|build|design)\b/i,
+    departments: ['strategy', 'content', 'paid_ads', 'email'],
+    reason: 'Campaign creation — requires multi-channel coordination',
+  },
+  {
+    pattern: /\b(rebrand|brand refresh|brand overhaul)\b/i,
+    departments: ['brand', 'content', 'website', 'compliance'],
+    reason: 'Brand refresh — requires coordinated brand + content + web update',
+  },
+  {
+    pattern: /\b(growth|scale|grow)\b.*\b(strategy|plan)\b/i,
+    departments: ['strategy', 'growth', 'seo', 'paid_ads'],
+    reason: 'Growth strategy — requires multi-channel planning',
+  },
+  {
+    pattern: /\b(content strategy|content plan|content calendar)\b/i,
+    departments: ['content', 'seo', 'email', 'brand'],
+    reason: 'Content strategy — requires SEO alignment + brand voice + distribution',
+  },
+  {
+    pattern: /\b(competitor|competitive)\b.*\b(analysis|audit|review|report)\b/i,
+    departments: ['competitor', 'seo', 'analytics'],
+    reason: 'Competitive analysis — requires market intel + SEO + data',
+  },
+]
+
+// ─── Single-match classifier (backward compat) ───────────────────────────────
+
 export function classifyIntent(message: string): RoutingResult {
-  // Extract URLs
   const urls = message.match(URL_REGEX)
   const firstUrl = urls?.[0] ?? null
 
-  // Check patterns (first match wins — patterns ordered by specificity)
   for (const { pattern, agent, reason } of INTENT_PATTERNS) {
     if (pattern.test(message)) {
       return {
@@ -82,7 +129,6 @@ export function classifyIntent(message: string): RoutingResult {
     }
   }
 
-  // If message contains a URL but no clear intent, suggest website analysis
   if (firstUrl) {
     return {
       suggestedAgent: 'website',
@@ -93,7 +139,6 @@ export function classifyIntent(message: string): RoutingResult {
     }
   }
 
-  // No clear match — let Director handle it
   return {
     suggestedAgent: 'overall',
     confidence: 'low',
@@ -103,11 +148,71 @@ export function classifyIntent(message: string): RoutingResult {
   }
 }
 
-/**
- * Build routing context to inject into the Director's prompt.
- * This tells the Director what to do WITHOUT it having to figure it out.
- */
-export function buildRoutingContext(routing: RoutingResult): string {
+// ─── Multi-match classifier (meeting detection) ──────────────────────────────
+
+export function classifyIntentMulti(message: string): MultiRoutingResult {
+  const urls = message.match(URL_REGEX)
+  const firstUrl = urls?.[0] ?? null
+
+  // Check compound patterns first (these are explicit meeting triggers)
+  for (const { pattern, departments, reason } of COMPOUND_PATTERNS) {
+    if (pattern.test(message)) {
+      return {
+        departments: departments.map(agent => ({ agent, reason })),
+        shouldConvene: true,
+        shouldScanUrl: firstUrl,
+      }
+    }
+  }
+
+  // Fall back to collecting all individual pattern matches
+  const matched = new Map<AgentType, string>()
+  for (const { pattern, agent, reason } of INTENT_PATTERNS) {
+    if (pattern.test(message) && !matched.has(agent)) {
+      matched.set(agent, reason)
+    }
+  }
+
+  const departments = Array.from(matched.entries()).map(([agent, reason]) => ({ agent, reason }))
+
+  return {
+    departments,
+    shouldConvene: departments.length >= 2,
+    shouldScanUrl: firstUrl,
+  }
+}
+
+// ─── Routing context builder ─────────────────────────────────────────────────
+
+export function buildRoutingContext(routing: RoutingResult, multiRouting?: MultiRoutingResult): string {
+  // Meeting mode — multiple departments needed
+  if (multiRouting?.shouldConvene) {
+    const deptNames = multiRouting.departments
+      .map(d => AGENT_LABELS[d.agent] ?? d.agent)
+      .join(', ')
+    const deptTypes = multiRouting.departments
+      .map(d => d.agent)
+      .join(', ')
+
+    const lines = [
+      `\n## AUTO-ROUTING ADVISORY — MEETING REQUIRED`,
+      `This request requires input from **multiple departments**.`,
+      `Matched departments: **${deptNames}**`,
+      `Reason: ${multiRouting.departments[0]?.reason ?? 'Multi-department brief detected'}`,
+    ]
+
+    if (multiRouting.shouldScanUrl) {
+      lines.push(`\nURL detected: **${multiRouting.shouldScanUrl}** — include this URL in the meeting brief for departments to analyse.`)
+    }
+
+    lines.push(`\n**ACTION REQUIRED:** Use **convene_meeting** to chair a meeting with departments: [${deptTypes}].`)
+    lines.push(`Write a clear, detailed brief for the meeting. After receiving department results, write a Director's Summary that synthesises key recommendations, highlights any conflicts, and provides a prioritised action plan.`)
+    lines.push(`Do NOT attempt the specialist work yourself. Do NOT use delegate_to_agent for this — use convene_meeting.`)
+
+    return lines.join('\n')
+  }
+
+  // Single department mode
   if (!routing.shouldDelegate) return ''
 
   const lines = [
