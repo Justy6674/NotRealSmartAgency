@@ -106,6 +106,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   }, [messages])
 
   const handleSend = async (text: string) => {
+    if (!activeBrandId) return // Guard: don't send without a brand
     await sendMessage({ text })
 
     // Create conversation on first message if no conversationId
@@ -151,6 +152,15 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
           </div>
         )}
       </div>
+
+      {/* No brand selected */}
+      {!activeBrandId && (
+        <div className="mx-4 mb-2 flex items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
+          <p className="text-sm text-amber-400">
+            Select a brand from the sidebar to start chatting.
+          </p>
+        </div>
+      )}
 
       {/* Error recovery */}
       {error && (
