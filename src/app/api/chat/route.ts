@@ -6,6 +6,7 @@ import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
 import { getToolsForAgent } from '@/lib/agents/tools'
 import { createDelegateTool } from '@/lib/agents/tools/delegate'
 import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
+import { classifyIntent, buildRoutingContext } from '@/lib/agents/intent-router'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
@@ -110,12 +111,21 @@ export async function POST(request: Request) {
     .single()
 
   // Build system prompt with memory + user context
-  const { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
+  let { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
     brand as Brand,
     agentConfig as AgentConfig,
     lastMessageText,
     userProfile?.work_context
   )
+
+  // Intent classification + auto-routing for Director
+  if (agentType === 'overall' && lastMessageText) {
+    const routing = classifyIntent(lastMessageText)
+    const routingContext = buildRoutingContext(routing)
+    if (routingContext) {
+      systemPrompt = systemPrompt + '\n\n---\n\n' + routingContext
+    }
+  }
 
   // Get tools for this agent
   const tools = getToolsForAgent(agentType, {
