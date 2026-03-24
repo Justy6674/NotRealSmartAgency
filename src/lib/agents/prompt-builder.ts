@@ -98,8 +98,32 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`\n**Additional Context:** ${brand.extra_context}`)
   }
 
-  // Team & workflow context
+  // Pricing context
   const brandAny = brand as unknown as Record<string, unknown>
+  const pricingModel = brandAny.pricing_model as string | undefined
+  const pricingDetails = brandAny.pricing_details as Record<string, unknown> | undefined
+  if (pricingModel || pricingDetails) {
+    lines.push(`\n## Pricing`)
+    if (pricingModel) lines.push(`**Model:** ${pricingModel}`)
+    if (pricingDetails) {
+      const details = { ...pricingDetails }
+      const competitors = details.competitors as Array<{ name: string; price: number; model: string }> | undefined
+      delete details.competitors
+      const detailStr = Object.entries(details)
+        .filter(([, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => `- ${k.replace(/_/g, ' ')}: ${v}`)
+        .join('\n')
+      if (detailStr) lines.push(detailStr)
+      if (competitors?.length) {
+        lines.push(`\n**Competitor Pricing:**`)
+        for (const c of competitors) {
+          lines.push(`- ${c.name}: $${c.price}/mo (${c.model})`)
+        }
+      }
+    }
+  }
+
+  // Team & workflow context
   const teamContext = brandAny.team_context as string | undefined
   const socialStrategy = brandAny.social_strategy as string | undefined
   const devTools = brandAny.dev_tools as string | undefined
