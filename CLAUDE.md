@@ -24,60 +24,90 @@ Downscale Weight Loss (AHPRA+TGA) | DownscaleDerm (TGA) | TeleCheck | TeleScribe
 
 ### 13 Agents (1 Director + 12 Departments)
 
-| Department | Agent Type | Tools |
+| Department | Agent Type | Key Tools (all also get create_task, request_approval, handoff_to_department) |
 |---|---|---|
-| NRS Director | `overall` | delegate, scan_website, scan_github, scan_social, marketing_audit, create_task, request_approval, save_output |
-| Content & Copy | `content` | save_output, word_count, create_task, request_approval |
-| SEO & GEO | `seo` | save_output, word_count, scan_website, create_task, request_approval |
-| Paid Ads | `paid_ads` | save_output, word_count, create_task, request_approval |
-| Strategy & Launch | `strategy` | save_output, create_task, request_approval |
-| Email Marketing | `email` | save_output, word_count, create_task, request_approval |
-| Growth & Partnerships | `growth` | save_output, word_count, scan_website, create_task, request_approval |
-| Brand | `brand` | save_output, create_task, request_approval |
-| Market Intelligence | `competitor` | save_output, scan_website, create_task, request_approval |
-| Web & CRO | `website` | save_output, word_count, scan_website, create_task, request_approval |
-| Compliance | `compliance` | save_output, scan_website, create_task, request_approval |
-| Analytics & Reporting | `analytics` | save_output, scan_website, create_task, request_approval |
-| Automation & AI | `automation` | save_output, scan_github, create_task, request_approval |
+| NRS Director | `overall` | delegate_to_agent, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search |
+| Content & Copy | `content` | save_output, word_count, generate_image, generate_slides |
+| SEO & GEO | `seo` | save_output, word_count, scan_website, browse_page, web_search |
+| Paid Ads | `paid_ads` | save_output, word_count, generate_image |
+| Strategy & Launch | `strategy` | save_output, browse_page, generate_slides |
+| Email Marketing | `email` | save_output, word_count, send_email, read_gmail |
+| Growth & Partnerships | `growth` | save_output, word_count, scan_website, send_email, browse_page, read_gmail |
+| Brand | `brand` | save_output, generate_image |
+| Market Intelligence | `competitor` | save_output, scan_website, browse_page, web_search |
+| Web & CRO | `website` | save_output, word_count, scan_website, browse_page, generate_image |
+| Compliance | `compliance` | save_output, scan_website, browse_page |
+| Analytics & Reporting | `analytics` | save_output, scan_website, browse_page |
+| Automation & AI | `automation` | save_output, scan_github, browse_page |
+
+> `martech` exists as an archived agent type for backward compat with old conversations — not shown in UI.
 
 ## Architecture
 
-### Agent Execution (AI SDK 6 ToolLoopAgent)
-Chat route creates a `ToolLoopAgent` per request with agent config, brand context, and memory. Director delegates to subagents via `generateText()`. Budget checked via `prepareStep`, cost recorded in `onFinish`. Every action logged to `audit_log`.
+### Agent Execution (AI SDK v6 `streamText`)
+Chat route (`/api/chat/route.ts`) uses `streamText()` (NOT ToolLoopAgent — that breaks streaming). Each request:
+1. Validates request (brandId, agentType, conversationId)
+2. Fetches brand (RLS-protected) + agent config from Supabase
+3. Gets/creates agent registry entry, checks budget (`429` if exceeded)
+4. Builds system prompt: base rules → user work context → brand context → agent system prompt → compliance rules (if AHPRA/TGA)
+5. Retrieves Ruflo memories for context
+6. For Director: runs intent router, appends routing hints to system prompt
+7. Streams via `gateway('anthropic/claude-sonnet-4')` with fallbacks `['openai/gpt-4.1', 'google/gemini-2.5-flash']`
+8. `stopWhen: stepCountIs(5)` — max 5 tool-use steps per turn
+9. `onFinish`: records spend, logs to `ai_usage` + `audit_log`, extracts memories
+
+Director delegates to subagents via `delegate_to_agent` tool (uses `generateText()` internally). Web search (Perplexity via AI Gateway) available to Director, SEO, and Market Intelligence.
+
+### Intent Router (`lib/agents/intent-router.ts`)
+Rule-based keyword classification that analyses the user's message and suggests which department should handle it. Returns `{ suggestedAgent, confidence, shouldDelegate }`. Injected into Director's system prompt as routing hints — fast and free (no LLM call).
 
 ### Heartbeat (Vercel Cron)
 `/api/heartbeat` runs every 15 min via Vercel Cron. Processes assigned tasks autonomously. Budget enforcement with auto-pause. Monthly reset on 1st. Uses Fluid Compute (`maxDuration=300`).
 
-### Memory System
-- Namespace: `nrs-{brandSlug}-{agentType}` per brand per department
-- Stored in `agent_memories` table (Supabase)
-- Retrieved before each chat, stored after each response
-- Director also searches global namespace `nrs-agency`
+### Memory System (Ruflo)
+- **Client:** `lib/ruflo/client.ts` — search + store via Ruflo API
+- **Namespaces:** `lib/ruflo/namespaces.ts` — `nrs-{brandSlug}-{agentType}` per brand per department, `nrs-agency` for global
+- **Extraction:** `lib/ruflo/memory-extractor.ts` — automatically extracts key facts from assistant responses on chat finish
+- **Prompt integration:** `lib/agents/prompt-builder.ts` — `buildSystemPromptWithMemory()` searches memories before each chat, injects relevant ones into system prompt
+- Also backed by `agent_memories` table in Supabase
+
+### Client State (Zustand)
+Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to localStorage key `nrs-agency`. Manages: `activeBrandId`, `activeAgentType`, `activeConversationId`, `activeView`, `sidebarOpen`. Changing brand resets agent to `overall` and clears conversation.
 
 ### Stack
 - **Next.js 15.3** (NOT 16), **React 19**, **Tailwind CSS 4** (oklch only)
 - **shadcn/ui v4** (base-ui — use `render` prop, NOT `asChild`)
 - **Supabase** (3 clients: browser, server, admin)
-- **Vercel AI SDK v6** ToolLoopAgent + AI Gateway (auto-injected)
-- **IBM Plex Sans + Mono**
-- **zustand** (client state)
+- **Vercel AI SDK v6** `streamText` + AI Gateway (auto-injected via `@ai-sdk/gateway`)
+- **Stripe** — checkout, portal, webhooks (`lib/stripe/`)
+- **Resend** — transactional email
+- **GSAP** + **Motion** (Framer Motion) — animations (landing page, about page)
+- **IBM Plex Sans + Mono**, **lucide-react** icons
+- **zustand** (client state), **Zod v4** (`zod/v3` import for AI SDK tool schemas)
 
 ### Route Structure (flat — no route groups)
 ```
-/                        → Landing page (water ripple hero — DO NOT TOUCH)
-/about                   → Space hero + terminal FAQ
-/pricing                 → Coming Soon
-/login, /signup          → Auth pages
-/agency/chat             → Main chat interface
-/agency/tasks            → Task board
-/agency/agents           → Org chart + budgets
-/agency/approvals        → Approval queue
-/agency/costs            → Cost dashboard
-/agency/brands           → Brand management
-/agency/outputs          → Output library
-/api/chat                → ToolLoopAgent streaming
-/api/heartbeat           → Cron endpoint
-/api/agents, tasks, goals, approvals, audit → CRUD routes
+/                              → Landing page (water ripple hero — DO NOT TOUCH)
+/about                         → Space hero + terminal FAQ
+/pricing                       → Coming Soon
+/faq                           → FAQ page
+/privacy, /terms               → Legal pages
+/login, /signup, /forgot-password → Auth pages
+/agency                        → Agency dashboard redirect
+/agency/chat                   → Main chat interface (new conversation)
+/agency/chat/[conversationId]  → Existing conversation
+/agency/tasks                  → Task board
+/agency/agents                 → Org chart + budgets
+/agency/approvals              → Approval queue
+/agency/costs                  → Cost dashboard
+/agency/brands                 → Brand list
+/agency/brands/[brandSlug]     → Brand profile editor
+/agency/outputs                → Output library
+/agency/activity               → Activity feed
+/api/chat                      → streamText streaming endpoint
+/api/heartbeat                 → Cron endpoint
+/api/agents, tasks, goals, approvals, audit, conversations, outputs, brands → CRUD routes
+/api/stripe/checkout, portal, webhook → Stripe integration
 ```
 
 ### Database Tables
@@ -92,10 +122,13 @@ approval_queue, heartbeats, project_scans, ai_usage
 - `lib/supabase/server.ts` — server (RSC, API routes)
 - `lib/supabase/admin.ts` — service role (webhooks, heartbeat)
 
+### Tool Implementation Pattern
+All tools in `lib/agents/tools/`. Factory functions take context (supabase, userId, brandId) and return AI SDK tool objects with Zod schemas. Tool index (`tools/index.ts`) assembles per-agent tool sets. Management tools (`create_task`, `request_approval`, `handoff_to_department`) are shared across all agents.
+
 ## Critical Gotchas
 
 - **NEVER touch the homepage** (`src/app/page.tsx`, WaterRippleHero)
-- **NEVER use Three.js** for new features — use CSS/SVG/Canvas 2D only
+- **NEVER use Three.js** for new features — use CSS/SVG/Canvas 2D only (Three.js exists only for the landing/about heroes)
 - **Test locally before pushing** (`npm run dev` + check in browser)
 - **Correct repo is `~/NotRealSmartAgency`** — NOT `~/notrealsmart`
 - **No route groups** — flat routes only
@@ -108,12 +141,16 @@ approval_queue, heartbeats, project_scans, ai_usage
 - **Trigger function is `update_updated_at()`** not `update_updated_at_column()`
 - **Supabase creds in `.env.local`** — never ask for them, just use them
 - **DB password:** `IloveBB0307$$`
+- **streamText works, ToolLoopAgent breaks** — never switch to ToolLoopAgent for chat
 
 ## Key Conventions
 
 - **Budget in cents** (integer, no floating point)
 - **Audit log is append-only** — no UPDATE/DELETE policies
-- **Agent configs = templates** (system prompts, tool lists)
-- **Agent registry = runtime state** (status, budget, org chart per user)
-- **Zod v3** for AI SDK tool schemas (`zod/v3` import)
+- **Agent configs = templates** (system prompts, tool lists, stored in `agent_configs` table)
+- **Agent registry = runtime state** (status, budget, model, org chart — per user, stored in `agent_registry` table)
+- **Zod v3** import path for AI SDK tool schemas (`import { z } from 'zod/v3'`)
 - **IBM Plex** font, **silver/chrome** palette
+- **Default model:** `anthropic/claude-sonnet-4` (overridable per agent in registry)
+- **Cost calculation:** `(inputTokens * 0.3 + outputTokens * 1.5) / 100` → cents
+- **Types:** all in `src/types/database.ts` — `AgentType`, `Brand`, `AgentConfig`, `Task`, `Goal`, etc.

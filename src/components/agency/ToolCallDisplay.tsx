@@ -38,69 +38,89 @@ const DELEGATION_STEPS: Record<string, { label: string; delay: number }[]> = {
   content: [
     { label: 'Loading brand context', delay: 0 },
     { label: 'Reviewing compliance rules', delay: 2000 },
-    { label: 'Researching topic', delay: 5000 },
-    { label: 'Writing content', delay: 10000 },
-    { label: 'Checking word count & formatting', delay: 22000 },
-    { label: 'Finalising output', delay: 35000 },
+    { label: 'Researching topic', delay: 6000 },
+    { label: 'Writing content', delay: 14000 },
+    { label: 'Reviewing draft', delay: 28000 },
+    { label: 'Checking word count & formatting', delay: 42000 },
+    { label: 'Applying brand voice', delay: 56000 },
+    { label: 'Finalising output', delay: 70000 },
   ],
   seo: [
     { label: 'Loading brand context', delay: 0 },
-    { label: 'Analysing current SEO', delay: 2000 },
-    { label: 'Researching keywords', delay: 6000 },
-    { label: 'Building recommendations', delay: 15000 },
-    { label: 'Finalising audit', delay: 28000 },
+    { label: 'Analysing current SEO', delay: 3000 },
+    { label: 'Researching keywords', delay: 10000 },
+    { label: 'Evaluating competitor rankings', delay: 22000 },
+    { label: 'Building recommendations', delay: 40000 },
+    { label: 'Compiling technical audit', delay: 55000 },
+    { label: 'Finalising report', delay: 70000 },
   ],
   paid_ads: [
     { label: 'Loading brand context', delay: 0 },
     { label: 'Reviewing compliance rules', delay: 2000 },
-    { label: 'Analysing target audience', delay: 5000 },
-    { label: 'Writing ad copy variants', delay: 12000 },
-    { label: 'Building campaign structure', delay: 22000 },
-    { label: 'Finalising output', delay: 32000 },
+    { label: 'Analysing target audience', delay: 8000 },
+    { label: 'Writing ad copy variants', delay: 18000 },
+    { label: 'Building campaign structure', delay: 35000 },
+    { label: 'Optimising bidding strategy', delay: 50000 },
+    { label: 'Finalising output', delay: 65000 },
   ],
   strategy: [
     { label: 'Loading brand context', delay: 0 },
-    { label: 'Analysing market position', delay: 3000 },
-    { label: 'Evaluating competitors', delay: 8000 },
-    { label: 'Building strategy', delay: 16000 },
-    { label: 'Finalising recommendations', delay: 28000 },
+    { label: 'Analysing market position', delay: 4000 },
+    { label: 'Evaluating competitors', delay: 12000 },
+    { label: 'Building strategy framework', delay: 25000 },
+    { label: 'Developing action items', delay: 42000 },
+    { label: 'Aligning with brand goals', delay: 56000 },
+    { label: 'Finalising recommendations', delay: 70000 },
   ],
   email: [
     { label: 'Loading brand context', delay: 0 },
     { label: 'Reviewing compliance rules', delay: 2000 },
-    { label: 'Planning email sequence', delay: 5000 },
-    { label: 'Writing email copy', delay: 10000 },
-    { label: 'Optimising subject lines', delay: 22000 },
-    { label: 'Finalising sequence', delay: 30000 },
+    { label: 'Planning email sequence', delay: 8000 },
+    { label: 'Writing email copy', delay: 18000 },
+    { label: 'Crafting subject lines', delay: 35000 },
+    { label: 'Optimising send strategy', delay: 50000 },
+    { label: 'Finalising sequence', delay: 65000 },
   ],
   competitor: [
     { label: 'Loading brand context', delay: 0 },
-    { label: 'Identifying competitors', delay: 3000 },
-    { label: 'Analysing positioning', delay: 8000 },
-    { label: 'Comparing pricing', delay: 15000 },
-    { label: 'Building SWOT analysis', delay: 22000 },
-    { label: 'Finalising report', delay: 30000 },
+    { label: 'Identifying competitors', delay: 4000 },
+    { label: 'Analysing positioning', delay: 12000 },
+    { label: 'Comparing pricing', delay: 25000 },
+    { label: 'Building SWOT analysis', delay: 40000 },
+    { label: 'Evaluating market gaps', delay: 55000 },
+    { label: 'Finalising report', delay: 70000 },
   ],
   compliance: [
     { label: 'Loading brand context', delay: 0 },
-    { label: 'Checking AHPRA requirements', delay: 2000 },
-    { label: 'Checking TGA requirements', delay: 6000 },
-    { label: 'Scanning for violations', delay: 12000 },
-    { label: 'Assessing risk levels', delay: 20000 },
-    { label: 'Finalising compliance report', delay: 28000 },
+    { label: 'Checking AHPRA requirements', delay: 3000 },
+    { label: 'Checking TGA requirements', delay: 10000 },
+    { label: 'Scanning for violations', delay: 20000 },
+    { label: 'Assessing risk levels', delay: 35000 },
+    { label: 'Cross-referencing guidelines', delay: 52000 },
+    { label: 'Finalising compliance report', delay: 68000 },
   ],
   _default: [
     { label: 'Loading brand context', delay: 0 },
-    { label: 'Reviewing requirements', delay: 2000 },
-    { label: 'Researching', delay: 6000 },
-    { label: 'Building output', delay: 14000 },
-    { label: 'Finalising', delay: 26000 },
+    { label: 'Reviewing requirements', delay: 3000 },
+    { label: 'Researching', delay: 10000 },
+    { label: 'Building output', delay: 24000 },
+    { label: 'Refining details', delay: 42000 },
+    { label: 'Quality checking', delay: 56000 },
+    { label: 'Finalising', delay: 70000 },
   ],
 }
 
 function DelegationProgress({ agentType, isComplete }: { agentType: string; isComplete: boolean }) {
   const [currentStep, setCurrentStep] = useState(0)
+  const [elapsed, setElapsed] = useState(0)
   const steps = DELEGATION_STEPS[agentType] ?? DELEGATION_STEPS._default
+
+  // Elapsed timer
+  useEffect(() => {
+    if (isComplete) return
+    const interval = setInterval(() => setElapsed((e) => e + 1), 1000)
+    return () => clearInterval(interval)
+  }, [isComplete])
 
   useEffect(() => {
     if (isComplete) {
@@ -115,6 +135,10 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
 
     return () => timers.forEach(clearTimeout)
   }, [isComplete, steps])
+
+  const lastStepDelay = steps[steps.length - 1]?.delay ?? 0
+  const allStepsDone = !isComplete && currentStep >= steps.length - 1
+    && elapsed * 1000 > lastStepDelay + 3000
 
   return (
     <div className="mt-2 space-y-1.5">
@@ -139,10 +163,21 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
           </div>
         )
       })}
+      {allStepsDone && (
+        <div className="flex items-center gap-2 text-xs">
+          <Loader2 className="h-3 w-3 animate-spin text-amber-400 shrink-0" />
+          <span className="text-amber-400">Still working... this can take a moment for complex tasks</span>
+        </div>
+      )}
       {isComplete && (
         <div className="flex items-center gap-2 text-xs">
           <Check className="h-3 w-3 text-emerald-500 shrink-0" />
           <span className="text-emerald-500 font-medium">Complete</span>
+        </div>
+      )}
+      {!isComplete && elapsed > 0 && (
+        <div className="mt-1 text-[10px] text-muted-foreground/60">
+          {elapsed}s elapsed
         </div>
       )}
     </div>
