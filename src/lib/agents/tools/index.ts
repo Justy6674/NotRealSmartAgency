@@ -8,6 +8,7 @@ import { createScanSocialTool } from './scan-social'
 import { createMarketingAuditTool } from './marketing-audit'
 import { createCreateTaskTool } from './create-task'
 import { createRequestApprovalTool } from './request-approval'
+import { createHandoffTool } from './handoff'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -44,10 +45,18 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     agentRegistryId: ctx.agentRegistryId ?? null,
   })
 
+  const handoff = createHandoffTool({
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    brandId: ctx.brandId,
+    agentRegistryId: ctx.agentRegistryId ?? null,
+  })
+
   // Base management tools every agent gets
   const managementTools = {
     create_task: createTask,
     request_approval: requestApproval,
+    handoff_to_department: handoff,
   }
 
   // Tool sets per agent type
