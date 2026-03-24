@@ -3,177 +3,82 @@
 ## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    LANDING PAGE                          │
-│  Three.js WebGL Water Ripple Hero → Below-fold sections │
-│  (dynamically imported, ssr: false)                     │
-└─────────────────────┬───────────────────────────────────┘
-                      │ /agency/chat
-┌─────────────────────▼───────────────────────────────────┐
-│                   AGENCY DASHBOARD                       │
-│  ┌──────────┬─────────────┬───────────────────────────┐ │
-│  │  Agent   │  Convo      │                           │ │
-│  │  Sidebar │  List       │     Chat Interface        │ │
-│  │  (10)    │  (per brand │     (useChat + stream)    │ │
-│  │          │   + agent)  │                           │ │
-│  └──────────┴─────────────┴───────────────────────────┘ │
-│  Brand Selector (topbar)                                │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────┐
-│                   /api/chat (POST)                       │
-│  1. Auth check (Supabase server client)                 │
-│  2. Fetch brand profile from DB                         │
-│  3. Fetch agent config from DB                          │
-│  4. Build system prompt:                                │
-│     [Base rules] + [Brand context] + [Agent prompt]     │
-│     + [Compliance rules if health brand]                │
-│  5. Get tools for agent type                            │
-│  6. streamText() via AI Gateway → Claude Sonnet 4       │
-│  7. Stream UIMessage back to client                     │
-│  8. onFinish: track token usage in ai_usage table       │
-└─────────────────────┬───────────────────────────────────┘
-                      │
-┌─────────────────────▼───────────────────────────────────┐
-│              SUPABASE (PostgreSQL + RLS)                  │
-│                                                          │
-│  brands ─── conversations ─── messages                   │
-│     │                                                    │
-│     └── outputs (saved deliverables)                     │
-│                                                          │
-│  agent_configs (10 agents, system prompts, tool lists)   │
-│  users (auth, profile)                                   │
-│  ai_usage (token tracking, cost)                         │
-└──────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                   NEXT.JS APP                        │
+│              (notrealsmart.com.au)                    │
+├─────────────────────────────────────────────────────┤
+│                                                       │
+│   UI Layer (React + shadcn/ui v4)                    │
+│   ├── Chat Interface (agent identity, brand context) │
+│   ├── Task Board (backlog → done)                    │
+│   ├── Agent Dashboard (org chart, budgets)            │
+│   ├── Approval Queue (human sign-off)                │
+│   ├── Cost Dashboard (per-agent spend)               │
+│   └── Landing Pages (water ripple, space hero)       │
+│                                                       │
+│   API Routes                                         │
+│   ├── /api/chat (ToolLoopAgent streaming)            │
+│   ├── /api/heartbeat (Vercel Cron, every 15 min)     │
+│   ├── /api/agents, tasks, goals, approvals, audit    │
+│   └── /api/brands, conversations, outputs, stripe    │
+│                                                       │
+│   Agent Layer (AI SDK 6)                             │
+│   ├── ToolLoopAgent (per-request, dynamic config)    │
+│   ├── Director → subagent delegation                 │
+│   ├── Budget enforcement (prepareStep)               │
+│   ├── Memory injection (prompt enrichment)           │
+│   └── Tool registry (per-agent tool sets)            │
+│                                                       │
+├─────────────────────────────────────────────────────┤
+│   Vercel: AI Gateway + Fluid Compute + Cron          │
+├─────────────────────────────────────────────────────┤
+│   Supabase: 15 tables + RLS + auth + realtime        │
+└─────────────────────────────────────────────────────┘
 ```
 
-## Agent Prompt Assembly
+## 13 Agents
 
-```
-buildSystemPrompt(brand, agentConfig) →
+| Department | Type | Role | Key Tools |
+|---|---|---|---|
+| NRS Director | overall | director | delegate, scan_*, marketing_audit |
+| Content & Copy | content | head | save_output, word_count |
+| SEO & GEO | seo | head | word_count, scan_website |
+| Paid Ads | paid_ads | head | word_count |
+| Strategy & Launch | strategy | head | save_output |
+| Email Marketing | email | head | word_count |
+| Growth & Partnerships | growth | head | word_count, scan_website |
+| Brand | brand | head | save_output |
+| Market Intelligence | competitor | head | scan_website |
+| Web & CRO | website | head | word_count, scan_website |
+| Compliance | compliance | head | scan_website |
+| Analytics & Reporting | analytics | head | scan_website |
+| Automation & AI | automation | head | scan_github |
 
-  ┌─ Base Rules ──────────────────────────────────┐
-  │ Australian English, markdown, date, format    │
-  └───────────────────────────────────────────────┘
-  ┌─ Brand Context ───────────────────────────────┐
-  │ Name, tagline, niche, tone, audience,         │
-  │ competitors, content pillars, extra context   │
-  └───────────────────────────────────────────────┘
-  ┌─ Agent Instructions ──────────────────────────┐
-  │ From agent_configs.system_prompt              │
-  │ (Content, SEO, Ads, Strategy, etc.)           │
-  └───────────────────────────────────────────────┘
-  ┌─ Compliance Layer (conditional) ──────────────┐
-  │ Only if brand.compliance_flags.ahpra/tga      │
-  │ AHPRA guidelines, TGA rules, safe language    │
-  └───────────────────────────────────────────────┘
-```
+All agents also have: create_task, request_approval, save_output.
 
-## Water Ripple Hero — Shader Pipeline
+## Database Tables (15)
 
-```
-Per frame:
-  1. Simulation pass (targetA → targetB):
-     - Read pressure, velocity, gradients from targetA
-     - Wave equation: neighbour averaging with delta=1.4
-     - Inject pressure at cursor position (radius 0.0275)
-     - Calculate gradients (gradX, gradY)
-     - Output: vec4(pressure, velocity, gradX, gradY)
+| Table | Purpose |
+|---|---|
+| agent_registry | Runtime org chart — role, department, reports_to, budget, status |
+| agent_configs | Agent templates — system prompts, tool lists |
+| agent_memories | Per-brand per-department persistent memory |
+| tasks | Work board — backlog → assigned → in_progress → done |
+| goals | Hierarchical objectives (objective → key_result → task) |
+| audit_log | Immutable append-only action trail |
+| approval_queue | Human sign-off gates |
+| heartbeats | Cron execution log |
+| brands | Brand profiles (tone, audience, compliance flags) |
+| conversations | Per-brand per-agent chat sessions |
+| messages | Chat message history |
+| outputs | Saved marketing deliverables |
+| project_scans | Website/GitHub/social scan results |
+| ai_usage | Token tracking for billing |
+| users | Auth + profile |
 
-  2. Render pass (targetB → screen):
-     - Read simulation data from targetB
-     - Distort background UVs by 0.3 * gradients
-     - If ripple intensity > 0.1: apply 9-point Gaussian blur
-     - Calculate specular highlights from normal mapping
-     - Composite: colour + highlight * specular
+## Styling
 
-  3. Swap targetA ↔ targetB (ping-pong)
-```
-
-## Styling Guide
-
-### Colour System (oklch)
-All colours use oklch colour space. Never use hex or rgb.
-
-**Industrial palette:**
-| Token | Value | Usage |
-|-------|-------|-------|
-| Background | `oklch(0.08 0 0)` | Page/section backgrounds |
-| Surface | `oklch(0.12 0 0)` | Cards, elevated surfaces |
-| Border | `oklch(0.2 0 0)` | Default borders |
-| Metal text | `oklch(0.6 0 0)` | Secondary text, icons |
-| Light text | `oklch(0.92 0 0)` | Headings, primary text |
-| Muted text | `oklch(0.5 0 0)` | Descriptions, captions |
-| Rust accent | `oklch(0.55 0.08 55)` | Bracketed text, hover borders |
-| CTA gold | `oklch(0.75 0.15 75)` | Buttons, highlights |
-| CTA gradient | `oklch(0.65 0.12 65) → oklch(0.5 0.08 55)` | Button backgrounds |
-
-**Metallic text gradient (hero):**
-```css
-background-image: linear-gradient(180deg, oklch(0.78 0.03 75), oklch(0.5 0.02 60));
--webkit-background-clip: text;
--webkit-text-fill-color: transparent;
-```
-
-### Typography
-- **Hero title**: Bold, uppercase, tracking-wider, `clamp(3rem, 10vw, 7.5rem)`
-- **Bracketed meanings**: Font-light, italic, `clamp(1rem, 3vw, 2.2rem)`, rust colour
-- **Sub heading**: Semibold, uppercase, tracking-[0.2em], gold colour
-- **Body**: Font-light, muted grey
-- **Font stack**: Geist Sans (variable) + Geist Mono
-
-### Hero Layout
-```
-     NOTREAL  (Artificial)      ← line 1: big + small italic
-       SMART  (Intelligence)    ← line 2: big + small italic
-
-    AGENTIC MARKETING AGENCY    ← sub heading: gold, spaced
-    In the fast-changing...     ← body: muted grey
-
-    [Enter the Agency] [Log In] ← CTAs
-```
-
-### Component Patterns
-- **base-ui composition**: Always use `render` prop, never `asChild`
-- **Dynamic pages**: Export `const dynamic = 'force-dynamic'` on pages with base-ui
-- **Three.js**: Dynamic import via client wrapper component (`ssr: false`)
-- **State**: zustand store for `activeBrandId`, `activeAgentType`, `activeConversationId`
-
-### File Structure
-```
-src/
-├── app/
-│   ├── page.tsx                    # Landing (water ripple hero)
-│   ├── login/signup/forgot-password/ # Auth pages
-│   ├── agency/                     # Dashboard (auth guarded)
-│   │   ├── layout.tsx              # Sidebar + topbar + brand selector
-│   │   ├── chat/                   # Chat interface
-│   │   ├── brands/                 # Brand management
-│   │   └── outputs/                # Output library
-│   └── api/                        # Server routes
-│       ├── chat/                   # Streaming chat endpoint
-│       ├── conversations/          # CRUD
-│       ├── brands/                 # CRUD
-│       └── outputs/                # Read
-├── components/
-│   ├── agency/                     # Dashboard components
-│   ├── landing/                    # Landing page components
-│   │   ├── WaterRippleHero.tsx     # Three.js WebGL water effect
-│   │   ├── WaterRippleHeroLoader.tsx # SSR-safe dynamic wrapper
-│   │   ├── AgentShowcase.tsx       # 10 departments grid
-│   │   ├── HowItWorks.tsx          # 3-step flow
-│   │   └── AgencyFooter.tsx        # Footer
-│   ├── ui/                         # shadcn/ui v4 components
-│   └── auth/                       # Auth form components
-├── lib/
-│   ├── agents/                     # Agent engine
-│   │   ├── prompt-builder.ts       # System prompt assembly
-│   │   ├── compliance-rules.ts     # AHPRA/TGA rules
-│   │   └── tools/                  # AI SDK tool definitions
-│   ├── supabase/                   # 3 client variants
-│   └── constants.ts                # Site config, disclaimers
-├── stores/
-│   └── agency-store.ts             # zustand: brand, agent, conversation
-└── types/
-    └── database.ts                 # All DB types + enums
-```
+- **Colours:** oklch only. Silver/chrome (hue ~240). Gold accents (hue ~75).
+- **Fonts:** IBM Plex Sans (body), IBM Plex Mono (code/terminal)
+- **Components:** shadcn/ui v4 (base-ui) — `render` prop, NOT `asChild`
+- **Dark mode default.** Variables in globals.css.
