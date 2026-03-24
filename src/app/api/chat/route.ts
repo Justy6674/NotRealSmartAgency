@@ -1,4 +1,4 @@
-import { ToolLoopAgent, stepCountIs, convertToModelMessages, type UIMessage } from 'ai'
+import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
@@ -14,7 +14,6 @@ const VALID_AGENT_TYPES: AgentType[] = [
   'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
   'growth', 'brand', 'competitor', 'website', 'compliance',
   'analytics', 'automation',
-  // Archived but still valid for loading old conversations
   'martech',
 ]
 
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
     if (!budget.allowed) {
       return new Response(JSON.stringify({
         error: 'Budget exceeded',
-        message: `${agentConfig.display_name} has exhausted its monthly budget. Please increase the budget or wait for the monthly reset.`,
+        message: `${agentConfig.display_name} has exhausted its monthly budget.`,
         spent: budget.spent,
         limit: budget.limit,
       }), {
@@ -103,14 +102,14 @@ export async function POST(request: Request) {
       ?? ''
     : ''
 
-  // Fetch user work context (how they operate — dev tools, social media, workflow)
+  // Fetch user work context
   const { data: userProfile } = await supabase
     .from('users')
     .select('work_context')
     .eq('id', user.id)
     .single()
 
-  // Build system prompt with memory context + user work context
+  // Build system prompt with memory + user context
   const { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
     brand as Brand,
     agentConfig as AgentConfig,
@@ -141,7 +140,7 @@ export async function POST(request: Request) {
 
   const typedBrand = brand as Brand
 
-  // Add web search tool for Director, SEO, and Market Intelligence
+  // Add web search for Director, SEO, Market Intelligence
   if (['overall', 'seo', 'competitor'].includes(agentType)) {
     ;(tools as Record<string, unknown>).web_search = gateway.tools.perplexitySearch({
       maxResults: 5,
@@ -150,45 +149,35 @@ export async function POST(request: Request) {
     })
   }
 
-  // Gateway provider options — fallbacks, tracking, compliance
+  // Gateway options — fallbacks, tracking, compliance
   const isHealthBrand = typedBrand.compliance_flags?.ahpra || typedBrand.compliance_flags?.tga
-  const gatewayOptions = {
-    gateway: {
-      // Fallback: if Claude is down, try GPT-4.1
-      models: ['openai/gpt-4.1'] as string[],
-      // Track spend per user
-      user: user.id,
-      // Tag by agent type for analytics
-      tags: [agentType, typedBrand.slug, 'chat'],
-      // Zero data retention for health brands (AHPRA/TGA compliance)
-      ...(isHealthBrand && { zeroDataRetention: true }),
-    },
-  }
 
-  // Create ToolLoopAgent with Gateway options
-  const agent = new ToolLoopAgent({
-    id: `nrs-${agentType}`,
+  // Stream with all features
+  const result = streamText({
     model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
-    instructions: systemPrompt,
+    system: systemPrompt,
+    messages: await convertToModelMessages(messages),
     tools,
     stopWhen: stepCountIs(5),
-    providerOptions: gatewayOptions,
-  })
-
-  // Stream the agent's response
-  const result = await agent.stream({
-    messages: await convertToModelMessages(messages),
+    providerOptions: {
+      gateway: {
+        models: ['openai/gpt-4.1'],
+        user: user.id,
+        tags: [agentType, typedBrand.slug, 'chat'],
+        ...(isHealthBrand && { zeroDataRetention: true }),
+      },
+    },
     onFinish: async ({ text, usage }) => {
-      const inputTokens = usage?.inputTokens ?? 0
-      const outputTokens = usage?.outputTokens ?? 0
+      const inputTokens = usage.inputTokens ?? 0
+      const outputTokens = usage.outputTokens ?? 0
       const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
 
-      // Record spend against budget
+      // Record spend
       if (registry) {
         await recordAgentSpend(supabase, registry.id, costCents)
       }
 
-      // Log token usage
+      // Log usage
       await supabase.from('ai_usage').insert({
         user_id: user.id,
         query_type: `agency_${agentType}`,
@@ -207,18 +196,11 @@ export async function POST(request: Request) {
         action: 'chat_completed',
         entityType: 'conversation',
         entityId: conversationId ?? undefined,
-        detail: {
-          agentType,
-          brand: typedBrand.slug,
-          inputTokens,
-          outputTokens,
-          costCents,
-          memoryCount,
-        },
+        detail: { agentType, brand: typedBrand.slug, inputTokens, outputTokens, costCents, memoryCount },
         costCents,
       })
 
-      // Smart memory extraction — pulls decisions, preferences, and summaries
+      // Smart memory extraction
       if (text && text.length > 20) {
         extractAndStoreMemories({
           brandSlug: typedBrand.slug,
