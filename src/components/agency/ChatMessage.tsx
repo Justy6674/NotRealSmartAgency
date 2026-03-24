@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { User } from 'lucide-react'
 import Markdown from 'react-markdown'
 import { ToolCallDisplay } from './ToolCallDisplay'
+import { MessageActions } from './MessageActions'
 import { AgentAvatar } from './AgentAvatar'
 import { AGENT_LABELS } from '@/types/database'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -11,11 +12,20 @@ import type { UIMessage } from 'ai'
 
 interface ChatMessageProps {
   message: UIMessage
+  onRegenerate?: () => void
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const { activeAgentType } = useAgencyStore()
+
+  // Extract full text content for action buttons
+  const textContent = message.parts
+    ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map(p => p.text)
+    .join('\n') ?? ''
+
+  const showActions = !isUser && textContent.length > 100
 
   return (
     <div className={cn('flex gap-3 py-4', isUser ? 'justify-end' : 'justify-start')}>
@@ -65,6 +75,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
             return null
           })}
         </div>
+
+        {/* Action bar for substantial assistant messages */}
+        {showActions && (
+          <MessageActions content={textContent} onRegenerate={onRegenerate} />
+        )}
       </div>
 
       {isUser && (

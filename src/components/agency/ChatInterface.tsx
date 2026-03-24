@@ -144,7 +144,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
         ) : (
           <div className="mx-auto max-w-3xl divide-y divide-border/50">
             {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+              <ChatMessage key={message.id} message={message} onRegenerate={regenerate} />
             ))}
             {isLoading && messages[messages.length - 1]?.role === 'user' && (
               <div className="flex gap-3 py-4">
