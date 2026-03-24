@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
-import { createClient } from '@/lib/supabase/client'
+
 import { ACTIVE_AGENT_TYPES, AGENT_LABELS } from '@/types/database'
 import type { Brand, Conversation, AgentType } from '@/types/database'
 import { AGENT_ICONS, AGENT_COLOURS } from '@/components/agency/AgentAvatar'
@@ -88,48 +88,30 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const [showAddBrand, setShowAddBrand] = useState(false)
 
   const fetchBrands = async () => {
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('brands')
-      .select('*')
-      .eq('is_active', true)
-      .order('name')
-
-    if (error) {
-      console.error('[sidebar] Brand fetch error:', error.message, error.code)
-      return
-    }
-
-    if (data && data.length > 0) {
-      setBrands(data as Brand[])
-      if (!activeBrandId && data.length > 0) {
-        setBrand((data[0] as Brand).id)
+    try {
+      const res = await fetch('/api/brands')
+      if (!res.ok) {
+        console.error('[sidebar] Brand fetch failed:', res.status, res.statusText)
+        return
       }
-    } else if (!data || data.length === 0) {
-      // RLS may have blocked the query if auth session not ready yet — retry once
-      console.warn('[sidebar] No brands returned, retrying in 1s...')
-      return null // signal caller to retry
+      const data = await res.json()
+      if (Array.isArray(data) && data.length > 0) {
+        setBrands(data as Brand[])
+        const store = useAgencyStore.getState()
+        if (!store.activeBrandId) {
+          setBrand((data[0] as Brand).id)
+        }
+      } else {
+        console.warn('[sidebar] No brands returned from API')
+      }
+    } catch (err) {
+      console.error('[sidebar] Brand fetch error:', err)
     }
-
-    return data
   }
 
-  // Fetch brands on mount with retry for auth timing
+  // Fetch brands on mount
   useEffect(() => {
-    let cancelled = false
-
-    const load = async () => {
-      const result = await fetchBrands()
-      // If no brands returned and not cancelled, retry once after auth settles
-      if (result === null && !cancelled) {
-        setTimeout(async () => {
-          if (!cancelled) await fetchBrands()
-        }, 1500)
-      }
-    }
-
-    load()
-    return () => { cancelled = true }
+    fetchBrands()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
