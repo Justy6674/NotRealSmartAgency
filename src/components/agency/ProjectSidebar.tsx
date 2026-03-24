@@ -87,42 +87,49 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const [teamExpanded, setTeamExpanded] = useState(true)
   const [showAddBrand, setShowAddBrand] = useState(false)
 
-  const fetchBrands = () => {
+  const fetchBrands = async () => {
     const supabase = createClient()
-    supabase
+    const { data, error } = await supabase
       .from('brands')
       .select('*')
       .eq('is_active', true)
       .order('name')
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('[sidebar] Brand fetch error:', error.message, error.code)
-        }
-        if (data) {
-          setBrands(data as Brand[])
-          if (!activeBrandId && data.length > 0) {
-            setBrand((data[0] as Brand).id)
-          }
-        }
-      })
+
+    if (error) {
+      console.error('[sidebar] Brand fetch error:', error.message, error.code)
+      return
+    }
+
+    if (data && data.length > 0) {
+      setBrands(data as Brand[])
+      if (!activeBrandId && data.length > 0) {
+        setBrand((data[0] as Brand).id)
+      }
+    } else if (!data || data.length === 0) {
+      // RLS may have blocked the query if auth session not ready yet — retry once
+      console.warn('[sidebar] No brands returned, retrying in 1s...')
+      return null // signal caller to retry
+    }
+
+    return data
   }
 
-  // Fetch brands on mount
+  // Fetch brands on mount with retry for auth timing
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('brands')
-      .select('*')
-      .eq('is_active', true)
-      .order('name')
-      .then(({ data }) => {
-        if (data) {
-          setBrands(data as Brand[])
-          if (!activeBrandId && data.length > 0) {
-            setBrand((data[0] as Brand).id)
-          }
-        }
-      })
+    let cancelled = false
+
+    const load = async () => {
+      const result = await fetchBrands()
+      // If no brands returned and not cancelled, retry once after auth settles
+      if (result === null && !cancelled) {
+        setTimeout(async () => {
+          if (!cancelled) await fetchBrands()
+        }, 1500)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -142,9 +149,8 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const handleNewChat = () => {
     setConversation(null)
     setAgent('overall')
-    // Force navigation even if already on /agency/chat (clear conversation URL)
-    router.replace('/agency/chat')
-    router.refresh()
+    // Force a full page transition even if already on /agency/chat
+    window.location.href = '/agency/chat'
     onClose?.()
   }
 

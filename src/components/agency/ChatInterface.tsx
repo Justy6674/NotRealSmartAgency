@@ -83,7 +83,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       .single()
       .then(({ data: conv }) => {
         if (conv) {
-          if (conv.brand_id && !activeBrandId) setBrand(conv.brand_id)
+          if (conv.brand_id) setBrand(conv.brand_id)
           if (conv.agent_type) setAgent(conv.agent_type)
         }
       })
