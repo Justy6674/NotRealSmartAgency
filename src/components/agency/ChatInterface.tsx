@@ -53,6 +53,11 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
+  // Clear messages when brand or agent changes
+  useEffect(() => {
+    setMessages([])
+  }, [activeBrandId, activeAgentType, setMessages])
+
   // Load existing messages when opening a conversation
   useEffect(() => {
     if (!conversationId) {

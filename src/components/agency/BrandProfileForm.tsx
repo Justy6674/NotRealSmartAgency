@@ -67,7 +67,7 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
     try {
       // Try to get favicon from the website
       const domain = new URL(formData.website_url).hostname
-      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
+      const faviconUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://${domain}&size=128`
       setFormData(prev => ({ ...prev, logo_url: faviconUrl }))
     } catch {
       // ignore
