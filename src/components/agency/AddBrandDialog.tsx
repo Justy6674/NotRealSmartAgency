@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Globe, Loader2 } from 'lucide-react'
+import { Globe, Loader2, Github } from 'lucide-react'
 
 interface AddBrandDialogProps {
   onClose: () => void
@@ -12,6 +12,7 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
   const router = useRouter()
   const [creating, setCreating] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [scanningGithub, setScanningGithub] = useState(false)
   const [form, setForm] = useState({
     name: '',
     website_url: '',
@@ -51,6 +52,50 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
     setScanning(false)
   }
 
+  const handleGithubScan = async () => {
+    if (!form.github_url) return
+    setScanningGithub(true)
+    try {
+      const res = await fetch(`/api/scan-github-quick?url=${encodeURIComponent(form.github_url)}`)
+      if (res.ok) {
+        const data = await res.json()
+        // Auto-fill name from repo if empty
+        if (data.name && !form.name) {
+          const name = data.name.replace(/[-_]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+          setForm(f => ({ ...f, name }))
+        }
+        // Auto-fill description
+        if (data.description && !form.description) {
+          setForm(f => ({ ...f, description: data.description }))
+        }
+        // Infer niche from tech stack or topics
+        if (!form.niche) {
+          const techs = (data.techStack ?? []).join(' ').toLowerCase()
+          const topics = (data.topics ?? []).join(' ').toLowerCase()
+          const combined = `${techs} ${topics}`
+          let niche = 'software'
+          if (combined.includes('next') || combined.includes('react')) niche = 'saas'
+          if (combined.includes('health') || combined.includes('medical')) niche = 'health tech'
+          if (combined.includes('ecommerce') || combined.includes('stripe')) niche = 'ecommerce'
+          if (combined.includes('ai') || combined.includes('llm')) niche = 'ai / saas'
+          setForm(f => ({ ...f, niche }))
+        }
+        // Store tech stack + README summary in scannedData for extra_context
+        const techSummary = data.techStack?.length
+          ? `Tech stack: ${data.techStack.slice(0, 20).join(', ')}`
+          : ''
+        const readmeSummary = data.readme ? `\n\nREADME:\n${data.readme}` : ''
+        setScannedData(prev => ({
+          ...prev,
+          github_context: `${techSummary}${readmeSummary}`,
+        }))
+      }
+    } catch {
+      console.error('[add-brand] GitHub scan failed')
+    }
+    setScanningGithub(false)
+  }
+
   const handleCreate = async () => {
     if (!form.name.trim()) return
     setCreating(true)
@@ -84,6 +129,7 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
         competitors: [],
         brand_colours: {},
         social_urls: {},
+        extra_context: scannedData?.github_context || null,
         is_active: true,
       }),
     })
@@ -157,13 +203,23 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
 
           <div>
             <label className="text-xs font-medium text-muted-foreground">GitHub URL (optional)</label>
-            <input
-              type="url"
-              value={form.github_url}
-              onChange={e => setForm({ ...form, github_url: e.target.value })}
-              className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm mt-1"
-              placeholder="https://github.com/org/repo"
-            />
+            <div className="flex gap-2 mt-1">
+              <input
+                type="url"
+                value={form.github_url}
+                onChange={e => setForm({ ...form, github_url: e.target.value })}
+                className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+                placeholder="https://github.com/org/repo"
+              />
+              <button
+                onClick={handleGithubScan}
+                disabled={scanningGithub || !form.github_url}
+                className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50 transition-colors"
+              >
+                {scanningGithub ? <Loader2 className="h-4 w-4 animate-spin" /> : <Github className="h-4 w-4" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Paste repo URL and scan to import README + tech stack</p>
           </div>
 
           <div>
