@@ -132,7 +132,7 @@ export async function GET(request: Request) {
           tools,
           providerOptions: {
             gateway: {
-              models: ['openai/gpt-4.1'],
+              models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],
               user: task.user_id,
               tags: [registry.agent_type, 'heartbeat'],
             },

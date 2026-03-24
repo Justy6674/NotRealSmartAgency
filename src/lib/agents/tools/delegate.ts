@@ -64,7 +64,7 @@ export function createDelegateTool(ctx: DelegateContext) {
         const isHealthBrand = ctx.brand.compliance_flags?.ahpra || ctx.brand.compliance_flags?.tga
         const gatewayOptions = {
           gateway: {
-            models: ['openai/gpt-4.1'] as string[],
+            models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'] as string[],
             user: ctx.userId,
             tags: [agentType, ctx.brand.slug, 'delegation'],
             ...(isHealthBrand && { zeroDataRetention: true }),

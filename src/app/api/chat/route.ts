@@ -161,7 +161,7 @@ export async function POST(request: Request) {
     stopWhen: stepCountIs(5),
     providerOptions: {
       gateway: {
-        models: ['openai/gpt-4.1'],
+        models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],
         user: user.id,
         tags: [agentType, typedBrand.slug, 'chat'],
         ...(isHealthBrand && { zeroDataRetention: true }),
