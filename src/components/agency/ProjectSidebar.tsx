@@ -9,6 +9,10 @@ import {
   ChevronDown,
   ChevronRight,
   MessageSquare,
+  ListTodo,
+  Users,
+  ShieldCheck,
+  DollarSign,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -280,6 +284,30 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
               })}
             </ul>
           )}
+        </section>
+
+        {/* ── Management ──────────────────────────────────────────────────── */}
+        <section className="border-t border-border px-3 py-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2">
+            Management
+          </p>
+          <nav className="space-y-0.5">
+            {[
+              { href: '/agency/tasks', icon: ListTodo, label: 'Tasks' },
+              { href: '/agency/agents', icon: Users, label: 'Agents' },
+              { href: '/agency/approvals', icon: ShieldCheck, label: 'Approvals' },
+              { href: '/agency/costs', icon: DollarSign, label: 'Costs' },
+            ].map(({ href, icon: NavIcon, label }) => (
+              <Link
+                key={href}
+                href={href}
+                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <NavIcon className="h-4 w-4 shrink-0" />
+                <span>{label}</span>
+              </Link>
+            ))}
+          </nav>
         </section>
       </div>
     </aside>
