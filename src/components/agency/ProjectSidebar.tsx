@@ -142,7 +142,9 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const handleNewChat = () => {
     setConversation(null)
     setAgent('overall')
-    router.push('/agency/chat')
+    // Force navigation even if already on /agency/chat (clear conversation URL)
+    router.replace('/agency/chat')
+    router.refresh()
     onClose?.()
   }
 
