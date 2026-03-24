@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useAgencyStore } from '@/stores/agency-store'
-import { createClient } from '@/lib/supabase/client'
 import type { Brand } from '@/types/database'
 import { cn } from '@/lib/utils'
 import { Building2, ChevronDown } from 'lucide-react'
@@ -19,20 +18,18 @@ export function BrandSelector() {
   const { activeBrandId, setBrand } = useAgencyStore()
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('brands')
-      .select('*')
-      .eq('is_active', true)
-      .order('name')
-      .then(({ data }) => {
-        if (data) {
-          setBrands(data as Brand[])
-          if (!activeBrandId && data.length > 0) {
+    // Fetch via API (server-side auth) — not direct Supabase client
+    fetch('/api/brands')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Brand[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setBrands(data)
+          if (!activeBrandId) {
             setBrand(data[0].id)
           }
         }
       })
+      .catch(() => {})
   }, [activeBrandId, setBrand])
 
   const activeBrand = brands.find((b) => b.id === activeBrandId)

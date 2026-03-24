@@ -25,19 +25,18 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const brandIdRef = useRef(activeBrandId)
   brandIdRef.current = activeBrandId
 
-  // Fetch active brand for compliance badge and context display
+  // Fetch active brand for welcome screen context
   useEffect(() => {
-    setBrandLocal(null) // Clear immediately to prevent stale brand showing
+    setBrandLocal(null)
     if (!activeBrandId) return
-    const supabase = createClient()
-    supabase
-      .from('brands')
-      .select('*')
-      .eq('id', activeBrandId)
-      .single()
-      .then(({ data }) => {
-        if (data) setBrandLocal(data as Brand)
+    // Fetch via API (server-side auth) — not direct Supabase client
+    fetch('/api/brands')
+      .then(r => r.ok ? r.json() : [])
+      .then((brands: Brand[]) => {
+        const match = brands.find(b => b.id === activeBrandId)
+        if (match) setBrandLocal(match)
       })
+      .catch(() => {})
   }, [activeBrandId])
 
   const transport = useMemo(

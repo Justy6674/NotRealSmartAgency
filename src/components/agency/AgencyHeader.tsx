@@ -5,7 +5,6 @@ import { AGENT_LABELS } from '@/types/database'
 import { AgentAvatar } from './AgentAvatar'
 import { ComplianceBadge } from './ComplianceBadge'
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { Brand } from '@/types/database'
 
 export function AgencyHeader() {
@@ -17,15 +16,15 @@ export function AgencyHeader() {
       setBrand(null)
       return
     }
-    const supabase = createClient()
-    supabase
-      .from('brands')
-      .select('*')
-      .eq('id', activeBrandId)
-      .single()
-      .then(({ data }) => {
-        if (data) setBrand(data as Brand)
+
+    // Fetch via API (server-side auth) — not direct Supabase client
+    fetch('/api/brands')
+      .then(r => r.ok ? r.json() : [])
+      .then((brands: Brand[]) => {
+        const match = brands.find(b => b.id === activeBrandId)
+        setBrand(match ?? null)
       })
+      .catch(() => setBrand(null))
   }, [activeBrandId])
 
   return (
