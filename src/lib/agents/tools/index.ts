@@ -9,6 +9,9 @@ import { createMarketingAuditTool } from './marketing-audit'
 import { createCreateTaskTool } from './create-task'
 import { createRequestApprovalTool } from './request-approval'
 import { createHandoffTool } from './handoff'
+import { createSendEmailTool } from './send-email'
+import { createGenerateImageTool } from './generate-image'
+import { createBrowsePageTool } from './browse-page'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -52,6 +55,11 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     agentRegistryId: ctx.agentRegistryId ?? null,
   })
 
+  // New capability tools
+  const sendEmail = createSendEmailTool()
+  const generateImageTool = createGenerateImageTool()
+  const browsePage = createBrowsePageTool()
+
   // Base management tools every agent gets
   const managementTools = {
     create_task: createTask,
@@ -68,20 +76,23 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       scan_github: scanGithub,
       scan_social: scanSocial,
       marketing_audit: marketingAudit,
+      browse_page: browsePage,
+      generate_image: generateImageTool,
+      send_email: sendEmail,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, ...managementTools },
-    growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, ...managementTools },
-    strategy: { save_output: saveOutput, ...managementTools },
-    competitor: { save_output: saveOutput, scan_website: scanWebsite, ...managementTools },
-    website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, ...managementTools },
-    compliance: { save_output: saveOutput, scan_website: scanWebsite, ...managementTools },
-    seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, ...managementTools },
-    paid_ads: { save_output: saveOutput, word_count: wordCount, ...managementTools },
-    email: { save_output: saveOutput, word_count: wordCount, ...managementTools },
-    brand: { save_output: saveOutput, ...managementTools },
-    analytics: { save_output: saveOutput, scan_website: scanWebsite, ...managementTools },
-    automation: { save_output: saveOutput, scan_github: scanGithub, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, ...managementTools },
+    growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, ...managementTools },
+    strategy: { save_output: saveOutput, browse_page: browsePage, ...managementTools },
+    competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
+    website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
+    compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
+    seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
+    paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, ...managementTools },
+    email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, ...managementTools },
+    brand: { save_output: saveOutput, generate_image: generateImageTool, ...managementTools },
+    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
+    automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 
