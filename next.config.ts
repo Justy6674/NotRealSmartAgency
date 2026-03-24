@@ -9,6 +9,11 @@ const nextConfig: NextConfig = {
         hostname: 'uyhtrwlotoriblicqqrl.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'www.google.com',
+        pathname: '/s2/favicons**',
+      },
     ],
   },
   async headers() {

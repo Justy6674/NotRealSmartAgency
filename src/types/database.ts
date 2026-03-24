@@ -295,6 +295,7 @@ export interface Brand {
   description: string | null
   website_url: string | null
   github_url: string | null
+  logo_url: string | null
   social_urls: Record<string, string>
   niche: string
   tone_of_voice: ToneOfVoice

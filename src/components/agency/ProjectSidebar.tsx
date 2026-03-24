@@ -165,6 +165,20 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
                         : 'text-foreground hover:bg-muted'
                     )}
                   >
+                    {brand.logo_url ? (
+                      <img
+                        src={brand.logo_url}
+                        alt=""
+                        className="h-5 w-5 rounded shrink-0 object-cover mr-2"
+                      />
+                    ) : (
+                      <span
+                        className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold shrink-0 mr-2"
+                        style={{ background: 'oklch(0.25 0.01 240)', color: 'oklch(0.7 0.01 240)' }}
+                      >
+                        {brand.name.charAt(0)}
+                      </span>
+                    )}
                     <span className="truncate">{brand.name}</span>
                   </button>
                 </li>

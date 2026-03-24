@@ -37,6 +37,9 @@ export function AgencyHeader() {
       {brand && (
         <>
           <span className="text-muted-foreground/50">|</span>
+          {brand.logo_url ? (
+            <img src={brand.logo_url} alt="" className="h-5 w-5 rounded object-cover" />
+          ) : null}
           <span className="text-sm text-muted-foreground">{brand.name}</span>
           <ComplianceBadge
             ahpra={brand.compliance_flags?.ahpra}
