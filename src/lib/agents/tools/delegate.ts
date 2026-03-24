@@ -60,6 +60,17 @@ export function createDelegateTool(ctx: DelegateContext) {
           conversationId: ctx.conversationId,
         })
 
+        // Gateway options — fallback, tracking, compliance
+        const isHealthBrand = ctx.brand.compliance_flags?.ahpra || ctx.brand.compliance_flags?.tga
+        const gatewayOptions = {
+          gateway: {
+            models: ['openai/gpt-4.1'] as string[],
+            user: ctx.userId,
+            tags: [agentType, ctx.brand.slug, 'delegation'],
+            ...(isHealthBrand && { zeroDataRetention: true }),
+          },
+        }
+
         // Run subagent (non-streaming — Director needs the complete result)
         const result = await generateText({
           model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
@@ -67,6 +78,7 @@ export function createDelegateTool(ctx: DelegateContext) {
           prompt: task,
           tools: departmentTools,
           maxSteps: 5,
+          providerOptions: gatewayOptions,
         })
 
         // Calculate cost

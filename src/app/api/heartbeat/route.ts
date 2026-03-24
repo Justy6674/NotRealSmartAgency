@@ -124,13 +124,20 @@ export async function GET(request: Request) {
           .update({ status: 'in_progress', started_at: new Date().toISOString() })
           .eq('id', task.id)
 
-        // Execute
+        // Execute with full Gateway features
         const result = await generateText({
           model: gateway(registry.model || 'anthropic/claude-sonnet-4'),
           system: systemPrompt,
           prompt: taskPrompt,
           tools,
           maxSteps: 5,
+          providerOptions: {
+            gateway: {
+              models: ['openai/gpt-4.1'],
+              user: task.user_id,
+              tags: [registry.agent_type, 'heartbeat'],
+            },
+          },
         })
 
         const inputTokens = result.usage?.inputTokens ?? 0

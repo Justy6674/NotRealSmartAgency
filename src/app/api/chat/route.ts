@@ -134,6 +134,30 @@ export async function POST(request: Request) {
 
   const typedBrand = brand as Brand
 
+  // Add web search tool for Director, SEO, and Market Intelligence
+  if (['overall', 'seo', 'competitor'].includes(agentType)) {
+    ;(tools as Record<string, unknown>).web_search = gateway.tools.perplexitySearch({
+      maxResults: 5,
+      searchLanguageFilter: ['en'],
+      searchRecencyFilter: 'month',
+    })
+  }
+
+  // Gateway provider options — fallbacks, tracking, compliance
+  const isHealthBrand = typedBrand.compliance_flags?.ahpra || typedBrand.compliance_flags?.tga
+  const gatewayOptions = {
+    gateway: {
+      // Fallback: if Claude is down, try GPT-4.1
+      models: ['openai/gpt-4.1'] as string[],
+      // Track spend per user
+      user: user.id,
+      // Tag by agent type for analytics
+      tags: [agentType, typedBrand.slug, 'chat'],
+      // Zero data retention for health brands (AHPRA/TGA compliance)
+      ...(isHealthBrand && { zeroDataRetention: true }),
+    },
+  }
+
   // Create ToolLoopAgent
   const agent = new ToolLoopAgent({
     id: `nrs-${agentType}`,
@@ -146,6 +170,7 @@ export async function POST(request: Request) {
   // Stream the agent's response
   const result = await agent.stream({
     messages: await convertToModelMessages(messages),
+    providerOptions: gatewayOptions,
     onFinish: async ({ text, usage }) => {
       const inputTokens = usage?.inputTokens ?? 0
       const outputTokens = usage?.outputTokens ?? 0
