@@ -16,13 +16,19 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 't2.gstatic.com',
-        pathname: '/faviconV2**',
+        hostname: 'www.notrealsmart.com.au',
       },
       {
         protocol: 'https',
-        hostname: 't0.gstatic.com',
-        pathname: '/faviconV2**',
+        hostname: 'www.telecheck.com.au',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.telescribe.com.au',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.downscale.com.au',
       },
     ],
   },
