@@ -3,7 +3,7 @@ import { getComplianceRules } from './compliance-rules'
 import { memorySearch } from '@/lib/ruflo/client'
 import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
 
-export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig): string {
+export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null): string {
   const sections: string[] = []
 
   // Base agency rules
@@ -16,7 +16,13 @@ Core rules:
 - Produce finished, publish-ready outputs — not drafts, not outlines
 - Use markdown formatting for all outputs
 - When producing a deliverable, clearly label the platform, format, and character/word count
-- Be direct and actionable — no filler, no preamble`)
+- Be direct and actionable — no filler, no preamble
+- The user is time-poor — give complete, ready-to-use outputs, not suggestions or outlines`)
+
+  // User work context (how the founder operates)
+  if (userWorkContext) {
+    sections.push(`## About the User\n${userWorkContext}`)
+  }
 
   // Brand context
   sections.push(buildBrandContext(brand))
@@ -92,6 +98,19 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`\n**Additional Context:** ${brand.extra_context}`)
   }
 
+  // Team & workflow context
+  const brandAny = brand as unknown as Record<string, unknown>
+  const teamContext = brandAny.team_context as string | undefined
+  const socialStrategy = brandAny.social_strategy as string | undefined
+  const devTools = brandAny.dev_tools as string | undefined
+
+  if (teamContext || socialStrategy || devTools) {
+    lines.push(`\n## How This Brand Operates`)
+    if (teamContext) lines.push(`**Team:** ${teamContext}`)
+    if (socialStrategy) lines.push(`**Social Media Strategy:** ${socialStrategy}`)
+    if (devTools) lines.push(`**Development Tools:** ${devTools}`)
+  }
+
   return lines.join('\n')
 }
 
@@ -102,9 +121,10 @@ function buildBrandContext(brand: Brand): string {
 export async function buildSystemPromptWithMemory(
   brand: Brand,
   agentConfig: AgentConfig,
-  latestMessage: string
+  latestMessage: string,
+  userWorkContext?: string | null
 ): Promise<{ prompt: string; memoryCount: number }> {
-  const basePrompt = buildSystemPrompt(brand, agentConfig)
+  const basePrompt = buildSystemPrompt(brand, agentConfig, userWorkContext)
 
   try {
     const namespace = getNamespace(brand.slug, agentConfig.agent_type)

@@ -104,11 +104,19 @@ export async function POST(request: Request) {
       ?? ''
     : ''
 
-  // Build system prompt with memory context
+  // Fetch user work context (how they operate — dev tools, social media, workflow)
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('work_context')
+    .eq('id', user.id)
+    .single()
+
+  // Build system prompt with memory context + user work context
   const { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
     brand as Brand,
     agentConfig as AgentConfig,
-    lastMessageText
+    lastMessageText,
+    userProfile?.work_context
   )
 
   // Get tools for this agent
