@@ -1,3 +1,5 @@
+export const maxDuration = 300 // Fluid Compute — 5 minutes for delegation
+
 import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'

@@ -71,14 +71,19 @@ export function createDelegateTool(ctx: DelegateContext) {
           },
         }
 
-        // Run subagent (non-streaming — Director needs the complete result)
+        // Run subagent with 120s timeout
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 120000)
+
         const result = await generateText({
           model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
           system: departmentPrompt,
           prompt: task,
           tools: departmentTools,
           providerOptions: gatewayOptions,
+          abortSignal: controller.signal,
         })
+        clearTimeout(timeout)
 
         // Calculate cost
         const inputTokens = result.usage?.inputTokens ?? 0
@@ -89,6 +94,24 @@ export function createDelegateTool(ctx: DelegateContext) {
         if (registry) {
           await recordAgentSpend(ctx.supabase, registry.id, costCents)
         }
+
+        // Auto-save delegation result to output library
+        const outputTypeMap: Record<string, string> = {
+          content: 'social_post', seo: 'seo_audit', paid_ads: 'ad_copy',
+          strategy: 'strategy_doc', email: 'email_sequence', growth: 'strategy_doc',
+          brand: 'brand_guide', competitor: 'competitor_report', website: 'landing_page',
+          compliance: 'compliance_check', analytics: 'analytics_report', automation: 'automation_workflow',
+        }
+        // Auto-save to output library (fire and forget)
+        void ctx.supabase.from('outputs').insert({
+          user_id: ctx.userId,
+          brand_id: ctx.brandId,
+          conversation_id: ctx.conversationId,
+          output_type: outputTypeMap[agentType] ?? 'other',
+          title: `${agentType}: ${task.slice(0, 80)}`,
+          content: result.text,
+          metadata: { source: 'delegation', department: agentType, tokensUsed: inputTokens + outputTokens, costCents },
+        })
 
         // Audit log
         await logAudit({
