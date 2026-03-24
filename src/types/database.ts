@@ -406,3 +406,114 @@ export const OUTPUT_LABELS: Record<OutputType, string> = {
   automation_workflow: 'Automation Workflow',
   other: 'Other',
 }
+
+// ---------------------------------------------------------------------------
+// Agentic Management types (Paperclip patterns)
+// ---------------------------------------------------------------------------
+
+export type AgentRole = 'director' | 'head' | 'worker'
+export type AgentStatus = 'idle' | 'working' | 'paused' | 'terminated'
+export type TaskStatus = 'backlog' | 'assigned' | 'in_progress' | 'review' | 'done' | 'blocked' | 'cancelled'
+export type GoalStatus = 'planned' | 'active' | 'completed' | 'paused' | 'cancelled'
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+export type HeartbeatSource = 'cron' | 'event' | 'manual'
+export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+export type GoalLevel = 'objective' | 'key_result' | 'task'
+
+export interface AgentRegistryEntry {
+  id: string
+  user_id: string
+  agent_type: AgentType
+  role: AgentRole
+  department: string | null
+  reports_to: string | null
+  model: string
+  status: AgentStatus
+  is_active: boolean
+  budget_monthly_cents: number
+  spent_monthly_cents: number
+  last_heartbeat_at: string | null
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface Goal {
+  id: string
+  user_id: string
+  parent_id: string | null
+  title: string
+  description: string | null
+  level: GoalLevel
+  status: GoalStatus
+  owner_agent_id: string | null
+  brand_id: string | null
+  deadline: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Task {
+  id: string
+  user_id: string
+  goal_id: string | null
+  parent_id: string | null
+  brand_id: string | null
+  assigned_agent_id: string | null
+  created_by_agent_id: string | null
+  title: string
+  description: string | null
+  context: Record<string, unknown>
+  status: TaskStatus
+  priority: TaskPriority
+  result: Record<string, unknown> | null
+  tokens_used: number
+  cost_cents: number
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AuditLogEntry {
+  id: string
+  user_id: string
+  agent_id: string | null
+  task_id: string | null
+  action: string
+  entity_type: string
+  entity_id: string | null
+  detail: Record<string, unknown>
+  cost_cents: number
+  created_at: string
+}
+
+export interface ApprovalQueueEntry {
+  id: string
+  user_id: string
+  agent_id: string | null
+  task_id: string | null
+  action_type: string
+  payload: Record<string, unknown>
+  status: ApprovalStatus
+  decision_note: string | null
+  reviewed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Heartbeat {
+  id: string
+  user_id: string
+  agent_id: string | null
+  triggered_by: HeartbeatSource
+  status: 'queued' | 'running' | 'succeeded' | 'failed'
+  tasks_checked: number
+  tasks_actioned: number
+  duration_ms: number | null
+  error: string | null
+  context_snapshot: Record<string, unknown> | null
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+}

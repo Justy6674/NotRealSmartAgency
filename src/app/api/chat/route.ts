@@ -1,12 +1,14 @@
-import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from 'ai'
+import { ToolLoopAgent, stepCountIs, convertToModelMessages, type UIMessage } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
 import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
+import { getToolsForAgent } from '@/lib/agents/tools'
+import { createDelegateTool } from '@/lib/agents/tools/delegate'
 import { memoryStore } from '@/lib/ruflo/client'
 import { getNamespace } from '@/lib/ruflo/namespaces'
-import { ensureAgent } from '@/lib/ruflo/ensure-agent'
-import { getToolsForAgent } from '@/lib/agents/tools'
+import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
+import { logAudit } from '@/lib/agents/audit'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
 
 const VALID_AGENT_TYPES: AgentType[] = [
@@ -73,8 +75,24 @@ export async function POST(request: Request) {
     })
   }
 
-  // Ensure agent is registered
-  await ensureAgent(agentType)
+  // Get/create agent registry entry (org chart + budget)
+  const registry = await getOrCreateAgentRegistry(supabase, user.id, agentType)
+
+  // Check budget before starting
+  if (registry) {
+    const budget = await checkBudget(supabase, registry.id)
+    if (!budget.allowed) {
+      return new Response(JSON.stringify({
+        error: 'Budget exceeded',
+        message: `${agentConfig.display_name} has exhausted its monthly budget. Please increase the budget or wait for the monthly reset.`,
+        spent: budget.spent,
+        limit: budget.limit,
+      }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
 
   // Get latest user message for memory search
   const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
@@ -99,19 +117,44 @@ export async function POST(request: Request) {
     userId: user.id,
     brandId,
     conversationId: conversationId ?? null,
+    agentRegistryId: registry?.id ?? null,
   })
+
+  // Add delegation tool for Director only
+  if (agentType === 'overall') {
+    const delegateTool = createDelegateTool({
+      supabase,
+      userId: user.id,
+      brandId,
+      brand: brand as Brand,
+      conversationId: conversationId ?? null,
+    })
+    ;(tools as Record<string, unknown>).delegate_to_agent = delegateTool
+  }
 
   const typedBrand = brand as Brand
 
-  const result = streamText({
-    model: gateway('anthropic/claude-sonnet-4'),
-    system: systemPrompt,
-    messages: await convertToModelMessages(messages),
+  // Create ToolLoopAgent
+  const agent = new ToolLoopAgent({
+    id: `nrs-${agentType}`,
+    model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
+    instructions: systemPrompt,
     tools,
     stopWhen: stepCountIs(5),
+  })
+
+  // Stream the agent's response
+  const result = await agent.stream({
+    messages: await convertToModelMessages(messages),
     onFinish: async ({ text, usage }) => {
-      const inputTokens = usage.inputTokens ?? 0
-      const outputTokens = usage.outputTokens ?? 0
+      const inputTokens = usage?.inputTokens ?? 0
+      const outputTokens = usage?.outputTokens ?? 0
+      const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
+
+      // Record spend against budget
+      if (registry) {
+        await recordAgentSpend(supabase, registry.id, costCents)
+      }
 
       // Log token usage
       await supabase.from('ai_usage').insert({
@@ -119,9 +162,28 @@ export async function POST(request: Request) {
         query_type: `agency_${agentType}`,
         tokens_input: inputTokens,
         tokens_output: outputTokens,
-        model: 'anthropic/claude-sonnet-4',
-        cost_usd: (inputTokens * 0.003 + outputTokens * 0.015) / 1000,
-        metadata: { memoryCount },
+        model: registry?.model || 'anthropic/claude-sonnet-4',
+        cost_usd: costCents / 100,
+        metadata: { memoryCount, agentRegistryId: registry?.id },
+      })
+
+      // Audit log
+      await logAudit({
+        supabase,
+        userId: user.id,
+        agentId: registry?.id,
+        action: 'chat_completed',
+        entityType: 'conversation',
+        entityId: conversationId ?? undefined,
+        detail: {
+          agentType,
+          brand: typedBrand.slug,
+          inputTokens,
+          outputTokens,
+          costCents,
+          memoryCount,
+        },
+        costCents,
       })
 
       // Store conversation summary to memory (non-blocking)
