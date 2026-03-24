@@ -13,6 +13,8 @@ import {
   Users,
   ShieldCheck,
   DollarSign,
+  Activity,
+  FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -29,6 +31,37 @@ const AGENT_BADGE_CLASSES: Partial<Record<AgentType, string>> = Object.fromEntri
     val.split(' ').slice(0, 2).join(' '), // e.g. "bg-amber-500/15 text-amber-400"
   ])
 )
+
+// ─── Date Grouping Helper ─────────────────────────────────────────────────────
+
+function groupConversationsByDate(conversations: Conversation[]) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterday = new Date(today.getTime() - 86400000)
+  const weekAgo = new Date(today.getTime() - 7 * 86400000)
+
+  const groups: { label: string; items: Conversation[] }[] = [
+    { label: 'Today', items: [] },
+    { label: 'Yesterday', items: [] },
+    { label: 'This Week', items: [] },
+    { label: 'Older', items: [] },
+  ]
+
+  for (const conv of conversations) {
+    const date = new Date(conv.updated_at)
+    if (date >= today) {
+      groups[0].items.push(conv)
+    } else if (date >= yesterday) {
+      groups[1].items.push(conv)
+    } else if (date >= weekAgo) {
+      groups[2].items.push(conv)
+    } else {
+      groups[3].items.push(conv)
+    }
+  }
+
+  return groups.filter(g => g.items.length > 0)
+}
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -101,7 +134,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) {
-          setConversations((data as Conversation[]).slice(0, 10))
+          setConversations((data as Conversation[]).slice(0, 30))
         }
       })
   }, [activeBrandId])
@@ -221,7 +254,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
 
         <div className="mx-3 my-1 h-px bg-border" />
 
-        {/* ── Recent Chats ──────────────────────────────────────────────────── */}
+        {/* ── Recent Chats (grouped by date) ──────────────────────────────── */}
         <section className="px-3 py-2">
           <p className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Recent Chats
@@ -231,43 +264,52 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
               {activeBrandId ? 'No conversations yet' : 'Select a brand to see chats'}
             </p>
           ) : (
-            <ul className="space-y-0.5">
-              {conversations.map((conv) => {
-                const badgeClass =
-                  AGENT_BADGE_CLASSES[conv.agent_type] ??
-                  'bg-muted text-muted-foreground'
-                const title = conv.title ?? 'Untitled'
-                const truncated =
-                  title.length > 40 ? title.slice(0, 40) + '…' : title
+            <div className="space-y-2">
+              {groupConversationsByDate(conversations).map(({ label, items }) => (
+                <div key={label}>
+                  <p className="px-1 mb-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                    {label}
+                  </p>
+                  <ul className="space-y-0.5">
+                    {items.map((conv) => {
+                      const badgeClass =
+                        AGENT_BADGE_CLASSES[conv.agent_type] ??
+                        'bg-muted text-muted-foreground'
+                      const title = conv.title ?? 'Untitled'
+                      const truncated =
+                        title.length > 40 ? title.slice(0, 40) + '…' : title
 
-                return (
-                  <li key={conv.id}>
-                    <button
-                      onClick={() => handleSelectConversation(conv)}
-                      className={cn(
-                        'flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors',
-                        activeConversationId === conv.id
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-foreground hover:bg-muted'
-                      )}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <MessageSquare className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className="truncate text-sm">{truncated}</span>
-                      </div>
-                      <span
-                        className={cn(
-                          'ml-4.5 rounded-full px-1.5 py-0 text-[10px] font-medium w-fit',
-                          badgeClass
-                        )}
-                      >
-                        {AGENT_LABELS[conv.agent_type]}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                      return (
+                        <li key={conv.id}>
+                          <button
+                            onClick={() => handleSelectConversation(conv)}
+                            className={cn(
+                              'flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors',
+                              activeConversationId === conv.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <MessageSquare className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <span className="truncate text-sm">{truncated}</span>
+                            </div>
+                            <span
+                              className={cn(
+                                'ml-4.5 rounded-full px-1.5 py-0 text-[10px] font-medium w-fit',
+                                badgeClass
+                              )}
+                            >
+                              {AGENT_LABELS[conv.agent_type]}
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </section>
 
@@ -331,10 +373,12 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
           </p>
           <nav className="space-y-0.5">
             {[
+              { href: '/agency/outputs', icon: FileText, label: 'Outputs' },
               { href: '/agency/tasks', icon: ListTodo, label: 'Tasks' },
               { href: '/agency/agents', icon: Users, label: 'Agents' },
               { href: '/agency/approvals', icon: ShieldCheck, label: 'Approvals' },
               { href: '/agency/costs', icon: DollarSign, label: 'Costs' },
+              { href: '/agency/activity', icon: Activity, label: 'Activity' },
             ].map(({ href, icon: NavIcon, label }) => (
               <Link
                 key={href}

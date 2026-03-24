@@ -71,9 +71,9 @@ export function createDelegateTool(ctx: DelegateContext) {
           },
         }
 
-        // Run subagent with 120s timeout
+        // Run subagent with 90s timeout (reduced from 120s to stay within Vercel function limits)
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 120000)
+        const timeout = setTimeout(() => controller.abort(), 90000)
 
         const result = await generateText({
           model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { Wrench, ChevronDown, Loader2, Check } from 'lucide-react'
 import { AGENT_LABELS } from '@/types/database'
@@ -32,13 +32,132 @@ const TOOL_LABELS: Record<string, string> = {
   web_search: 'Searching the web',
 }
 
+// ─── Delegation Progress Steps ──────────────────────────────────────────────
+
+const DELEGATION_STEPS: Record<string, { label: string; delay: number }[]> = {
+  content: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Reviewing compliance rules', delay: 2000 },
+    { label: 'Researching topic', delay: 5000 },
+    { label: 'Writing content', delay: 10000 },
+    { label: 'Checking word count & formatting', delay: 22000 },
+    { label: 'Finalising output', delay: 35000 },
+  ],
+  seo: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Analysing current SEO', delay: 2000 },
+    { label: 'Researching keywords', delay: 6000 },
+    { label: 'Building recommendations', delay: 15000 },
+    { label: 'Finalising audit', delay: 28000 },
+  ],
+  paid_ads: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Reviewing compliance rules', delay: 2000 },
+    { label: 'Analysing target audience', delay: 5000 },
+    { label: 'Writing ad copy variants', delay: 12000 },
+    { label: 'Building campaign structure', delay: 22000 },
+    { label: 'Finalising output', delay: 32000 },
+  ],
+  strategy: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Analysing market position', delay: 3000 },
+    { label: 'Evaluating competitors', delay: 8000 },
+    { label: 'Building strategy', delay: 16000 },
+    { label: 'Finalising recommendations', delay: 28000 },
+  ],
+  email: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Reviewing compliance rules', delay: 2000 },
+    { label: 'Planning email sequence', delay: 5000 },
+    { label: 'Writing email copy', delay: 10000 },
+    { label: 'Optimising subject lines', delay: 22000 },
+    { label: 'Finalising sequence', delay: 30000 },
+  ],
+  competitor: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Identifying competitors', delay: 3000 },
+    { label: 'Analysing positioning', delay: 8000 },
+    { label: 'Comparing pricing', delay: 15000 },
+    { label: 'Building SWOT analysis', delay: 22000 },
+    { label: 'Finalising report', delay: 30000 },
+  ],
+  compliance: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Checking AHPRA requirements', delay: 2000 },
+    { label: 'Checking TGA requirements', delay: 6000 },
+    { label: 'Scanning for violations', delay: 12000 },
+    { label: 'Assessing risk levels', delay: 20000 },
+    { label: 'Finalising compliance report', delay: 28000 },
+  ],
+  _default: [
+    { label: 'Loading brand context', delay: 0 },
+    { label: 'Reviewing requirements', delay: 2000 },
+    { label: 'Researching', delay: 6000 },
+    { label: 'Building output', delay: 14000 },
+    { label: 'Finalising', delay: 26000 },
+  ],
+}
+
+function DelegationProgress({ agentType, isComplete }: { agentType: string; isComplete: boolean }) {
+  const [currentStep, setCurrentStep] = useState(0)
+  const steps = DELEGATION_STEPS[agentType] ?? DELEGATION_STEPS._default
+
+  useEffect(() => {
+    if (isComplete) {
+      setCurrentStep(steps.length)
+      return
+    }
+
+    const timers: ReturnType<typeof setTimeout>[] = []
+    for (let i = 1; i < steps.length; i++) {
+      timers.push(setTimeout(() => setCurrentStep(i), steps[i].delay))
+    }
+
+    return () => timers.forEach(clearTimeout)
+  }, [isComplete, steps])
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      {steps.map((step, i) => {
+        const isDone = isComplete || i < currentStep
+        const isActive = !isComplete && i === currentStep
+
+        return (
+          <div key={i} className="flex items-center gap-2 text-xs">
+            {isDone ? (
+              <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+            ) : isActive ? (
+              <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
+            ) : (
+              <div className="h-3 w-3 rounded-full border border-border shrink-0" />
+            )}
+            <span className={cn(
+              isDone ? 'text-muted-foreground' : isActive ? 'text-foreground' : 'text-muted-foreground/50'
+            )}>
+              {step.label}
+            </span>
+          </div>
+        )
+      })}
+      {isComplete && (
+        <div className="flex items-center gap-2 text-xs">
+          <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+          <span className="text-emerald-500 font-medium">Complete</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Tool Label Logic ───────────────────────────────────────────────────────
+
 function getToolLabel(toolName: string, args: Record<string, unknown>, state: string): string {
   // For delegation, show which department is working
   if (toolName === 'delegate_to_agent' && args?.agentType) {
     const deptName = AGENT_LABELS[args.agentType as AgentType] ?? args.agentType
     return state === 'result'
       ? `${deptName} completed`
-      : `${deptName} is working on this...`
+      : `${deptName} is working...`
   }
 
   // For handoff, show target department
@@ -65,9 +184,13 @@ function getToolLabel(toolName: string, args: Record<string, unknown>, state: st
   return TOOL_LABELS[toolName] ?? toolName
 }
 
+// ─── Main Component ─────────────────────────────────────────────────────────
+
 export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDisplayProps) {
   const [expanded, setExpanded] = useState(false)
   const label = getToolLabel(toolName, args, state)
+  const isDelegation = toolName === 'delegate_to_agent'
+  const isComplete = state === 'result'
 
   return (
     <div className="rounded-lg border bg-background/50 text-sm">
@@ -75,7 +198,7 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-muted-foreground hover:text-foreground"
       >
-        {state === 'result' ? (
+        {isComplete ? (
           <Check className="h-3.5 w-3.5 text-green-600" />
         ) : (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -90,6 +213,16 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
         />
       </button>
 
+      {/* Delegation progress steps — always visible during delegation */}
+      {isDelegation && (
+        <div className="px-3 pb-2">
+          <DelegationProgress
+            agentType={String(args?.agentType ?? '')}
+            isComplete={isComplete}
+          />
+        </div>
+      )}
+
       {expanded && (
         <div className="border-t px-3 py-2 space-y-2">
           <div>
@@ -101,8 +234,10 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
           {result !== undefined && (
             <div>
               <p className="text-xs font-medium text-muted-foreground">Result</p>
-              <pre className="mt-1 text-xs overflow-x-auto whitespace-pre-wrap text-muted-foreground">
-                {JSON.stringify(result, null, 2)}
+              <pre className="mt-1 text-xs overflow-x-auto whitespace-pre-wrap text-muted-foreground max-h-60 overflow-y-auto">
+                {typeof result === 'object' && result !== null && 'result' in (result as Record<string, unknown>)
+                  ? String((result as Record<string, unknown>).result).slice(0, 2000)
+                  : JSON.stringify(result, null, 2).slice(0, 2000)}
               </pre>
             </div>
           )}

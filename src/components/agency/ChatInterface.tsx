@@ -48,7 +48,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     [activeBrandId, activeAgentType, conversationId]
   )
 
-  const { messages, sendMessage, setMessages, status } = useChat({
+  const { messages, sendMessage, setMessages, status, error } = useChat({
     transport,
   })
 
@@ -136,6 +136,30 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
           </div>
         )}
       </div>
+
+      {/* Error recovery */}
+      {error && (
+        <div className="mx-4 mb-2 flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2.5">
+          <p className="flex-1 text-sm text-red-400">
+            Connection lost — {error.message?.includes('fetch') ? 'network interrupted' : error.message}
+          </p>
+          <button
+            onClick={() => {
+              const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
+              if (lastUserMsg) {
+                const text = lastUserMsg.parts
+                  ?.filter((p: { type: string }) => p.type === 'text')
+                  .map((p: { type: string; text?: string }) => p.text ?? '')
+                  .join(' ') ?? ''
+                if (text) handleSend(text)
+              }
+            }}
+            className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Input */}
       <ChatInput onSend={handleSend} isLoading={isLoading} />
