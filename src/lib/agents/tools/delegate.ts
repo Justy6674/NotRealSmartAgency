@@ -77,7 +77,6 @@ export function createDelegateTool(ctx: DelegateContext) {
           system: departmentPrompt,
           prompt: task,
           tools: departmentTools,
-          maxSteps: 5,
           providerOptions: gatewayOptions,
         })
 

@@ -1,7 +1,7 @@
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
 import { getToolsForAgent } from '@/lib/agents/tools'
 import { recordAgentSpend, checkBudget } from '@/lib/agents/registry'
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     return new Response('Unauthorised', { status: 401 })
   }
 
-  const supabase = createClient()
+  const supabase = createAdminClient()
   const startTime = Date.now()
   let totalChecked = 0
   let totalActioned = 0
@@ -130,7 +130,6 @@ export async function GET(request: Request) {
           system: systemPrompt,
           prompt: taskPrompt,
           tools,
-          maxSteps: 5,
           providerOptions: {
             gateway: {
               models: ['openai/gpt-4.1'],

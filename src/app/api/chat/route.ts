@@ -158,19 +158,19 @@ export async function POST(request: Request) {
     },
   }
 
-  // Create ToolLoopAgent
+  // Create ToolLoopAgent with Gateway options
   const agent = new ToolLoopAgent({
     id: `nrs-${agentType}`,
     model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
     instructions: systemPrompt,
     tools,
     stopWhen: stepCountIs(5),
+    providerOptions: gatewayOptions,
   })
 
   // Stream the agent's response
   const result = await agent.stream({
     messages: await convertToModelMessages(messages),
-    providerOptions: gatewayOptions,
     onFinish: async ({ text, usage }) => {
       const inputTokens = usage?.inputTokens ?? 0
       const outputTokens = usage?.outputTokens ?? 0

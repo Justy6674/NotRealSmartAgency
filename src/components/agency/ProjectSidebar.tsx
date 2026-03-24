@@ -252,7 +252,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
           {teamExpanded && (
             <ul className="space-y-0.5">
               {ACTIVE_AGENT_TYPES.map((agent, index) => {
-                const Icon = AGENT_ICONS[agent] ?? UserCircle
+                const Icon = AGENT_ICONS[agent]
                 const isOverall = agent === 'overall'
                 const isActive = activeAgentType === agent
 
