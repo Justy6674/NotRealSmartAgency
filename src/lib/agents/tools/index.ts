@@ -12,6 +12,8 @@ import { createHandoffTool } from './handoff'
 import { createSendEmailTool } from './send-email'
 import { createGenerateImageTool } from './generate-image'
 import { createBrowsePageTool } from './browse-page'
+import { createReadGmailTool } from './read-gmail'
+import { createGenerateSlidesTool } from './generate-slides'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -59,6 +61,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const sendEmail = createSendEmailTool()
   const generateImageTool = createGenerateImageTool()
   const browsePage = createBrowsePageTool()
+  const readGmail = createReadGmailTool()
+  const generateSlides = createGenerateSlidesTool()
 
   // Base management tools every agent gets
   const managementTools = {
@@ -79,17 +83,19 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       browse_page: browsePage,
       generate_image: generateImageTool,
       send_email: sendEmail,
+      read_gmail: readGmail,
+      generate_slides: generateSlides,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, ...managementTools },
-    growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, ...managementTools },
-    strategy: { save_output: saveOutput, browse_page: browsePage, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, ...managementTools },
+    growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
+    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
     compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, ...managementTools },
-    email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, ...managementTools },
+    email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, ...managementTools },
     brand: { save_output: saveOutput, generate_image: generateImageTool, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },

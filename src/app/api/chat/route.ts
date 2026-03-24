@@ -5,8 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
 import { getToolsForAgent } from '@/lib/agents/tools'
 import { createDelegateTool } from '@/lib/agents/tools/delegate'
-import { memoryStore } from '@/lib/ruflo/client'
-import { getNamespace } from '@/lib/ruflo/namespaces'
+import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
@@ -219,21 +218,15 @@ export async function POST(request: Request) {
         costCents,
       })
 
-      // Store conversation summary to memory (non-blocking)
+      // Smart memory extraction — pulls decisions, preferences, and summaries
       if (text && text.length > 20) {
-        const namespace = getNamespace(typedBrand.slug, agentType)
-        memoryStore(
-          `conv-${conversationId ?? 'new'}-${Date.now()}`,
-          {
-            agent: agentType,
-            brand: typedBrand.slug,
-            userQuery: lastMessageText.slice(0, 200),
-            summary: text.slice(0, 500),
-            timestamp: new Date().toISOString(),
-          },
-          namespace,
-          [agentType, typedBrand.slug, 'conversation']
-        ).catch((err) => console.error('[chat] Memory store failed:', err))
+        extractAndStoreMemories({
+          brandSlug: typedBrand.slug,
+          agentType,
+          userMessage: lastMessageText,
+          assistantResponse: text,
+          conversationId: conversationId ?? null,
+        }).catch((err) => console.error('[chat] Memory extraction failed:', err))
       }
     },
   })

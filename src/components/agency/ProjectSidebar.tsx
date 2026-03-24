@@ -20,6 +20,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ACTIVE_AGENT_TYPES, AGENT_LABELS } from '@/types/database'
 import type { Brand, Conversation, AgentType } from '@/types/database'
 import { AGENT_ICONS, AGENT_COLOURS } from '@/components/agency/AgentAvatar'
+import { AddBrandDialog } from './AddBrandDialog'
 
 // Badge classes derived from AGENT_COLOURS (just the bg + text parts)
 const AGENT_BADGE_CLASSES: Partial<Record<AgentType, string>> = Object.fromEntries(
@@ -51,6 +52,24 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const [brands, setBrands] = useState<Brand[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [teamExpanded, setTeamExpanded] = useState(true)
+  const [showAddBrand, setShowAddBrand] = useState(false)
+
+  const fetchBrands = () => {
+    const supabase = createClient()
+    supabase
+      .from('brands')
+      .select('*')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => {
+        if (data) {
+          setBrands(data as Brand[])
+          if (!activeBrandId && data.length > 0) {
+            setBrand((data[0] as Brand).id)
+          }
+        }
+      })
+  }
 
   // Fetch brands on mount
   useEffect(() => {
@@ -185,14 +204,16 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
               ))}
             </ul>
           )}
-          <Link
-            href="/agency/brands"
+          <button
+            onClick={() => setShowAddBrand(true)}
             className="mt-1.5 flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-primary"
-            onClick={onClose}
           >
             <Plus className="h-3 w-3" />
             Add Brand
-          </Link>
+          </button>
+          {showAddBrand && (
+            <AddBrandDialog onClose={() => { setShowAddBrand(false); fetchBrands() }} />
+          )}
         </section>
 
         <div className="mx-3 my-1 h-px bg-border" />

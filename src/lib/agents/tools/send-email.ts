@@ -12,8 +12,9 @@ export function createSendEmailTool() {
       html: z.string().describe('Full HTML email body. Must include unsubscribe link placeholder {{unsubscribe_url}} and sender ABN.'),
       previewText: z.string().max(150).optional().describe('Preview text shown in inbox (90 chars ideal)'),
       replyTo: z.string().email().optional().describe('Reply-to address'),
+      bcc: z.string().email().optional().describe('BCC address — always BCC the sender for records'),
     }),
-    execute: async ({ to, subject, html, previewText, replyTo }) => {
+    execute: async ({ to, subject, html, previewText, replyTo, bcc }) => {
       const apiKey = process.env.RESEND_API_KEY
       if (!apiKey) {
         return {
@@ -34,6 +35,7 @@ export function createSendEmailTool() {
         const { data, error } = await resend.emails.send({
           from: `NRS Agency <${process.env.RESEND_FROM_EMAIL ?? 'noreply@notrealsmart.com.au'}>`,
           to,
+          bcc: bcc ?? process.env.RESEND_FROM_EMAIL ?? 'office@notrealsmart.com.au',
           subject,
           html: fullHtml,
           replyTo: replyTo ?? process.env.RESEND_REPLY_TO,
