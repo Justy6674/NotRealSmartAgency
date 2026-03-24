@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { User } from 'lucide-react'
+import Markdown from 'react-markdown'
 import { ToolCallDisplay } from './ToolCallDisplay'
 import { AgentAvatar } from './AgentAvatar'
 import { AGENT_LABELS } from '@/types/database'
@@ -42,8 +43,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
           {message.parts?.map((part, i) => {
             if (part.type === 'text') {
               return (
-                <div key={i} className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                  {part.text}
+                <div key={i} className="prose prose-sm dark:prose-invert max-w-none">
+                  <Markdown>{part.text}</Markdown>
                 </div>
               )
             }
