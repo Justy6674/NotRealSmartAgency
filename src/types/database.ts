@@ -296,6 +296,7 @@ export interface Brand {
   website_url: string | null
   github_url: string | null
   logo_url: string | null
+  business_stage: 'idea' | 'mvp' | 'launch' | 'growth' | 'scale' | 'mature'
   social_urls: Record<string, string>
   niche: string
   tone_of_voice: ToneOfVoice

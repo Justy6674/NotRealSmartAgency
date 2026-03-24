@@ -41,7 +41,19 @@ function buildBrandContext(brand: Brand): string {
   if (brand.tagline) lines.push(`**Tagline:** ${brand.tagline}`)
   if (brand.description) lines.push(`**Description:** ${brand.description}`)
   if (brand.website_url) lines.push(`**Website:** ${brand.website_url}`)
+  if (brand.github_url) lines.push(`**GitHub:** ${brand.github_url}`)
   lines.push(`**Niche:** ${brand.niche}`)
+  if (brand.business_stage) {
+    const stageDescriptions: Record<string, string> = {
+      idea: 'Idea stage — not yet built. Focus on validation, planning, and early positioning.',
+      mvp: 'MVP stage — product exists but not launched. Focus on launch prep, early adopters, waitlist growth.',
+      launch: 'Launch stage — just launched or recently live. Focus on awareness, first customers, initial traction.',
+      growth: 'Growth stage — established product with customers. Focus on scaling, retention, market share.',
+      scale: 'Scale stage — significant traction, expanding. Focus on efficiency, new markets, brand authority.',
+      mature: 'Mature stage — established market position. Focus on retention, innovation, competitive defence.',
+    }
+    lines.push(`**Business Stage:** ${brand.business_stage} — ${stageDescriptions[brand.business_stage] ?? brand.business_stage}`)
+  }
 
   // Tone of voice
   if (brand.tone_of_voice && Object.keys(brand.tone_of_voice).length > 0) {

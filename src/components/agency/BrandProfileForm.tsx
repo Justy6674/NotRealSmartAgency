@@ -23,7 +23,8 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
     description: brand.description ?? '',
     website_url: brand.website_url ?? '',
     github_url: brand.github_url ?? '',
-    logo_url: (brand as Brand & { logo_url?: string }).logo_url ?? '',
+    logo_url: brand.logo_url ?? '',
+    business_stage: brand.business_stage ?? 'growth',
     niche: brand.niche,
     content_pillars: brand.content_pillars.join(', '),
     extra_context: brand.extra_context ?? '',
@@ -44,6 +45,7 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
         website_url: formData.website_url || null,
         github_url: formData.github_url || null,
         logo_url: formData.logo_url || null,
+        business_stage: formData.business_stage,
         niche: formData.niche,
         content_pillars: formData.content_pillars.split(',').map((s) => s.trim()).filter(Boolean),
         extra_context: formData.extra_context || null,
@@ -179,6 +181,26 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
             value={formData.niche}
             onChange={(e) => setFormData({ ...formData, niche: e.target.value })}
           />
+        </div>
+
+        <div>
+          <Label htmlFor="business_stage">Business Stage</Label>
+          <select
+            id="business_stage"
+            value={formData.business_stage}
+            onChange={(e) => setFormData({ ...formData, business_stage: e.target.value as Brand['business_stage'] })}
+            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+          >
+            <option value="idea">Idea - not yet built</option>
+            <option value="mvp">MVP - built but not launched</option>
+            <option value="launch">Launch - just went live</option>
+            <option value="growth">Growth - established, scaling</option>
+            <option value="scale">Scale - expanding markets</option>
+            <option value="mature">Mature - market leader</option>
+          </select>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Tells agents what marketing strategy fits your current stage.
+          </p>
         </div>
 
         <div>
