@@ -17,12 +17,12 @@ interface ChatInterfaceProps {
 
 export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [brand, setBrand] = useState<Brand | null>(null)
-  const { activeBrandId, activeAgentType, setConversation } = useAgencyStore()
+  const [brand, setBrandLocal] = useState<Brand | null>(null)
+  const { activeBrandId, activeAgentType, setConversation, setBrand, setAgent } = useAgencyStore()
 
   // Fetch active brand for compliance badge and context display
   useEffect(() => {
-    setBrand(null) // Clear immediately to prevent stale brand showing
+    setBrandLocal(null) // Clear immediately to prevent stale brand showing
     if (!activeBrandId) return
     const supabase = createClient()
     supabase
@@ -31,7 +31,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       .eq('id', activeBrandId)
       .single()
       .then(({ data }) => {
-        if (data) setBrand(data as Brand)
+        if (data) setBrandLocal(data as Brand)
       })
   }, [activeBrandId])
 
@@ -59,13 +59,28 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     setMessages([])
   }, [activeBrandId, activeAgentType, setMessages])
 
-  // Load existing messages when opening a conversation
+  // Load existing messages AND restore brand/agent when opening a conversation
   useEffect(() => {
     if (!conversationId) {
       setMessages([])
       return
     }
     const supabase = createClient()
+
+    // Restore brand + agent from conversation record
+    supabase
+      .from('conversations')
+      .select('brand_id, agent_type')
+      .eq('id', conversationId)
+      .single()
+      .then(({ data: conv }) => {
+        if (conv) {
+          if (conv.brand_id && !activeBrandId) setBrand(conv.brand_id)
+          if (conv.agent_type) setAgent(conv.agent_type)
+        }
+      })
+
+    // Load messages
     supabase
       .from('messages')
       .select('*')
