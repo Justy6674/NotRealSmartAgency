@@ -44,6 +44,21 @@ export const BRAND_PORTFOLIO: Record<string, string> = {
 - **Competitors**: Heidi Health, Lyrebird Health (AI scribes). Best Practice, MedicalDirector (legacy PMS)
 `,
 
+  'tele360': `
+## Tele360 — Deep Context
+- **Product**: Full Australian practice management system (PMS) — telehealth-first, AI-native. Replaces Halaxy, Best Practice, MedicalDirector.
+- **Repo**: Tele360PMS (local), tele360 (GitHub)
+- **Tech**: Next.js 14.2, Supabase (23 tables), shadcn/ui, Tailwind CSS, PDFKit, Vercel Cron, Stripe (Phase 2)
+- **Core features**: Day/week calendar scheduling, patient management, 9 clinical note types, MBS invoicing with fee schedule lookup, payment recording, Medicare/DVA claiming prep, pathology/radiology orders, prescriptions (ePrescribing-ready), referral letters, 12 validated clinical calculators (BMI, PHQ-9, K10, Epworth, ASRS, etc.), public booking page with auto-patient creation
+- **TeleScribe embedded**: The consult workspace IS TeleScribe — AI scribe + phone/video + clinical tools
+- **TeleCheck embedded**: Medicare disaster eligibility checker syncs daily
+- **Competitors**: Halaxy (primary — being replaced), Best Practice, MedicalDirector, Cliniko, Zedmed, Jane App
+- **Target**: Australian clinics — GP, allied health, multi-specialty. Phase 2: multi-clinic networks with SaaS model.
+- **Pricing (Phase 2)**: Per-seat SaaS subscriptions, video add-on. Phase 1 is single-clinic free/trial.
+- **Compliance**: Multi-tenancy via clinic_id + RLS. Audit logging on invoices, payments, notes, orders. Consent capture. GST-free medical services (Health Insurance Act 1973). AI = documentation aid only.
+- **Key differentiator**: Only PMS built by a clinician who codes. AI-native from day one. Not a bolt-on — TeleScribe IS the consult experience.
+`,
+
   'telecheck': `
 ## TeleCheck — Deep Context
 - **Product**: Medicare telehealth disaster eligibility checker
