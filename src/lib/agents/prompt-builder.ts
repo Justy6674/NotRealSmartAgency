@@ -1,6 +1,7 @@
 import type { Brand, AgentConfig } from '@/types/database'
 import { getComplianceRules } from './compliance-rules'
 import { getMarketingKnowledge } from './knowledge/au-health-marketing-2025'
+import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
 import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
 
@@ -107,7 +108,16 @@ function buildBrandContext(brand: Brand): string {
 
   // Extra context
   if (brand.extra_context) {
-    lines.push(`\n**Additional Context:** ${brand.extra_context}`)
+    const cleanedContext = brand.extra_context.replace(/\n---DIGEST_SETTINGS---[\s\S]*$/, '').trim()
+    if (cleanedContext) {
+      lines.push(`\n**Additional Context:** ${cleanedContext}`)
+    }
+  }
+
+  // Deep brand context from portfolio scan
+  const portfolioContext = getBrandPortfolioContext(brand.slug)
+  if (portfolioContext) {
+    lines.push(portfolioContext)
   }
 
   // Pricing context
