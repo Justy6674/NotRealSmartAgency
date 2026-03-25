@@ -343,7 +343,7 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
   const label = getToolLabel(toolName, args, state)
   const isDelegation = toolName === 'delegate_to_agent'
   const isMeeting = toolName === 'convene_meeting'
-  const isComplete = state === 'result'
+  const isComplete = state === 'result' || result !== undefined
 
   return (
     <div className="rounded-lg border bg-background/50 text-sm">
