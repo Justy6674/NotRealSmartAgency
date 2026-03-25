@@ -24,6 +24,7 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
     ahpra: false,
     tga: false,
   })
+  const [error, setError] = useState<string | null>(null)
   const [scannedData, setScannedData] = useState<Record<string, string> | null>(null)
 
   const handleScan = async () => {
@@ -99,6 +100,7 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
   const handleCreate = async () => {
     if (!form.name.trim()) return
     setCreating(true)
+    setError(null)
 
     const slug = form.name
       .toLowerCase()
@@ -137,6 +139,9 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
     if (res.ok) {
       router.refresh()
       onClose()
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error || `Failed to create brand (${res.status})`)
     }
     setCreating(false)
   }
@@ -250,13 +255,24 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
           </div>
         </div>
 
+        {error && (
+          <div className="mt-3 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400">
+            {error}
+          </div>
+        )}
+
         <div className="flex gap-2 mt-5">
           <button
             onClick={handleCreate}
             disabled={creating || !form.name.trim()}
             className="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
-            {creating ? 'Creating...' : 'Create Brand'}
+            {creating ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Creating...
+              </span>
+            ) : 'Create Brand'}
           </button>
           <button onClick={onClose} className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
             Cancel

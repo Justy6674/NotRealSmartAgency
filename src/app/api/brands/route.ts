@@ -5,16 +5,22 @@ import { createClient } from '@/lib/supabase/server'
 const CreateBrandSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(1),
-  tagline: z.string().optional(),
-  description: z.string().optional(),
-  website_url: z.string().url().optional().or(z.literal('')),
+  tagline: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  website_url: z.string().nullable().optional(),
+  github_url: z.string().nullable().optional(),
+  logo_url: z.string().nullable().optional(),
   niche: z.string().min(1),
+  business_stage: z.string().optional(),
   tone_of_voice: z.record(z.unknown()).optional(),
   target_audience: z.record(z.unknown()).optional(),
   competitors: z.array(z.record(z.unknown())).optional(),
   compliance_flags: z.record(z.unknown()).optional(),
   content_pillars: z.array(z.string()).optional(),
-  extra_context: z.string().optional(),
+  brand_colours: z.record(z.unknown()).optional(),
+  social_urls: z.record(z.unknown()).optional(),
+  extra_context: z.string().nullable().optional(),
+  is_active: z.boolean().optional(),
 })
 
 export async function GET() {
