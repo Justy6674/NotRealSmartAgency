@@ -14,19 +14,54 @@ export const AU_HEALTH_MARKETING_KNOWLEDGE = `
 
 ### REGULATORY LANDSCAPE — NON-NEGOTIABLE
 
-**AHPRA Advertising:**
-- Penalties up to $60,000 per offence for non-compliant advertising
+**AHPRA — Health Practitioner Regulation National Law Act 2009:**
+- Section 133: offence to advertise a regulated health service in a way that is false, misleading, or creates unreasonable expectations
+- Section 133A: offence to use testimonials or purported testimonials in advertising
+- Penalties: up to $60,000 (individual) or $120,000 (body corporate) PER OFFENCE
 - AI-generated content carries the SAME legal accountability as manually written content (September 2025 update)
-- No testimonials that include clinical outcomes, before/after comparisons, or create unreasonable expectations
-- All advertising must include practitioner name, profession, and registration number where applicable
-- Cosmetic procedure advertising has additional restrictions as of September 2025
+- AHPRA proactively scans websites and social media using AI since September 2025
+- Cosmetic procedure advertising: mandatory cooling-off period disclosures, no urgency/pressure tactics, no before/after without strict conditions (September 2025 rules)
+- ALL registered health professions covered: medical, nursing, dental, psychology, physio, chiro, osteo, optometry, pharmacy, podiatry, Chinese medicine, Aboriginal and Torres Strait Islander health practice, occupational therapy, paramedicine
 
-**TGA Enforcement (Active):**
-- $198,000 fine to Midnight Health for telehealth weight-loss advertising violations
-- $300,000+ total in recent infringement notices for social media advertising breaches
-- Updated social media advertising guidance requires clear distinction between educational content and product promotion
-- Therapeutic goods cannot be promoted with personal testimonials or endorsements on social media
-- Telehealth providers: NEVER mention specific prescription drug names (e.g., Ozempic, semaglutide) in advertising
+**TGA — Therapeutic Goods Act 1989 + Therapeutic Goods Advertising Code 2021:**
+- Section 42DL: offence to advertise therapeutic goods to the public in a manner that is prohibited — up to $1.11 million (corporate) per offence
+- ALL prescription medicines (Schedule 4 and Schedule 8) are PROHIBITED from consumer advertising — this includes:
+  - GLP-1 receptor agonists: semaglutide (Ozempic, Wegovy, Rybelsus), tirzepatide (Mounjaro, Zepbound), liraglutide (Saxenda, Victoza), dulaglutide (Trulicity)
+  - Dermatology: tretinoin, adapalene, isotretinoin, spironolactone, hydroquinone (prescription strength)
+  - Mental health: all SSRIs, SNRIs, benzodiazepines, antipsychotics
+  - Pain: all opioids, gabapentinoids
+  - Cannabis: ALL medicinal cannabis products (Schedule 8, accessed via SAS-B or AP)
+  - Hormones: testosterone, oestrogen (HRT), melatonin (prescription in AU)
+  - ANY Schedule 4 or 8 medicine — if it requires a prescription in Australia, it CANNOT be named in consumer-facing advertising
+- You CAN advertise the prescribing SERVICE (e.g., "telehealth weight loss consultations", "online skin consultations")
+- You CAN say "clinician-prescribed treatment" or "prescription medication" generically
+- You CANNOT use brand names, generic drug names, or indirect references that identify specific medicines
+
+**TGA Enforcement Actions (Recent):**
+- $198,000 fine: Midnight Health — telehealth weight-loss advertising violations on social media
+- $300,000+ total: infringement notices across telehealth providers for naming Schedule 4 medicines in social media ads
+- TGA actively monitors TikTok, Instagram, Facebook, Google Ads for breaches
+- Updated social media advertising guidance (2025) requires clear distinction between educational content and product promotion
+- Personal testimonials and endorsements for therapeutic goods are PROHIBITED on social media
+
+**Google Ads Healthcare Policy (Australia):**
+- Prescription drug terms banned in ad copy AND landing pages (Google's own policy, separate from TGA)
+- Rehab/addiction services advertising banned in Australia since 2024
+- Healthcare LPG (Limited Personalised Advertising) — restricted targeting for health-related ads
+- October 2025 update further tightened healthcare and medicines advertising
+- Pharmacies must be certified to advertise OTC medicines
+
+**Meta (Facebook/Instagram) Health Advertising:**
+- Special Ad Category: health & wellness — restricted targeting, no custom audiences based on health data
+- January 2025: cannot optimise for appointment bookings as conversion event
+- Cannot build audiences from health condition page visits
+- 20,000+ health ads flagged for review in H1 2025
+
+**Platform-Specific Restrictions:**
+- TikTok: no remote diagnosis or treatment promotion in paid ads (directly affects telehealth)
+- LinkedIn: no specific health ad restrictions but AHPRA/TGA still apply to all platforms
+- Reddit: community guidelines prohibit medical misinformation; AHPRA/TGA apply regardless of platform
+- ALL platforms: if it's advertising a regulated health service or therapeutic good in Australia, AHPRA and TGA rules apply — there are no platform exceptions
 
 ### GOOGLE ADS — HIGHEST INTENT CHANNEL
 
