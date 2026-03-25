@@ -26,7 +26,7 @@ Downscale Weight Loss (AHPRA+TGA) | DownscaleDerm (TGA) | TeleCheck | TeleScribe
 
 | Department | Agent Type | Key Tools (all also get create_task, request_approval, handoff_to_department) |
 |---|---|---|
-| NRS Director | `overall` | delegate_to_agent, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search |
+| NRS Director | `overall` | delegate_to_agent, convene_meeting, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search |
 | Content & Copy | `content` | save_output, word_count, generate_image, generate_slides |
 | SEO & GEO | `seo` | save_output, word_count, scan_website, browse_page, web_search |
 | Paid Ads | `paid_ads` | save_output, word_count, generate_image |
@@ -70,6 +70,17 @@ Rule-based keyword classification that analyses the user's message and suggests 
 - **Extraction:** `lib/ruflo/memory-extractor.ts` — automatically extracts key facts from assistant responses on chat finish
 - **Prompt integration:** `lib/agents/prompt-builder.ts` — `buildSystemPromptWithMemory()` searches memories before each chat, injects relevant ones into system prompt
 - Also backed by `agent_memories` table in Supabase
+
+### Meeting Room (Multi-Department Collaboration)
+When the intent router detects 2+ departments needed, the Director uses `convene_meeting` instead of `delegate_to_agent`. All departments run in parallel via `Promise.allSettled`. Each gets meeting context ("you are in a meeting with X, Y, Z — focus on YOUR expertise"). Results returned as structured meeting output. Auto-saved to output library with `[Meeting]` prefix.
+
+Compound triggers: comprehensive audit, launch plan, campaign, rebrand, growth strategy, content strategy, competitive analysis.
+
+### 10-Action Report Bar (`components/agency/MessageActions.tsx`)
+Every substantial assistant message (>100 chars) gets action buttons: Save, Email Me, Send to..., Baseline, Re-analyse, Todo, Copy, Remember, Full View, PDF. APIs: `POST /api/outputs`, `POST /api/email-report`, `POST /api/extract-todos`.
+
+### GitHub Repo Scanning
+Add Brand dialog has a scan button. `GET /api/scan-github-quick?url=...` fetches README + package.json + repo metadata. Auto-fills brand name, description, niche, extra_context.
 
 ### Client State (Zustand)
 Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to localStorage key `nrs-agency`. Manages: `activeBrandId`, `activeAgentType`, `activeConversationId`, `activeView`, `sidebarOpen`. Changing brand resets agent to `overall` and clears conversation.

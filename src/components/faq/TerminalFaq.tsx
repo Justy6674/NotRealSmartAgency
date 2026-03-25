@@ -29,17 +29,22 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What is NotRealSmart Agency?',
         answer:
-          'An AI-powered marketing agency with 10 specialist departments. You brief an agent, it produces finished marketing output — social posts, ad copy, SEO strategies, email sequences, and more. Built specifically for Australian health businesses.',
+          'An AI-powered marketing agency with 13 agents — 1 Director and 12 specialist department heads. You brief the Director, it routes work to the right department or convenes a meeting with multiple departments. Built specifically for Australian health businesses.',
       },
       {
         question: 'How is this different from ChatGPT?',
         answer:
-          'Three things. First, brand memory — every agent knows your brand voice, audience, and past outputs. Second, compliance — every output is checked against AHPRA and TGA advertising guidelines. Third, departments — you brief a specialist, not a generalist.',
+          'Five things. Brand memory — every agent knows your brand voice, audience, and past outputs across sessions. Compliance — every output is checked against AHPRA and TGA advertising guidelines. Departments — you brief specialists, not a generalist. Meeting room — complex briefs get input from multiple departments in parallel. Action bar — save, email, create todos, export, and compare reports with one click.',
+      },
+      {
+        question: 'What is the Meeting Room?',
+        answer:
+          'When your brief requires multiple areas of expertise, the Director convenes a meeting. For example, "run a comprehensive marketing audit" brings together Market Intelligence, SEO, Content, Analytics, and Compliance — all working in parallel. Each produces an expert document. The Director then writes a synthesis with priorities.',
       },
       {
         question: 'Do I need marketing experience?',
         answer:
-          'No. Each agent asks the right questions and guides you through the brief. You describe what you want in plain English, and the agent handles the rest.',
+          'No. Each agent asks the right questions and guides you through the brief. You describe what you want in plain English, and the agent handles the rest. Every output includes action items you can turn into a todo list with one click.',
       },
     ],
   },
@@ -97,7 +102,12 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'Can I export my outputs?',
         answer:
-          'Every output is saved to your library. You can copy, download, or iterate on any previous output at any time.',
+          'Every output is saved to your library. You can also copy to clipboard, email to yourself or anyone, export as PDF, save as a baseline for comparison, or generate a todo checklist from any report — all from the action bar below every response.',
+      },
+      {
+        question: 'Can I connect my GitHub repo?',
+        answer:
+          'Yes. When adding a brand, paste your GitHub URL and click scan. The system reads your README, tech stack, and recent commits to give agents better context about your product.',
       },
     ],
   },
