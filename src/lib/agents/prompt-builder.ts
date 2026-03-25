@@ -1,5 +1,6 @@
 import type { Brand, AgentConfig } from '@/types/database'
 import { getComplianceRules } from './compliance-rules'
+import { getMarketingKnowledge } from './knowledge/au-health-marketing-2025'
 import { memorySearch } from '@/lib/ruflo/client'
 import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
 
@@ -29,6 +30,12 @@ Core rules:
 
   // Agent-specific instructions
   sections.push(agentConfig.system_prompt)
+
+  // Marketing intelligence (filtered by agent type)
+  const knowledge = getMarketingKnowledge(agentConfig.agent_type)
+  if (knowledge) {
+    sections.push(knowledge)
+  }
 
   // Compliance layer (conditional)
   if (brand.compliance_flags.ahpra || brand.compliance_flags.tga) {
