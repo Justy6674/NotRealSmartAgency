@@ -274,10 +274,19 @@ export interface TargetAudience {
   desires: string[]
 }
 
+export type CompetitorCategory = 'direct' | 'adjacent' | 'aspirational' | 'indirect'
+
 export interface Competitor {
   name: string
   url: string
   notes: string
+  category?: CompetitorCategory
+  why?: string            // WHY they're a competitor — injected into agent prompts
+  watch_pages?: string[]  // specific pages to monitor: ['/pricing', '/blog']
+  keywords?: string[]     // alert keywords for change detection
+  is_active?: boolean
+  last_snapshot_hash?: string
+  last_checked_at?: string
 }
 
 export interface ComplianceFlags {

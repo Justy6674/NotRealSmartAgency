@@ -87,9 +87,14 @@ function buildBrandContext(brand: Brand): string {
 
   // Competitors
   if (brand.competitors?.length) {
-    lines.push(`\n**Known Competitors:**`)
-    for (const comp of brand.competitors) {
-      lines.push(`- ${comp.name} (${comp.url})${comp.notes ? ` — ${comp.notes}` : ''}`)
+    const activeComps = brand.competitors.filter(c => c.is_active !== false)
+    if (activeComps.length > 0) {
+      lines.push(`\n**Known Competitors:**`)
+      for (const comp of activeComps) {
+        const catLabel = comp.category ? `[${comp.category.toUpperCase()}]` : ''
+        const whyText = comp.why ? ` — "${comp.why}"` : comp.notes ? ` — ${comp.notes}` : ''
+        lines.push(`- ${comp.name} (${comp.url}) ${catLabel}${whyText}`)
+      }
     }
   }
 

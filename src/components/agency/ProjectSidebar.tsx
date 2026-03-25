@@ -15,6 +15,7 @@ import {
   DollarSign,
   Activity,
   FileText,
+  Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -369,6 +370,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
               { href: '/agency/approvals', icon: ShieldCheck, label: 'Approvals' },
               { href: '/agency/costs', icon: DollarSign, label: 'Costs' },
               { href: '/agency/activity', icon: Activity, label: 'Activity' },
+              { href: '/agency/settings', icon: Settings, label: 'Settings' },
             ].map(({ href, icon: NavIcon, label }) => (
               <Link
                 key={href}
