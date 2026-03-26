@@ -38,6 +38,7 @@ function parseSettings(workContext: string): DigestGlobalSettings {
 export function GlobalSettings({ userId, userEmail, workContext }: GlobalSettingsProps) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<DigestGlobalSettings>(parseSettings(workContext))
   const [userContext, setUserContext] = useState(
     workContext.replace(/\n---GLOBAL_DIGEST---[\s\S]*$/, '')
@@ -45,26 +46,31 @@ export function GlobalSettings({ userId, userEmail, workContext }: GlobalSetting
 
   const handleSave = async () => {
     setSaving(true)
+    setError(null)
+
     const newWorkContext = [
       userContext.trim(),
       '---GLOBAL_DIGEST---',
       JSON.stringify(settings),
     ].join('\n')
 
-    await fetch('/api/agents', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        table: 'users',
-        id: userId,
-        updates: { work_context: newWorkContext },
-      }),
-    }).catch(() => {
-      // Fallback: use Supabase directly if agents API doesn't support users table
-    })
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ work_context: newWorkContext }),
+      })
 
-    setSaving(false)
-    router.refresh()
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || `Save failed (${res.status})`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings')
+    } finally {
+      setSaving(false)
+      router.refresh()
+    }
   }
 
   return (
@@ -183,6 +189,10 @@ export function GlobalSettings({ userId, userEmail, workContext }: GlobalSetting
           />
         </div>
       </section>
+
+      {error && (
+        <p className="text-sm text-red-500">{error}</p>
+      )}
 
       <button
         onClick={handleSave}

@@ -81,6 +81,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
     setBrand,
     setAgent,
     setConversation,
+    selectConversation,
   } = useAgencyStore()
 
   const [brands, setBrands] = useState<Brand[]>([])
@@ -138,8 +139,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   }
 
   const handleSelectConversation = (conv: Conversation) => {
-    setConversation(conv.id)
-    setAgent(conv.agent_type)
+    selectConversation(conv.id, conv.agent_type)
     router.push(`/agency/chat/${conv.id}`)
     onClose?.()
   }

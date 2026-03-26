@@ -18,7 +18,7 @@ interface ChatInterfaceProps {
 export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [brand, setBrandLocal] = useState<Brand | null>(null)
-  const { activeBrandId, activeAgentType, setConversation, setBrand, setAgent } = useAgencyStore()
+  const { activeBrandId, activeAgentType, setConversation, restoreContext } = useAgencyStore()
 
   // Refs so the transport always reads the LATEST values at send time
   // (not stale values captured when useMemo ran)
@@ -61,10 +61,10 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
-  // Clear messages when brand or agent changes
+  // Clear messages when brand or agent changes (only on new-chat page)
   useEffect(() => {
-    setMessages([])
-  }, [activeBrandId, activeAgentType, setMessages])
+    if (!conversationId) setMessages([])
+  }, [activeBrandId, activeAgentType, conversationId, setMessages])
 
   // Load existing messages AND restore brand/agent when opening a conversation
   useEffect(() => {
@@ -74,16 +74,15 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     }
     const supabase = createClient()
 
-    // Restore brand + agent from conversation record
+    // Restore brand + agent from conversation record (no side-effect resets)
     supabase
       .from('conversations')
       .select('brand_id, agent_type')
       .eq('id', conversationId)
       .single()
       .then(({ data: conv }) => {
-        if (conv) {
-          if (conv.brand_id) setBrand(conv.brand_id)
-          if (conv.agent_type) setAgent(conv.agent_type)
+        if (conv?.brand_id && conv?.agent_type) {
+          restoreContext(conv.brand_id, conv.agent_type, conversationId)
         }
       })
 

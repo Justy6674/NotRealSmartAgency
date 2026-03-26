@@ -13,6 +13,8 @@ interface AgencyState {
   setBrand: (brandId: string) => void
   setAgent: (agentType: AgentType) => void
   setConversation: (conversationId: string | null) => void
+  selectConversation: (conversationId: string, agentType: AgentType) => void
+  restoreContext: (brandId: string, agentType: AgentType, conversationId: string) => void
   setView: (view: AgencyView) => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
@@ -32,6 +34,10 @@ export const useAgencyStore = create<AgencyState>()(
         set({ activeAgentType: agentType, activeConversationId: null }),
       setConversation: (conversationId) =>
         set({ activeConversationId: conversationId }),
+      selectConversation: (conversationId, agentType) =>
+        set({ activeConversationId: conversationId, activeAgentType: agentType }),
+      restoreContext: (brandId, agentType, conversationId) =>
+        set({ activeBrandId: brandId, activeAgentType: agentType, activeConversationId: conversationId }),
       setView: (view) =>
         set({ activeView: view }),
       toggleSidebar: () =>
