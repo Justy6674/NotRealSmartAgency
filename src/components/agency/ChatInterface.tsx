@@ -284,7 +284,13 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       )}
 
       {/* Input */}
-      <ChatInput onSend={handleSend} isLoading={isLoading} />
+      <ChatInput
+        onSend={handleSend}
+        isLoading={isLoading}
+        brand={brand}
+        agentType={activeAgentType}
+        showChips={messages.length === 0}
+      />
     </div>
   )
 }
