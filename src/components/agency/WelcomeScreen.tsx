@@ -235,41 +235,15 @@ export function WelcomeScreen({ brand, onAction, onBrandRefresh }: WelcomeScreen
   const { activeAgentType } = useAgencyStore()
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-8">
-      {/* Agent identity */}
-      <div className="flex flex-col items-center gap-3 text-center">
-        <AgentAvatar agentType={activeAgentType} size="lg" />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            {AGENT_LABELS[activeAgentType]}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeAgentType === 'overall'
-              ? 'I oversee all departments. How can I help?'
-              : AGENT_SUBTITLES[activeAgentType] + ' — what would you like to work on?'}
-          </p>
-        </div>
-        {activeAgentType !== 'overall' && (
-          <button
-            onClick={() => useAgencyStore.getState().setAgent('overall')}
-            className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-          >
-            <UserCircle className="h-3 w-3" />
-            Not sure? Ask the Director
-          </button>
-        )}
-        {!brand && (
-          <p className="text-xs text-muted-foreground">
-            Select a brand from the sidebar to get started.
-          </p>
-        )}
-      </div>
-
-      {/* Brand intelligence briefing */}
-      {brand && <BrandBriefing brand={brand} onAction={onAction} onBrandRefresh={onBrandRefresh} />}
-
-      {/* Quick action chips */}
-      <QuickActions brand={brand} agentType={activeAgentType} onAction={onAction} />
+    <div className="flex flex-1 flex-col items-center justify-end gap-4 px-4 pb-4">
+      {/* Brand briefing only — no hero, no duplicate chips */}
+      {brand ? (
+        <BrandBriefing brand={brand} onAction={onAction} onBrandRefresh={onBrandRefresh} />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Select a brand from the sidebar to get started.
+        </p>
+      )}
     </div>
   )
 }
