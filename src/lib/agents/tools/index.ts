@@ -25,6 +25,12 @@ import { createSaveBrandInfoTool } from './save-brand-info'
 import { createReadProformaTool, createUpdateProformaTool } from './proforma'
 import { createDesignGraphicTool, createExportDesignTool } from './canva'
 import { createCreateVideoTool } from './create-video'
+import { createWriteBlogTool } from './write-blog'
+import { createWriteEmailCampaignTool } from './write-email-campaign'
+import { createDeepCompetitorScanTool } from './deep-competitor-scan'
+import { createManagePostsTool } from './manage-posts'
+import { createAnalyseVoiceTool } from './analyse-voice'
+import { createWriteAdsTool } from './write-ads'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -87,6 +93,12 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const designGraphic = createDesignGraphicTool(ctx.supabase, ctx.userId, ctx.brandId)
   const exportDesign = createExportDesignTool(ctx.supabase, ctx.userId)
   const createVideo = createCreateVideoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const writeBlog = createWriteBlogTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const writeEmailCampaign = createWriteEmailCampaignTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const deepCompetitorScan = createDeepCompetitorScanTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const managePosts = createManagePostsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const analyseVoice = createAnalyseVoiceTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const writeAds = createWriteAdsTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -122,18 +134,24 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       design_graphic: designGraphic,
       export_design: exportDesign,
       create_video: createVideo,
+      write_blog: writeBlog,
+      deep_competitor_scan: deepCompetitorScan,
+      write_email_campaign: writeEmailCampaign,
+      manage_posts: managePosts,
+      analyse_voice: analyseVoice,
+      write_ads: writeAds,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
-    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, ...managementTools },
-    competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
+    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, ...managementTools },
+    competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
     compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
-    seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
-    paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, ...managementTools },
-    email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, ...managementTools },
-    brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, ...managementTools },
+    seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, write_blog: writeBlog, ...managementTools },
+    paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, ...managementTools },
+    email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },
+    brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, analyse_voice: analyseVoice, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
     video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, ...managementTools },

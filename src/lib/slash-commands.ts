@@ -15,10 +15,16 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/meeting', label: 'Team meeting', description: 'Get all departments to weigh in', message: 'Convene a team meeting on my current priorities.', category: 'Director' },
   { command: '/plan', label: 'Plan campaign', description: 'Plan a multi-channel campaign', message: 'Help me plan a marketing campaign.', category: 'Director' },
   { command: '/review', label: 'Review brand', description: 'End-to-end brand review', message: 'Review my brand and tell me what to focus on.', category: 'Director' },
+  { command: '/research', label: 'Research', description: 'Search the web for market intelligence', message: 'Research the latest trends and news relevant to my brand.', category: 'Director' },
 
   // Content
+  { command: '/schedule', label: 'Schedule post', description: 'Schedule a draft post', message: 'Schedule my draft posts. Show me what needs scheduling.', category: 'Content' },
+  { command: '/approve', label: 'Approve posts', description: 'Approve all draft posts', message: 'Approve all my draft posts and schedule them.', category: 'Content' },
+  { command: '/publish', label: 'Publish now', description: 'Publish a post immediately', message: 'Publish my next scheduled post right now.', category: 'Content' },
   { command: '/post', label: 'Write a post', description: 'Social media post', message: 'Write me a social media post for my brand.', category: 'Content' },
-  { command: '/blog', label: 'Blog article', description: 'SEO-optimised blog', message: 'Write a blog article for my brand.', category: 'Content' },
+  { command: '/blog', label: 'Blog article', description: 'Write an SEO-optimised blog post', message: 'Write an SEO-optimised blog article for my brand. Ask me what topic and keyword to target.', category: 'Content' },
+  { command: '/seoblog', label: 'SEO blog', description: 'Write an SEO-optimised blog targeting a keyword', message: 'Write an SEO blog post for my brand. Ask me what keyword to target.', category: 'Content' },
+  { command: '/blogideas', label: 'Blog ideas', description: 'Generate blog topic ideas for SEO', message: 'Suggest 10 blog topics that would drive organic traffic to my brand.', category: 'SEO' },
   { command: '/email', label: 'Write email', description: 'Marketing email', message: 'Write a marketing email for my brand.', category: 'Content' },
   { command: '/landing', label: 'Landing page', description: 'Landing page copy', message: 'Write landing page copy for my main offer.', category: 'Content' },
   { command: '/repurpose', label: 'Repurpose video', description: 'Turn a video into 20+ pieces', message: 'Repurpose my latest video into clips, posts, blog, and newsletter.', category: 'Content' },
@@ -28,12 +34,14 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/seoaudit', label: 'SEO audit', description: 'Audit website SEO', message: 'Audit my website for SEO issues.', category: 'SEO' },
   { command: '/rankings', label: 'Check rankings', description: 'Where do I rank', message: 'Check where my brand ranks for our target keywords.', category: 'SEO' },
   { command: '/clusters', label: 'Topic clusters', description: 'Build content clusters', message: 'Build topic clusters for my content strategy.', category: 'SEO' },
+  { command: '/trendsearch', label: 'Trend search', description: 'Find trending topics in my niche', message: 'What are the trending topics in my industry right now?', category: 'SEO' },
 
   // Paid Ads
   { command: '/googleads', label: 'Google Ads', description: 'Write Google Ads copy', message: 'Write Google Ads copy for my brand.', category: 'Ads' },
   { command: '/metaads', label: 'Meta ads', description: 'Facebook/Instagram ads', message: 'Create a Facebook and Instagram ad set for my brand.', category: 'Ads' },
   { command: '/budget', label: 'Ad budget', description: 'Budget allocation advice', message: 'How should I split my ad budget across platforms?', category: 'Ads' },
   { command: '/tiktokads', label: 'TikTok ads', description: 'TikTok ad scripts', message: 'Write TikTok ad scripts for my brand.', category: 'Ads' },
+  { command: '/adcopy', label: 'Write ads', description: 'Generate multi-variant ad copy', message: 'Write ad copy for my brand. Ask me which platform and what I am promoting.', category: 'Ads' },
 
   // Strategy
   { command: '/campaign', label: 'Campaign plan', description: 'Multi-channel campaign', message: 'Plan a multi-channel marketing campaign for my brand.', category: 'Strategy' },
@@ -42,6 +50,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/pricing', label: 'Pricing strategy', description: 'Pricing advice', message: 'Help me define my pricing strategy.', category: 'Strategy' },
 
   // Email
+  { command: '/emailcampaign', label: 'Email campaign', description: 'Design a multi-email campaign', message: 'Design an email campaign for my brand.', category: 'Email' },
+  { command: '/welcomeemails', label: 'Welcome emails', description: 'Welcome sequence for new subscribers', message: 'Create a welcome email sequence for new subscribers.', category: 'Email' },
   { command: '/welcome', label: 'Welcome sequence', description: 'New subscriber emails', message: 'Build a welcome email sequence for new subscribers.', category: 'Email' },
   { command: '/newsletter', label: 'Newsletter', description: 'Weekly newsletter', message: "Write this week's newsletter for my audience.", category: 'Email' },
   { command: '/winback', label: 'Win-back email', description: 'Re-engage customers', message: 'Write a re-engagement email for inactive customers.', category: 'Email' },
@@ -54,6 +64,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/pr', label: 'PR campaign', description: 'Media coverage plan', message: 'Plan a PR campaign to get media coverage.', category: 'Growth' },
 
   // Brand
+  { command: '/voicecheck', label: 'Voice check', description: 'Check content matches brand voice', message: 'Check my latest content for brand voice consistency.', category: 'Brand' },
   { command: '/voice', label: 'Brand voice', description: 'Define voice and tone', message: 'Help me define my brand voice and tone.', category: 'Brand' },
   { command: '/guidelines', label: 'Brand guidelines', description: 'Shareable guidelines', message: 'Create brand guidelines I can share with others.', category: 'Brand' },
   { command: '/pillars', label: 'Content pillars', description: 'Messaging framework', message: 'Define my content pillars and messaging framework.', category: 'Brand' },
@@ -64,6 +75,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/scan', label: 'Scan competitors', description: 'Check competitor websites', message: "Scan my competitors' websites and tell me what they're doing.", category: 'Competitors' },
   { command: '/gaps', label: 'Market gaps', description: 'Find opportunities', message: 'Find gaps in the market I can exploit.', category: 'Competitors' },
   { command: '/battlecards', label: 'Battle cards', description: 'Competitor comparisons', message: 'Create battle cards comparing me to my top competitors.', category: 'Competitors' },
+  { command: '/deepscan', label: 'Deep scan competitor', description: 'Full competitive analysis of a website', message: 'Deep scan a competitor website and compare them to my brand.', category: 'Competitors' },
 
   // Website
   { command: '/cro', label: 'CRO audit', description: 'Conversion rate audit', message: 'Audit my website for conversion rate improvements.', category: 'Website' },
