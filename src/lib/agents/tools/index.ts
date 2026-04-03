@@ -23,6 +23,8 @@ import { createRepurposeContentTool } from './repurpose-content'
 import { createFillCalendarTool } from './fill-calendar'
 import { createSaveBrandInfoTool } from './save-brand-info'
 import { createReadProformaTool, createUpdateProformaTool } from './proforma'
+import { createDesignGraphicTool, createExportDesignTool } from './canva'
+import { createCreateVideoTool } from './create-video'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -82,6 +84,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const saveBrandInfo = createSaveBrandInfoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const readProforma = createReadProformaTool(ctx.supabase, ctx.brandId)
   const updateProforma = createUpdateProformaTool(ctx.supabase, ctx.brandId, ctx.conversationId)
+  const designGraphic = createDesignGraphicTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const exportDesign = createExportDesignTool(ctx.supabase, ctx.userId)
+  const createVideo = createCreateVideoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -114,6 +119,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       query_analytics: queryAnalytics,
       query_media: queryMedia,
       update_proforma: updateProforma,
+      design_graphic: designGraphic,
+      export_design: exportDesign,
+      create_video: createVideo,
       ...managementTools,
     },
     content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, ...managementTools },
@@ -125,10 +133,10 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, ...managementTools },
-    brand: { save_output: saveOutput, generate_image: generateImageTool, ...managementTools },
+    brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
-    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 

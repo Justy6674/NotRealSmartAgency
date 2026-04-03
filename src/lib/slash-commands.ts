@@ -84,8 +84,13 @@ export const SLASH_COMMANDS: SlashCommand[] = [
 
   // Video
   { command: '/script', label: 'Video script', description: 'Write a video script', message: 'Write a video script for my brand.', category: 'Video' },
+  { command: '/video', label: 'Create video', description: 'Generate an AI avatar video', message: 'Create a video for my brand using the script I give you.', category: 'Video' },
   { command: '/process', label: 'Process video', description: 'Transcribe and caption', message: 'I have a video to process into content.', category: 'Video' },
   { command: '/storyboard', label: 'Storyboard', description: 'Video storyboard', message: 'Create a storyboard for a product demo video.', category: 'Video' },
+
+  // Design
+  { command: '/design', label: 'Design graphic', description: 'Create a design in Canva', message: 'Design me a social media graphic for my brand.', category: 'Content' },
+  { command: '/export', label: 'Export design', description: 'Download a Canva design', message: 'Export my latest Canva design as a PNG.', category: 'Content' },
 
   // Automation
   { command: '/workflow', label: 'Lead workflow', description: 'Automated lead nurture', message: 'Design an automated lead nurture workflow.', category: 'Automation' },
