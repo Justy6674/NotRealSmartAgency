@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import type { Brand } from '@/types/database'
-import { Bot, UserCircle } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import { WelcomeScreen } from './WelcomeScreen'
 import { getFriendlyError } from '@/lib/errors/friendly-messages'
 
@@ -19,7 +19,7 @@ interface ChatInterfaceProps {
 export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [brand, setBrandLocal] = useState<Brand | null>(null)
-  const { activeBrandId, activeAgentType, setConversation, restoreContext, setAgent } = useAgencyStore()
+  const { activeBrandId, activeAgentType, setConversation, restoreContext } = useAgencyStore()
 
   // Refs so the transport always reads the LATEST values at send time
   // (not stale values captured when useMemo ran)
@@ -253,11 +253,11 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
               <button
                 onClick={() => {
                   clearError()
-                  useAgencyStore.getState().setAgent('overall')
+                  regenerate()
                 }}
                 className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
               >
-                {friendly.action ?? 'Ask the Director'}
+                Try again
               </button>
             )}
             <button
@@ -269,19 +269,6 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
           </div>
         )
       })()}
-
-      {/* Back to Director safety net */}
-      {activeAgentType !== 'overall' && (
-        <div className="mx-4 mb-1 flex justify-center">
-          <button
-            onClick={() => setAgent('overall')}
-            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <UserCircle className="h-3 w-3" />
-            Not sure? Ask the Director
-          </button>
-        </div>
-      )}
 
       {/* Input */}
       <ChatInput

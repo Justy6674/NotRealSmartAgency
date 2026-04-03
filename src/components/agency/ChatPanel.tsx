@@ -8,9 +8,8 @@ import { useAgencyStore } from '@/stores/agency-store'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { AgentAvatar } from './AgentAvatar'
-import { AGENT_LABELS, ACTIVE_AGENT_TYPES } from '@/types/database'
-import type { AgentType } from '@/types/database'
-import { MessageCircle, X, ChevronDown } from 'lucide-react'
+import { AGENT_LABELS } from '@/types/database'
+import { MessageCircle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function ChatPanel() {
@@ -19,12 +18,13 @@ export function ChatPanel() {
 
   const {
     activeBrandId,
-    activeAgentType,
     chatPanelOpen,
     setChatPanelOpen,
-    setAgent,
     setConversation,
   } = useAgencyStore()
+
+  // Always Director — the user never switches agents
+  const activeAgentType = 'overall' as const
 
   // Don't render on the full chat pages
   const isFullChatPage = pathname?.startsWith('/agency/chat')
@@ -88,10 +88,6 @@ export function ChatPanel() {
     }
   }, [activeBrandId, activeAgentType, messages.length, sendMessage, setConversation])
 
-  const handleAgentChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setAgent(e.target.value as AgentType)
-  }, [setAgent])
-
   return (
     <>
       {/* Toggle pill — visible when panel is closed */}
@@ -117,22 +113,9 @@ export function ChatPanel() {
         {/* Header */}
         <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
           <AgentAvatar agentType={activeAgentType} size="sm" />
-
-          {/* Agent selector */}
-          <div className="relative flex-1">
-            <select
-              value={activeAgentType}
-              onChange={handleAgentChange}
-              className="w-full cursor-pointer appearance-none bg-transparent pr-6 text-sm font-medium text-foreground focus:outline-none"
-            >
-              {ACTIVE_AGENT_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {AGENT_LABELS[type]}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          </div>
+          <span className="flex-1 text-sm font-medium text-foreground">
+            {AGENT_LABELS[activeAgentType]}
+          </span>
 
           {/* Close button */}
           <button

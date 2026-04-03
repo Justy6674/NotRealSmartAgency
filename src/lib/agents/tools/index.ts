@@ -21,6 +21,7 @@ import { createQueryMediaTool } from './query-media'
 import { createProcessMediaTool } from './process-media'
 import { createRepurposeContentTool } from './repurpose-content'
 import { createFillCalendarTool } from './fill-calendar'
+import { createSaveBrandInfoTool } from './save-brand-info'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -77,6 +78,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const processMedia = createProcessMediaTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const repurposeContent = createRepurposeContentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const fillCalendar = createFillCalendarTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const saveBrandInfo = createSaveBrandInfoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -91,6 +93,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const toolSets: Partial<Record<AgentType, Record<string, unknown>>> = {
     overall: {
       save_output: saveOutput,
+      save_brand_info: saveBrandInfo,
       scan_website: scanWebsite,
       scan_github: scanGithub,
       scan_social: scanSocial,

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { SendHorizontal, Plus, Paperclip, Mic } from 'lucide-react'
+import { SendHorizontal, Plus, Paperclip, Mic, X } from 'lucide-react'
 import type { AgentType, Brand } from '@/types/database'
+import { useAgencyStore } from '@/stores/agency-store'
 
 interface ChatInputProps {
   onSend: (text: string) => void
@@ -112,7 +113,12 @@ export function ChatInput({
   showChips = false,
 }: ChatInputProps) {
   const [input, setInput] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { activeBrandId } = useAgencyStore()
 
   // Auto-resize textarea
   useEffect(() => {
@@ -122,11 +128,70 @@ export function ChatInput({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [input])
 
-  const handleSend = () => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) setSelectedFile(file)
+    // Reset so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file && (file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/'))) {
+      setSelectedFile(file)
+    }
+  }
+
+  const handleSend = async () => {
     const trimmed = input.trim()
-    if (!trimmed || isLoading) return
-    onSend(trimmed)
-    setInput('')
+    if ((!trimmed && !selectedFile) || isLoading || isUploading) return
+
+    if (selectedFile && activeBrandId) {
+      setIsUploading(true)
+      try {
+        const formData = new FormData()
+        formData.append('file', selectedFile)
+        formData.append('brandId', activeBrandId)
+        const uploadRes = await fetch('/api/media/upload', { method: 'POST', body: formData })
+
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json()
+          // Send the error as a message so the agent can respond
+          onSend(`I tried to upload ${selectedFile.name} but got an error: ${err.error || 'Upload failed'}`)
+          setSelectedFile(null)
+          setInput('')
+          setIsUploading(false)
+          return
+        }
+
+        const mediaItem = await uploadRes.json()
+        const fileType = selectedFile.type.startsWith('video/') ? 'video'
+          : selectedFile.type.startsWith('audio/') ? 'audio'
+          : 'image'
+
+        const fileMsg = trimmed
+          ? `${trimmed} [Uploaded ${fileType}: ${selectedFile.name}, media_item_id: ${mediaItem.id}]`
+          : `I've uploaded a ${fileType}: ${selectedFile.name}. Process this and create content from it. [media_item_id: ${mediaItem.id}]`
+
+        onSend(fileMsg)
+        setSelectedFile(null)
+        setInput('')
+      } catch {
+        onSend(`I tried to upload ${selectedFile.name} but something went wrong. Please try again.`)
+        setSelectedFile(null)
+        setInput('')
+      } finally {
+        setIsUploading(false)
+      }
+      return
+    }
+
+    if (trimmed) {
+      onSend(trimmed)
+      setInput('')
+    }
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -142,7 +207,35 @@ export function ChatInput({
     <div className="border-t bg-background px-4 py-3">
       {/* Main input — large, inviting, Claude-style */}
       <div className="mx-auto max-w-3xl">
-        <div className="relative rounded-2xl border bg-muted/30 shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-2 focus-within:ring-primary/20">
+        <div
+          className={`relative rounded-2xl border bg-muted/30 shadow-sm transition-all focus-within:shadow-md focus-within:ring-2 focus-within:ring-primary/20 ${dragOver ? 'border-primary border-dashed ring-2 ring-primary/30' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+        >
+          {/* File attachment preview */}
+          {selectedFile && (
+            <div className="mx-4 mt-3 mb-1 flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-xs">
+              <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <span className="truncate">{selectedFile.name}</span>
+              <span className="shrink-0 text-muted-foreground">
+                ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedFile(null)}
+                className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+          {/* Drag overlay hint */}
+          {dragOver && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-primary/5">
+              <p className="text-sm font-medium text-primary">Drop file here</p>
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={input}
@@ -150,14 +243,23 @@ export function ChatInput({
             onKeyDown={onKeyDown}
             placeholder={placeholder}
             rows={1}
-            disabled={isLoading}
+            disabled={isLoading || isUploading}
             className="w-full resize-none rounded-2xl bg-transparent px-4 pb-12 pt-4 text-sm placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
+          />
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/*,audio/*,image/*"
+            className="hidden"
+            onChange={handleFileSelect}
           />
           {/* Bottom bar inside the input box */}
           <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
             <div className="flex items-center gap-1">
               <button
                 type="button"
+                onClick={() => fileInputRef.current?.click()}
                 className="rounded-lg p-2 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
                 title="Attach file"
               >
@@ -166,11 +268,15 @@ export function ChatInput({
             </div>
             <button
               type="button"
-              disabled={!input.trim() || isLoading}
+              disabled={(!input.trim() && !selectedFile) || isLoading || isUploading}
               onClick={handleSend}
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity disabled:opacity-30"
             >
-              <SendHorizontal className="h-4 w-4" />
+              {isUploading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+              ) : (
+                <SendHorizontal className="h-4 w-4" />
+              )}
             </button>
           </div>
         </div>

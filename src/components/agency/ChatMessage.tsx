@@ -8,12 +8,56 @@ import { MessageActions } from './MessageActions'
 import { AgentAvatar } from './AgentAvatar'
 import { AGENT_LABELS } from '@/types/database'
 import { useAgencyStore } from '@/stores/agency-store'
+import { hasInlineCards, parseInlineCards } from './inline/parseInlineCards'
+import { PostPreviewCard } from './inline/PostPreviewCard'
+import { AnalyticsSummaryCard } from './inline/AnalyticsSummaryCard'
+import { CalendarWeekCard } from './inline/CalendarWeekCard'
 import type { UIMessage } from 'ai'
 
 interface ChatMessageProps {
   message: UIMessage
   onRegenerate?: () => void
 }
+
+// ─── Inline Card Renderer ─────────────────────────────────────────────────────
+
+function RichTextContent({ text }: { text: string }) {
+  // Fast path: no card markers, render as plain markdown
+  if (!hasInlineCards(text)) {
+    return (
+      <div className="prose prose-sm dark:prose-invert max-w-none">
+        <Markdown>{text}</Markdown>
+      </div>
+    )
+  }
+
+  const segments = parseInlineCards(text)
+
+  return (
+    <div className="space-y-2">
+      {segments.map((segment, i) => {
+        switch (segment.type) {
+          case 'markdown':
+            return (
+              <div key={i} className="prose prose-sm dark:prose-invert max-w-none">
+                <Markdown>{segment.content}</Markdown>
+              </div>
+            )
+          case 'post_preview':
+            return <PostPreviewCard key={i} {...segment.data} />
+          case 'analytics_summary':
+            return <AnalyticsSummaryCard key={i} {...segment.data} />
+          case 'calendar_week':
+            return <CalendarWeekCard key={i} {...segment.data} />
+          default:
+            return null
+        }
+      })}
+    </div>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
   const isUser = message.role === 'user'
@@ -52,11 +96,7 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
         >
           {message.parts?.map((part, i) => {
             if (part.type === 'text') {
-              return (
-                <div key={i} className="prose prose-sm dark:prose-invert max-w-none">
-                  <Markdown>{part.text}</Markdown>
-                </div>
-              )
+              return <RichTextContent key={i} text={part.text} />
             }
             // Tool invocation parts in v6 have type starting with 'tool-'
             if (part.type.startsWith('tool-')) {

@@ -5,8 +5,6 @@ import { useState, useRef, useEffect } from 'react'
 import { QuickActions } from './QuickActions'
 import { ComplianceBadge } from './ComplianceBadge'
 import { AgentAvatar } from './AgentAvatar'
-import { AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
-import { useAgencyStore } from '@/stores/agency-store'
 import type { Brand } from '@/types/database'
 
 interface WelcomeScreenProps {
@@ -232,8 +230,6 @@ function MissingItem({ label }: { label: string }) {
 // ─── Main WelcomeScreen ─────────────────────────────────────────────────────
 
 export function WelcomeScreen({ brand, onAction, onBrandRefresh }: WelcomeScreenProps) {
-  const { activeAgentType } = useAgencyStore()
-
   return (
     <div className="flex flex-1 flex-col items-center justify-end gap-4 px-4 pb-4">
       {/* Brand briefing only — no hero, no duplicate chips */}

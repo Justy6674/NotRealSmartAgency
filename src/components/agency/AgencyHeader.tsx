@@ -1,14 +1,12 @@
 'use client'
 
 import { useAgencyStore } from '@/stores/agency-store'
-import { AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
-import { AgentAvatar } from './AgentAvatar'
 import { ComplianceBadge } from './ComplianceBadge'
 import { useEffect, useState } from 'react'
 import type { Brand } from '@/types/database'
 
 export function AgencyHeader() {
-  const { activeBrandId, activeAgentType } = useAgencyStore()
+  const { activeBrandId } = useAgencyStore()
   const [brand, setBrand] = useState<Brand | null>(null)
 
   useEffect(() => {
@@ -29,7 +27,7 @@ export function AgencyHeader() {
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
-      {/* Brand logo — always visible at far left */}
+      {/* Brand logo + name */}
       {brand && (
         <div className="flex items-center gap-2 shrink-0">
           {brand.logo_url ? (
@@ -45,17 +43,6 @@ export function AgencyHeader() {
           <span className="text-sm font-medium text-foreground">{brand.name}</span>
         </div>
       )}
-
-      {brand && <span className="text-muted-foreground/30">|</span>}
-
-      {/* Agent identity */}
-      <AgentAvatar agentType={activeAgentType} size="sm" />
-      <span className="text-sm text-muted-foreground">
-        {AGENT_LABELS[activeAgentType]}
-      </span>
-      <span className="hidden sm:inline text-xs text-muted-foreground/50">
-        · {AGENT_SUBTITLES[activeAgentType]}
-      </span>
 
       {/* Compliance badges */}
       {brand && (

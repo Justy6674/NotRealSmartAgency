@@ -2,30 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Plus,
-  ChevronDown,
-  ChevronRight,
   MessageSquare,
-  ListTodo,
-  Users,
-  ShieldCheck,
-  DollarSign,
-  Activity,
-  FileText,
-  Settings,
-  Film,
-  CalendarDays,
-  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 
-import { ACTIVE_AGENT_TYPES, AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
+import { AGENT_LABELS } from '@/types/database'
 import type { Brand, Conversation, AgentType } from '@/types/database'
-import { AGENT_ICONS, AGENT_COLOURS } from '@/components/agency/AgentAvatar'
+import { AGENT_COLOURS } from '@/components/agency/AgentAvatar'
 import { AddBrandDialog } from './AddBrandDialog'
 
 // Badge classes derived from AGENT_COLOURS (just the bg + text parts)
@@ -79,7 +66,6 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const router = useRouter()
   const {
     activeBrandId,
-    activeAgentType,
     activeConversationId,
     setBrand,
     setAgent,
@@ -89,7 +75,6 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
 
   const [brands, setBrands] = useState<Brand[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
-  const [teamExpanded, setTeamExpanded] = useState(true)
   const [showAddBrand, setShowAddBrand] = useState(false)
 
   const fetchBrands = async () => {
@@ -150,12 +135,6 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const handleSelectBrand = (brandId: string) => {
     setBrand(brandId)
     setConversation(null)
-    router.push('/agency/chat')
-    onClose?.()
-  }
-
-  const handleSelectAgent = (agent: AgentType) => {
-    setAgent(agent)
     router.push('/agency/chat')
     onClose?.()
   }
@@ -235,7 +214,12 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
             </ul>
           )}
           <button
-            onClick={() => setShowAddBrand(true)}
+            onClick={() => {
+              useAgencyStore.getState().setPendingReviewMessage('I want to add a new brand to my agency.')
+              useAgencyStore.getState().setAgent('overall')
+              router.push('/agency/chat')
+              onClose?.()
+            }}
             className="mt-1.5 flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-primary"
           >
             <Plus className="h-3 w-3" />
@@ -307,89 +291,6 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
           )}
         </section>
 
-        <div className="mx-3 my-1 h-px bg-border" />
-
-        {/* ── Talk to a Team ────────────────────────────────────────────────── */}
-        <section className="px-3 py-2">
-          <button
-            onClick={() => setTeamExpanded((v) => !v)}
-            className="mb-1.5 flex w-full items-center justify-between px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <span>Talk to a Team</span>
-            {teamExpanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-          </button>
-
-          {teamExpanded && (
-            <ul className="space-y-0.5">
-              {ACTIVE_AGENT_TYPES.map((agent, index) => {
-                const Icon = AGENT_ICONS[agent]
-                const isOverall = agent === 'overall'
-                const isActive = activeAgentType === agent
-
-                return (
-                  <li key={agent}>
-                    <button
-                      onClick={() => handleSelectAgent(agent)}
-                      title={AGENT_SUBTITLES[agent]}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-                        isActive
-                          ? 'bg-primary/10 text-primary font-medium'
-                          : 'text-foreground hover:bg-muted'
-                      )}
-                    >
-                      <Icon
-                        className={cn(
-                          'h-4 w-4 shrink-0',
-                          isActive ? 'text-primary' : 'text-muted-foreground'
-                        )}
-                      />
-                      <span className="truncate">{AGENT_LABELS[agent]}</span>
-                    </button>
-                    {/* Separator after Account Manager */}
-                    {isOverall && index < ACTIVE_AGENT_TYPES.length - 1 && (
-                      <div className="mx-2 my-1 h-px bg-border" />
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
-
-        {/* ── Management ──────────────────────────────────────────────────── */}
-        <section className="border-t border-border px-3 py-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2">
-            Management
-          </p>
-          <nav className="space-y-0.5">
-            {[
-              { href: '/agency/outputs', icon: FileText, label: 'Outputs' },
-              { href: '/agency/media', icon: Film, label: 'Media' },
-              { href: '/agency/calendar', icon: CalendarDays, label: 'Calendar' },
-              { href: '/agency/tasks', icon: ListTodo, label: 'Tasks' },
-              { href: '/agency/agents', icon: Users, label: 'Agents' },
-              { href: '/agency/approvals', icon: ShieldCheck, label: 'Approvals' },
-              { href: '/agency/costs', icon: DollarSign, label: 'Costs' },
-              { href: '/agency/analytics', icon: BarChart3, label: 'Analytics' },
-              { href: '/agency/activity', icon: Activity, label: 'Activity' },
-              { href: '/agency/settings', icon: Settings, label: 'Settings' },
-            ].map(({ href, icon: NavIcon, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <NavIcon className="h-4 w-4 shrink-0" />
-                <span>{label}</span>
-              </Link>
-            ))}
-          </nav>
-        </section>
       </div>
     </aside>
   )
