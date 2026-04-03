@@ -12,6 +12,7 @@ import { hasInlineCards, parseInlineCards } from './inline/parseInlineCards'
 import { PostPreviewCard } from './inline/PostPreviewCard'
 import { AnalyticsSummaryCard } from './inline/AnalyticsSummaryCard'
 import { CalendarWeekCard } from './inline/CalendarWeekCard'
+import { BrandSavedCard } from './inline/BrandSavedCard'
 import type { UIMessage } from 'ai'
 
 interface ChatMessageProps {
@@ -49,6 +50,8 @@ function RichTextContent({ text }: { text: string }) {
             return <AnalyticsSummaryCard key={i} {...segment.data} />
           case 'calendar_week':
             return <CalendarWeekCard key={i} {...segment.data} />
+          case 'brand_saved':
+            return <BrandSavedCard key={i} {...segment.data} />
           default:
             return null
         }

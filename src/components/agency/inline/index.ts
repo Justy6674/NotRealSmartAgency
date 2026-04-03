@@ -6,3 +6,5 @@ export type { AnalyticsSummaryCardProps } from './AnalyticsSummaryCard'
 
 export { CalendarWeekCard } from './CalendarWeekCard'
 export type { CalendarWeekCardProps, CalendarWeekPost } from './CalendarWeekCard'
+
+export { BrandSavedCard } from './BrandSavedCard'

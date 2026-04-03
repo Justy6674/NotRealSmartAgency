@@ -17,11 +17,18 @@ import type { CalendarWeekCardProps } from './CalendarWeekCard'
 
 // ─── Segment Types ──────────────────────────────────────────────────────────
 
+export interface BrandSavedCardData {
+  action: 'created' | 'updated'
+  brand_name: string
+  fields: string[]
+}
+
 export type InlineSegment =
   | { type: 'markdown'; content: string }
   | { type: 'post_preview'; data: PostPreviewCardProps }
   | { type: 'analytics_summary'; data: AnalyticsSummaryCardProps }
   | { type: 'calendar_week'; data: CalendarWeekCardProps }
+  | { type: 'brand_saved'; data: BrandSavedCardData }
 
 // ─── Parser ─────────────────────────────────────────────────────────────────
 
@@ -87,6 +94,17 @@ export function parseInlineCards(text: string): InlineSegment[] {
                 id: (p.id as string) ?? '',
               })),
               title: json.title as string | undefined,
+            },
+          })
+          break
+
+        case 'brand_saved':
+          segments.push({
+            type: 'brand_saved',
+            data: {
+              action: json.action ?? 'updated',
+              brand_name: json.brand_name ?? '',
+              fields: json.fields ?? [],
             },
           })
           break

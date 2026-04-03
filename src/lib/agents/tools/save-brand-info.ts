@@ -163,6 +163,7 @@ async function createBrand(
     brand_name: data.name,
     action: 'created',
     summary: `Created "${data.name}" with ${savedFields.join(', ')}. The user should now select this brand from the sidebar to start working with it.`,
+    card: `\`\`\`json:card\n${JSON.stringify({ __card: 'brand_saved', action: 'created', brand_name: data.name, fields: savedFields })}\n\`\`\``,
   }
 }
 
@@ -277,5 +278,6 @@ async function updateBrand(
     brand_name: updates.name ?? current.name,
     action: 'updated',
     summary: `Updated ${current.name}: ${changedFields.join(', ')}.`,
+    card: `\`\`\`json:card\n${JSON.stringify({ __card: 'brand_saved', action: 'updated', brand_name: updates.name ?? current.name, fields: changedFields })}\n\`\`\``,
   }
 }
