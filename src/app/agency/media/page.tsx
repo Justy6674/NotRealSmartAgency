@@ -3,13 +3,15 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAgencyStore } from '@/stores/agency-store'
 import { MediaUploader } from '@/components/agency/MediaUploader'
 import { MediaCard } from '@/components/agency/MediaCard'
 import type { MediaItem } from '@/types/database'
 
 export default function MediaPage() {
-  const { activeBrandId } = useAgencyStore()
+  const { activeBrandId, setAgent, setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
   const [mediaItems, setMediaItems] = useState<(MediaItem & { brands?: { name: string; slug: string } })[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -44,6 +46,14 @@ export default function MediaPage() {
     }
   }
 
+  const handleRepurpose = (mediaItemId: string) => {
+    setAgent('overall')
+    setPendingReviewMessage(
+      `Repurpose media item ${mediaItemId} into clips, quotes, blog, newsletter, and social posts`
+    )
+    router.push('/agency/chat')
+  }
+
   if (!activeBrandId) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -75,6 +85,7 @@ export default function MediaPage() {
               mediaItem={item}
               onGenerate={handleGenerate}
               onDelete={handleDelete}
+              onRepurpose={handleRepurpose}
             />
           ))}
         </div>

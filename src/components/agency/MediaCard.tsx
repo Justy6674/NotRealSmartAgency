@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, Sparkles, Trash2, Video } from 'lucide-react'
+import { Loader2, Recycle, Sparkles, Trash2, Video } from 'lucide-react'
 import type { MediaItem } from '@/types/database'
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -18,9 +18,10 @@ interface MediaCardProps {
   mediaItem: MediaItem & { brands?: { name: string; slug: string } }
   onGenerate: (id: string) => void
   onDelete: (id: string) => void
+  onRepurpose?: (id: string) => void
 }
 
-export function MediaCard({ mediaItem, onGenerate, onDelete }: MediaCardProps) {
+export function MediaCard({ mediaItem, onGenerate, onDelete, onRepurpose }: MediaCardProps) {
   const [generating, setGenerating] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -82,31 +83,43 @@ export function MediaCard({ mediaItem, onGenerate, onDelete }: MediaCardProps) {
       )}
 
       {/* Actions */}
-      <div className="flex gap-2 mt-auto pt-2">
-        {mediaItem.transcription_status === 'transcribed' && (
+      <div className="flex flex-col gap-2 mt-auto pt-2">
+        <div className="flex gap-2">
+          {mediaItem.transcription_status === 'transcribed' && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="flex-1"
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              {generating ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Generating...</>
+              ) : (
+                <><Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Content</>
+              )}
+            </Button>
+          )}
           <Button
             size="sm"
-            variant="secondary"
-            className="flex-1"
-            onClick={handleGenerate}
-            disabled={generating}
+            variant="ghost"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-muted-foreground"
           >
-            {generating ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> Generating...</>
-            ) : (
-              <><Sparkles className="h-3.5 w-3.5 mr-1" /> Generate Content</>
-            )}
+            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+        {mediaItem.transcription_status === 'transcribed' && onRepurpose && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            onClick={() => onRepurpose(mediaItem.id)}
+          >
+            <Recycle className="h-3.5 w-3.5 mr-1" /> Repurpose All
           </Button>
         )}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handleDelete}
-          disabled={deleting}
-          className="text-muted-foreground"
-        >
-          {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        </Button>
       </div>
 
       <p className="text-[10px] text-muted-foreground">
