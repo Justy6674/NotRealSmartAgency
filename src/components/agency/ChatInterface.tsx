@@ -95,28 +95,61 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
 
     greetApplied.current = brand.id
 
-    // Build a SHORT contextual greeting — one line, one question max
-    let greeting: string
-    if (!brand.products_services?.length && !brand.description) {
-      // Brand is bare — start from scratch
-      greeting = `Hey! Tell me about ${brand.name} — what do you do and who are your customers?`
-    } else {
-      const missing: string[] = []
-      if (!brand.social_urls || Object.keys(brand.social_urls).length === 0) missing.push('social profiles')
-      if (!brand.competitors || brand.competitors.length === 0) missing.push('competitors')
+    // Build a greeting that shows what the Director knows about this brand
+    const lines: string[] = [`Hey! Here's what I know about **${brand.name}**:\n`]
 
-      if (missing.length > 0) {
-        greeting = `What would you like to work on today? By the way, I'm still missing your ${missing.join(' and ')} — drop them whenever you're ready.`
-      } else {
-        greeting = `What would you like to work on today?`
-      }
+    // What we know
+    if (brand.website_url) lines.push(`**Website:** ${brand.website_url} — scanned`)
+    if (brand.github_url) lines.push(`**Codebase:** ${brand.github_context ? 'Synced from GitHub' : brand.github_url}`)
+    if (brand.description) lines.push(`**What you do:** ${brand.description}`)
+    if (brand.products_services?.length) {
+      lines.push(`**Products:** ${brand.products_services.map(p => p.name).join(', ')}`)
+    }
+    if (brand.target_audience?.demographics) {
+      lines.push(`**Audience:** ${brand.target_audience.demographics}`)
+    }
+    if (brand.tone_of_voice?.formality) {
+      lines.push(`**Voice:** ${brand.tone_of_voice.formality}${brand.tone_of_voice.humour !== 'none' ? `, ${brand.tone_of_voice.humour} humour` : ''}`)
+    }
+    if (brand.content_pillars?.length) {
+      lines.push(`**Content pillars:** ${brand.content_pillars.join(', ')}`)
+    }
+    if (brand.compliance_flags?.ahpra || brand.compliance_flags?.tga) {
+      const flags = [brand.compliance_flags.ahpra && 'AHPRA', brand.compliance_flags.tga && 'TGA'].filter(Boolean).join(' + ')
+      lines.push(`**Compliance:** ${flags}`)
+    }
+    if (brand.social_urls && Object.keys(brand.social_urls).length > 0) {
+      lines.push(`**Socials:** ${Object.keys(brand.social_urls).join(', ')}`)
+    }
+
+    // What's missing
+    const missing: string[] = []
+    if (!brand.social_urls || Object.keys(brand.social_urls).length === 0) missing.push('social profiles')
+    if (!brand.competitors || brand.competitors.length === 0) missing.push('competitors')
+    if (!brand.products_services?.length) missing.push('products')
+    if (!brand.target_audience?.demographics) missing.push('target audience')
+
+    if (missing.length > 0) {
+      lines.push(`\n**Still missing:** ${missing.join(', ')}`)
+    }
+
+    lines.push(`\nWhat would you like to work on?`)
+
+    const greeting = lines.join('\n')
+
+    // Handle bare brands differently
+    let finalGreeting: string
+    if (!brand.description && !brand.products_services?.length && !brand.website_url) {
+      finalGreeting = `Hey! Tell me about ${brand.name} — what do you do and who are your customers?`
+    } else {
+      finalGreeting = greeting
     }
 
     // Insert as a pre-loaded assistant message — NOT sent through the API
     setMessages([{
       id: `greet-${brand.id}`,
       role: 'assistant' as const,
-      parts: [{ type: 'text' as const, text: greeting }],
+      parts: [{ type: 'text' as const, text: finalGreeting }],
     }])
   }, [brand, activeBrandId, conversationId, messages.length, setMessages])
 
@@ -193,7 +226,11 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4">
         {messages.length === 0 ? (
-          <WelcomeScreen brand={brand} onAction={handleSend} onBrandRefresh={fetchBrand} />
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-muted-foreground">
+              {!activeBrandId ? 'Pick a brand from the sidebar, or tell me about your business.' : ''}
+            </p>
+          </div>
         ) : (
           <div className="mx-auto max-w-3xl divide-y divide-border/50">
             {messages.map((message) => (
