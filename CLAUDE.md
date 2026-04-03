@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## First Principle — Read This Before Every Build
+
+**The user of this app is a non-technical business owner trying to be their own marketing agency.** They are not a developer. They do not know what "SEO & GEO" means. They cannot write JSON. They should never have to.
+
+Every feature, every screen, every interaction must follow this rule:
+
+> **The LLM drives tomorrow's complexity. The user just talks.**
+
+- **Conversation-first, not form-first.** If data is missing, the agent asks for it in chat — never show a blank form and expect the user to fill it.
+- **One obvious action per screen.** Not 14 sidebar options. Not 5 tabs. One thing to do next.
+- **Auto-fill everything possible.** Scan the website, sync GitHub, guess social handles — without being asked.
+- **Plain language, not jargon.** "Get more customers" not "Growth & Partnerships". "Make me a video" not "Generate video script output".
+- **Minimum clicks to value.** If the user says "make me a TikTok video", the agent should write the script AND trigger generation — not make them navigate to Outputs and click a button.
+- **The agent should know what to do.** Show what it already knows about the brand. Suggest what to do next. Don't wait to be asked.
+
+This is the founding design principle. Every PR, every feature, every refactor must be evaluated against it.
+
 ## Commands
 
 ```bash
