@@ -13,7 +13,7 @@ npm run lint         # ESLint (flat config v9)
 
 ## What This App Is
 
-**NotRealSmart Agency** — a self-owned agentic AI marketing agency platform. 1 Director + 12 department heads run marketing autonomously across 8 brands.
+**NotRealSmart Agency** — a self-owned agentic AI marketing agency platform. 1 Director + 13 department heads run marketing autonomously across 8 brands.
 
 **Name:** Not(Artificial) Real(Intelligence) Smart. **Owner:** Black Health Intelligence Pty Ltd, ABN 23 693 026 112.
 
@@ -76,7 +76,7 @@ Rule-based keyword classification that analyses the user's message and suggests 
 ### Meeting Room (Multi-Department Collaboration)
 When the intent router detects 2+ departments needed, the Director uses `convene_meeting` instead of `delegate_to_agent`. All departments run in parallel via `Promise.allSettled`. Each gets meeting context ("you are in a meeting with X, Y, Z — focus on YOUR expertise"). Results returned as structured meeting output. Auto-saved to output library with `[Meeting]` prefix.
 
-Compound triggers: comprehensive audit, launch plan, campaign, rebrand, growth strategy, content strategy, competitive analysis.
+Compound triggers: comprehensive audit, launch plan, campaign, rebrand, growth strategy, content strategy, competitive analysis, video campaign, review my brand.
 
 ### 10-Action Report Bar (`components/agency/MessageActions.tsx`)
 Every substantial assistant message (>100 chars) gets action buttons: Save, Email Me, Send to..., Baseline, Re-analyse, Todo, Copy, Remember, Full View, PDF. APIs: `POST /api/outputs`, `POST /api/email-report`, `POST /api/extract-todos`.
@@ -131,6 +131,7 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /agency/brands                 → Brand list
 /agency/brands/[brandSlug]     → Brand profile editor
 /agency/outputs                → Output library
+/agency/media                  → Media library (upload, transcribe, generate captions)
 /agency/activity               → Activity feed
 /api/chat                      → streamText streaming endpoint
 /api/heartbeat                 → Cron endpoint
@@ -140,14 +141,32 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /api/video/status                    → Poll video generation status
 /api/integrations                    → GET/POST provider API keys
 /api/github/sync                     → Sync GitHub context to brand
+/api/media/upload                    → Upload video/audio to Supabase Storage
+/api/media/transcribe                → Deepgram/Whisper transcription
+/api/media/[mediaItemId]/generate    → AI generates 6 platform captions
+/api/media                           → GET/DELETE media items
+/api/cron/publish-posts              → Cron: publish scheduled posts via Ayrshare
 /api/stripe/checkout, portal, webhook → Stripe integration
 ```
+
+### Content Automation Machine (CAM)
+Upload → Transcribe → Generate → Schedule → Publish pipeline:
+- `/agency/media` page with drag & drop batch upload to Supabase Storage `media` bucket
+- 2-layer ASR: Deepgram nova-2 → OpenAI Whisper fallback (`lib/transcription/transcribe.ts`)
+- AI generates 6 platform-specific captions per video (YouTube, TikTok, Instagram, Facebook, LinkedIn, X)
+- `scheduled_posts` table tracks draft → scheduled → publishing → published flow
+- Cron publisher (`/api/cron/publish-posts`, every 5 min) via Ayrshare API
+- Provider settings: Ayrshare + Deepgram in Brand Settings → Video tab
+
+### Department-Specific Quick Actions
+`QuickActions.tsx` shows contextual buttons per department (not generic). 14 sets of 4-6 buttons with conditional AHPRA/TGA compliance prompts, website scan prompts, and GitHub scan prompts based on brand config.
 
 ### Database Tables
 ```
 users, brands, conversations, messages, outputs, agent_configs,
 agent_registry, agent_memories, goals, tasks, audit_log,
-approval_queue, heartbeats, project_scans, ai_usage
+approval_queue, heartbeats, project_scans, ai_usage,
+media_items, scheduled_posts
 ```
 
 ### Three Supabase Clients (don't mix)
