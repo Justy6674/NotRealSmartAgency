@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -27,10 +27,11 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   brandIdRef.current = activeBrandId
 
   // Fetch active brand for welcome screen context
-  useEffect(() => {
-    setBrandLocal(null)
-    if (!activeBrandId) return
-    // Fetch via API (server-side auth) — not direct Supabase client
+  const fetchBrand = useCallback(() => {
+    if (!activeBrandId) {
+      setBrandLocal(null)
+      return
+    }
     fetch('/api/brands')
       .then(r => r.ok ? r.json() : [])
       .then((brands: Brand[]) => {
@@ -39,6 +40,11 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       })
       .catch(() => {})
   }, [activeBrandId])
+
+  useEffect(() => {
+    setBrandLocal(null)
+    fetchBrand()
+  }, [fetchBrand])
 
   const transport = useMemo(
     () =>
@@ -152,7 +158,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4">
         {messages.length === 0 ? (
-          <WelcomeScreen brand={brand} onAction={handleSend} />
+          <WelcomeScreen brand={brand} onAction={handleSend} onBrandRefresh={fetchBrand} />
         ) : (
           <div className="mx-auto max-w-3xl divide-y divide-border/50">
             {messages.map((message) => (

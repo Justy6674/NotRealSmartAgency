@@ -1,7 +1,7 @@
 'use client'
 
 import { ExternalLink, Github, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { QuickActions } from './QuickActions'
 import { ComplianceBadge } from './ComplianceBadge'
 import { AgentAvatar } from './AgentAvatar'
@@ -12,6 +12,7 @@ import type { Brand } from '@/types/database'
 interface WelcomeScreenProps {
   brand?: Brand | null
   onAction: (message: string) => void
+  onBrandRefresh?: () => void
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -34,21 +35,40 @@ const MARKETING_LABELS: Record<string, string> = {
 
 // ─── Brand Intelligence Briefing ────────────────────────────────────────────
 
-function BrandBriefing({ brand, onAction }: { brand: Brand; onAction: (msg: string) => void }) {
+function BrandBriefing({ brand, onAction, onBrandRefresh }: { brand: Brand; onAction: (msg: string) => void; onBrandRefresh?: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const autoSyncAttempted = useRef(false)
 
-  // Auto-sync GitHub if repo URL exists but context hasn't been pulled
-  const autoSyncGithub = async () => {
-    if (!brand.github_url || brand.github_context || syncing) return
+  // Auto-sync GitHub on mount if repo URL exists but context hasn't been pulled
+  useEffect(() => {
+    if (brand.github_url && !brand.github_context && !autoSyncAttempted.current) {
+      autoSyncAttempted.current = true
+      syncGithub()
+    }
+  }, [brand.id])
+
+  const syncGithub = async () => {
+    if (!brand.github_url || syncing) return
     setSyncing(true)
+    setSyncError(null)
     try {
-      await fetch('/api/github/sync', {
+      const res = await fetch('/api/github/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brand_id: brand.id }),
       })
-    } catch { /* ignore */ }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setSyncError(data.error || 'Sync failed')
+      } else {
+        // Refresh the brand data so the UI updates
+        onBrandRefresh?.()
+      }
+    } catch {
+      setSyncError('Network error — check your connection')
+    }
     setSyncing(false)
   }
 
@@ -148,7 +168,10 @@ function BrandBriefing({ brand, onAction }: { brand: Brand; onAction: (msg: stri
             <KnowItem ok={hasWebsite} label="Website" detail={brand.website_url} />
             <KnowItem ok={hasGithub} label="GitHub repo" detail={hasGithubContext ? 'Synced' : syncing ? 'Syncing...' : brand.github_url ? 'Not synced yet' : undefined} />
             {hasGithub && !hasGithubContext && !syncing && (
-              <button onClick={autoSyncGithub} className="ml-5 text-[10px] text-primary hover:underline">Sync now</button>
+              <button onClick={syncGithub} className="ml-5 text-[10px] text-primary hover:underline">Sync now</button>
+            )}
+            {syncError && (
+              <p className="ml-5 text-[10px] text-red-400">{syncError}</p>
             )}
             <KnowItem ok={hasSocials} label="Social profiles" detail={hasSocials ? Object.keys(brand.social_urls!).join(', ') : undefined} />
             <KnowItem ok={hasCompetitors} label="Competitors" detail={hasCompetitors ? `${brand.competitors!.length} tracked` : undefined} />
@@ -208,7 +231,7 @@ function MissingItem({ label }: { label: string }) {
 
 // ─── Main WelcomeScreen ─────────────────────────────────────────────────────
 
-export function WelcomeScreen({ brand, onAction }: WelcomeScreenProps) {
+export function WelcomeScreen({ brand, onAction, onBrandRefresh }: WelcomeScreenProps) {
   const { activeAgentType } = useAgencyStore()
 
   return (
@@ -243,7 +266,7 @@ export function WelcomeScreen({ brand, onAction }: WelcomeScreenProps) {
       </div>
 
       {/* Brand intelligence briefing */}
-      {brand && <BrandBriefing brand={brand} onAction={onAction} />}
+      {brand && <BrandBriefing brand={brand} onAction={onAction} onBrandRefresh={onBrandRefresh} />}
 
       {/* Quick action chips */}
       <QuickActions brand={brand} agentType={activeAgentType} onAction={onAction} />
