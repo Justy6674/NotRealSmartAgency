@@ -20,6 +20,7 @@ async function getCanvaApiKey(
   supabase: SupabaseClient,
   userId: string
 ): Promise<string | null> {
+  // User-specific key first (power users connect their own)
   const { data } = await supabase
     .from('user_integrations')
     .select('cached_data')
@@ -27,7 +28,11 @@ async function getCanvaApiKey(
     .eq('provider', 'canva')
     .single()
 
-  return (data?.cached_data?.api_key as string) ?? null
+  const userKey = (data?.cached_data?.api_key as string) ?? null
+  if (userKey) return userKey
+
+  // Fall back to platform-wide key (included in subscription)
+  return process.env.CANVA_API_KEY ?? null
 }
 
 export function createDesignGraphicTool(

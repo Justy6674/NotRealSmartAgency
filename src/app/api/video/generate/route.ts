@@ -41,11 +41,14 @@ export async function POST(request: Request) {
     .eq('provider', provider)
     .single()
 
-  if (integrationError || !integration || !integration.cached_data?.api_key) {
+  // User key first, then platform-wide env var fallback
+  const apiKey = (integration?.cached_data?.api_key as string)
+    || (provider === 'heygen' ? process.env.HEYGEN_API_KEY : undefined)
+    || undefined
+
+  if (!apiKey) {
     return NextResponse.json({ error: `API key for ${provider} not configured. Add it in Brand Settings → Video tab.` }, { status: 400 })
   }
-
-  const apiKey = integration.cached_data.api_key as string
   const scriptContent = output.content
   const videoPrefs = output.brands?.video_preferences || {}
 

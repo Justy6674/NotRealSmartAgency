@@ -29,7 +29,8 @@ export function createCreateVideoTool(
         .eq('provider', 'heygen')
         .single()
 
-      const apiKey = (integration?.cached_data?.api_key as string) ?? null
+      // User-specific key first, fall back to platform-wide key
+      const apiKey = (integration?.cached_data?.api_key as string) ?? process.env.HEYGEN_API_KEY ?? null
 
       if (!apiKey) {
         return {

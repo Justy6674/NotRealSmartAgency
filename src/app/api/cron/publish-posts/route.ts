@@ -43,11 +43,12 @@ export async function GET(request: Request) {
         .eq('provider', 'ayrshare')
         .single()
 
-      if (!integration?.cached_data?.api_key) {
+      // User key first, then platform-wide env var fallback
+      const apiKey = (integration?.cached_data?.api_key as string) || process.env.AYRSHARE_API_KEY || null
+
+      if (!apiKey) {
         throw new Error('Ayrshare API key not configured')
       }
-
-      const apiKey = integration.cached_data.api_key as string
       const mediaUrl = post.media_items?.file_url
 
       // Post via Ayrshare
