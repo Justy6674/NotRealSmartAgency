@@ -13,6 +13,8 @@ import { classifyIntent, classifyIntentMulti, buildRoutingContext } from '@/lib/
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
+import { ensureProforma } from '@/lib/proforma/auto-populate'
+import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 
 const VALID_AGENT_TYPES: AgentType[] = [
   'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
@@ -109,19 +111,55 @@ export async function POST(request: Request) {
       ?? ''
     : ''
 
-  // Fetch user work context + sibling brands (for ecosystem awareness)
-  const [{ data: userProfile }, { data: siblingBrands }] = await Promise.all([
+  // Fetch user work context + sibling brands + proforma (for ecosystem awareness)
+  const [{ data: userProfile }, { data: siblingBrands }, proformaSections] = await Promise.all([
     supabase.from('users').select('work_context').eq('id', user.id).single(),
     supabase.from('brands').select('name, slug, description, niche, website_url, github_url, products_services').eq('user_id', user.id).neq('id', brandId),
+    ensureProforma(supabase, brand as Brand),
   ])
 
-  // Build system prompt with memory + user context
+  // Build proforma summary for system prompt
+  let proformaSummary: string | null = null
+  if (proformaSections.length > 0) {
+    const lines: string[] = []
+
+    // Executive snapshot in full
+    const snapshot = proformaSections.find(s => s.section_key === 'executive_snapshot')
+    if (snapshot) {
+      const data = snapshot.section_data as Record<string, unknown>
+      const entries = Object.entries(data)
+        .filter(([, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => `- ${k.replace(/_/g, ' ')}: ${Array.isArray(v) ? v.join(', ') : String(v)}`)
+      if (entries.length > 0) {
+        lines.push('**Executive Snapshot:**')
+        lines.push(...entries)
+        lines.push('')
+      }
+    }
+
+    // Status overview of all other sections
+    lines.push('**Section Status:**')
+    for (const s of proformaSections) {
+      if (s.section_key === 'executive_snapshot') continue
+      const maxDays = CADENCE_DAYS[s.review_cadence as ReviewCadence] ?? 30
+      const ageDays = (Date.now() - new Date(s.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+      const stale = ageDays > maxDays
+      const status = s.rag_status === 'green' ? 'GREEN' : s.rag_status === 'amber' ? 'AMBER' : s.rag_status === 'red' ? 'RED' : '?'
+      const updated = new Date(s.updated_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+      lines.push(`- ${s.section_title}: [${status}]${stale ? ' **STALE**' : ''} (updated ${updated})`)
+    }
+
+    proformaSummary = lines.join('\n')
+  }
+
+  // Build system prompt with memory + user context + proforma
   let { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
     brand as Brand,
     agentConfig as AgentConfig,
     lastMessageText,
     userProfile?.work_context,
-    (siblingBrands as Brand[]) ?? []
+    (siblingBrands as Brand[]) ?? [],
+    proformaSummary
   )
 
   // Intent classification + auto-routing for Director

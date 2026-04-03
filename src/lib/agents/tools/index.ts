@@ -22,6 +22,7 @@ import { createProcessMediaTool } from './process-media'
 import { createRepurposeContentTool } from './repurpose-content'
 import { createFillCalendarTool } from './fill-calendar'
 import { createSaveBrandInfoTool } from './save-brand-info'
+import { createReadProformaTool, createUpdateProformaTool } from './proforma'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -79,6 +80,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const repurposeContent = createRepurposeContentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const fillCalendar = createFillCalendarTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const saveBrandInfo = createSaveBrandInfoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const readProforma = createReadProformaTool(ctx.supabase, ctx.brandId)
+  const updateProforma = createUpdateProformaTool(ctx.supabase, ctx.brandId, ctx.conversationId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -86,6 +89,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     request_approval: requestApproval,
     handoff_to_department: handoff,
     query_outputs: queryOutputs,
+    read_proforma: readProforma,
   }
 
   // Tool sets per agent type
@@ -109,6 +113,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       query_calendar: queryCalendar,
       query_analytics: queryAnalytics,
       query_media: queryMedia,
+      update_proforma: updateProforma,
       ...managementTools,
     },
     content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, ...managementTools },

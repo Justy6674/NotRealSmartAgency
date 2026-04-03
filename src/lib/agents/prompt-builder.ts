@@ -6,7 +6,7 @@ import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
 import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
 
-export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null, siblingBrands?: Partial<Brand>[]): string {
+export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null, siblingBrands?: Partial<Brand>[], proformaSummary?: string | null): string {
   const sections: string[] = []
 
   // Base agency rules
@@ -66,6 +66,20 @@ Core rules:
 
   // Brand context
   sections.push(buildBrandContext(brand))
+
+  // Master Marketing Proforma summary
+  if (proformaSummary) {
+    sections.push(`## Master Marketing Proforma
+
+${proformaSummary}
+
+### How to Use the Proforma
+- You have access to a Master Marketing Proforma for this brand — a living document that is the single source of truth.
+- Before creating ANY content, check the proforma. Use read_proforma to review the relevant section.
+- After every significant conversation, update the proforma with decisions, wins, and learnings using update_proforma (Director only).
+- If a proforma section is STALE (not reviewed within its cadence), flag it to the user and offer to update it.
+- The proforma is not aspirational — it reflects current truth. If information is wrong, update it immediately.`)
+  }
 
   // Agent-specific instructions
   sections.push(agentConfig.system_prompt)
@@ -282,9 +296,10 @@ export async function buildSystemPromptWithMemory(
   agentConfig: AgentConfig,
   latestMessage: string,
   userWorkContext?: string | null,
-  siblingBrands?: Partial<Brand>[]
+  siblingBrands?: Partial<Brand>[],
+  proformaSummary?: string | null
 ): Promise<{ prompt: string; memoryCount: number }> {
-  const basePrompt = buildSystemPrompt(brand, agentConfig, userWorkContext, siblingBrands)
+  const basePrompt = buildSystemPrompt(brand, agentConfig, userWorkContext, siblingBrands, proformaSummary)
 
   try {
     const namespace = getNamespace(brand.slug, agentConfig.agent_type)
