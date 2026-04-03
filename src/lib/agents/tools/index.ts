@@ -110,7 +110,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     },
     content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
-    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, ...managementTools },
+    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
     compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
@@ -118,9 +118,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, ...managementTools },
     brand: { save_output: saveOutput, generate_image: generateImageTool, ...managementTools },
-    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
+    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
-    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 
