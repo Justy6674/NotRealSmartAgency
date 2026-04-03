@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { SendHorizontal, Plus, Paperclip, Mic, X } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { SendHorizontal, Plus, Paperclip, X } from 'lucide-react'
 import type { AgentType, Brand } from '@/types/database'
 import { useAgencyStore } from '@/stores/agency-store'
+import { filterCommands, type SlashCommand } from '@/lib/slash-commands'
 
 interface ChatInputProps {
   onSend: (text: string) => void
@@ -116,8 +117,12 @@ export function ChatInput({
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [showSlashMenu, setShowSlashMenu] = useState(false)
+  const [slashResults, setSlashResults] = useState<SlashCommand[]>([])
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const { activeBrandId } = useAgencyStore()
 
   // Auto-resize textarea
@@ -128,10 +133,36 @@ export function ChatInput({
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`
   }, [input])
 
+  // Slash command detection
+  useEffect(() => {
+    if (input.startsWith('/')) {
+      const results = filterCommands(input)
+      setSlashResults(results)
+      setShowSlashMenu(results.length > 0)
+      setSelectedIndex(0)
+    } else {
+      setShowSlashMenu(false)
+      setSlashResults([])
+    }
+  }, [input])
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (!showSlashMenu || !dropdownRef.current) return
+    const items = dropdownRef.current.querySelectorAll('[data-slash-item]')
+    items[selectedIndex]?.scrollIntoView({ block: 'nearest' })
+  }, [selectedIndex, showSlashMenu])
+
+  const selectCommand = useCallback((cmd: SlashCommand) => {
+    setInput('')
+    setShowSlashMenu(false)
+    setSlashResults([])
+    onSend(cmd.message)
+  }, [onSend])
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) setSelectedFile(file)
-    // Reset so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -158,7 +189,6 @@ export function ChatInput({
 
         if (!uploadRes.ok) {
           const err = await uploadRes.json()
-          // Send the error as a message so the agent can respond
           onSend(`I tried to upload ${selectedFile.name} but got an error: ${err.error || 'Upload failed'}`)
           setSelectedFile(null)
           setInput('')
@@ -195,6 +225,34 @@ export function ChatInput({
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showSlashMenu && slashResults.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIndex(prev => (prev + 1) % slashResults.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIndex(prev => (prev - 1 + slashResults.length) % slashResults.length)
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        selectCommand(slashResults[selectedIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowSlashMenu(false)
+        return
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        selectCommand(slashResults[selectedIndex])
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -205,7 +263,7 @@ export function ChatInput({
 
   return (
     <div className="border-t bg-background px-4 py-3">
-      {/* Main input — large, inviting, Claude-style */}
+      {/* Main input -- large, inviting, Claude-style */}
       <div className="mx-auto max-w-3xl">
         <div
           className={`relative rounded-2xl border bg-muted/30 shadow-sm transition-all focus-within:shadow-md focus-within:ring-2 focus-within:ring-primary/20 ${dragOver ? 'border-primary border-dashed ring-2 ring-primary/30' : ''}`}
@@ -213,6 +271,43 @@ export function ChatInput({
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
         >
+          {/* Slash command dropdown — positioned above the input */}
+          {showSlashMenu && slashResults.length > 0 && (
+            <div
+              ref={dropdownRef}
+              className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-80 overflow-y-auto rounded-xl border border-border bg-card p-2 shadow-lg"
+            >
+              <div className="mb-1.5 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                Commands
+              </div>
+              {slashResults.map((cmd, i) => (
+                <button
+                  key={cmd.command}
+                  type="button"
+                  data-slash-item
+                  onClick={() => selectCommand(cmd)}
+                  onMouseEnter={() => setSelectedIndex(i)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                    i === selectedIndex ? 'bg-muted' : 'hover:bg-muted/50'
+                  }`}
+                >
+                  <span className="w-24 shrink-0 font-mono text-xs text-muted-foreground">
+                    {cmd.command}
+                  </span>
+                  <span className="text-sm font-medium text-foreground">
+                    {cmd.label}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {cmd.description}
+                  </span>
+                  <span className="ml-auto shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                    {cmd.category}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* File attachment preview */}
           {selectedFile && (
             <div className="mx-4 mt-3 mb-1 flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-xs">
@@ -265,6 +360,12 @@ export function ChatInput({
               >
                 <Plus className="h-4 w-4" />
               </button>
+              {/* Slash hint — visible when input is empty */}
+              {!input && (
+                <span className="select-none pl-1 text-[11px] text-muted-foreground/40">
+                  Type <kbd className="rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[10px]">/</kbd> for shortcuts
+                </span>
+              )}
             </div>
             <button
               type="button"
