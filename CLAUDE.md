@@ -83,12 +83,18 @@ Rule-based keyword classification that analyses the user's message and suggests 
 ### Heartbeat (Vercel Cron)
 `/api/heartbeat` runs every 15 min via Vercel Cron. Processes assigned tasks autonomously. Budget enforcement with auto-pause. Monthly reset on 1st. Uses Fluid Compute (`maxDuration=300`).
 
-### Memory System (Ruflo)
-- **Client:** `lib/ruflo/client.ts` — search + store via Ruflo API
+### Memory System (Ruflo — pending replacement with mem0)
+- **Client:** `lib/ruflo/client.ts` — search + store via Supabase `agent_memories` table
 - **Namespaces:** `lib/ruflo/namespaces.ts` — `nrs-{brandSlug}-{agentType}` per brand per department, `nrs-agency` for global
-- **Extraction:** `lib/ruflo/memory-extractor.ts` — automatically extracts key facts from assistant responses on chat finish
-- **Prompt integration:** `lib/agents/prompt-builder.ts` — `buildSystemPromptWithMemory()` searches memories before each chat, injects relevant ones into system prompt
-- Also backed by `agent_memories` table in Supabase
+- **Extraction:** `lib/ruflo/memory-extractor.ts` — regex-based extraction of preferences, decisions, metrics from responses
+- **Prompt integration:** `lib/agents/prompt-builder.ts` — `buildSystemPromptWithMemory()` searches memories before each chat, injects up to 15 (10 local + 5 global)
+- **Known limitations:** Keyword search only (no semantic), regex extraction misses ~40-60% of insights, no deduplication, no importance scoring, no memory decay
+- **Planned replacement:** mem0 self-hosted on Supabase pgvector — LLM-based fact extraction, semantic vector search, memory consolidation, graph relationships. See `project_memory_architecture.md` in memory files.
+
+### Planned Major Builds (next sessions)
+1. **mem0 memory system** — replace Ruflo with semantic search, LLM extraction, graph memory
+2. **Director auto-greet** — conversation-first onboarding for incomplete brands
+3. **Self-updating knowledge** — daily research cron, agents stay current with AI/marketing trends
 
 ### Meeting Room (Multi-Department Collaboration)
 When the intent router detects 2+ departments needed, the Director uses `convene_meeting` instead of `delegate_to_agent`. All departments run in parallel via `Promise.allSettled`. Each gets meeting context ("you are in a meeting with X, Y, Z — focus on YOUR expertise"). Results returned as structured meeting output. Auto-saved to output library with `[Meeting]` prefix.
