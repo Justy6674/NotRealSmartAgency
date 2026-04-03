@@ -17,6 +17,8 @@ import {
   FileText,
   Settings,
   Film,
+  CalendarDays,
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -368,10 +370,12 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
             {[
               { href: '/agency/outputs', icon: FileText, label: 'Outputs' },
               { href: '/agency/media', icon: Film, label: 'Media' },
+              { href: '/agency/calendar', icon: CalendarDays, label: 'Calendar' },
               { href: '/agency/tasks', icon: ListTodo, label: 'Tasks' },
               { href: '/agency/agents', icon: Users, label: 'Agents' },
               { href: '/agency/approvals', icon: ShieldCheck, label: 'Approvals' },
               { href: '/agency/costs', icon: DollarSign, label: 'Costs' },
+              { href: '/agency/analytics', icon: BarChart3, label: 'Analytics' },
               { href: '/agency/activity', icon: Activity, label: 'Activity' },
               { href: '/agency/settings', icon: Settings, label: 'Settings' },
             ].map(({ href, icon: NavIcon, label }) => (

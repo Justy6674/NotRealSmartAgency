@@ -15,6 +15,7 @@ import { createBrowsePageTool } from './browse-page'
 import { createReadGmailTool } from './read-gmail'
 import { createGenerateSlidesTool } from './generate-slides'
 import { createQueryOutputsTool } from './query-outputs'
+import { createProcessMediaTool } from './process-media'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -65,6 +66,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const readGmail = createReadGmailTool()
   const generateSlides = createGenerateSlidesTool()
   const queryOutputs = createQueryOutputsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const processMedia = createProcessMediaTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -88,6 +90,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       send_email: sendEmail,
       read_gmail: readGmail,
       generate_slides: generateSlides,
+      process_media: processMedia,
       ...managementTools,
     },
     content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, ...managementTools },
@@ -102,7 +105,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     brand: { save_output: saveOutput, generate_image: generateImageTool, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
-    video: { save_output: saveOutput, word_count: wordCount, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 
