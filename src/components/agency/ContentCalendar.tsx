@@ -14,7 +14,9 @@ import {
   Check,
   AlertCircle,
   Clock,
+  Sparkles,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import type { ScheduledPost, PostPlatform } from '@/types/database'
@@ -61,7 +63,8 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ContentCalendar() {
-  const { activeBrandId } = useAgencyStore()
+  const { activeBrandId, setAgent, setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
   const [posts, setPosts] = useState<ScheduledPost[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
@@ -187,12 +190,27 @@ export function ContentCalendar() {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <button
-            onClick={goToToday}
-            className="rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            Today
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToToday}
+              className="rounded-md border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              Today
+            </button>
+            {activeBrandId && (
+              <button
+                onClick={() => {
+                  setAgent('overall')
+                  setPendingReviewMessage('Fill my calendar for the next 2 weeks with 5 posts per week across all my social platforms')
+                  router.push('/agency/chat')
+                }}
+                className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Fill My Calendar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Weekday headers */}

@@ -16,6 +16,8 @@ import { createReadGmailTool } from './read-gmail'
 import { createGenerateSlidesTool } from './generate-slides'
 import { createQueryOutputsTool } from './query-outputs'
 import { createProcessMediaTool } from './process-media'
+import { createRepurposeContentTool } from './repurpose-content'
+import { createFillCalendarTool } from './fill-calendar'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -67,6 +69,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const generateSlides = createGenerateSlidesTool()
   const queryOutputs = createQueryOutputsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const processMedia = createProcessMediaTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const repurposeContent = createRepurposeContentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const fillCalendar = createFillCalendarTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -91,11 +95,13 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       read_gmail: readGmail,
       generate_slides: generateSlides,
       process_media: processMedia,
+      repurpose_content: repurposeContent,
+      fill_calendar: fillCalendar,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
-    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, ...managementTools },
+    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
     compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
@@ -105,7 +111,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     brand: { save_output: saveOutput, generate_image: generateImageTool, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
-    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 

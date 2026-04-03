@@ -17,6 +17,7 @@ interface ActionChip {
 
 const BASE_ACTIONS: Record<string, ActionChip[]> = {
   overall: [
+    { label: 'Fill my calendar', message: 'Fill my content calendar for the next 2 weeks with 5 posts per week across all my social platforms.' },
     { label: 'Run marketing audit', message: 'Run a comprehensive marketing audit for my brand. Scan our website, review social presence, analyse competitors, and produce a prioritised action plan.' },
     { label: 'Convene team meeting', message: 'Convene an agency meeting to align all departments on our current priorities. Summarise open tasks, blockers, and next steps for each team.' },
     { label: 'Delegate a brief', message: 'I have a new project. Help me write a brief and delegate it to the right department with clear deliverables and deadlines.' },
