@@ -36,6 +36,21 @@ const MARKETING_LABELS: Record<string, string> = {
 
 function BrandBriefing({ brand, onAction }: { brand: Brand; onAction: (msg: string) => void }) {
   const [expanded, setExpanded] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+
+  // Auto-sync GitHub if repo URL exists but context hasn't been pulled
+  const autoSyncGithub = async () => {
+    if (!brand.github_url || brand.github_context || syncing) return
+    setSyncing(true)
+    try {
+      await fetch('/api/github/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: brand.id }),
+      })
+    } catch { /* ignore */ }
+    setSyncing(false)
+  }
 
   // What we know vs what's missing
   const hasWebsite = !!brand.website_url
@@ -131,7 +146,10 @@ function BrandBriefing({ brand, onAction }: { brand: Brand; onAction: (msg: stri
           {/* Checklist of what we know */}
           <div className="grid gap-1.5">
             <KnowItem ok={hasWebsite} label="Website" detail={brand.website_url} />
-            <KnowItem ok={hasGithub} label="GitHub repo" detail={hasGithubContext ? 'Synced' : brand.github_url ? 'Not synced yet' : undefined} />
+            <KnowItem ok={hasGithub} label="GitHub repo" detail={hasGithubContext ? 'Synced' : syncing ? 'Syncing...' : brand.github_url ? 'Not synced yet' : undefined} />
+            {hasGithub && !hasGithubContext && !syncing && (
+              <button onClick={autoSyncGithub} className="ml-5 text-[10px] text-primary hover:underline">Sync now</button>
+            )}
             <KnowItem ok={hasSocials} label="Social profiles" detail={hasSocials ? Object.keys(brand.social_urls!).join(', ') : undefined} />
             <KnowItem ok={hasCompetitors} label="Competitors" detail={hasCompetitors ? `${brand.competitors!.length} tracked` : undefined} />
             <KnowItem ok={hasProducts} label="Products & services" detail={hasProducts ? `${brand.products_services!.length} listed` : undefined} />
