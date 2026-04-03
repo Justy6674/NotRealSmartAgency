@@ -109,19 +109,19 @@ export async function POST(request: Request) {
       ?? ''
     : ''
 
-  // Fetch user work context
-  const { data: userProfile } = await supabase
-    .from('users')
-    .select('work_context')
-    .eq('id', user.id)
-    .single()
+  // Fetch user work context + sibling brands (for ecosystem awareness)
+  const [{ data: userProfile }, { data: siblingBrands }] = await Promise.all([
+    supabase.from('users').select('work_context').eq('id', user.id).single(),
+    supabase.from('brands').select('name, slug, description, niche, website_url, github_url, products_services').eq('user_id', user.id).neq('id', brandId),
+  ])
 
   // Build system prompt with memory + user context
   let { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
     brand as Brand,
     agentConfig as AgentConfig,
     lastMessageText,
-    userProfile?.work_context
+    userProfile?.work_context,
+    (siblingBrands as Brand[]) ?? []
   )
 
   // Intent classification + auto-routing for Director

@@ -6,7 +6,7 @@ import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
 import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
 
-export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null): string {
+export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null, siblingBrands?: Partial<Brand>[]): string {
   const sections: string[] = []
 
   // Base agency rules
@@ -80,6 +80,17 @@ Core rules:
   const socialKnowledge = getSocialMediaKnowledge(agentConfig.agent_type)
   if (socialKnowledge) {
     sections.push(socialKnowledge)
+  }
+
+  // Brand ecosystem — sibling brands owned by the same user
+  if (siblingBrands?.length) {
+    const ecosystemLines = [`## Brand Ecosystem\nThe owner also runs these related brands — use this for cross-promotion and ecosystem awareness:\n`]
+    for (const sib of siblingBrands) {
+      const products = sib.products_services?.map(p => p.name).join(', ') || ''
+      ecosystemLines.push(`- **${sib.name}** (${sib.niche || 'general'})${sib.description ? ': ' + sib.description : ''}${products ? ' — Products: ' + products : ''}${sib.website_url ? ' — ' + sib.website_url : ''}`)
+    }
+    ecosystemLines.push(`\nWhen relevant, suggest cross-promotion opportunities between ${brand.name} and these related brands. They share the same owner and can strengthen each other's marketing.`)
+    sections.push(ecosystemLines.join('\n'))
   }
 
   // Compliance layer (conditional)
@@ -270,9 +281,10 @@ export async function buildSystemPromptWithMemory(
   brand: Brand,
   agentConfig: AgentConfig,
   latestMessage: string,
-  userWorkContext?: string | null
+  userWorkContext?: string | null,
+  siblingBrands?: Partial<Brand>[]
 ): Promise<{ prompt: string; memoryCount: number }> {
-  const basePrompt = buildSystemPrompt(brand, agentConfig, userWorkContext)
+  const basePrompt = buildSystemPrompt(brand, agentConfig, userWorkContext, siblingBrands)
 
   try {
     const namespace = getNamespace(brand.slug, agentConfig.agent_type)
