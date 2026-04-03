@@ -119,7 +119,7 @@ export function WelcomeScreen({ brand, onAction }: WelcomeScreenProps) {
       )}
 
       {/* Quick action chips */}
-      <QuickActions brand={brand} onAction={onAction} />
+      <QuickActions brand={brand} agentType={activeAgentType} onAction={onAction} />
     </div>
   )
 }
