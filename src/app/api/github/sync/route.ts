@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { generateObject } from 'ai'
+import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 
 const SyncSchema = z.object({
@@ -93,7 +95,7 @@ export async function POST(request: Request) {
       summary += `README Snippet:\n${truncatedReadme}`
     }
 
-    // Save back to brand
+    // Save GitHub context
     const { error: updateError } = await supabase
       .from('brands')
       .update({ github_context: summary })
@@ -101,6 +103,55 @@ export async function POST(request: Request) {
 
     if (updateError) {
       throw new Error(updateError.message)
+    }
+
+    // ── Auto-enrich: extract structured brand data from the repo ──
+    // Use a quick LLM call to pull products, description, niche from the README
+    try {
+      // Fetch current brand to see what's already filled
+      const { data: fullBrand } = await supabase
+        .from('brands')
+        .select('description, niche, products_services')
+        .eq('id', brandId)
+        .single()
+
+      const needsProducts = !fullBrand?.products_services?.length
+      const needsDescription = !fullBrand?.description
+
+      if (needsProducts || needsDescription) {
+        const enrichResult = await generateObject({
+          model: gateway('anthropic/claude-haiku-4-5-20251001'),
+          schema: z.object({
+            description: z.string().describe('One-sentence brand description based on the repo'),
+            niche: z.string().describe('Business niche, e.g. "telehealth", "saas", "ecommerce"'),
+            products: z.array(z.object({
+              name: z.string(),
+              description: z.string(),
+              price: z.string().optional(),
+              target_audience: z.string().optional(),
+            })).describe('Products or services extracted from the README'),
+          }),
+          prompt: `Extract structured brand information from this GitHub repository context. Be concise.\n\n${summary}`,
+        })
+
+        const updates: Record<string, unknown> = {}
+        if (needsDescription && enrichResult.object.description) {
+          updates.description = enrichResult.object.description
+        }
+        if (enrichResult.object.niche && fullBrand?.niche === 'general') {
+          updates.niche = enrichResult.object.niche
+        }
+        if (needsProducts && enrichResult.object.products?.length) {
+          updates.products_services = enrichResult.object.products
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('brands').update(updates).eq('id', brandId)
+        }
+      }
+    } catch (enrichErr) {
+      // Non-fatal — GitHub context is already saved, enrichment is a bonus
+      console.error('[github-sync] Auto-enrich failed:', enrichErr)
     }
 
     return NextResponse.json({ success: true, context: summary })
