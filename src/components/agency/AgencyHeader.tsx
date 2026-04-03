@@ -1,7 +1,7 @@
 'use client'
 
 import { useAgencyStore } from '@/stores/agency-store'
-import { AGENT_LABELS } from '@/types/database'
+import { AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
 import { AgentAvatar } from './AgentAvatar'
 import { ComplianceBadge } from './ComplianceBadge'
 import { useEffect, useState } from 'react'
@@ -52,6 +52,9 @@ export function AgencyHeader() {
       <AgentAvatar agentType={activeAgentType} size="sm" />
       <span className="text-sm text-muted-foreground">
         {AGENT_LABELS[activeAgentType]}
+      </span>
+      <span className="hidden sm:inline text-xs text-muted-foreground/50">
+        · {AGENT_SUBTITLES[activeAgentType]}
       </span>
 
       {/* Compliance badges */}

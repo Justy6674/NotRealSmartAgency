@@ -33,14 +33,17 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return new Response('Unauthorised', { status: 401 })
+    return new Response(JSON.stringify({ error: 'Unauthorised', friendlyMessage: "You've been signed out. Please log in again." }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const body = await request.json()
   const parsed = RequestSchema.safeParse(body)
 
   if (!parsed.success) {
-    return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.issues }), {
+    return new Response(JSON.stringify({ error: 'Invalid request', friendlyMessage: "Something didn't look right. Try rewording your message.", details: parsed.error.issues }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
     .single()
 
   if (brandError || !brand) {
-    return new Response(JSON.stringify({ error: 'Brand not found' }), {
+    return new Response(JSON.stringify({ error: 'Brand not found', friendlyMessage: "I can't find this brand. Try selecting it again from the sidebar." }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     })
@@ -71,7 +74,7 @@ export async function POST(request: Request) {
     .single()
 
   if (agentError || !agentConfig) {
-    return new Response(JSON.stringify({ error: 'Agent not found' }), {
+    return new Response(JSON.stringify({ error: 'Agent not found', friendlyMessage: "This department isn't available right now. Try the Director instead." }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     })

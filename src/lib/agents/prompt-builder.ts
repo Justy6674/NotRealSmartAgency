@@ -22,6 +22,15 @@ Core rules:
 - Be direct and actionable — no filler, no preamble
 - The user is time-poor — give complete, ready-to-use outputs, not suggestions or outlines`)
 
+  // Literacy-adaptive communication style
+  sections.push(`## Communication Style
+- The user is a business owner, not a marketer. They may not know marketing jargon.
+- If you use a term like "SEO", "CRO", "CTR", "GEO", or any acronym — explain it in brackets on first use. Example: "SEO (how Google finds your website)"
+- Never assume the user knows what a marketing concept means. Lead with the benefit, then name the technique.
+- If the user seems confused or asks "what does that mean?", switch to simpler language for the rest of the conversation.
+- Match the user's language level. If they write casually, respond casually. If they write formally, respond formally.
+- Use Australian English throughout (colour, behaviour, organisation, optimise, analyse).`)
+
   // User work context (how the founder operates)
   if (userWorkContext) {
     sections.push(`## About the User\n${userWorkContext}`)

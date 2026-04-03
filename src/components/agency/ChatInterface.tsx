@@ -8,8 +8,9 @@ import { createClient } from '@/lib/supabase/client'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import type { Brand } from '@/types/database'
-import { Bot } from 'lucide-react'
+import { Bot, UserCircle } from 'lucide-react'
 import { WelcomeScreen } from './WelcomeScreen'
+import { getFriendlyError } from '@/lib/errors/friendly-messages'
 
 interface ChatInterfaceProps {
   conversationId?: string
@@ -18,7 +19,7 @@ interface ChatInterfaceProps {
 export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [brand, setBrandLocal] = useState<Brand | null>(null)
-  const { activeBrandId, activeAgentType, setConversation, restoreContext } = useAgencyStore()
+  const { activeBrandId, activeAgentType, setConversation, restoreContext, setAgent } = useAgencyStore()
 
   // Refs so the transport always reads the LATEST values at send time
   // (not stale values captured when useMemo ran)
@@ -181,27 +182,64 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       )}
 
       {/* Error recovery */}
-      {error && (
-        <div className="mx-4 mb-2 flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2.5">
-          <p className="flex-1 text-sm text-red-400">
-            Something went wrong — {error.message?.includes('fetch') ? 'network interrupted' : error.message}
-          </p>
+      {error && (() => {
+        const friendly = getFriendlyError(error)
+        return (
+          <div className="mx-4 mb-2 flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2.5">
+            <p className="flex-1 text-sm text-red-400">
+              {friendly.message}
+            </p>
+            {friendly.actionType === 'retry' && (
+              <button
+                onClick={() => {
+                  if (!activeBrandId) return
+                  clearError()
+                  regenerate()
+                }}
+                disabled={!activeBrandId}
+                className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40"
+              >
+                {friendly.action ?? 'Retry'}
+              </button>
+            )}
+            {friendly.actionType === 'login' && (
+              <a
+                href="/login"
+                className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+              >
+                {friendly.action ?? 'Log in'}
+              </a>
+            )}
+            {friendly.actionType === 'director' && (
+              <button
+                onClick={() => {
+                  clearError()
+                  useAgencyStore.getState().setAgent('overall')
+                }}
+                className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
+              >
+                {friendly.action ?? 'Ask the Director'}
+              </button>
+            )}
+            <button
+              onClick={() => clearError()}
+              className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* Back to Director safety net */}
+      {activeAgentType !== 'overall' && (
+        <div className="mx-4 mb-1 flex justify-center">
           <button
-            onClick={() => {
-              if (!activeBrandId) return
-              clearError()
-              regenerate()
-            }}
-            disabled={!activeBrandId}
-            className="shrink-0 rounded-md bg-red-500/10 px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40"
+            onClick={() => setAgent('overall')}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            Retry
-          </button>
-          <button
-            onClick={() => clearError()}
-            className="shrink-0 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Dismiss
+            <UserCircle className="h-3 w-3" />
+            Not sure? Ask the Director
           </button>
         </div>
       )}

@@ -3,7 +3,7 @@
 import { useAgencyStore } from '@/stores/agency-store'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { ACTIVE_AGENT_TYPES, AGENT_LABELS } from '@/types/database'
+import { ACTIVE_AGENT_TYPES, AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
 import { AGENT_ICONS, AgentAvatar } from './AgentAvatar'
 
 export function AgentSidebar() {
@@ -36,9 +36,14 @@ export function AgentSidebar() {
               )}
             >
               <AgentAvatar agentType={type} size="sm" />
-              <p className={cn('text-sm truncate', isActive && 'font-medium')}>
-                {label}
-              </p>
+              <div className="min-w-0">
+                <p className={cn('text-sm truncate', isActive && 'font-medium')}>
+                  {label}
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 truncate">
+                  {AGENT_SUBTITLES[type]}
+                </p>
+              </div>
             </button>
           )
         })}

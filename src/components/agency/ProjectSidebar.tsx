@@ -21,7 +21,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 
-import { ACTIVE_AGENT_TYPES, AGENT_LABELS } from '@/types/database'
+import { ACTIVE_AGENT_TYPES, AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
 import type { Brand, Conversation, AgentType } from '@/types/database'
 import { AGENT_ICONS, AGENT_COLOURS } from '@/components/agency/AgentAvatar'
 import { AddBrandDialog } from './AddBrandDialog'
@@ -332,6 +332,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
                   <li key={agent}>
                     <button
                       onClick={() => handleSelectAgent(agent)}
+                      title={AGENT_SUBTITLES[agent]}
                       className={cn(
                         'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
                         isActive

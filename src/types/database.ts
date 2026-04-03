@@ -411,21 +411,40 @@ export interface AgentConfig {
 
 export const AGENT_LABELS: Record<AgentType, string> = {
   overall: 'NRS Director',
-  content: 'Content & Copy',
-  seo: 'SEO & GEO',
-  paid_ads: 'Paid Ads',
-  strategy: 'Strategy & Launch',
-  email: 'Email Marketing',
-  growth: 'Growth & Partnerships',
-  brand: 'Brand',
-  competitor: 'Market Intelligence',
-  website: 'Web & CRO',
-  compliance: 'Compliance',
-  analytics: 'Analytics & Reporting',
-  automation: 'Automation & AI',
-  video: 'Video & Scripting',
+  content: 'Write Content',
+  seo: 'Get Found Online',
+  paid_ads: 'Run Ads',
+  strategy: 'Plan & Launch',
+  email: 'Send Emails',
+  growth: 'Find Partners',
+  brand: 'Build My Brand',
+  competitor: 'Watch Competitors',
+  website: 'Improve My Website',
+  compliance: 'Check Compliance',
+  analytics: 'Track Results',
+  automation: 'Automate My Work',
+  video: 'Make Videos',
   // Archived
   martech: 'Connect My Tools',
+}
+
+/** Professional subtitle for each agent — shown as tooltip/secondary text */
+export const AGENT_SUBTITLES: Record<AgentType, string> = {
+  overall: 'Oversees all departments',
+  content: 'Content & copy creation',
+  seo: 'SEO & GEO strategy',
+  paid_ads: 'Paid advertising campaigns',
+  strategy: 'Strategy & launch planning',
+  email: 'Email marketing & sequences',
+  growth: 'Growth & partnership development',
+  brand: 'Brand identity & guidelines',
+  competitor: 'Market intelligence & analysis',
+  website: 'Web optimisation & CRO',
+  compliance: 'AHPRA, TGA & regulatory',
+  analytics: 'Analytics & performance reporting',
+  automation: 'Workflow automation & AI tools',
+  video: 'Video scripting & production',
+  martech: 'Marketing technology integrations',
 }
 
 export const OUTPUT_LABELS: Record<OutputType, string> = {

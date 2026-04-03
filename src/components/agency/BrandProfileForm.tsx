@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Globe, Github, Loader2, RefreshCw } from 'lucide-react'
-import type { Brand } from '@/types/database'
+import { ProductServiceEditor } from './ProductServiceEditor'
+import { VideoPreferencesEditor } from './VideoPreferencesEditor'
+import type { Brand, ProductService, VideoPreferences } from '@/types/database'
 
 interface BrandProfileFormProps {
   brand: Brand
@@ -30,8 +32,8 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
     extra_context: brand.extra_context ?? '',
     ahpra: brand.compliance_flags?.ahpra ?? false,
     tga: brand.compliance_flags?.tga ?? false,
-    products_services: JSON.stringify(brand.products_services ?? [], null, 2),
-    video_preferences: JSON.stringify(brand.video_preferences ?? {}, null, 2),
+    products_services: (brand.products_services ?? []) as ProductService[],
+    video_preferences: (brand.video_preferences ?? {}) as VideoPreferences,
     marketing_status: brand.marketing_status ?? 'unknown',
     marketing_notes: brand.marketing_notes ?? '',
     social_linkedin: brand.social_urls?.linkedin ?? '',
@@ -60,8 +62,8 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
         niche: formData.niche,
         content_pillars: formData.content_pillars.split(',').map((s) => s.trim()).filter(Boolean),
         extra_context: formData.extra_context || null,
-        products_services: (() => { try { return JSON.parse(formData.products_services) } catch { return [] } })(),
-        video_preferences: (() => { try { return JSON.parse(formData.video_preferences) } catch { return {} } })(),
+        products_services: formData.products_services,
+        video_preferences: formData.video_preferences,
         marketing_status: formData.marketing_status,
         marketing_notes: formData.marketing_notes || null,
         social_urls: Object.fromEntries(
@@ -342,35 +344,17 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
           />
         </div>
 
-        <div>
-          <Label htmlFor="products_services">Products & Services (JSON)</Label>
-          <textarea
-            id="products_services"
-            value={formData.products_services}
-            onChange={(e) => setFormData({ ...formData, products_services: e.target.value })}
-            rows={5}
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono"
-            placeholder={'[\n  { "name": "Service Name", "description": "What it does", "price": "$99" }\n]'}
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            JSON array of products/services. Each needs at least name and description.
-          </p>
-        </div>
+        <ProductServiceEditor
+          products={formData.products_services as ProductService[]}
+          onChange={(products) => setFormData({ ...formData, products_services: products as any })}
+          complianceMode={formData.ahpra || formData.tga}
+        />
 
-        <div>
-          <Label htmlFor="video_preferences">Video Preferences (JSON)</Label>
-          <textarea
-            id="video_preferences"
-            value={formData.video_preferences}
-            onChange={(e) => setFormData({ ...formData, video_preferences: e.target.value })}
-            rows={4}
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono"
-            placeholder={'{\n  "avatar_id": "",\n  "accent": "Australian",\n  "presenter_style": "professional",\n  "background_preference": "office"\n}'}
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">
-            Configure how AI-generated videos look: avatar, accent, style, and background.
-          </p>
-        </div>
+        <VideoPreferencesEditor
+          preferences={formData.video_preferences as VideoPreferences}
+          onChange={(prefs) => setFormData({ ...formData, video_preferences: prefs as any })}
+          showAvatarId={false}
+        />
 
         <div className="flex gap-6">
           <label className="flex items-center gap-2 text-sm">

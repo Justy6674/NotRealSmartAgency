@@ -3,7 +3,7 @@ import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
-import { AGENT_LABELS } from '@/types/database'
+import { AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
 import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
 import { getToolsForAgent } from './index'
 import { logAudit } from '@/lib/agents/audit'
@@ -216,7 +216,7 @@ async function runDepartment(
 You are in a **department meeting** chaired by the NRS Director.
 Other departments in this meeting: ${otherDepts}
 
-Your role: provide your **deep specialist expertise** as the ${AGENT_LABELS[dept as AgentType] ?? dept} department head.
+Your role: provide your **deep specialist expertise** as the ${AGENT_SUBTITLES[dept as AgentType] ?? AGENT_LABELS[dept as AgentType] ?? dept} department head.
 
 ${deptBrief}
 

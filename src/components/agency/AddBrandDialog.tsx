@@ -141,7 +141,13 @@ export function AddBrandDialog({ onClose }: AddBrandDialogProps) {
       onClose()
     } else {
       const data = await res.json().catch(() => ({}))
-      setError(data.error || `Failed to create brand (${res.status})`)
+      if (res.status === 401) {
+        setError("You've been signed out. Please log in again to add a brand.")
+      } else if (res.status === 409) {
+        setError('A brand with this name already exists. Try a different name.')
+      } else {
+        setError(data.error || 'Something went wrong creating your brand. Please try again.')
+      }
     }
     setCreating(false)
   }

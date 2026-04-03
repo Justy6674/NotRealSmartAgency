@@ -1,11 +1,11 @@
 'use client'
 
-import { ExternalLink, Github, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, Github, AlertCircle, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserCircle } from 'lucide-react'
 import { useState } from 'react'
 import { QuickActions } from './QuickActions'
 import { ComplianceBadge } from './ComplianceBadge'
 import { AgentAvatar } from './AgentAvatar'
-import { AGENT_LABELS } from '@/types/database'
+import { AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
 import { useAgencyStore } from '@/stores/agency-store'
 import type { Brand } from '@/types/database'
 
@@ -223,9 +223,18 @@ export function WelcomeScreen({ brand, onAction }: WelcomeScreenProps) {
           <p className="mt-1 text-sm text-muted-foreground">
             {activeAgentType === 'overall'
               ? 'I oversee all departments. How can I help?'
-              : 'What would you like to work on?'}
+              : AGENT_SUBTITLES[activeAgentType] + ' — what would you like to work on?'}
           </p>
         </div>
+        {activeAgentType !== 'overall' && (
+          <button
+            onClick={() => useAgencyStore.getState().setAgent('overall')}
+            className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+          >
+            <UserCircle className="h-3 w-3" />
+            Not sure? Ask the Director
+          </button>
+        )}
         {!brand && (
           <p className="text-xs text-muted-foreground">
             Select a brand from the sidebar to get started.
