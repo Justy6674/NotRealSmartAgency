@@ -5,6 +5,7 @@ import { AgencyHeader } from '@/components/agency/AgencyHeader'
 import { MobileSidebar } from '@/components/agency/MobileSidebar'
 import { SidebarToggle } from '@/components/agency/SidebarToggle'
 import { UserMenu } from '@/components/agency/UserMenu'
+import { ChatPanelWrapper } from '@/components/agency/ChatPanelWrapper'
 
 export default async function AgencyLayout({
   children,
@@ -52,6 +53,9 @@ export default async function AgencyLayout({
           {children}
         </main>
       </div>
+
+      {/* Persistent chat panel — available on every agency page */}
+      <ChatPanelWrapper />
     </div>
   )
 }

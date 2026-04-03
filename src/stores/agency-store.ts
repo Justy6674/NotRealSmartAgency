@@ -10,6 +10,7 @@ interface AgencyState {
   activeConversationId: string | null
   activeView: AgencyView
   sidebarOpen: boolean
+  chatPanelOpen: boolean
   pendingReviewMessage: string | null
   setBrand: (brandId: string) => void
   setAgent: (agentType: AgentType) => void
@@ -19,6 +20,7 @@ interface AgencyState {
   setView: (view: AgencyView) => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
+  setChatPanelOpen: (open: boolean) => void
   setPendingReviewMessage: (message: string | null) => void
 }
 
@@ -30,6 +32,7 @@ export const useAgencyStore = create<AgencyState>()(
       activeConversationId: null,
       activeView: 'chat',
       sidebarOpen: false,
+      chatPanelOpen: false,
       pendingReviewMessage: null,
       setBrand: (brandId) =>
         set({ activeBrandId: brandId, activeAgentType: 'overall', activeConversationId: null }),
@@ -47,6 +50,8 @@ export const useAgencyStore = create<AgencyState>()(
         set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       setSidebarOpen: (open) =>
         set({ sidebarOpen: open }),
+      setChatPanelOpen: (open) =>
+        set({ chatPanelOpen: open }),
       setPendingReviewMessage: (message) =>
         set({ pendingReviewMessage: message }),
     }),
@@ -58,6 +63,7 @@ export const useAgencyStore = create<AgencyState>()(
         activeConversationId: state.activeConversationId,
         activeView: state.activeView,
         sidebarOpen: state.sidebarOpen,
+        chatPanelOpen: state.chatPanelOpen,
         // pendingReviewMessage excluded — transient
       }),
     }

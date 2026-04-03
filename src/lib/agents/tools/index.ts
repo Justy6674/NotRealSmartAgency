@@ -15,6 +15,9 @@ import { createBrowsePageTool } from './browse-page'
 import { createReadGmailTool } from './read-gmail'
 import { createGenerateSlidesTool } from './generate-slides'
 import { createQueryOutputsTool } from './query-outputs'
+import { createQueryCalendarTool } from './query-calendar'
+import { createQueryAnalyticsTool } from './query-analytics'
+import { createQueryMediaTool } from './query-media'
 import { createProcessMediaTool } from './process-media'
 import { createRepurposeContentTool } from './repurpose-content'
 import { createFillCalendarTool } from './fill-calendar'
@@ -68,6 +71,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const readGmail = createReadGmailTool()
   const generateSlides = createGenerateSlidesTool()
   const queryOutputs = createQueryOutputsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const queryCalendar = createQueryCalendarTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const queryAnalytics = createQueryAnalyticsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const queryMedia = createQueryMediaTool(ctx.supabase, ctx.userId, ctx.brandId)
   const processMedia = createProcessMediaTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const repurposeContent = createRepurposeContentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const fillCalendar = createFillCalendarTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
@@ -97,6 +103,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       process_media: processMedia,
       repurpose_content: repurposeContent,
       fill_calendar: fillCalendar,
+      query_calendar: queryCalendar,
+      query_analytics: queryAnalytics,
+      query_media: queryMedia,
       ...managementTools,
     },
     content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, ...managementTools },
