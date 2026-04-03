@@ -85,6 +85,39 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     }
   }, [activeBrandId, brand, conversationId])
 
+  // Director auto-greet: when a brand is loaded on a new conversation,
+  // auto-send a contextual greeting so the Director speaks first
+  const autoGreetSent = useRef<string | null>(null)
+  useEffect(() => {
+    // Only on new conversations with the Director, when brand is loaded
+    if (conversationId || !brand || !activeBrandId) return
+    if (activeAgentType !== 'overall') return
+    if (pendingHandled.current) return // don't greet if a pending message is queued
+    if (autoGreetSent.current === brand.id) return // already greeted this brand
+    if (messages.length > 0) return // already has messages
+
+    autoGreetSent.current = brand.id
+
+    // Build a contextual greeting based on what's missing
+    const missing: string[] = []
+    if (!brand.social_urls || Object.keys(brand.social_urls).length === 0) missing.push('social media profiles')
+    if (!brand.competitors || brand.competitors.length === 0) missing.push('competitors')
+    if (!brand.products_services || brand.products_services.length === 0) missing.push('products and services')
+    if (!brand.tone_of_voice?.keywords?.length) missing.push('brand voice keywords')
+    if (!brand.target_audience?.demographics) missing.push('target audience')
+
+    let greetMsg: string
+    if (missing.length === 0) {
+      greetMsg = `I've looked at ${brand.name} — you're in great shape. Website, GitHub, products, audience, voice — all set. What would you like me to work on first? I could write some social posts, plan a campaign, or fill your content calendar for the next couple of weeks.`
+    } else if (missing.length <= 2) {
+      greetMsg = `Hey — I've looked at ${brand.name}. Most things are set up, but I'm missing your ${missing.join(' and ')}. Can you tell me those quickly? Then I'll get straight to creating content.`
+    } else {
+      greetMsg = `Hey — I'm looking at ${brand.name}. I can see your website and some basics, but I'm missing a few things: ${missing.join(', ')}. Want to quickly tell me about these? Just chat naturally — I'll save everything as we go. Or if you'd rather jump straight to creating content, just say the word.`
+    }
+
+    setTimeout(() => handleSend(greetMsg), 400)
+  }, [brand, activeBrandId, activeAgentType, conversationId, messages.length])
+
   // Load existing messages AND restore brand/agent when opening a conversation
   useEffect(() => {
     if (!conversationId) {
