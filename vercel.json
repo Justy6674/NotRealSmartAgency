@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/daily-intel",
       "schedule": "0 20 * * *"
+    },
+    {
+      "path": "/api/cron/publish-posts",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

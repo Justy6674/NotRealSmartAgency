@@ -16,6 +16,7 @@ import {
   Activity,
   FileText,
   Settings,
+  Film,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -365,6 +366,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
           <nav className="space-y-0.5">
             {[
               { href: '/agency/outputs', icon: FileText, label: 'Outputs' },
+              { href: '/agency/media', icon: Film, label: 'Media' },
               { href: '/agency/tasks', icon: ListTodo, label: 'Tasks' },
               { href: '/agency/agents', icon: Users, label: 'Agents' },
               { href: '/agency/approvals', icon: ShieldCheck, label: 'Approvals' },

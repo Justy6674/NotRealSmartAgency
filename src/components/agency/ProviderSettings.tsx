@@ -13,6 +13,11 @@ const VIDEO_PROVIDERS = [
   { id: 'google_veo', name: 'Google Veo', description: 'Highest quality cinematic video' },
 ]
 
+const SOCIAL_PROVIDERS = [
+  { id: 'ayrshare', name: 'Ayrshare', description: 'Post to Instagram, TikTok, YouTube, LinkedIn, Facebook, X — single API ($29/mo)' },
+  { id: 'deepgram', name: 'Deepgram', description: 'Video/audio transcription for content automation' },
+]
+
 export function ProviderSettings() {
   const [saving, setSaving] = useState(false)
   const [keys, setKeys] = useState<Record<string, string>>({})
@@ -64,6 +69,43 @@ export function ProviderSettings() {
 
       <div className="space-y-6">
         {VIDEO_PROVIDERS.map((provider) => (
+          <div key={provider.id} className="p-4 border rounded-md bg-card">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium">{provider.name}</h3>
+              {configured[provider.id] && (
+                <span className="text-xs bg-green-500/10 text-green-500 px-2 py-1 rounded-full">
+                  Configured
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">{provider.description}</p>
+
+            <div className="flex gap-2">
+              <Input
+                type="password"
+                placeholder={configured[provider.id] ? 'Enter new API key to update...' : 'Enter API key...'}
+                value={keys[provider.id] || ''}
+                onChange={(e) => setKeys({ ...keys, [provider.id]: e.target.value })}
+              />
+              <Button
+                onClick={() => handleSave(provider.id)}
+                disabled={saving || !keys[provider.id]}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="pt-4 border-t">
+        <h2 className="text-lg font-semibold mb-2">Social Media & Transcription</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Connect Ayrshare to auto-post across all platforms. Add Deepgram for video transcription.
+        </p>
+      </div>
+
+      <div className="space-y-6">
+        {SOCIAL_PROVIDERS.map((provider) => (
           <div key={provider.id} className="p-4 border rounded-md bg-card">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium">{provider.name}</h3>

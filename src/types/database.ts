@@ -15,7 +15,7 @@ export type SubscriptionTier = 'free' | 'starter' | 'professional' | 'practice'
 export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'trialing' | 'incomplete'
 export type PhaseStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped'
 export type ScanType = 'website' | 'social_media' | 'google_business'
-export type IntegrationProvider = 'halaxy' | 'xero' | 'stripe' | 'google_analytics' | 'heygen' | 'runway' | 'synthesia' | 'kling' | 'google_veo' | 'github'
+export type IntegrationProvider = 'halaxy' | 'xero' | 'stripe' | 'google_analytics' | 'heygen' | 'runway' | 'synthesia' | 'kling' | 'google_veo' | 'github' | 'deepgram' | 'instagram_business' | 'facebook_page' | 'linkedin_company' | 'twitter_app' | 'tiktok_business' | 'youtube_channel' | 'ayrshare'
 
 export interface User {
   id: string
@@ -262,6 +262,7 @@ export type OutputType =
   | 'automation_workflow'
   | 'video_script'
   | 'video'
+  | 'scheduled_post'
   | 'other'
 
 export interface ToneOfVoice {
@@ -442,6 +443,7 @@ export const OUTPUT_LABELS: Record<OutputType, string> = {
   automation_workflow: 'Automation Workflow',
   video_script: 'Video Script',
   video: 'Video',
+  scheduled_post: 'Scheduled Post',
   other: 'Other',
 }
 
@@ -536,6 +538,47 @@ export interface ApprovalQueueEntry {
   status: ApprovalStatus
   decision_note: string | null
   reviewed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type MediaStatus = 'pending' | 'transcribing' | 'transcribed' | 'failed'
+export type PostPlatform = 'instagram' | 'facebook' | 'linkedin' | 'twitter' | 'tiktok' | 'youtube'
+export type ScheduledPostStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled'
+
+export interface MediaItem {
+  id: string
+  user_id: string
+  brand_id: string
+  file_url: string
+  file_name: string
+  file_type: string
+  file_size_bytes: number | null
+  duration_seconds: number | null
+  thumbnail_url: string | null
+  transcription: string | null
+  transcription_model: string | null
+  transcription_status: MediaStatus
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface ScheduledPost {
+  id: string
+  user_id: string
+  brand_id: string
+  media_item_id: string | null
+  output_id: string | null
+  platform: PostPlatform
+  caption: string
+  hashtags: string[]
+  scheduled_at: string
+  published_at: string | null
+  status: ScheduledPostStatus
+  external_post_id: string | null
+  error: string | null
+  metadata: Record<string, unknown>
   created_at: string
   updated_at: string
 }
