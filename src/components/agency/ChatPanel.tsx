@@ -199,6 +199,8 @@ export function ChatPanel() {
           onSend={handleSend}
           isLoading={isLoading}
           placeholder="Ask your agent..."
+          agentType={activeAgentType}
+          showChips={messages.length === 0}
         />
       </div>
 
