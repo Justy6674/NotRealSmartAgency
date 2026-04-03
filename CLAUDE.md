@@ -22,9 +22,9 @@ npm run lint         # ESLint (flat config v9)
 ### The 8 Brands
 Downscale Weight Loss (AHPRA+TGA) | DownscaleDerm (TGA) | TeleCheck | TeleScribe | NotRealSmart | Downscale Diary | Scent Sell | EndorseMe (AHPRA)
 
-### 13 Agents (1 Director + 12 Departments)
+### 14 Agents (1 Director + 13 Departments)
 
-| Department | Agent Type | Key Tools (all also get create_task, request_approval, handoff_to_department) |
+| Department | Agent Type | Key Tools (all also get create_task, request_approval, handoff_to_department, query_outputs) |
 |---|---|---|
 | NRS Director | `overall` | delegate_to_agent, convene_meeting, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search |
 | Content & Copy | `content` | save_output, word_count, generate_image, generate_slides |
@@ -39,8 +39,10 @@ Downscale Weight Loss (AHPRA+TGA) | DownscaleDerm (TGA) | TeleCheck | TeleScribe
 | Compliance | `compliance` | save_output, scan_website, browse_page |
 | Analytics & Reporting | `analytics` | save_output, scan_website, browse_page |
 | Automation & AI | `automation` | save_output, scan_github, browse_page |
+| Video & Scripting | `video` | save_output, word_count |
 
 > `martech` exists as an archived agent type for backward compat with old conversations — not shown in UI.
+> All agents get `query_outputs` for cross-agent learning (search past work from any department).
 
 ## Architecture
 
@@ -82,8 +84,23 @@ Every substantial assistant message (>100 chars) gets action buttons: Save, Emai
 ### GitHub Repo Scanning
 Add Brand dialog has a scan button. `GET /api/scan-github-quick?url=...` fetches README + package.json + repo metadata. Auto-fills brand name, description, niche, extra_context.
 
+### Video Generation Pipeline
+Video agent writes platform-specific scripts (Reels, TikTok, YouTube, LinkedIn). Scripts saved as `video_script` output type with AHPRA/TGA compliance check. OutputCard has "Generate Video (HeyGen)" button → calls `/api/video/generate` → creates `video` output with player. Status polling via `/api/video/status`. Provider API keys managed in Brand Settings → Video tab via `/api/integrations`.
+
+### "Review My Brand" Flow
+Brand cards have "Review Brand" button → `POST /api/brands/{brandId}/review` runs website + GitHub + social scans in parallel → builds structured message → stores in Zustand `pendingReviewMessage` → redirects to Director chat → ChatInterface auto-sends → triggers 6-department meeting (competitor, SEO, content, analytics, compliance, website).
+
+### Compliance Filter
+`lib/agents/compliance-filter.ts` — uses Claude Haiku to evaluate content against AHPRA/TGA rules before saving outputs. Returns `{ isValid, flags, warnings }`. Runs automatically in `save_output` tool.
+
+### Social Media Knowledge
+`lib/agents/knowledge/social-media-benchmarks.ts` — platform benchmarks (engagement rates, CTR, CPC, video specs, posting times). Injected into agent prompts filtered by agent type (video gets video specs, analytics gets all formulas, etc.).
+
+### Cross-Agent Learning
+`query_outputs` tool (all agents) — search past outputs from any department. Memory extractor captures social metrics. Cross-department memories stored to `nrs-agency` global namespace.
+
 ### Client State (Zustand)
-Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to localStorage key `nrs-agency`. Manages: `activeBrandId`, `activeAgentType`, `activeConversationId`, `activeView`, `sidebarOpen`. Changing brand resets agent to `overall` and clears conversation.
+Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to localStorage key `nrs-agency`. Manages: `activeBrandId`, `activeAgentType`, `activeConversationId`, `activeView`, `sidebarOpen`, `pendingReviewMessage` (transient). Changing brand resets agent to `overall` and clears conversation.
 
 ### Stack
 - **Next.js 15.3** (NOT 16), **React 19**, **Tailwind CSS 4** (oklch only)
@@ -118,6 +135,11 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /api/chat                      → streamText streaming endpoint
 /api/heartbeat                 → Cron endpoint
 /api/agents, tasks, goals, approvals, audit, conversations, outputs, brands → CRUD routes
+/api/brands/[brandId]/review         → One-click brand audit (scans + Director chat)
+/api/video/generate                  → Submit video generation job (HeyGen)
+/api/video/status                    → Poll video generation status
+/api/integrations                    → GET/POST provider API keys
+/api/github/sync                     → Sync GitHub context to brand
 /api/stripe/checkout, portal, webhook → Stripe integration
 ```
 
