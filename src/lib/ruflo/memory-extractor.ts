@@ -42,6 +42,22 @@ export async function extractAndStoreMemories(params: {
   const decisionPatterns = [
     /(?:i recommend|i suggest|let's go with|the best approach|we should|the strategy is)\s+(.{20,200})/gi,
   ]
+
+  // 2b. Social media metrics (from assistant response) — cross-agent learning
+  const metricsPatterns = [
+    /(?:engagement rate|CTR|click-through rate|conversion rate|ROI|ROAS|CPM|CPC|CPE)\s*(?:is|was|of|at|=|:)\s*(.{5,100})/gi,
+  ]
+  for (const pattern of metricsPatterns) {
+    const matches = assistantResponse.matchAll(pattern)
+    for (const match of matches) {
+      extractions.push({
+        key: `metrics-${Date.now()}-${memoriesStored}`,
+        value: { type: 'metrics', content: match[0].trim(), source: 'agent', timestamp },
+        tags: ['metrics', agentType, brandSlug],
+      })
+      memoriesStored++
+    }
+  }
   for (const pattern of decisionPatterns) {
     const matches = assistantResponse.matchAll(pattern)
     for (const match of matches) {

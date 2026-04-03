@@ -14,6 +14,7 @@ import { createGenerateImageTool } from './generate-image'
 import { createBrowsePageTool } from './browse-page'
 import { createReadGmailTool } from './read-gmail'
 import { createGenerateSlidesTool } from './generate-slides'
+import { createQueryOutputsTool } from './query-outputs'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -63,12 +64,14 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const browsePage = createBrowsePageTool()
   const readGmail = createReadGmailTool()
   const generateSlides = createGenerateSlidesTool()
+  const queryOutputs = createQueryOutputsTool(ctx.supabase, ctx.userId, ctx.brandId)
 
   // Base management tools every agent gets
   const managementTools = {
     create_task: createTask,
     request_approval: requestApproval,
     handoff_to_department: handoff,
+    query_outputs: queryOutputs,
   }
 
   // Tool sets per agent type
@@ -99,6 +102,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     brand: { save_output: saveOutput, generate_image: generateImageTool, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 

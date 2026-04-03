@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Globe, Github, Loader2 } from 'lucide-react'
+import { Globe, Github, Loader2, RefreshCw } from 'lucide-react'
 import type { Brand } from '@/types/database'
 
 interface BrandProfileFormProps {
@@ -30,7 +30,18 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
     extra_context: brand.extra_context ?? '',
     ahpra: brand.compliance_flags?.ahpra ?? false,
     tga: brand.compliance_flags?.tga ?? false,
+    products_services: JSON.stringify(brand.products_services ?? [], null, 2),
+    video_preferences: JSON.stringify(brand.video_preferences ?? {}, null, 2),
+    marketing_status: brand.marketing_status ?? 'unknown',
+    marketing_notes: brand.marketing_notes ?? '',
+    social_linkedin: brand.social_urls?.linkedin ?? '',
+    social_twitter: brand.social_urls?.twitter ?? '',
+    social_instagram: brand.social_urls?.instagram ?? '',
+    social_facebook: brand.social_urls?.facebook ?? '',
+    social_tiktok: brand.social_urls?.tiktok ?? '',
+    social_youtube: brand.social_urls?.youtube ?? '',
   })
+  const [syncing, setSyncing] = useState(false)
 
   const handleSave = async () => {
     setSaving(true)
@@ -49,6 +60,20 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
         niche: formData.niche,
         content_pillars: formData.content_pillars.split(',').map((s) => s.trim()).filter(Boolean),
         extra_context: formData.extra_context || null,
+        products_services: (() => { try { return JSON.parse(formData.products_services) } catch { return [] } })(),
+        video_preferences: (() => { try { return JSON.parse(formData.video_preferences) } catch { return {} } })(),
+        marketing_status: formData.marketing_status,
+        marketing_notes: formData.marketing_notes || null,
+        social_urls: Object.fromEntries(
+          Object.entries({
+            linkedin: formData.social_linkedin,
+            twitter: formData.social_twitter,
+            instagram: formData.social_instagram,
+            facebook: formData.social_facebook,
+            tiktok: formData.social_tiktok,
+            youtube: formData.social_youtube,
+          }).filter(([, v]) => v)
+        ),
         compliance_flags: {
           ahpra: formData.ahpra,
           tga: formData.tga,
@@ -73,6 +98,24 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
       // ignore
     }
     setScanning(false)
+  }
+
+  const handleSyncGithub = async () => {
+    if (!formData.github_url) return
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/github/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_id: brand.id }),
+      })
+      if (res.ok) {
+        router.refresh()
+      }
+    } catch {
+      // ignore
+    }
+    setSyncing(false)
   }
 
   return (
@@ -165,9 +208,15 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
               onChange={(e) => setFormData({ ...formData, github_url: e.target.value })}
               placeholder="https://github.com/org/repo"
             />
-            <div className="flex items-center shrink-0 px-2">
-              <Github className="h-4 w-4 text-muted-foreground" />
-            </div>
+            <Button
+              onClick={handleSyncGithub}
+              disabled={syncing || !formData.github_url}
+              variant="outline"
+              className="shrink-0"
+            >
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="ml-1.5 hidden sm:inline">Sync</span>
+            </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">
             Link your repo so agents can read your codebase, README, and tech stack.
@@ -204,6 +253,75 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
         </div>
 
         <div>
+          <Label htmlFor="marketing_status">Marketing Status</Label>
+          <select
+            id="marketing_status"
+            value={formData.marketing_status}
+            onChange={(e) => setFormData({ ...formData, marketing_status: e.target.value as Brand['marketing_status'] })}
+            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+          >
+            <option value="unknown">Not assessed</option>
+            <option value="no_marketing">No marketing presence</option>
+            <option value="early_stage">Early stage marketing</option>
+            <option value="needs_strategy">Has presence, needs strategy</option>
+            <option value="active">Active marketing</option>
+            <option value="scaling">Scaling marketing efforts</option>
+          </select>
+        </div>
+
+        <div>
+          <Label htmlFor="marketing_notes">Marketing Notes</Label>
+          <textarea
+            id="marketing_notes"
+            value={formData.marketing_notes}
+            onChange={(e) => setFormData({ ...formData, marketing_notes: e.target.value })}
+            rows={2}
+            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+            placeholder="e.g. No advertising done yet, needs full strategy from scratch..."
+          />
+        </div>
+
+        {/* Social Media Profiles */}
+        <div className="space-y-2">
+          <Label>Social Media Profiles</Label>
+          <p className="text-[10px] text-muted-foreground -mt-1">
+            Add your social URLs so agents can scan and create platform-specific content.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input
+              placeholder="LinkedIn URL"
+              value={formData.social_linkedin}
+              onChange={(e) => setFormData({ ...formData, social_linkedin: e.target.value })}
+            />
+            <Input
+              placeholder="Instagram URL"
+              value={formData.social_instagram}
+              onChange={(e) => setFormData({ ...formData, social_instagram: e.target.value })}
+            />
+            <Input
+              placeholder="Facebook URL"
+              value={formData.social_facebook}
+              onChange={(e) => setFormData({ ...formData, social_facebook: e.target.value })}
+            />
+            <Input
+              placeholder="X / Twitter URL"
+              value={formData.social_twitter}
+              onChange={(e) => setFormData({ ...formData, social_twitter: e.target.value })}
+            />
+            <Input
+              placeholder="TikTok URL"
+              value={formData.social_tiktok}
+              onChange={(e) => setFormData({ ...formData, social_tiktok: e.target.value })}
+            />
+            <Input
+              placeholder="YouTube URL"
+              value={formData.social_youtube}
+              onChange={(e) => setFormData({ ...formData, social_youtube: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div>
           <Label htmlFor="content_pillars">Content Pillars (comma separated)</Label>
           <Input
             id="content_pillars"
@@ -222,6 +340,36 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
             className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
             placeholder="Anything else the AI agents should know about this brand..."
           />
+        </div>
+
+        <div>
+          <Label htmlFor="products_services">Products & Services (JSON)</Label>
+          <textarea
+            id="products_services"
+            value={formData.products_services}
+            onChange={(e) => setFormData({ ...formData, products_services: e.target.value })}
+            rows={5}
+            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono"
+            placeholder={'[\n  { "name": "Service Name", "description": "What it does", "price": "$99" }\n]'}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            JSON array of products/services. Each needs at least name and description.
+          </p>
+        </div>
+
+        <div>
+          <Label htmlFor="video_preferences">Video Preferences (JSON)</Label>
+          <textarea
+            id="video_preferences"
+            value={formData.video_preferences}
+            onChange={(e) => setFormData({ ...formData, video_preferences: e.target.value })}
+            rows={4}
+            className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono"
+            placeholder={'{\n  "avatar_id": "",\n  "accent": "Australian",\n  "presenter_style": "professional",\n  "background_preference": "office"\n}'}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Configure how AI-generated videos look: avatar, accent, style, and background.
+          </p>
         </div>
 
         <div className="flex gap-6">

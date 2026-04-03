@@ -1,6 +1,7 @@
 import type { Brand, AgentConfig } from '@/types/database'
 import { getComplianceRules } from './compliance-rules'
 import { getMarketingKnowledge } from './knowledge/au-health-marketing-2025'
+import { getSocialMediaKnowledge } from './knowledge/social-media-benchmarks'
 import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
 import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
@@ -38,6 +39,12 @@ Core rules:
     sections.push(knowledge)
   }
 
+  // Social media & video intelligence (filtered by agent type)
+  const socialKnowledge = getSocialMediaKnowledge(agentConfig.agent_type)
+  if (socialKnowledge) {
+    sections.push(socialKnowledge)
+  }
+
   // Compliance layer (conditional)
   if (brand.compliance_flags.ahpra || brand.compliance_flags.tga) {
     sections.push(getComplianceRules(brand.compliance_flags))
@@ -56,6 +63,10 @@ function buildBrandContext(brand: Brand): string {
   if (brand.description) lines.push(`**Description:** ${brand.description}`)
   if (brand.website_url) lines.push(`**Website:** ${brand.website_url}`)
   if (brand.github_url) lines.push(`**GitHub:** ${brand.github_url}`)
+  if (brand.social_urls && Object.keys(brand.social_urls).length > 0) {
+    const socials = Object.entries(brand.social_urls).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')
+    if (socials) lines.push(`**Social Media:** ${socials}`)
+  }
   lines.push(`**Niche:** ${brand.niche}`)
   if (brand.business_stage) {
     const stageDescriptions: Record<string, string> = {
@@ -67,6 +78,21 @@ function buildBrandContext(brand: Brand): string {
       mature: 'Mature stage — established market position. Focus on retention, innovation, competitive defence.',
     }
     lines.push(`**Business Stage:** ${brand.business_stage} — ${stageDescriptions[brand.business_stage] ?? brand.business_stage}`)
+  }
+
+  // Marketing status
+  if (brand.marketing_status && brand.marketing_status !== 'unknown') {
+    const marketingDescriptions: Record<string, string> = {
+      no_marketing: 'Zero marketing presence. Everything needs to be built from scratch.',
+      early_stage: 'Early stage — has basic presence but no real strategy or consistent execution.',
+      needs_strategy: 'Has some marketing assets but no cohesive strategy. Needs direction.',
+      active: 'Active marketing in progress. Focus on optimisation and expansion.',
+      scaling: 'Marketing is working. Focus on scaling what works and entering new channels.',
+    }
+    lines.push(`**Marketing Status:** ${brand.marketing_status} — ${marketingDescriptions[brand.marketing_status] ?? brand.marketing_status}`)
+  }
+  if (brand.marketing_notes) {
+    lines.push(`**Marketing Notes:** ${brand.marketing_notes}`)
   }
 
   // Tone of voice
@@ -104,6 +130,33 @@ function buildBrandContext(brand: Brand): string {
         lines.push(`- ${comp.name} (${comp.url}) ${catLabel}${whyText}`)
       }
     }
+  }
+
+  // Products & Services
+  if (brand.products_services?.length) {
+    lines.push(`\n**Products & Services:**`)
+    for (const prod of brand.products_services) {
+      lines.push(`- ${prod.name}: ${prod.description}`)
+      if (prod.price) lines.push(`  Price: ${prod.price}`)
+      if (prod.target_audience) lines.push(`  Target Audience: ${prod.target_audience}`)
+      if (prod.usps?.length) lines.push(`  USPs: ${prod.usps.join(', ')}`)
+      if (prod.compliance_notes) lines.push(`  Compliance Notes: ${prod.compliance_notes}`)
+    }
+  }
+
+  // Video Preferences
+  if (brand.video_preferences && Object.keys(brand.video_preferences).length > 0) {
+    const vp = brand.video_preferences
+    lines.push(`\n**Video Presenter Preferences:**`)
+    if (vp.avatar_id) lines.push(`- Avatar ID: ${vp.avatar_id}`)
+    if (vp.accent) lines.push(`- Accent: ${vp.accent}`)
+    if (vp.presenter_style) lines.push(`- Style: ${vp.presenter_style}`)
+    if (vp.background_preference) lines.push(`- Background: ${vp.background_preference}`)
+  }
+
+  // GitHub Context
+  if (brand.github_context) {
+    lines.push(`\n**Technical/GitHub Context:**\n${brand.github_context}`)
   }
 
   // Extra context

@@ -122,6 +122,18 @@ This should be a brand bible section, not bullet points.`,
 - Social proof and trust signal placement strategy
 This should be a website brief a developer can build from.`,
 
+  video: `As Video & Scripting, produce PLATFORM-SPECIFIC video scripts for each key message:
+- Create scene-by-scene script breakdowns (Scene / Visual / Audio / CTA)
+- Produce variants for each platform: Instagram Reels (9:16, 60s), TikTok (9:16, 15–60s), YouTube Shorts (9:16, 60s), LinkedIn (1:1, 30–120s)
+- Hook MUST appear in first 3 seconds (question, bold claim, or visual interrupt)
+- Reference brand video preferences (avatar, accent, presenter style, background)
+- Include presenter direction: tone, pace, gestures, eye contact
+- Reference engagement benchmarks to justify format choices
+- For AHPRA/TGA brands: NO therapeutic claims, NO before/after, NO testimonials — use "journey" framing
+- Include CTA placement guidance (where in the video, what to say)
+- Suggest trending audio or music mood per platform
+This should include READY-TO-FILM scripts with every line of dialogue written out.`,
+
   automation: `As Automation & AI, produce a COMPLETE automation strategy:
 - Marketing automation workflows (lead scoring, nurture triggers, alerts)
 - AI integration opportunities (chatbots, content generation, personalisation)

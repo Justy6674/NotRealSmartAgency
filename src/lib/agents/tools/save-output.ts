@@ -1,6 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { runComplianceFilter } from '../compliance-filter'
 
 export function createSaveOutputTool(
   supabase: SupabaseClient,
@@ -25,6 +26,8 @@ export function createSaveOutputTool(
         'competitor_report',
         'compliance_check',
         'brand_guide',
+        'video_script',
+        'video',
         'other',
       ]),
       platform: z
@@ -33,6 +36,22 @@ export function createSaveOutputTool(
         .describe('Target platform (e.g. Instagram, Facebook, Google Ads)'),
     }),
     execute: async ({ title, content, output_type, platform }) => {
+      // Run compliance filter if brand has AHPRA/TGA flags
+      let complianceResult = null
+      try {
+        const { data: brand } = await supabase
+          .from('brands')
+          .select('compliance_flags')
+          .eq('id', brandId)
+          .single()
+
+        if (brand?.compliance_flags) {
+          complianceResult = await runComplianceFilter(content, brand.compliance_flags)
+        }
+      } catch {
+        // Non-blocking — save proceeds even if compliance check fails
+      }
+
       const { data, error } = await supabase
         .from('outputs')
         .insert({
@@ -42,7 +61,11 @@ export function createSaveOutputTool(
           output_type,
           title,
           content,
-          metadata: { platform: platform ?? null, word_count: content.split(/\s+/).filter(Boolean).length },
+          metadata: {
+            platform: platform ?? null,
+            word_count: content.split(/\s+/).filter(Boolean).length,
+            compliance: complianceResult,
+          },
         })
         .select('id')
         .single()
@@ -51,7 +74,14 @@ export function createSaveOutputTool(
         return { saved: false, error: error.message }
       }
 
-      return { saved: true, id: data.id, title }
+      return {
+        saved: true,
+        id: data.id,
+        title,
+        ...(complianceResult && !complianceResult.isValid
+          ? { compliance_warnings: complianceResult.warnings, compliance_flags: complianceResult.flags }
+          : {}),
+      }
     },
   })
 }

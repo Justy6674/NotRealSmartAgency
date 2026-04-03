@@ -17,7 +17,7 @@ import type { AgentType, Brand, AgentConfig } from '@/types/database'
 const VALID_AGENT_TYPES: AgentType[] = [
   'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
   'growth', 'brand', 'competitor', 'website', 'compliance',
-  'analytics', 'automation',
+  'analytics', 'automation', 'video',
   'martech',
 ]
 

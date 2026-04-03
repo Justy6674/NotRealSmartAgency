@@ -33,6 +33,62 @@ async function checkUrl(url: string): Promise<boolean> {
   }
 }
 
+/** Core scan logic — callable from both the AI tool and the review API */
+export async function scanSocialCore(
+  supabase: SupabaseClient,
+  userId: string,
+  brandId: string,
+  brandName: string,
+  urls?: Partial<Record<Platform, string>>
+) {
+  const handle = brandName.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const platforms: Platform[] = ['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok']
+
+  const candidates: Record<Platform, string> = {
+    instagram: urls?.instagram ?? `${PLATFORM_BASE_URLS.instagram}/${handle}`,
+    facebook: urls?.facebook ?? `${PLATFORM_BASE_URLS.facebook}/${handle}`,
+    linkedin: urls?.linkedin ?? `${PLATFORM_BASE_URLS.linkedin}/${handle}`,
+    twitter: urls?.twitter ?? `${PLATFORM_BASE_URLS.twitter}/${handle}`,
+    tiktok: urls?.tiktok ?? `${PLATFORM_BASE_URLS.tiktok}${handle}`,
+  }
+
+  const checks = await Promise.allSettled(
+    platforms.map(async (platform) => {
+      const url = candidates[platform]
+      const found = await checkUrl(url)
+      return { platform, found, url }
+    })
+  )
+
+  const presence = Object.fromEntries(
+    checks.map((result) => {
+      if (result.status === 'fulfilled') {
+        const { platform, found, url } = result.value
+        return [platform, { found, url: found ? url : null, checked_url: url }]
+      }
+      return [result.reason as string, { found: false, url: null, checked_url: null }]
+    })
+  ) as Record<Platform, { found: boolean; url: string | null; checked_url: string | null }>
+
+  const results = {
+    brand_name: brandName,
+    handle_guessed: handle,
+    presence,
+    urls_provided: !!urls,
+  }
+
+  await supabase.from('project_scans').insert({
+    brand_id: brandId,
+    user_id: userId,
+    scan_type: 'social',
+    status: 'completed',
+    results,
+    error: null,
+  })
+
+  return results
+}
+
 export function createScanSocialTool(
   supabase: SupabaseClient,
   userId: string,
@@ -56,57 +112,6 @@ export function createScanSocialTool(
         .optional()
         .describe('Known social media URLs for the brand. Any omitted platforms will be guessed from the brand name.'),
     }),
-    execute: async ({ brand_name, urls }) => {
-      // Normalise brand name to a slug-like handle (lowercase, no spaces)
-      const handle = brand_name.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-      const platforms: Platform[] = ['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok']
-
-      // Build the candidate URL for each platform
-      const candidates: Record<Platform, string> = {
-        instagram: urls?.instagram ?? `${PLATFORM_BASE_URLS.instagram}/${handle}`,
-        facebook: urls?.facebook ?? `${PLATFORM_BASE_URLS.facebook}/${handle}`,
-        linkedin: urls?.linkedin ?? `${PLATFORM_BASE_URLS.linkedin}/${handle}`,
-        twitter: urls?.twitter ?? `${PLATFORM_BASE_URLS.twitter}/${handle}`,
-        tiktok: urls?.tiktok ?? `${PLATFORM_BASE_URLS.tiktok}${handle}`,
-      }
-
-      // Check all platforms in parallel
-      const checks = await Promise.allSettled(
-        platforms.map(async (platform) => {
-          const url = candidates[platform]
-          const found = await checkUrl(url)
-          return { platform, found, url }
-        })
-      )
-
-      const presence = Object.fromEntries(
-        checks.map((result) => {
-          if (result.status === 'fulfilled') {
-            const { platform, found, url } = result.value
-            return [platform, { found, url: found ? url : null, checked_url: url }]
-          }
-          return [result.reason as string, { found: false, url: null, checked_url: null }]
-        })
-      ) as Record<Platform, { found: boolean; url: string | null; checked_url: string | null }>
-
-      const results = {
-        brand_name,
-        handle_guessed: handle,
-        presence,
-        urls_provided: !!urls,
-      }
-
-      await supabase.from('project_scans').insert({
-        brand_id: brandId,
-        user_id: userId,
-        scan_type: 'social',
-        status: 'completed',
-        results,
-        error: null,
-      })
-
-      return results
-    },
+    execute: async ({ brand_name, urls }) => scanSocialCore(supabase, userId, brandId, brand_name, urls),
   })
 }

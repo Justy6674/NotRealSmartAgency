@@ -66,6 +66,18 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     if (!conversationId) setMessages([])
   }, [activeBrandId, activeAgentType, conversationId, setMessages])
 
+  // Auto-send pending review message (from "Review Brand" button)
+  const pendingHandled = useRef(false)
+  useEffect(() => {
+    if (pendingHandled.current) return
+    const pending = useAgencyStore.getState().pendingReviewMessage
+    if (pending && !conversationId && activeBrandId && brand) {
+      pendingHandled.current = true
+      useAgencyStore.getState().setPendingReviewMessage(null)
+      setTimeout(() => handleSend(pending), 200)
+    }
+  }, [activeBrandId, brand, conversationId])
+
   // Load existing messages AND restore brand/agent when opening a conversation
   useEffect(() => {
     if (!conversationId) {

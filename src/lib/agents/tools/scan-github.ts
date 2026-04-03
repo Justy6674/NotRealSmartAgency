@@ -24,6 +24,76 @@ function parseGithubRepo(repoUrl: string): { owner: string; repo: string } | nul
   }
 }
 
+/** Core scan logic — callable from both the AI tool and the review API */
+export async function scanGithubCore(
+  supabase: SupabaseClient,
+  userId: string,
+  brandId: string,
+  repoUrl: string
+) {
+  const parsed = parseGithubRepo(repoUrl)
+  if (!parsed) {
+    return { error: 'Could not parse GitHub repository URL' }
+  }
+
+  const { owner, repo } = parsed
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}`
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`
+  }
+
+  const [readmeRes, pkgRes, commitsRes] = await Promise.allSettled([
+    fetch(`${apiBase}/readme`, { headers: { ...headers, Accept: 'application/vnd.github.raw' } }),
+    fetch(`${apiBase}/contents/package.json`, { headers }),
+    fetch(`${apiBase}/commits?per_page=10`, { headers }),
+  ])
+
+  let readme: string | null = null
+  if (readmeRes.status === 'fulfilled' && readmeRes.value.ok) {
+    const text = await readmeRes.value.text()
+    readme = text.slice(0, 2000)
+  }
+
+  let techStack: Record<string, string> | null = null
+  if (pkgRes.status === 'fulfilled' && pkgRes.value.ok) {
+    try {
+      const pkgData = await pkgRes.value.json() as { content?: string }
+      const pkgText = pkgData.content ? Buffer.from(pkgData.content, 'base64').toString('utf-8') : null
+      if (pkgText) {
+        const pkg = JSON.parse(pkgText) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> }
+        techStack = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) }
+      }
+    } catch { /* skip */ }
+  }
+
+  let recentCommits: { message: string; date: string }[] = []
+  if (commitsRes.status === 'fulfilled' && commitsRes.value.ok) {
+    try {
+      const commits = await commitsRes.value.json() as Array<{ commit: { message: string; author: { date: string } } }>
+      recentCommits = commits.map((c) => ({ message: c.commit.message.split('\n')[0], date: c.commit.author.date }))
+    } catch { /* skip */ }
+  }
+
+  if (!readme && !techStack && recentCommits.length === 0) {
+    await supabase.from('project_scans').insert({
+      brand_id: brandId, user_id: userId, scan_type: 'github', status: 'failed', results: {}, error: 'Could not retrieve any data from the repository',
+    })
+    return { error: 'Could not retrieve data from the repository' }
+  }
+
+  const results = { repo_url: repoUrl, owner, repo, readme, techStack, recentCommits }
+
+  await supabase.from('project_scans').insert({
+    brand_id: brandId, user_id: userId, scan_type: 'github', status: 'completed', results, error: null,
+  })
+
+  return results
+}
+
 export function createScanGithubTool(
   supabase: SupabaseClient,
   userId: string,
@@ -37,116 +107,6 @@ export function createScanGithubTool(
         .string()
         .describe('The GitHub repository URL (e.g. https://github.com/owner/repo)'),
     }),
-    execute: async ({ repo_url }) => {
-      const parsed = parseGithubRepo(repo_url)
-      if (!parsed) {
-        return {
-          error: 'Could not parse GitHub repository URL',
-          suggestion:
-            'Please provide a full GitHub URL like https://github.com/owner/repo',
-        }
-      }
-
-      const { owner, repo } = parsed
-      const apiBase = `https://api.github.com/repos/${owner}/${repo}`
-      const headers: Record<string, string> = {
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      }
-      if (process.env.GITHUB_TOKEN) {
-        headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`
-      }
-
-      // Fetch README, package.json, and commits in parallel
-      const [readmeRes, pkgRes, commitsRes] = await Promise.allSettled([
-        fetch(`${apiBase}/readme`, {
-          headers: { ...headers, Accept: 'application/vnd.github.raw' },
-        }),
-        fetch(`${apiBase}/contents/package.json`, { headers }),
-        fetch(`${apiBase}/commits?per_page=10`, { headers }),
-      ])
-
-      // Parse README
-      let readme: string | null = null
-      if (readmeRes.status === 'fulfilled' && readmeRes.value.ok) {
-        const text = await readmeRes.value.text()
-        readme = text.slice(0, 2000)
-      }
-
-      // Parse package.json tech stack
-      let techStack: Record<string, string> | null = null
-      if (pkgRes.status === 'fulfilled' && pkgRes.value.ok) {
-        try {
-          const pkgData = await pkgRes.value.json() as { content?: string }
-          const pkgText = pkgData.content
-            ? Buffer.from(pkgData.content, 'base64').toString('utf-8')
-            : null
-          if (pkgText) {
-            const pkg = JSON.parse(pkgText) as {
-              dependencies?: Record<string, string>
-              devDependencies?: Record<string, string>
-            }
-            techStack = {
-              ...(pkg.dependencies ?? {}),
-              ...(pkg.devDependencies ?? {}),
-            }
-          }
-        } catch {
-          // package.json malformed — skip
-        }
-      }
-
-      // Parse recent commits
-      let recentCommits: { message: string; date: string }[] = []
-      if (commitsRes.status === 'fulfilled' && commitsRes.value.ok) {
-        try {
-          const commits = await commitsRes.value.json() as Array<{
-            commit: { message: string; author: { date: string } }
-          }>
-          recentCommits = commits.map((c) => ({
-            message: c.commit.message.split('\n')[0],
-            date: c.commit.author.date,
-          }))
-        } catch {
-          // commits malformed — skip
-        }
-      }
-
-      if (!readme && !techStack && recentCommits.length === 0) {
-        await supabase.from('project_scans').insert({
-          brand_id: brandId,
-          user_id: userId,
-          scan_type: 'github',
-          status: 'failed',
-          results: {},
-          error: 'Could not retrieve any data from the repository',
-        })
-        return {
-          error: 'Could not retrieve data from the repository',
-          suggestion:
-            'Make sure the repository is public, or try pasting your README directly into the chat.',
-        }
-      }
-
-      const results = {
-        repo_url,
-        owner,
-        repo,
-        readme,
-        techStack,
-        recentCommits,
-      }
-
-      await supabase.from('project_scans').insert({
-        brand_id: brandId,
-        user_id: userId,
-        scan_type: 'github',
-        status: 'completed',
-        results,
-        error: null,
-      })
-
-      return results
-    },
+    execute: async ({ repo_url }) => scanGithubCore(supabase, userId, brandId, repo_url),
   })
 }

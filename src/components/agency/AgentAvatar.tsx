@@ -16,6 +16,7 @@ import {
   BarChart3,
   Zap,
   Wrench,
+  Video,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -37,6 +38,7 @@ export const AGENT_ICONS: Record<AgentType, React.ElementType> = {
   compliance: ShieldCheck,
   analytics: BarChart3,
   automation: Zap,
+  video: Video,
   martech: Wrench,
 }
 
@@ -58,6 +60,7 @@ export const AGENT_COLOURS: Record<AgentType, string> = {
   compliance: 'bg-yellow-500/15 text-yellow-400 ring-yellow-500/30',
   analytics: 'bg-sky-500/15 text-sky-400 ring-sky-500/30',
   automation: 'bg-violet-500/15 text-violet-400 ring-violet-500/30',
+  video: 'bg-red-500/15 text-red-400 ring-red-500/30',
   martech: 'bg-stone-500/15 text-stone-400 ring-stone-500/30',
 }
 

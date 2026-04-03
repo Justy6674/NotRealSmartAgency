@@ -20,6 +20,11 @@ const CreateBrandSchema = z.object({
   brand_colours: z.record(z.unknown()).optional(),
   social_urls: z.record(z.unknown()).optional(),
   extra_context: z.string().nullable().optional(),
+  products_services: z.array(z.record(z.unknown())).optional(),
+  video_preferences: z.record(z.unknown()).optional(),
+  github_context: z.string().nullable().optional(),
+  marketing_status: z.string().optional(),
+  marketing_notes: z.string().nullable().optional(),
   is_active: z.boolean().optional(),
 })
 

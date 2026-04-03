@@ -67,6 +67,9 @@ const INTENT_PATTERNS: { pattern: RegExp; agent: AgentType; reason: string }[] =
   // Automation
   { pattern: /\b(automat|workflow|zapier|make\.com|integration|api|webhook|prompt engineering)\b/i, agent: 'automation', reason: 'Automation work requested' },
 
+  // Video
+  { pattern: /\b(video|script|scene|presenter|avatar|heygen|talking head|explainer video|product demo video)\b/i, agent: 'video', reason: 'Video content requested' },
+
   // Pricing
   { pattern: /\b(pric|pricing|subscription|billing|cost|revenue model|freemium|tier)\b/i, agent: 'strategy', reason: 'Pricing analysis requested' },
 ]
@@ -81,13 +84,13 @@ const COMPOUND_PATTERNS: { pattern: RegExp; departments: AgentType[]; reason: st
   },
   {
     pattern: /\b(launch|go-to-market|gtm)\b.*\b(plan|strategy|campaign)\b/i,
-    departments: ['strategy', 'content', 'seo', 'paid_ads', 'email'],
-    reason: 'Launch plan — requires coordinated strategy across channels',
+    departments: ['strategy', 'content', 'seo', 'paid_ads', 'email', 'video'],
+    reason: 'Launch plan — requires coordinated strategy across channels + launch video',
   },
   {
     pattern: /\b(campaign)\b.*\b(plan|create|build|design)\b/i,
-    departments: ['strategy', 'content', 'paid_ads', 'email'],
-    reason: 'Campaign creation — requires multi-channel coordination',
+    departments: ['strategy', 'content', 'paid_ads', 'email', 'video'],
+    reason: 'Campaign creation — requires multi-channel coordination + video assets',
   },
   {
     pattern: /\b(rebrand|brand refresh|brand overhaul)\b/i,
@@ -101,13 +104,23 @@ const COMPOUND_PATTERNS: { pattern: RegExp; departments: AgentType[]; reason: st
   },
   {
     pattern: /\b(content strategy|content plan|content calendar)\b/i,
-    departments: ['content', 'seo', 'email', 'brand'],
-    reason: 'Content strategy — requires SEO alignment + brand voice + distribution',
+    departments: ['content', 'seo', 'email', 'brand', 'video'],
+    reason: 'Content strategy — requires SEO alignment + brand voice + video + distribution',
   },
   {
     pattern: /\b(competitor|competitive)\b.*\b(analysis|audit|review|report)\b/i,
     departments: ['competitor', 'seo', 'analytics'],
     reason: 'Competitive analysis — requires market intel + SEO + data',
+  },
+  {
+    pattern: /\b(video)\b.*\b(campaign|strategy|series|plan)\b/i,
+    departments: ['video', 'content', 'paid_ads', 'analytics'],
+    reason: 'Video campaign — requires scripts + content strategy + paid distribution + measurement',
+  },
+  {
+    pattern: /\breview my brand\b/i,
+    departments: ['competitor', 'seo', 'content', 'analytics', 'compliance', 'website'],
+    reason: 'Brand review — comprehensive audit across all marketing channels',
   },
 ]
 

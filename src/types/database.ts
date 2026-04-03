@@ -15,7 +15,7 @@ export type SubscriptionTier = 'free' | 'starter' | 'professional' | 'practice'
 export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'trialing' | 'incomplete'
 export type PhaseStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped'
 export type ScanType = 'website' | 'social_media' | 'google_business'
-export type IntegrationProvider = 'halaxy' | 'xero' | 'stripe' | 'google_analytics'
+export type IntegrationProvider = 'halaxy' | 'xero' | 'stripe' | 'google_analytics' | 'heygen' | 'runway' | 'synthesia' | 'kling' | 'google_veo' | 'github'
 
 export interface User {
   id: string
@@ -235,6 +235,7 @@ export type AgentType =
   | 'compliance'  // Compliance
   | 'analytics'   // Analytics & Reporting
   | 'automation'  // Automation & AI
+  | 'video'       // Video & Scripting
   // Archived (kept for backward compat with existing conversations)
   | 'martech'
 
@@ -243,7 +244,7 @@ export const ACTIVE_AGENT_TYPES: AgentType[] = [
   'overall',
   'content', 'seo', 'paid_ads', 'strategy', 'email', 'growth',
   'brand', 'competitor', 'website', 'compliance',
-  'analytics', 'automation',
+  'analytics', 'automation', 'video',
 ]
 
 export type OutputType =
@@ -259,6 +260,8 @@ export type OutputType =
   | 'brand_guide'
   | 'analytics_report'
   | 'automation_workflow'
+  | 'video_script'
+  | 'video'
   | 'other'
 
 export interface ToneOfVoice {
@@ -295,6 +298,22 @@ export interface ComplianceFlags {
   tga_categories: string[]
 }
 
+export interface ProductService {
+  name: string
+  description: string
+  price?: string
+  target_audience?: string
+  usps?: string[]
+  compliance_notes?: string
+}
+
+export interface VideoPreferences {
+  avatar_id?: string
+  accent?: string
+  presenter_style?: string
+  background_preference?: string
+}
+
 export interface Brand {
   id: string
   user_id: string
@@ -315,6 +334,11 @@ export interface Brand {
   brand_colours: Record<string, string>
   content_pillars: string[]
   extra_context: string | null
+  products_services: ProductService[]
+  video_preferences: VideoPreferences
+  github_context: string | null
+  marketing_status: 'unknown' | 'no_marketing' | 'early_stage' | 'needs_strategy' | 'active' | 'scaling'
+  marketing_notes: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -398,6 +422,7 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   compliance: 'Compliance',
   analytics: 'Analytics & Reporting',
   automation: 'Automation & AI',
+  video: 'Video & Scripting',
   // Archived
   martech: 'Connect My Tools',
 }
@@ -415,6 +440,8 @@ export const OUTPUT_LABELS: Record<OutputType, string> = {
   brand_guide: 'Brand Guide',
   analytics_report: 'Analytics Report',
   automation_workflow: 'Automation Workflow',
+  video_script: 'Video Script',
+  video: 'Video',
   other: 'Other',
 }
 

@@ -7,8 +7,9 @@ import { BrandProfileForm } from './BrandProfileForm'
 import { CompetitorEditor } from './CompetitorEditor'
 import { VoiceAudienceEditor } from './VoiceAudienceEditor'
 import { DigestSettings } from './DigestSettings'
+import { ProviderSettings } from './ProviderSettings'
 import type { Brand, Competitor, ToneOfVoice, TargetAudience } from '@/types/database'
-import { Settings, Swords, Volume2, Bell } from 'lucide-react'
+import { Settings, Swords, Volume2, Bell, Video } from 'lucide-react'
 
 interface BrandSettingsProps {
   brand: Brand
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'competitors', label: 'Competitors', icon: Swords },
   { id: 'voice', label: 'Voice & Audience', icon: Volume2 },
   { id: 'digest', label: 'Digest', icon: Bell },
+  { id: 'video', label: 'Video', icon: Video },
 ] as const
 
 type TabId = typeof TABS[number]['id']
@@ -137,6 +139,10 @@ export function BrandSettings({ brand }: BrandSettingsProps) {
               {saving ? 'Saving...' : 'Save Digest Settings'}
             </button>
           </div>
+        )}
+
+        {activeTab === 'video' && (
+          <ProviderSettings />
         )}
       </div>
     </div>
