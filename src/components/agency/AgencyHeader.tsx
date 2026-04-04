@@ -5,7 +5,7 @@ import { ComplianceBadge } from './ComplianceBadge'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { MessageSquare, Palette, CalendarDays, LayoutDashboard, type LucideIcon } from 'lucide-react'
+import { MessageSquare, Palette, LayoutDashboard, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ROOMS, getActiveRoom } from '@/lib/room-config'
 import type { Brand } from '@/types/database'
@@ -13,7 +13,6 @@ import type { Brand } from '@/types/database'
 const ICON_MAP: Record<string, LucideIcon> = {
   MessageSquare,
   Palette,
-  CalendarDays,
   LayoutDashboard,
 }
 

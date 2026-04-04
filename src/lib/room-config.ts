@@ -1,4 +1,4 @@
-export type RoomId = 'director' | 'studio' | 'calendar' | 'command'
+export type RoomId = 'director' | 'studio' | 'command'
 
 export interface SubTabConfig {
   label: string
@@ -31,15 +31,7 @@ export const ROOMS: RoomConfig[] = [
     shortLabel: 'Studio',
     iconName: 'Palette',
     href: '/agency/studio',
-    matchPrefixes: ['/agency/studio'],
-  },
-  {
-    id: 'calendar',
-    label: 'Calendar',
-    shortLabel: 'Calendar',
-    iconName: 'CalendarDays',
-    href: '/agency/calendar',
-    matchPrefixes: ['/agency/calendar'],
+    matchPrefixes: ['/agency/studio', '/agency/calendar'],
   },
   {
     id: 'command',
