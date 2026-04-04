@@ -6,7 +6,6 @@ import { MobileSidebar } from '@/components/agency/MobileSidebar'
 import { SidebarToggle } from '@/components/agency/SidebarToggle'
 import { UserMenu } from '@/components/agency/UserMenu'
 import { ChatPanelWrapper } from '@/components/agency/ChatPanelWrapper'
-import { RoomNavigation, RoomSubNavigation } from '@/components/agency/RoomNavigation'
 
 export default async function AgencyLayout({
   children,
@@ -40,21 +39,14 @@ export default async function AgencyLayout({
           <div className="flex items-center px-2 md:hidden">
             <SidebarToggle />
           </div>
-          {/* Active agent / brand / compliance — hidden on mobile */}
-          <div className="shrink-0 hidden md:flex">
+          {/* Active agent / brand / compliance + room tabs — client component */}
+          <div className="flex-1">
             <AgencyHeader />
-          </div>
-          {/* Room navigation — centred tabs */}
-          <div className="flex flex-1 items-center justify-center px-2">
-            <RoomNavigation />
           </div>
           <div className="shrink-0 px-2">
             <UserMenu />
           </div>
         </header>
-
-        {/* Sub-navigation — conditional per room */}
-        <RoomSubNavigation />
 
         {/* Page content */}
         <main className="flex flex-1 flex-col overflow-hidden">
