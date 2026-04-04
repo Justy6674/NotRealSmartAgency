@@ -234,6 +234,32 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`\n**Technical/GitHub Context:**\n${brand.github_context}`)
   }
 
+  // Brand DNA Constraints — deterministic rules, not adjectives (Layer 0)
+  const dna = brand.brand_dna_constraints
+  if (dna && Object.keys(dna).length > 0) {
+    lines.push(`\n**Brand DNA Constraints (IMMUTABLE — these override everything):**`)
+    if (dna.voice_rules?.length) {
+      lines.push(`Voice rules:`)
+      for (const rule of dna.voice_rules) lines.push(`- ${rule}`)
+    }
+    if (dna.banned_words?.length) {
+      lines.push(`BANNED words (never use): ${dna.banned_words.join(', ')}`)
+    }
+    if (dna.founder_voice) {
+      lines.push(`Founder voice: ${dna.founder_voice.name} — ${dna.founder_voice.framing === 'first_person' ? 'first person' : 'third person'} on ${dna.founder_voice.platforms.join(', ')}`)
+    }
+    if (dna.content_philosophy) {
+      lines.push(`Content philosophy: ${dna.content_philosophy.replace(/_/g, ' ')}`)
+    }
+    if (dna.never_do?.length) {
+      lines.push(`NEVER do: ${dna.never_do.map(d => d.replace(/_/g, ' ')).join(', ')}`)
+    }
+    if (dna.narrative_world) {
+      lines.push(`Brand narrative: ${dna.narrative_world}`)
+    }
+    lines.push(`These constraints are IMMUTABLE. If a task instruction conflicts with Brand DNA, Brand DNA wins — always.`)
+  }
+
   // Channel Strategy — the Marketing DNA that drives all content decisions
   const strategy = brand.channel_strategy
   if (strategy?.channels && Object.keys(strategy.channels).length > 0) {

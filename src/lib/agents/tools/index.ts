@@ -31,6 +31,7 @@ import { createDeepCompetitorScanTool } from './deep-competitor-scan'
 import { createManagePostsTool } from './manage-posts'
 import { createAnalyseVoiceTool } from './analyse-voice'
 import { createWriteAdsTool } from './write-ads'
+import { createAddInspirationTool, createSearchInspirationTool } from './inspiration'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -99,6 +100,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const managePosts = createManagePostsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const analyseVoice = createAnalyseVoiceTool(ctx.supabase, ctx.userId, ctx.brandId)
   const writeAds = createWriteAdsTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const addInspiration = createAddInspirationTool(ctx.supabase, ctx.userId)
+  const searchInspiration = createSearchInspirationTool(ctx.supabase, ctx.userId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -140,11 +143,13 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       manage_posts: managePosts,
       analyse_voice: analyseVoice,
       write_ads: writeAds,
+      add_inspiration: addInspiration,
+      search_inspiration: searchInspiration,
       ...managementTools,
     },
     content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
-    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, ...managementTools },
+    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
     compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, ...managementTools },

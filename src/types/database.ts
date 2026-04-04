@@ -338,6 +338,8 @@ export interface Brand {
   products_services: ProductService[]
   video_preferences: VideoPreferences
   github_context: string | null
+  brand_dna_constraints: BrandDNAConstraints
+  emulation_wishlist: EmulationEntry[]
   channel_strategy: ChannelStrategy
   post_signature: PostSignature
   marketing_status: 'unknown' | 'no_marketing' | 'early_stage' | 'needs_strategy' | 'active' | 'scaling'
@@ -479,6 +481,42 @@ export type GoalStatus = 'planned' | 'active' | 'completed' | 'paused' | 'cancel
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 export type HeartbeatSource = 'cron' | 'event' | 'manual'
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+export interface BrandDNAConstraints {
+  voice_rules?: string[]           // deterministic rules, not adjectives
+  banned_words?: string[]          // words the brand never uses
+  founder_voice?: {
+    name: string
+    platforms: string[]            // where founder voice is used
+    framing: 'first_person' | 'third_person'
+  }
+  content_philosophy?: 'storytelling_first' | 'product_first' | 'educational_first' | 'community_first'
+  never_do?: string[]              // hard constraints: "before_after_images", "testimonials_in_ads", etc.
+  narrative_world?: string         // the brand's story universe
+}
+
+export interface EmulationEntry {
+  brand: string
+  why: string
+}
+
+export interface InspirationEntry {
+  id: string
+  user_id: string
+  brand_name: string
+  industry: string
+  platform: string | null
+  format: string | null
+  what_they_did: string
+  why_it_works: string
+  transferable_principle: string
+  applicability_tags: string[]
+  source_url: string | null
+  observed_at: string
+  performance_notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface ChannelStrategy {
   channels?: Record<string, number>      // platform → percentage (must sum to 100)
   content_mix?: Record<string, number>   // content type → percentage
