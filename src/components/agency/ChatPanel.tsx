@@ -26,9 +26,8 @@ export function ChatPanel() {
   // Always Director — the user never switches agents
   const activeAgentType = 'overall' as const
 
-  // Don't render on the full chat pages
+  // Check if we're on a full chat page (all hooks must be ABOVE this check)
   const isFullChatPage = pathname?.startsWith('/agency/chat')
-  if (isFullChatPage) return null
 
   // Ref so the transport always reads latest brandId
   const brandIdRef = useRef(activeBrandId)
@@ -87,6 +86,9 @@ export function ChatPanel() {
       }
     }
   }, [activeBrandId, activeAgentType, messages.length, sendMessage, setConversation])
+
+  // Don't render on the full chat pages — AFTER all hooks
+  if (isFullChatPage) return null
 
   return (
     <>
