@@ -29,12 +29,17 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What is NotRealSmart Agency?',
         answer:
-          'An AI-powered marketing agency with 13 agents — 1 Director and 12 specialist department heads. You brief the Director, it routes work to the right department or convenes a meeting with multiple departments. Built specifically for Australian health businesses.',
+          'An AI-powered marketing agency with 14 independent AI specialist agents — 1 Director and 13 department heads. You brief the Director, it routes work to the right department or convenes a meeting with multiple departments. Built specifically for Australian businesses, with deep compliance for health practitioners.',
+      },
+      {
+        question: 'How does it work?',
+        answer:
+          'You talk to one person — the Director (The Orchestrator). Behind the scenes, 13 specialist agents handle the work: The Storyteller (Content & Copy), The Search Scientist (SEO & GEO), The Performance Marketer (Paid Ads), The Strategist (Strategy & Launch), The Relationship Builder (Email Marketing), The Growth Hacker (Growth & Partnerships), The Brand Guardian (Brand), The Intelligence Analyst (Market Intelligence), The Conversion Architect (Web & CRO), The Regulatory Shield (Compliance), The Data Translator (Analytics & Reporting), The Systems Architect (Automation & AI), and The Visual Director (Video & Scripting). You never pick departments — the Director delegates automatically.',
       },
       {
         question: 'How is this different from ChatGPT?',
         answer:
-          'Five things. Brand memory — every agent knows your brand voice, audience, and past outputs across sessions. Compliance — every output is checked against AHPRA and TGA advertising guidelines. Departments — you brief specialists, not a generalist. Meeting room — complex briefs get input from multiple departments in parallel. Action bar — save, email, create todos, export, and compare reports with one click.',
+          'Five things. Brand memory — every agent knows your brand voice, audience, and past outputs across sessions. Compliance — every output is checked against AHPRA and TGA advertising guidelines. Departments — 14 independent AI specialist agents, not a generalist. Meeting room — complex briefs get input from multiple departments in parallel. Action bar — save, email, create todos, export, and compare reports with one click.',
       },
       {
         question: 'What is the Meeting Room?',
@@ -49,13 +54,60 @@ const FAQ_DATA: FaqCategory[] = [
     ],
   },
   {
+    id: 'tools',
+    label: 'tools',
+    items: [
+      {
+        question: 'What tools are built in?',
+        answer:
+          'Canva graphic design, HeyGen AI video generation, Mixpost social publishing (Facebook, Instagram, LinkedIn, TikTok, YouTube), Perplexity web search, Deepgram and Whisper transcription, Resend transactional email, and Stripe payments. All tools work out of the box with platform keys — power users can connect their own accounts.',
+      },
+      {
+        question: 'Can I upload images and videos?',
+        answer:
+          'Yes. Paste screenshots directly in chat for the agents to analyse. Upload videos to automatically transcribe, generate captions for 6 platforms, schedule, and publish via Mixpost — all from the Media Library.',
+      },
+      {
+        question: 'What are slash commands?',
+        answer:
+          '65+ shortcuts like /campaign, /post, /blog, /video, /design, /audit, /fill, /deepscan, /proforma, /calendar, /analytics, and /help. Type / in the chat input to see the full list with descriptions. Each command sends a natural language instruction to the Director.',
+      },
+    ],
+  },
+  {
+    id: 'brand',
+    label: 'brand',
+    items: [
+      {
+        question: 'What is Marketing DNA?',
+        answer:
+          'A visual channel strategy per brand. Set your platform allocation (e.g. TikTok 40%, Instagram 35%, YouTube 15%, Facebook 10%) and every agent follows it when creating content. It ensures your marketing effort is distributed according to where your audience actually is.',
+      },
+      {
+        question: 'What is Brand DNA?',
+        answer:
+          'Deterministic brand voice rules that override everything. Banned words, voice constraints, content philosophy, founder voice settings. The Brand Guardian agent validates all output against these rules before anything is saved or published. Think of it as your brand constitution — no agent can break it.',
+      },
+      {
+        question: 'What is the Inspiration Library?',
+        answer:
+          'A curated database of marketing approaches you admire from ANY industry. Save examples from hospitality, fashion, tech — wherever you see brilliant marketing. The Strategy agent queries it before building campaigns to apply cross-industry principles. Not copy — adapt.',
+      },
+      {
+        question: 'Can I invite team members?',
+        answer:
+          'Yes. Invite people with admin (full access) or viewer (read-only) access, either to all brands or specific ones. Invitations are sent via email with a secure link.',
+      },
+    ],
+  },
+  {
     id: 'compliance',
     label: 'compliance',
     items: [
       {
         question: 'How does AHPRA compliance work?',
         answer:
-          'Every output passes through our compliance agent which checks for prohibited claims, testimonial usage, and TGA advertising restrictions. It flags issues and suggests compliant alternatives. This is guidance — not a legal determination.',
+          'Every output passes through the Regulatory Shield (Guardian Agent) which checks for prohibited claims, testimonial usage, and TGA advertising restrictions. It also enforces your Brand DNA constraints — banned words, voice rules, and content philosophy. It flags issues and suggests compliant alternatives. Important: Reddit posts are now publicly visible and subject to AHPRA scrutiny, so all content is checked regardless of platform. This is guidance — not a legal determination.',
       },
       {
         question: 'Can I use this for regulated health advertising?',
@@ -86,7 +138,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'Can I manage multiple brands?',
         answer:
-          'Absolutely. The dashboard supports multiple brand profiles. Switch between them and each agent automatically loads the right context.',
+          'Absolutely. The dashboard supports unlimited brand profiles. Switch between them and each agent automatically loads the right context, voice rules, and compliance settings.',
       },
     ],
   },
