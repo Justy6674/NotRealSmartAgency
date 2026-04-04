@@ -16,7 +16,7 @@ interface ToolCallDisplayProps {
 const TOOL_LABELS: Record<string, string> = {
   save_output: 'Saving to output library',
   word_count: 'Checking word/character count',
-  delegate_to_agent: 'Delegating to department',
+  delegate_to_agent: 'Delegating to specialist',
   scan_website: 'Scanning website',
   scan_github: 'Reading GitHub repository',
   scan_social: 'Checking social media',
@@ -28,9 +28,44 @@ const TOOL_LABELS: Record<string, string> = {
   generate_slides: 'Creating presentation',
   create_task: 'Creating task',
   request_approval: 'Requesting approval',
-  handoff_to_department: 'Handing off to department',
-  convene_meeting: 'Convening department meeting',
+  handoff_to_department: 'Handing off to specialist',
+  convene_meeting: 'Convening team meeting',
   web_search: 'Searching the web',
+  design_graphic: 'Designing in Canva',
+  export_design: 'Exporting design',
+  create_video: 'Creating video',
+  fill_calendar: 'Filling content calendar',
+  write_blog: 'Writing blog article',
+  write_ads: 'Writing ad copy',
+  write_email_campaign: 'Writing email campaign',
+  deep_competitor_scan: 'Deep scanning competitor',
+  manage_posts: 'Managing posts',
+  analyse_voice: 'Analysing brand voice',
+  repurpose_content: 'Repurposing content',
+  process_media: 'Processing media',
+  query_outputs: 'Searching past work',
+  query_analytics: 'Pulling analytics',
+  query_calendar: 'Checking calendar',
+  read_proforma: 'Reading marketing proforma',
+  update_proforma: 'Updating proforma',
+  save_brand_info: 'Saving brand info',
+}
+
+/** Agent personality names — shown to user during delegation */
+const AGENT_PERSONALITIES: Record<string, { name: string; colour: string }> = {
+  content: { name: 'The Storyteller', colour: 'bg-teal-500/10 text-teal-400' },
+  seo: { name: 'The Search Scientist', colour: 'bg-blue-500/10 text-blue-400' },
+  paid_ads: { name: 'The Performance Marketer', colour: 'bg-orange-500/10 text-orange-400' },
+  strategy: { name: 'The Strategist', colour: 'bg-purple-500/10 text-purple-400' },
+  email: { name: 'The Relationship Builder', colour: 'bg-pink-500/10 text-pink-400' },
+  growth: { name: 'The Growth Hacker', colour: 'bg-green-500/10 text-green-400' },
+  brand: { name: 'The Brand Guardian', colour: 'bg-amber-500/10 text-amber-400' },
+  competitor: { name: 'The Intelligence Analyst', colour: 'bg-red-500/10 text-red-400' },
+  website: { name: 'The Conversion Architect', colour: 'bg-cyan-500/10 text-cyan-400' },
+  compliance: { name: 'The Regulatory Shield', colour: 'bg-yellow-500/10 text-yellow-500' },
+  analytics: { name: 'The Data Translator', colour: 'bg-indigo-500/10 text-indigo-400' },
+  automation: { name: 'The Systems Architect', colour: 'bg-slate-500/10 text-slate-400' },
+  video: { name: 'The Visual Director', colour: 'bg-violet-500/10 text-violet-400' },
 }
 
 // ─── Delegation Progress Steps ──────────────────────────────────────────────
@@ -115,6 +150,7 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
   const [currentStep, setCurrentStep] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const steps = DELEGATION_STEPS[agentType] ?? DELEGATION_STEPS._default
+  const personality = AGENT_PERSONALITIES[agentType]
 
   // Elapsed timer
   useEffect(() => {
@@ -143,6 +179,17 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
 
   return (
     <div className="mt-2 space-y-1.5">
+      {/* Agent personality header */}
+      {personality && (
+        <div className="flex items-center gap-2 mb-2">
+          <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', personality.colour)}>
+            {personality.name}
+          </span>
+          {!isComplete && (
+            <span className="text-[10px] text-muted-foreground/60">{elapsed}s</span>
+          )}
+        </div>
+      )}
       {steps.map((step, i) => {
         const isDone = isComplete || i < currentStep
         const isActive = !isComplete && i === currentStep
@@ -167,18 +214,13 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
       {allStepsDone && (
         <div className="flex items-center gap-2 text-xs">
           <Loader2 className="h-3 w-3 animate-spin text-amber-400 shrink-0" />
-          <span className="text-amber-400">Still working... this can take a moment for complex tasks</span>
+          <span className="text-amber-400">Still working... complex tasks take a moment</span>
         </div>
       )}
       {isComplete && (
         <div className="flex items-center gap-2 text-xs">
           <Check className="h-3 w-3 text-emerald-500 shrink-0" />
           <span className="text-emerald-500 font-medium">Complete</span>
-        </div>
-      )}
-      {!isComplete && elapsed > 0 && (
-        <div className="mt-1 text-[10px] text-muted-foreground/60">
-          {elapsed}s elapsed
         </div>
       )}
     </div>
@@ -197,35 +239,48 @@ function MeetingProgress({ departments, isComplete }: { departments: string[]; i
   }, [isComplete])
 
   return (
-    <div className="mt-2 space-y-1.5">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-        <Users className="h-3 w-3" />
-        <span>{departments.length} departments in meeting</span>
+    <div className="mt-2 space-y-2">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Users className="h-3.5 w-3.5" />
+        <span className="font-medium">
+          {isComplete ? `${departments.length} agents delivered` : `${departments.length} agents working in parallel`}
+        </span>
+        {!isComplete && elapsed > 0 && (
+          <span className="text-[10px] text-muted-foreground/60">{elapsed}s</span>
+        )}
       </div>
-      {departments.map((dept) => {
-        const name = AGENT_LABELS[dept as AgentType] ?? dept
-        return (
-          <div key={dept} className="flex items-center gap-2 text-xs">
-            {isComplete ? (
-              <Check className="h-3 w-3 text-emerald-500 shrink-0" />
-            ) : (
-              <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
-            )}
-            <span className={isComplete ? 'text-muted-foreground' : 'text-foreground'}>
-              {name} {isComplete ? '— done' : '— working...'}
-            </span>
-          </div>
-        )
-      })}
+      <div className="space-y-1.5 pl-1">
+        {departments.map((dept, i) => {
+          const personality = AGENT_PERSONALITIES[dept]
+          const isLast = i === departments.length - 1
+          const treeChar = isLast ? '└─' : '├─'
+
+          return (
+            <div key={dept} className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground/40 font-mono text-[10px] w-4 shrink-0">{treeChar}</span>
+              {isComplete ? (
+                <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+              ) : (
+                <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
+              )}
+              {personality ? (
+                <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', personality.colour)}>
+                  {personality.name}
+                </span>
+              ) : (
+                <span className="text-foreground">{AGENT_LABELS[dept as AgentType] ?? dept}</span>
+              )}
+              <span className="text-muted-foreground/50 text-[10px]">
+                {isComplete ? 'done' : 'working...'}
+              </span>
+            </div>
+          )
+        })}
+      </div>
       {isComplete && (
         <div className="flex items-center gap-2 text-xs mt-1">
           <Check className="h-3 w-3 text-emerald-500 shrink-0" />
-          <span className="text-emerald-500 font-medium">Meeting complete</span>
-        </div>
-      )}
-      {!isComplete && elapsed > 0 && (
-        <div className="mt-1 text-[10px] text-muted-foreground/60">
-          {elapsed}s elapsed — departments working in parallel
+          <span className="text-emerald-500 font-medium">All agents delivered</span>
         </div>
       )}
     </div>
@@ -259,7 +314,9 @@ function MeetingResultDisplay({ data }: { data: MeetingResult }) {
       <div className="text-xs text-muted-foreground">
         {data.departments.length} departments contributed
       </div>
-      {data.departments.map(({ department, name, result }) => (
+      {data.departments.map(({ department, name, result }) => {
+        const personality = AGENT_PERSONALITIES[department]
+        return (
         <div key={department} className="rounded-md border border-border overflow-hidden">
           <button
             onClick={() => toggleDept(department)}
@@ -271,7 +328,13 @@ function MeetingResultDisplay({ data }: { data: MeetingResult }) {
               <ChevronRight className="h-3 w-3 shrink-0" />
             )}
             <Check className="h-3 w-3 text-emerald-500 shrink-0" />
-            <span>{name}</span>
+            {personality ? (
+              <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', personality.colour)}>
+                {personality.name}
+              </span>
+            ) : (
+              <span>{name}</span>
+            )}
             <span className="ml-auto text-[10px] text-muted-foreground font-normal">
               {result.length.toLocaleString()} chars
             </span>
@@ -282,7 +345,8 @@ function MeetingResultDisplay({ data }: { data: MeetingResult }) {
             </div>
           )}
         </div>
-      ))}
+        )
+      })}
       {data.errors && data.errors.length > 0 && (
         <div className="text-xs text-red-400">
           {data.errors.map(e => `${e.department}: ${e.error}`).join('; ')}
@@ -295,21 +359,22 @@ function MeetingResultDisplay({ data }: { data: MeetingResult }) {
 // ─── Tool Label Logic ───────────────────────────────────────────────────────
 
 function getToolLabel(toolName: string, args: Record<string, unknown>, state: string): string {
-  // For delegation, show which department is working
+  // For delegation, show agent personality name
   if (toolName === 'delegate_to_agent' && args?.agentType) {
-    const deptName = AGENT_LABELS[args.agentType as AgentType] ?? args.agentType
+    const personality = AGENT_PERSONALITIES[args.agentType as string]
+    const name = personality?.name ?? AGENT_LABELS[args.agentType as AgentType] ?? args.agentType
     return state === 'result'
-      ? `${deptName} completed`
-      : `${deptName} is working...`
+      ? `${name} delivered`
+      : `${name} is working...`
   }
 
-  // For meeting, show department count
+  // For meeting, show agent count with personality
   if (toolName === 'convene_meeting' && args?.departments) {
     const depts = args.departments as string[]
     const count = depts.length
     return state === 'result'
-      ? `Meeting complete — ${count} departments`
-      : `Meeting in progress — ${count} departments...`
+      ? `${count} agents delivered`
+      : `${count} agents working in parallel...`
   }
 
   // For handoff, show target department
