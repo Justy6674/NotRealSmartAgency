@@ -119,8 +119,8 @@ export const SLASH_COMMANDS: SlashCommand[] = [
 
 export function filterCommands(query: string): SlashCommand[] {
   const q = query.toLowerCase().replace('/', '')
-  if (!q) return SLASH_COMMANDS.slice(0, 8)
+  if (!q) return SLASH_COMMANDS
   return SLASH_COMMANDS.filter(cmd =>
     cmd.command.includes(q) || cmd.label.toLowerCase().includes(q) || cmd.category.toLowerCase().includes(q)
-  ).slice(0, 8)
+  )
 }
