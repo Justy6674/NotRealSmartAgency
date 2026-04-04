@@ -25,13 +25,15 @@ import { getToolsForAgent } from './tools'
 import { logAudit } from './audit'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget, updateAgentStatus } from './registry'
 
-/** Maximum workers running simultaneously to prevent rate limit exhaustion */
+/** Maximum workers running simultaneously to prevent AI Gateway rate limit exhaustion.
+ *  AI Gateway enforces per-user concurrency limits; 4 is conservative for most providers. */
 const MAX_CONCURRENT_WORKERS = 4
 
 /** Agents that should always get web_search during delegation */
 const WEB_SEARCH_AGENTS = new Set<string>(['seo', 'competitor'])
 
-/** Max tool-use steps per worker to prevent infinite loops */
+/** Max tool-use steps per worker (each step = one tool call round-trip).
+ *  Prevents infinite loops if a tool keeps returning results that trigger more calls. */
 const MAX_WORKER_STEPS = 3
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -138,7 +140,8 @@ export async function runAgentWorker(
 
     // 4. Set THIS agent's status to 'working'
     if (registry) {
-      await updateAgentStatus(ctx.supabase, registry.id, 'working').catch(() => {})
+      await updateAgentStatus(ctx.supabase, registry.id, 'working')
+        .catch((e) => console.warn(`[worker:${dept}] Failed to set working status:`, e))
     }
 
     // 5. Build THIS agent's system prompt with ITS OWN memory retrieval
@@ -235,7 +238,8 @@ Rules:
 
     // 11. Set THIS agent's status back to 'idle'
     if (registry) {
-      await updateAgentStatus(ctx.supabase, registry.id, 'idle').catch(() => {})
+      await updateAgentStatus(ctx.supabase, registry.id, 'idle')
+        .catch((e) => console.warn(`[worker:${dept}] Failed to set idle status:`, e))
     }
 
     // 12. Track THIS agent's spend independently
@@ -300,7 +304,7 @@ Rules:
       if (registry) {
         await updateAgentStatus(ctx.supabase, registry.id, 'idle')
       }
-    } catch { /* best-effort cleanup */ }
+    } catch (resetErr) { console.warn(`[worker:${dept}] Failed to reset status on error:`, resetErr) }
 
     return {
       department: dept,

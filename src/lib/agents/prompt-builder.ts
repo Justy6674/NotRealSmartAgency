@@ -321,7 +321,8 @@ export async function buildSystemPromptWithMemory(
     const namespace = getNamespace(brand.slug, agentConfig.agent_type)
     const memories = await memorySearch(latestMessage, namespace, 10)
 
-    // Director gets global agency memory; sub-agents get brand-wide shared memories
+    // Director gets global agency memory; sub-agents get brand-wide memories
+    // from OTHER departments' work on the same brand (cross-department learning)
     let crossMemories: typeof memories = []
     if (agentConfig.agent_type === 'overall') {
       crossMemories = await memorySearch(latestMessage, getGlobalNamespace(), 5)

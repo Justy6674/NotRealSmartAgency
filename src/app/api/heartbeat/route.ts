@@ -107,7 +107,7 @@ export async function GET(request: Request) {
 
         const result = await runAgentWorker(registry.agent_type, taskPrompt, workerCtx, {
           timeoutMs: 240000, // Allow more time for heartbeat tasks
-          maxSteps: 5,
+          maxSteps: 5, // Heartbeat tasks may need more tool iterations (e.g., scan + save + create_task)
         })
 
         if (result.error) {
