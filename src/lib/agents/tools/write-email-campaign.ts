@@ -128,7 +128,7 @@ export function createWriteEmailCampaignTool(
       // 1. Fetch brand context
       const { data: brand, error: brandError } = await supabase
         .from('brands')
-        .select('name, description, niche, website_url, compliance_flags')
+        .select('name, description, niche, website_url, compliance_flags, brand_dna_constraints')
         .eq('id', brandId)
         .single()
 
@@ -182,7 +182,7 @@ Generate the full campaign now. Remember:
       if (brand.compliance_flags?.ahpra || brand.compliance_flags?.tga) {
         const allContent = campaign.emails.map((e) => `${e.subject_line}\n${e.body_html}`).join('\n\n---\n\n')
         try {
-          const result = await runComplianceFilter(allContent, brand.compliance_flags)
+          const result = await runComplianceFilter(allContent, brand.compliance_flags, brand.brand_dna_constraints)
           if (!result.isValid) {
             complianceWarnings = [...result.flags, ...result.warnings]
           } else if (result.warnings.length > 0) {

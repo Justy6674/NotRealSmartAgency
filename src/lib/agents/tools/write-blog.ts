@@ -83,7 +83,7 @@ export function createWriteBlogTool(
       const { data: brand, error: brandError } = await supabase
         .from('brands')
         .select(
-          'name, description, website_url, niche, tone_of_voice, target_audience, competitors, compliance_flags, content_pillars, products_services, extra_context'
+          'name, description, website_url, niche, tone_of_voice, target_audience, competitors, compliance_flags, content_pillars, products_services, extra_context, brand_dna_constraints'
         )
         .eq('id', brandId)
         .single()
@@ -235,7 +235,8 @@ slug: "url-friendly-slug"
           try {
             complianceResult = await runComplianceFilter(
               blogContent,
-              complianceFlags!
+              complianceFlags!,
+              brand.brand_dna_constraints
             )
           } catch {
             // Non-blocking

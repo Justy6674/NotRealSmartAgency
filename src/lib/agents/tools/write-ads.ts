@@ -392,7 +392,7 @@ Generate the ad copy now. Remember: character limits are STRICT — count carefu
             })
             .join('\n---\n')
 
-          complianceResult = await runComplianceFilter(allCopy, brand.compliance_flags)
+          complianceResult = await runComplianceFilter(allCopy, brand.compliance_flags, brand.brand_dna_constraints)
         } catch {
           // Non-blocking
         }

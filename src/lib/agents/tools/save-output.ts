@@ -41,12 +41,12 @@ export function createSaveOutputTool(
       try {
         const { data: brand } = await supabase
           .from('brands')
-          .select('compliance_flags')
+          .select('compliance_flags, brand_dna_constraints')
           .eq('id', brandId)
           .single()
 
-        if (brand?.compliance_flags) {
-          complianceResult = await runComplianceFilter(content, brand.compliance_flags)
+        if (brand?.compliance_flags || brand?.brand_dna_constraints) {
+          complianceResult = await runComplianceFilter(content, brand.compliance_flags ?? { ahpra: false, tga: false, tga_categories: [] }, brand.brand_dna_constraints)
         }
       } catch {
         // Non-blocking — save proceeds even if compliance check fails
