@@ -133,6 +133,64 @@ const SOCIAL_MEDIA_KNOWLEDGE = `## Social Media Intelligence & Platform Benchmar
 | YouTube | Thu, Fri, Sat | 2–4pm (publish), 6–9pm (peak views) | Mon morning |
 | Facebook | Wed, Thu, Fri | 9–11am, 1–3pm | Late night |
 
+### PLATFORM ALGORITHM INTELLIGENCE
+
+#### TikTok Algorithm
+- **Watch time is king.** Completion rate, rewatch rate, and early engagement (first 30-60 min) determine distribution.
+- Content is served to small test audiences first, then expanded if engagement clears thresholds.
+- Hook in 1-3 seconds is non-negotiable — the algorithm penalises early drop-off.
+- Two-character dialogues (roaster + helper) drive high comment counts.
+- Comments asking viewers to participate ("drop your X in the comments") are the highest-signal CTA because comment count directly feeds the algorithm.
+- Use hashtags #fyp + 2-3 niche-specific tags. Don't spam generic tags.
+- Default content to review before publishing — accidental posts destroy trust.
+
+#### Instagram Algorithm
+- **Saves and shares are weighted higher than likes.** Optimise for saves (reference content, checklists, tips).
+- Carousels get re-served when users swipe (counts as re-engagement) — 5-10 slides ideal.
+- Reels get preferential distribution over static posts. Instagram pushes video to compete with TikTok.
+- Keep hashtags to 3-5 relevant niche tags. Never use generic tags (#motivation, #inspo).
+- Engagement rate benchmarks: average 1.22%, good 3-6%, excellent >6%.
+- TTS narration with on-screen text performs well for Reels.
+
+#### LinkedIn Algorithm
+- **Dwell time** (how long people read) and **comments** (especially long-form) drive distribution.
+- Polls get disproportionate algorithmic reach. Use for audience research.
+- Document (PDF carousel) posts get high engagement because users swipe through.
+- Mix content types — never two consecutive posts of the same type.
+- Sound like a founder, not a marketing department. Professional but authentic.
+- Only ~30% of posts should reference the brand. The rest is pure value.
+- 3-5 hashtags at end, never generic.
+
+#### Facebook Algorithm
+- **Group engagement is where organic reach still exists.** Brand page organic reach is near zero.
+- Group posts get algorithmic distribution when comments from real accounts trigger expansion.
+- Target relevant community groups by niche. Contribute genuinely helpful comments.
+- Page posts require paid amplification for any meaningful reach.
+
+#### X / Twitter Algorithm
+- **Replies to high-engagement accounts get algorithmic visibility.** Threads get re-served tweet by tweet.
+- The algorithm favours accounts that generate genuine conversation (replies, quote tweets) over broadcast-only.
+- Punchy replies under 250 characters perform best — opinionated, personality-driven.
+- Threads: exactly 7 tweets: hook, 5 value items (each standalone), CTA.
+- No em-dashes (AI tell). No hashtags in replies. 7th-grade reading level.
+- Only 10-20% of replies should mention the brand. The rest is pure value.
+- Pain-signal search (people tweeting about the problem your product solves) is the highest-signal discovery method.
+
+#### YouTube Algorithm
+- **Click-through rate on thumbnails + watch time** are the two primary signals.
+- Shorts (<60s) get separate algorithmic treatment from long-form.
+- First 30 seconds determine whether the algorithm continues serving the video.
+- Title and thumbnail are more important than the video content for initial distribution.
+
+### CROSS-PLATFORM GROWTH TACTICS
+
+- **Content capsule model:** Generate once, publish everywhere. A single piece of content (video, thread, post) is packaged as a self-contained capsule. Cross-posting reuses the same media with platform-specific formatting.
+- **Repurposing chain:** Video → Reel + Short + TikTok → Caption → Twitter thread → LinkedIn post → Blog section.
+- **Anti-AI detection:** Strip em-dashes, en-dashes from all text. Avoid words: "game-changer", "revolutionise", "leverage", "delve", "tapestry", "landscape".
+- **Feedback loop:** Tag published content with IDs, fetch analytics after publishing, run sentiment analysis, generate permanent content guidelines, feed those back into future generation. The system improves with every publish cycle.
+- **Platform defaults:** Video → Instagram + LinkedIn + YouTube. Images → Instagram + LinkedIn. Threads → Twitter. Articles → LinkedIn. Text posts → Twitter + LinkedIn.
+- **Mention strategy:** Only ~10-20% of engagement should mention the brand. The rest must be genuinely helpful with zero agenda. When mentioning, rotate angles: never say "check out" or "you should try".
+
 ### PROACTIVE TRIGGERS
 
 - **Engagement rate below platform average** → Content isn't resonating. Analyse top performers for patterns.
@@ -154,6 +212,7 @@ export function getSocialMediaKnowledge(agentType: string): string | null {
       'CONTENT TYPE PERFORMANCE BY PLATFORM',
       'ENGAGEMENT RATE BENCHMARKS BY PLATFORM',
       'OPTIMAL POSTING TIMES',
+      'PLATFORM ALGORITHM INTELLIGENCE',
     ],
     content: [
       'ENGAGEMENT RATE BENCHMARKS BY PLATFORM',
@@ -161,6 +220,8 @@ export function getSocialMediaKnowledge(agentType: string): string | null {
       'VIDEO SCRIPTING BEST PRACTICES',
       'OPTIMAL POSTING TIMES',
       'PERFORMANCE CATEGORIES',
+      'PLATFORM ALGORITHM INTELLIGENCE',
+      'CROSS-PLATFORM GROWTH TACTICS',
     ],
     analytics: [
       'ENGAGEMENT METRICS — FORMULAS',
@@ -183,6 +244,8 @@ export function getSocialMediaKnowledge(agentType: string): string | null {
       'ENGAGEMENT VALUE ESTIMATES',
       'CONTENT TYPE PERFORMANCE BY PLATFORM',
       'PROACTIVE TRIGGERS',
+      'PLATFORM ALGORITHM INTELLIGENCE',
+      'CROSS-PLATFORM GROWTH TACTICS',
     ],
     overall: [
       'ENGAGEMENT RATE BENCHMARKS BY PLATFORM',
@@ -190,6 +253,7 @@ export function getSocialMediaKnowledge(agentType: string): string | null {
       'PERFORMANCE CATEGORIES',
       'ROI INTERPRETATION',
       'PROACTIVE TRIGGERS',
+      'CROSS-PLATFORM GROWTH TACTICS',
     ],
     strategy: [
       'PAID MEDIA COST BENCHMARKS',
