@@ -39,8 +39,8 @@ export function CreateHub() {
   if (!activeBrandId) {
     return (
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center">
-          <p className="text-sm text-white/50">
+        <div className="rounded-xl border border-border bg-muted/30 p-8 text-center">
+          <p className="text-sm text-muted-foreground">
             Select a brand from the sidebar to start creating content.
           </p>
         </div>
@@ -143,18 +143,18 @@ export function CreateHub() {
   return (
     <div className="flex-1 overflow-y-auto p-6">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-white">Create New Content</h2>
-        <p className="mt-1 text-sm text-white/50">
+        <h2 className="text-lg font-semibold text-foreground">Create New Content</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Write a quick post, generate content with AI, create videos, or pull in designs from Canva.
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Card 1: Quick Post */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
+        <div className="rounded-xl border border-border bg-muted/30 p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">Quick Post</h3>
-            <p className="mt-1 text-xs text-white/40">Write and schedule a post across your platforms.</p>
+            <h3 className="text-sm font-semibold text-foreground">Quick Post</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Write and schedule a post across your platforms.</p>
           </div>
 
           {/* Platform pills */}
@@ -167,8 +167,8 @@ export function CreateHub() {
                 className={cn(
                   'rounded-full px-3 py-1 text-xs font-medium transition-colors',
                   selectedPlatforms.includes(id)
-                    ? 'bg-white/20 text-white ring-1 ring-white/30'
-                    : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70'
+                    ? 'bg-primary/15 text-foreground ring-1 ring-primary/30'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
                 )}
               >
                 {label}
@@ -183,9 +183,9 @@ export function CreateHub() {
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               placeholder="Write your post..."
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/20"
+              className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
             />
-            <p className="mt-1 text-right text-xs text-white/30">{caption.length} characters</p>
+            <p className="mt-1 text-right text-xs text-muted-foreground/60">{caption.length} characters</p>
           </div>
 
           {/* Hashtags */}
@@ -194,7 +194,7 @@ export function CreateHub() {
             value={hashtagsInput}
             onChange={(e) => setHashtagsInput(e.target.value)}
             placeholder="Hashtags (comma-separated)"
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/20"
+            className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
 
           {/* Schedule */}
@@ -202,30 +202,30 @@ export function CreateHub() {
             type="datetime-local"
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/20 [color-scheme:dark]"
+            className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30 [color-scheme:dark]"
           />
 
           {/* Status radio */}
           <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
               <input
                 type="radio"
                 name="post-status"
                 value="draft"
                 checked={postStatus === 'draft'}
                 onChange={() => setPostStatus('draft')}
-                className="accent-white"
+                className="accent-primary"
               />
               Save as Draft
             </label>
-            <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
               <input
                 type="radio"
                 name="post-status"
                 value="scheduled"
                 checked={postStatus === 'scheduled'}
                 onChange={() => setPostStatus('scheduled')}
-                className="accent-white"
+                className="accent-primary"
               />
               Schedule Now
             </label>
@@ -239,8 +239,8 @@ export function CreateHub() {
             className={cn(
               'w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors',
               submitting
-                ? 'bg-white/10 text-white/30 cursor-not-allowed'
-                : 'bg-white/15 text-white hover:bg-white/20'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-primary/15 text-foreground hover:bg-primary/25'
             )}
           >
             {submitting ? 'Creating...' : 'Create Post'}
@@ -260,10 +260,10 @@ export function CreateHub() {
         </div>
 
         {/* Card 2: AI Generate */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
+        <div className="rounded-xl border border-border bg-muted/30 p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">AI Generate</h3>
-            <p className="mt-1 text-xs text-white/40">
+            <h3 className="text-sm font-semibold text-foreground">AI Generate</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
               Describe what you want to post about and the Director will create optimised content across your platforms.
             </p>
           </div>
@@ -276,7 +276,7 @@ export function CreateHub() {
               if (e.key === 'Enter') handleAiGenerate()
             }}
             placeholder="e.g. Announce our new telehealth feature"
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/20"
+            className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
 
           <button
@@ -286,8 +286,8 @@ export function CreateHub() {
             className={cn(
               'w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors',
               !aiPrompt.trim()
-                ? 'bg-white/10 text-white/30 cursor-not-allowed'
-                : 'bg-white/15 text-white hover:bg-white/20'
+                ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                : 'bg-primary/15 text-foreground hover:bg-primary/25'
             )}
           >
             Generate
@@ -295,10 +295,10 @@ export function CreateHub() {
         </div>
 
         {/* Card 3: AI Video */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
+        <div className="rounded-xl border border-border bg-muted/30 p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">AI Video</h3>
-            <p className="mt-1 text-xs text-white/40">
+            <h3 className="text-sm font-semibold text-foreground">AI Video</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
               Write a script and generate a professional video with an AI presenter.
             </p>
           </div>
@@ -307,7 +307,7 @@ export function CreateHub() {
             <button
               type="button"
               onClick={() => setShowVideoCreator(true)}
-              className="w-full rounded-lg bg-white/15 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+              className="w-full rounded-lg bg-white/15 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-white/20"
             >
               Create Video
             </button>
@@ -317,10 +317,10 @@ export function CreateHub() {
         </div>
 
         {/* Card 4: Canva Designs */}
-        <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
+        <div className="rounded-xl border border-border bg-muted/30 p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">Canva Designs</h3>
-            <p className="mt-1 text-xs text-white/40">
+            <h3 className="text-sm font-semibold text-foreground">Canva Designs</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
               Browse your Canva account to find and use existing designs.
             </p>
           </div>
@@ -328,7 +328,7 @@ export function CreateHub() {
           <button
             type="button"
             onClick={handleBrowseCanva}
-            className="w-full rounded-lg bg-white/15 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+            className="w-full rounded-lg bg-white/15 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-white/20"
           >
             Browse Canva
           </button>

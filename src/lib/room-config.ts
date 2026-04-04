@@ -1,11 +1,3 @@
-import {
-  MessageSquare,
-  Palette,
-  CalendarDays,
-  LayoutDashboard,
-  type LucideIcon,
-} from 'lucide-react'
-
 export type RoomId = 'director' | 'studio' | 'calendar' | 'command'
 
 export interface SubTabConfig {
@@ -18,7 +10,7 @@ export interface RoomConfig {
   id: RoomId
   label: string
   shortLabel: string
-  icon: LucideIcon
+  iconName: 'MessageSquare' | 'Palette' | 'CalendarDays' | 'LayoutDashboard'
   href: string
   matchPrefixes: string[]
   subTabs?: SubTabConfig[]
@@ -29,7 +21,7 @@ export const ROOMS: RoomConfig[] = [
     id: 'director',
     label: "Director's Office",
     shortLabel: 'Director',
-    icon: MessageSquare,
+    iconName: 'MessageSquare',
     href: '/agency/chat',
     matchPrefixes: ['/agency/chat'],
   },
@@ -37,7 +29,7 @@ export const ROOMS: RoomConfig[] = [
     id: 'studio',
     label: 'Creative Studio',
     shortLabel: 'Studio',
-    icon: Palette,
+    iconName: 'Palette',
     href: '/agency/studio',
     matchPrefixes: ['/agency/studio'],
   },
@@ -45,7 +37,7 @@ export const ROOMS: RoomConfig[] = [
     id: 'calendar',
     label: 'Calendar',
     shortLabel: 'Calendar',
-    icon: CalendarDays,
+    iconName: 'CalendarDays',
     href: '/agency/calendar',
     matchPrefixes: ['/agency/calendar'],
   },
@@ -53,7 +45,7 @@ export const ROOMS: RoomConfig[] = [
     id: 'command',
     label: 'Command Centre',
     shortLabel: 'Command',
-    icon: LayoutDashboard,
+    iconName: 'LayoutDashboard',
     href: '/agency/tasks',
     matchPrefixes: [
       '/agency/tasks',

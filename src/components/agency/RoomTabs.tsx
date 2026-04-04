@@ -2,8 +2,16 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { MessageSquare, Palette, CalendarDays, LayoutDashboard, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ROOMS, getActiveRoom } from '@/lib/room-config'
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  MessageSquare,
+  Palette,
+  CalendarDays,
+  LayoutDashboard,
+}
 
 export function RoomTabs() {
   const pathname = usePathname() ?? ''
@@ -13,7 +21,7 @@ export function RoomTabs() {
     <nav className="flex items-center gap-0.5 rounded-lg bg-muted/50 p-0.5">
       {ROOMS.map((room) => {
         const isActive = activeRoom?.id === room.id
-        const Icon = room.icon
+        const Icon = ICON_MAP[room.iconName] ?? MessageSquare
 
         return (
           <Link

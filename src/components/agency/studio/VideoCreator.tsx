@@ -75,7 +75,7 @@ export function VideoCreator({ brandId }: VideoCreatorProps) {
 
   if (!brandId) {
     return (
-      <p className="text-xs text-white/40">Select a brand first.</p>
+      <p className="text-xs text-muted-foreground">Select a brand first.</p>
     )
   }
 
@@ -87,9 +87,9 @@ export function VideoCreator({ brandId }: VideoCreatorProps) {
           value={script}
           onChange={(e) => setScript(e.target.value)}
           placeholder="Write what the AI presenter should say..."
-          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/20"
+          className="w-full rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/30"
         />
-        <p className="mt-1 text-right text-xs text-white/30">{script.length} characters</p>
+        <p className="mt-1 text-right text-xs text-muted-foreground">{script.length} characters</p>
       </div>
 
       <button
@@ -99,8 +99,8 @@ export function VideoCreator({ brandId }: VideoCreatorProps) {
         className={cn(
           'w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors',
           generating || !script.trim()
-            ? 'bg-white/10 text-white/30 cursor-not-allowed'
-            : 'bg-white/15 text-white hover:bg-white/20'
+            ? 'bg-muted text-muted-foreground cursor-not-allowed'
+            : 'bg-primary/15 text-foreground hover:bg-primary/25'
         )}
       >
         {generating ? 'Generating...' : 'Generate Video'}

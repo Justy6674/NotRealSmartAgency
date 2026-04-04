@@ -81,7 +81,9 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
     if (!isDirty || saving) return
     setSaving(true)
     try {
-      const body: Record<string, unknown> = { id: item.id }
+      // Strip the 'post-' or 'output-' prefix to get the raw UUID
+      const rawId = item.id.replace(/^(post|output)-/, '')
+      const body: Record<string, unknown> = { id: rawId }
       if (editedCaption !== item.caption) body.caption = editedCaption
       if (JSON.stringify(editedHashtags) !== JSON.stringify(item.hashtags ?? [])) {
         body.hashtags = editedHashtags
@@ -112,7 +114,7 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
         const res = await fetch('/api/scheduled-posts', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: item.id, status: newStatus }),
+          body: JSON.stringify({ id: item.id.replace(/^(post|output)-/, ''), status: newStatus }),
         })
         if (!res.ok) throw new Error('Failed to update status')
         onUpdated()
