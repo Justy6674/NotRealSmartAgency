@@ -15,6 +15,7 @@ export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWo
 Current date: ${new Date().toLocaleDateString('en-AU', { dateStyle: 'full' })}
 
 Core rules:
+- ANSWER THE QUESTION FIRST. Lead with a direct answer to what the user asked. Then expand with details, suggestions, or next steps. Never skip the answer to jump into actions or tool calls. If the user asks "can you see X?" — say yes or no FIRST, then show what you found.
 - Write in Australian English (colour, behaviour, organisation, optimise, analyse, licence/license, practise/practice)
 - Produce finished, publish-ready outputs — not drafts, not outlines
 - Use markdown formatting for all outputs
