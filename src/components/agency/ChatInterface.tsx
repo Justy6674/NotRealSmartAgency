@@ -160,20 +160,45 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       lines.push(`**Marketing DNA:** ${channels}`)
     }
 
-    // What's missing
-    const missing: string[] = []
+    // Guided onboarding — instead of listing missing items, guide the user
     const hasSocials = (brandMixpost?.length ?? 0) > 0 || (brand.social_urls && Object.keys(brand.social_urls).length > 0)
-    if (!hasSocials) missing.push('social profiles')
-    if (!hasChannels) missing.push('marketing strategy (tell me which platforms to focus on)')
-    if (!brand.competitors || brand.competitors.length === 0) missing.push('competitors')
-    if (!brand.products_services?.length) missing.push('products')
-    if (!brand.target_audience?.demographics) missing.push('target audience')
+    const hasDNA = brand.brand_dna_constraints && Object.keys(brand.brand_dna_constraints).length > 0
 
-    if (missing.length > 0) {
-      lines.push(`\n**Still missing:** ${missing.join(', ')}`)
+    // Count what's set up vs what's missing
+    const setupDone = [
+      brand.description,
+      brand.products_services?.length,
+      brand.target_audience?.demographics,
+      hasSocials,
+      hasChannels,
+      hasDNA,
+      brand.competitors?.length,
+    ].filter(Boolean).length
+    const setupTotal = 7
+
+    if (setupDone < 3) {
+      // Brand is mostly empty — start guided setup
+      lines.push(`\nLet's get you set up — it'll take 2 minutes.\n`)
+      lines.push(`**First question:** Where are your customers? Pick the platforms that matter most — Instagram, TikTok, LinkedIn, Facebook, YouTube — and I'll build your marketing strategy around them.`)
+    } else if (!hasChannels) {
+      // Brand has basics but no marketing strategy
+      lines.push(`\nYou're almost set up. One thing I need to start creating content:\n`)
+      lines.push(`**Where should I focus?** Which platforms matter most for ${brand.name}? For example: "TikTok and Instagram" or "LinkedIn mainly". I'll set your Marketing DNA and everything I create will follow it.`)
+    } else if (!hasDNA) {
+      // Has strategy but no brand voice rules
+      lines.push(`\nYour marketing strategy is set. One more thing to protect your brand:\n`)
+      lines.push(`**What should ${brand.name} never say?** Any words or phrases that don't fit your brand? Any rules about how you communicate? This helps me keep your voice consistent across everything.`)
+    } else {
+      // Fully set up — show what they can do
+      lines.push(`\nYou're all set. I can:`)
+      lines.push(`- **Write content** for your platforms`)
+      lines.push(`- **Fill your calendar** for the next 2 weeks`)
+      lines.push(`- **Run a full campaign** (type /campaign)`)
+      lines.push(`- **Design graphics** in Canva`)
+      lines.push(`- **Create videos** with HeyGen`)
+      lines.push(`- **Scan competitors** and find gaps`)
+      lines.push(`\nWhat would you like to work on?`)
     }
-
-    lines.push(`\nWhat would you like to work on?`)
 
     const greeting = lines.join('\n')
 
