@@ -35,6 +35,357 @@ async function getCanvaApiKey(
   return process.env.CANVA_API_KEY ?? null
 }
 
+function noKeyError() {
+  return {
+    success: false,
+    error:
+      'No Canva API key connected. To use Canva features, connect your Canva account: go to canva.com/developers to get an API key, then tell me and I\'ll save it for you.',
+  }
+}
+
+async function canvaFetch(apiKey: string, path: string, options?: RequestInit) {
+  const res = await fetch(`${CANVA_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(
+      `Canva API error (${res.status}): ${err.message || err.code || 'Unknown error'}`
+    )
+  }
+
+  return res.json()
+}
+
+// ---------------------------------------------------------------------------
+// Search designs by keyword
+// ---------------------------------------------------------------------------
+export function createSearchDesignsTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Search existing designs in the connected Canva account by keyword. Use this to find designs, images, presentations, or any files the user has in Canva.',
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe('Search term to find designs by title or content'),
+      ownership: z
+        .enum(['any', 'owned', 'shared'])
+        .default('any')
+        .describe('Filter by ownership: any, owned, or shared'),
+    }),
+    execute: async ({ query, ownership }) => {
+      const apiKey = await getCanvaApiKey(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const params = new URLSearchParams({
+          query,
+          ownership,
+          sort_by: 'relevance',
+        })
+
+        const data = await canvaFetch(apiKey, `/designs?${params}`)
+        const items = data.items ?? []
+
+        if (items.length === 0) {
+          return {
+            success: true,
+            count: 0,
+            message: `No designs found matching "${query}". Try a different search term or check folder contents with search_folders.`,
+          }
+        }
+
+        const results = items.map(
+          (d: { id: string; title: string; urls?: { edit_url?: string; view_url?: string }; thumbnail?: { url?: string }; updated_at?: string }) => ({
+            id: d.id,
+            title: d.title,
+            edit_url: d.urls?.edit_url,
+            view_url: d.urls?.view_url,
+            thumbnail: d.thumbnail?.url,
+            updated_at: d.updated_at,
+          })
+        )
+
+        return {
+          success: true,
+          count: results.length,
+          designs: results,
+          message: `Found ${results.length} design(s) matching "${query}":\n${results.map((r: { title: string; edit_url?: string }, i: number) => `${i + 1}. **${r.title}** — [Open in Canva](${r.edit_url})`).join('\n')}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to search Canva designs',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Search folders
+// ---------------------------------------------------------------------------
+export function createSearchFoldersTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Search folders in the connected Canva account by name. Use to find where brand assets, templates, or project files are organised.',
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe('Search term to match against folder names'),
+    }),
+    execute: async ({ query }) => {
+      const apiKey = await getCanvaApiKey(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const params = new URLSearchParams({ query, ownership: 'any' })
+        const data = await canvaFetch(apiKey, `/folders/search?${params}`)
+        const items = data.items ?? []
+
+        if (items.length === 0) {
+          return {
+            success: true,
+            count: 0,
+            message: `No folders found matching "${query}". Try searching for designs directly with search_designs.`,
+          }
+        }
+
+        const results = items.map(
+          (f: { id: string; name: string; thumbnail?: { url?: string }; updated_at?: string }) => ({
+            id: f.id,
+            name: f.name,
+            thumbnail: f.thumbnail?.url,
+            updated_at: f.updated_at,
+          })
+        )
+
+        return {
+          success: true,
+          count: results.length,
+          folders: results,
+          message: `Found ${results.length} folder(s) matching "${query}":\n${results.map((f: { name: string; id: string }, i: number) => `${i + 1}. **${f.name}** (ID: ${f.id})`).join('\n')}\n\nUse list_folder_items with a folder ID to see what's inside.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to search Canva folders',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// List folder items
+// ---------------------------------------------------------------------------
+export function createListFolderItemsTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Browse the contents of a Canva folder. Returns designs, images, and subfolders. Use folder ID from search_folders, or "root" for top-level items.',
+    inputSchema: z.object({
+      folder_id: z
+        .string()
+        .describe('Folder ID to browse, or "root" for top-level'),
+      item_types: z
+        .array(z.enum(['design', 'folder', 'image']))
+        .optional()
+        .describe('Filter by item type(s)'),
+    }),
+    execute: async ({ folder_id, item_types }) => {
+      const apiKey = await getCanvaApiKey(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const params = new URLSearchParams({
+          sort_by: 'modified_descending',
+        })
+        if (item_types?.length) {
+          for (const t of item_types) {
+            params.append('item_types', t)
+          }
+        }
+
+        const data = await canvaFetch(
+          apiKey,
+          `/folders/${folder_id}/items?${params}`
+        )
+        const items = data.items ?? []
+
+        if (items.length === 0) {
+          return {
+            success: true,
+            count: 0,
+            message: 'This folder is empty.',
+          }
+        }
+
+        const results = items.map(
+          (item: { type: string; folder?: { id: string; name: string }; design?: { id: string; title: string; urls?: { edit_url?: string }; thumbnail?: { url?: string } }; image?: { id: string; urls?: { view_url?: string }; thumbnail?: { url?: string } } }) => {
+            if (item.type === 'folder') {
+              return { type: 'folder', id: item.folder?.id, name: item.folder?.name }
+            }
+            if (item.type === 'design') {
+              return {
+                type: 'design',
+                id: item.design?.id,
+                title: item.design?.title,
+                edit_url: item.design?.urls?.edit_url,
+                thumbnail: item.design?.thumbnail?.url,
+              }
+            }
+            // image
+            return {
+              type: 'image',
+              id: item.image?.id,
+              view_url: item.image?.urls?.view_url,
+              thumbnail: item.image?.thumbnail?.url,
+            }
+          }
+        )
+
+        const lines = results.map(
+          (r: { type: string; title?: string; name?: string; id?: string; edit_url?: string; view_url?: string }, i: number) => {
+            if (r.type === 'folder') return `${i + 1}. 📁 **${r.name}** (folder ID: ${r.id})`
+            if (r.type === 'design') return `${i + 1}. 🎨 **${r.title}** — [Open](${r.edit_url})`
+            return `${i + 1}. 🖼️ Image — [View](${r.view_url})`
+          }
+        )
+
+        return {
+          success: true,
+          count: results.length,
+          items: results,
+          message: `Folder contains ${results.length} item(s):\n${lines.join('\n')}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to list folder items',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// List brand kits
+// ---------------------------------------------------------------------------
+export function createListBrandKitsTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'List brand kits available in the connected Canva account. Brand kits contain colours, fonts, and logos. Use to find a brand_kit_id for on-brand design creation.',
+    inputSchema: z.object({}),
+    execute: async () => {
+      const apiKey = await getCanvaApiKey(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const data = await canvaFetch(apiKey, '/brand-kits')
+        const kits = data.items ?? []
+
+        if (kits.length === 0) {
+          return {
+            success: true,
+            count: 0,
+            message:
+              'No brand kits found in Canva. You can create one at canva.com → Brand Kit to set up your brand colours, fonts, and logos.',
+          }
+        }
+
+        const results = kits.map(
+          (k: { id: string; name: string; thumbnail?: { url?: string } }) => ({
+            id: k.id,
+            name: k.name,
+            thumbnail: k.thumbnail?.url,
+          })
+        )
+
+        return {
+          success: true,
+          count: results.length,
+          brand_kits: results,
+          message: `Found ${results.length} brand kit(s):\n${results.map((k: { name: string; id: string }, i: number) => `${i + 1}. **${k.name}** (ID: ${k.id})`).join('\n')}\n\nI can use these to create on-brand designs with your colours and fonts.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to list brand kits',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Get design details
+// ---------------------------------------------------------------------------
+export function createGetDesignTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Get detailed information about a specific Canva design by its ID. Returns title, owner, thumbnail, edit/view URLs, and page count.',
+    inputSchema: z.object({
+      design_id: z
+        .string()
+        .describe('Canva design ID (starts with D, 11 chars)'),
+    }),
+    execute: async ({ design_id }) => {
+      const apiKey = await getCanvaApiKey(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const data = await canvaFetch(apiKey, `/designs/${design_id}`)
+        const d = data.design
+
+        return {
+          success: true,
+          design: {
+            id: d.id,
+            title: d.title,
+            owner: d.owner?.display_name,
+            page_count: d.page_count,
+            edit_url: d.urls?.edit_url,
+            view_url: d.urls?.view_url,
+            thumbnail: d.thumbnail?.url,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
+          },
+          message: `**${d.title}**\n- Pages: ${d.page_count}\n- Last updated: ${d.updated_at}\n- [Open in Canva](${d.urls?.edit_url})`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to get design details',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Design graphic (upgraded — now supports brand kits)
+// ---------------------------------------------------------------------------
 export function createDesignGraphicTool(
   supabase: SupabaseClient,
   userId: string,
@@ -42,7 +393,7 @@ export function createDesignGraphicTool(
 ) {
   return tool({
     description:
-      'Create a graphic design using Canva. Use for social media posts, stories, presentations, thumbnails, and documents. Describe what you want and pick a format.',
+      'Create a graphic design using Canva. Supports social media posts, stories, presentations, thumbnails, and documents. Optionally use a brand_kit_id (from list_brand_kits) for on-brand colours and fonts.',
     inputSchema: z.object({
       prompt: z
         .string()
@@ -66,17 +417,15 @@ export function createDesignGraphicTool(
         .string()
         .optional()
         .describe('Brand name to include in the design'),
+      brand_kit_id: z
+        .string()
+        .optional()
+        .describe('Canva brand kit ID for on-brand colours and fonts (from list_brand_kits)'),
     }),
-    execute: async ({ prompt, format, brand_name }) => {
+    execute: async ({ prompt, format, brand_name, brand_kit_id }) => {
       const apiKey = await getCanvaApiKey(supabase, userId)
 
-      if (!apiKey) {
-        return {
-          success: false,
-          error:
-            'No Canva API key connected. To create designs, connect your Canva account: go to canva.com/developers to get an API key, then tell me and I\'ll save it for you.',
-        }
-      }
+      if (!apiKey) return noKeyError()
 
       const dims = FORMAT_DIMENSIONS[format]
       const designTitle = brand_name
@@ -84,55 +433,41 @@ export function createDesignGraphicTool(
         : dims.title_suffix
 
       try {
-        // Step 1: Create the design
-        const createRes = await fetch(`${CANVA_BASE_URL}/designs`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+        // Build request body
+        const body: Record<string, unknown> = {
+          design_type: {
+            type: 'custom',
+            width: dims.width,
+            height: dims.height,
           },
-          body: JSON.stringify({
-            design_type: {
-              type: 'custom',
-              width: dims.width,
-              height: dims.height,
-            },
-            title: designTitle,
-          }),
-        })
-
-        if (!createRes.ok) {
-          const err = await createRes.json().catch(() => ({}))
-          return {
-            success: false,
-            error: `Canva API error (${createRes.status}): ${err.message || err.code || 'Unknown error'}. Check your API key is valid.`,
-          }
+          title: designTitle,
         }
 
-        const createData = await createRes.json()
+        // If brand kit provided, attach it
+        if (brand_kit_id) {
+          body.brand_kit_id = brand_kit_id
+        }
+
+        const createData = await canvaFetch(apiKey, '/designs', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+
         const designId = createData.design?.id
         const editUrl = createData.design?.urls?.edit_url
 
-        // Step 2: Try to get thumbnail
+        // Try to get thumbnail
         let thumbnailUrl: string | null = null
         if (designId) {
           try {
-            const thumbRes = await fetch(
-              `${CANVA_BASE_URL}/designs/${designId}`,
-              {
-                headers: { Authorization: `Bearer ${apiKey}` },
-              }
-            )
-            if (thumbRes.ok) {
-              const thumbData = await thumbRes.json()
-              thumbnailUrl = thumbData.design?.thumbnail?.url ?? null
-            }
+            const thumbData = await canvaFetch(apiKey, `/designs/${designId}`)
+            thumbnailUrl = thumbData.design?.thumbnail?.url ?? null
           } catch {
             // Thumbnail fetch is best-effort
           }
         }
 
-        // Fetch brand name if not provided
+        // Resolve brand name if not provided
         let resolvedBrandName = brand_name
         if (!resolvedBrandName) {
           const { data: brand } = await supabase
@@ -151,7 +486,8 @@ export function createDesignGraphicTool(
           format,
           dimensions: `${dims.width}x${dims.height}`,
           title: designTitle,
-          message: `I've created a ${dims.title_suffix} design${resolvedBrandName ? ` for ${resolvedBrandName}` : ''} in Canva. You can open and edit it here: ${editUrl}\n\nDesign prompt: "${prompt}"\n\nOnce you're happy with it, tell me to export it and I'll download it as a PNG, JPG, or PDF.`,
+          brand_kit_applied: !!brand_kit_id,
+          message: `I've created a ${dims.title_suffix} design${resolvedBrandName ? ` for ${resolvedBrandName}` : ''}${brand_kit_id ? ' using your brand kit colours and fonts' : ''} in Canva. You can open and edit it here: ${editUrl}\n\nDesign prompt: "${prompt}"\n\nOnce you're happy with it, tell me to export it and I'll download it as a PNG, JPG, or PDF.`,
         }
       } catch (err) {
         return {
@@ -166,6 +502,9 @@ export function createDesignGraphicTool(
   })
 }
 
+// ---------------------------------------------------------------------------
+// Export design (unchanged)
+// ---------------------------------------------------------------------------
 export function createExportDesignTool(
   supabase: SupabaseClient,
   userId: string
@@ -183,37 +522,18 @@ export function createExportDesignTool(
     execute: async ({ design_id, format }) => {
       const apiKey = await getCanvaApiKey(supabase, userId)
 
-      if (!apiKey) {
-        return {
-          success: false,
-          error:
-            'No Canva API key connected. To export designs, connect your Canva account first.',
-        }
-      }
+      if (!apiKey) return noKeyError()
 
       try {
         // Step 1: Start the export
-        const exportRes = await fetch(`${CANVA_BASE_URL}/exports`, {
+        const exportData = await canvaFetch(apiKey, '/exports', {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
             design_id,
             format: { type: format },
           }),
         })
 
-        if (!exportRes.ok) {
-          const err = await exportRes.json().catch(() => ({}))
-          return {
-            success: false,
-            error: `Canva export error (${exportRes.status}): ${err.message || err.code || 'Unknown error'}`,
-          }
-        }
-
-        const exportData = await exportRes.json()
         const exportId = exportData.export?.id
 
         if (!exportId) {
@@ -227,40 +547,38 @@ export function createExportDesignTool(
         for (let i = 0; i < maxAttempts; i++) {
           await new Promise((resolve) => setTimeout(resolve, pollInterval))
 
-          const statusRes = await fetch(
-            `${CANVA_BASE_URL}/exports/${exportId}`,
-            {
-              headers: { Authorization: `Bearer ${apiKey}` },
+          try {
+            const statusData = await canvaFetch(
+              apiKey,
+              `/exports/${exportId}`
+            )
+            const status = statusData.export?.status
+
+            if (status === 'completed') {
+              const downloadUrl =
+                statusData.export?.urls?.[0]?.url ??
+                statusData.export?.download_url
+
+              return {
+                success: true,
+                export_id: exportId,
+                design_id,
+                format,
+                download_url: downloadUrl,
+                message: downloadUrl
+                  ? `Your design has been exported as ${format.toUpperCase()}. Download it here: ${downloadUrl}`
+                  : `Export completed but no download URL was returned. Export ID: ${exportId}`,
+              }
             }
-          )
 
-          if (!statusRes.ok) continue
-
-          const statusData = await statusRes.json()
-          const status = statusData.export?.status
-
-          if (status === 'completed') {
-            const downloadUrl =
-              statusData.export?.urls?.[0]?.url ??
-              statusData.export?.download_url
-
-            return {
-              success: true,
-              export_id: exportId,
-              design_id,
-              format,
-              download_url: downloadUrl,
-              message: downloadUrl
-                ? `Your design has been exported as ${format.toUpperCase()}. Download it here: ${downloadUrl}`
-                : `Export completed but no download URL was returned. Export ID: ${exportId}`,
+            if (status === 'failed') {
+              return {
+                success: false,
+                error: 'Canva export failed. The design may be empty or corrupted.',
+              }
             }
-          }
-
-          if (status === 'failed') {
-            return {
-              success: false,
-              error: 'Canva export failed. The design may be empty or corrupted.',
-            }
+          } catch {
+            // Poll attempt failed, continue
           }
         }
 

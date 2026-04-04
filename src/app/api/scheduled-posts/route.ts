@@ -84,3 +84,62 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json(data)
 }
+
+const CreateSchema = z.object({
+  brandId: z.string().uuid(),
+  platform: z.enum(['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube']),
+  caption: z.string().min(1),
+  hashtags: z.array(z.string()).optional().default([]),
+  scheduled_at: z.string(),
+  status: z.enum(['draft', 'scheduled']).optional().default('draft'),
+})
+
+export async function POST(request: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
+
+  const body = await request.json()
+  const parsed = CreateSchema.safeParse(body)
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
+  }
+
+  const { brandId, platform, caption, hashtags, scheduled_at, status } = parsed.data
+
+  // Verify brand belongs to the user
+  const { data: brand, error: brandError } = await supabase
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (brandError || !brand) {
+    return NextResponse.json({ error: 'Brand not found or access denied' }, { status: 403 })
+  }
+
+  const { data, error } = await supabase
+    .from('scheduled_posts')
+    .insert({
+      user_id: user.id,
+      brand_id: brandId,
+      platform,
+      caption,
+      hashtags,
+      scheduled_at,
+      status,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json(data, { status: 201 })
+}

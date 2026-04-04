@@ -26,7 +26,7 @@ export function AgencyHeader() {
   }, [activeBrandId])
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
+    <div className="flex h-12 shrink-0 items-center gap-3 px-4">
       {/* Brand logo + name */}
       {brand && (
         <div className="flex items-center gap-2 shrink-0">
