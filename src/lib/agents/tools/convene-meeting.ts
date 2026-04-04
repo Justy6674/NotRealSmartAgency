@@ -1,16 +1,20 @@
-import { tool, generateText } from 'ai'
-import { gateway } from '@ai-sdk/gateway'
+/**
+ * convene_meeting — Spawn multiple independent agent workers in parallel.
+ *
+ * Each department is a genuinely separate agent with its own model, memory,
+ * tools, and budget. All run simultaneously via Promise.allSettled().
+ * Results are collected and returned to the Director for synthesis.
+ */
+
+import { tool } from 'ai'
 import { z } from 'zod/v3'
+import type { Brand } from '@/types/database'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AgentType, Brand, AgentConfig } from '@/types/database'
-import { AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
-import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
-import { getToolsForAgent } from './index'
+import { AGENT_LABELS, type AgentType } from '@/types/database'
+import { runParallelAgents, type WorkerContext } from '@/lib/agents/worker'
 import { logAudit } from '@/lib/agents/audit'
-import { getOrCreateAgentRegistry, recordAgentSpend } from '@/lib/agents/registry'
 
 // ─── Per-department meeting briefs ───────────────────────────────────────────
-// Each department gets a tailored brief so they know exactly what deep analysis to produce
 
 const DEPARTMENT_MEETING_BRIEFS: Record<string, string> = {
   competitor: `As Market Intelligence, produce a DEEP competitive analysis:
@@ -37,7 +41,7 @@ This should be an actionable SEO playbook, not a list of suggestions.`,
 - Create 3-5 sample content pieces (social posts, blog outlines, ad copy) ready to publish
 - Content pillar strategy with 10+ topic ideas per pillar
 - Platform-specific content recommendations (what works on each channel)
-- Content repurposing strategy (one piece → multiple formats)
+- Content repurposing strategy (one piece to multiple formats)
 - Calls-to-action that are compliant with AHPRA/TGA where applicable
 - Publishing cadence and content calendar framework
 This should include ACTUAL COPY the brand can use, not just recommendations.`,
@@ -60,7 +64,6 @@ This should be a measurement playbook that can be implemented immediately.`,
 - Safe language guide specific to this brand's services
 - Mandatory disclaimers and disclosures required
 - Risk register with severity ratings and mitigation strategies
-- Upcoming regulatory changes that could affect this brand
 This should be a compliance manual, not a checklist.`,
 
   strategy: `As Strategy & Launch, produce a COMPREHENSIVE go-to-market plan:
@@ -91,7 +94,7 @@ This should be a campaign blueprint ready for setup.`,
 - Newsletter strategy with content themes and frequency
 - Email automation triggers and workflows
 - Subject line formulas and A/B testing plan
-- Compliance requirements (Australian Spam Act, unsubscribe, ABN)
+- Compliance (Australian Spam Act, unsubscribe, ABN)
 This should include ACTUAL email outlines, not just recommendations.`,
 
   growth: `As Growth & Partnerships, produce a DETAILED growth strategy:
@@ -122,16 +125,14 @@ This should be a brand bible section, not bullet points.`,
 - Social proof and trust signal placement strategy
 This should be a website brief a developer can build from.`,
 
-  video: `As Video & Scripting, produce PLATFORM-SPECIFIC video scripts for each key message:
-- Create scene-by-scene script breakdowns (Scene / Visual / Audio / CTA)
-- Produce variants for each platform: Instagram Reels (9:16, 60s), TikTok (9:16, 15–60s), YouTube Shorts (9:16, 60s), LinkedIn (1:1, 30–120s)
-- Hook MUST appear in first 3 seconds (question, bold claim, or visual interrupt)
+  video: `As Video & Scripting, produce PLATFORM-SPECIFIC video scripts:
+- Scene-by-scene script breakdowns (Scene / Visual / Audio / CTA)
+- Variants for: Instagram Reels (9:16, 60s), TikTok (9:16, 15-60s), YouTube Shorts (9:16, 60s), LinkedIn (1:1, 30-120s)
+- Hook MUST appear in first 3 seconds
 - Reference brand video preferences (avatar, accent, presenter style, background)
 - Include presenter direction: tone, pace, gestures, eye contact
-- Reference engagement benchmarks to justify format choices
-- For AHPRA/TGA brands: NO therapeutic claims, NO before/after, NO testimonials — use "journey" framing
-- Include CTA placement guidance (where in the video, what to say)
-- Suggest trending audio or music mood per platform
+- For AHPRA/TGA brands: NO therapeutic claims, NO before/after, NO testimonials
+- Include CTA placement guidance
 This should include READY-TO-FILM scripts with every line of dialogue written out.`,
 
   automation: `As Automation & AI, produce a COMPLETE automation strategy:
@@ -155,211 +156,43 @@ interface MeetingContext {
 
 const DEPARTMENT_TYPES = [
   'content', 'seo', 'paid_ads', 'strategy', 'email', 'growth',
-  'brand', 'competitor', 'website', 'compliance', 'analytics', 'automation',
+  'brand', 'competitor', 'website', 'compliance', 'analytics', 'automation', 'video',
 ] as const
 
-const outputTypeMap: Record<string, string> = {
-  content: 'social_post', seo: 'seo_audit', paid_ads: 'ad_copy',
-  strategy: 'strategy_doc', email: 'email_sequence', growth: 'strategy_doc',
-  brand: 'brand_guide', competitor: 'competitor_report', website: 'landing_page',
-  compliance: 'compliance_check', analytics: 'analytics_report', automation: 'automation_workflow',
-}
-
-async function runDepartment(
-  dept: string,
-  brief: string,
-  allDepartments: string[],
-  ctx: MeetingContext
-): Promise<{
-  department: string
-  result: string
-  costCents: number
-  tokensUsed: number
-  error?: string
-}> {
-  try {
-    // Fetch agent config
-    const { data: agentConfig } = await ctx.supabase
-      .from('agent_configs')
-      .select('*')
-      .eq('agent_type', dept)
-      .single()
-
-    if (!agentConfig) {
-      return { department: dept, result: '', costCents: 0, tokensUsed: 0, error: `Department ${dept} not found` }
-    }
-
-    // Get registry for budget
-    const registry = await getOrCreateAgentRegistry(ctx.supabase, ctx.userId, dept as AgentType)
-
-    // Build system prompt with meeting context
-    const { prompt: basePrompt } = await buildSystemPromptWithMemory(
-      ctx.brand,
-      agentConfig as AgentConfig,
-      brief
-    )
-
-    const otherDepts = allDepartments
-      .filter(d => d !== dept)
-      .map(d => AGENT_LABELS[d as AgentType] ?? d)
-      .join(', ')
-
-    // Get department-specific brief or use generic
-    const deptBrief = DEPARTMENT_MEETING_BRIEFS[dept] ?? ''
-
-    const meetingPrompt = `${basePrompt}
-
----
-
-## MEETING CONTEXT
-
-You are in a **department meeting** chaired by the NRS Director.
-Other departments in this meeting: ${otherDepts}
-
-Your role: provide your **deep specialist expertise** as the ${AGENT_SUBTITLES[dept as AgentType] ?? AGENT_LABELS[dept as AgentType] ?? dept} department head.
-
-${deptBrief}
-
-## OUTPUT REQUIREMENTS — READ CAREFULLY
-
-You are producing a **FULL EXPERT DOCUMENT**, not a summary. This is a formal department contribution to a cross-functional meeting. Your output will be reviewed by the founder and potentially shared with the team.
-
-Rules:
-- **DEPTH over breadth** — go deep on YOUR area, don't try to cover everything
-- **SPECIFICS over generics** — use actual numbers, real platform names, concrete examples
-- **ACTIONABLE over advisory** — every recommendation must say WHO does WHAT by WHEN
-- **EVIDENCE-BASED** — cite the marketing intelligence you have (platform CPCs, regulations, benchmarks)
-- **INCLUDE ACTUAL DELIVERABLES** where possible — sample copy, campaign structures, keyword lists, email outlines
-- Minimum 800 words. If you can write 1500+, do it.
-- Write in Australian English, publish-ready quality
-- Flag any risks, compliance concerns, or dependencies on other departments
-
-The meeting brief from the Director is below. Respond with your FULL department contribution.`
-
-    // Get department tools
-    const departmentTools = getToolsForAgent(dept as AgentType, {
-      supabase: ctx.supabase,
-      userId: ctx.userId,
-      brandId: ctx.brandId,
-      conversationId: ctx.conversationId,
-    })
-
-    // Gateway options
-    const isHealthBrand = ctx.brand.compliance_flags?.ahpra || ctx.brand.compliance_flags?.tga
-    const gatewayOptions = {
-      gateway: {
-        models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'] as string[],
-        user: ctx.userId,
-        tags: [dept, ctx.brand.slug, 'meeting'],
-        ...(isHealthBrand && { zeroDataRetention: true }),
-      },
-    }
-
-    // Give meeting departments web search capability
-    const meetingTools = {
-      ...departmentTools,
-      web_search: gateway.tools.perplexitySearch({
-        maxResults: 5,
-        searchLanguageFilter: ['en'],
-        searchRecencyFilter: 'month',
-      }),
-    }
-
-    // Run with 180s timeout (doubled for deep analysis)
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 180000)
-
-    const result = await generateText({
-      model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
-      system: meetingPrompt,
-      prompt: brief,
-      tools: meetingTools,
-      providerOptions: gatewayOptions,
-      abortSignal: controller.signal,
-    })
-    clearTimeout(timeout)
-
-    // Cost
-    const inputTokens = result.usage?.inputTokens ?? 0
-    const outputTokens = result.usage?.outputTokens ?? 0
-    const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
-
-    // Record spend
-    if (registry) {
-      await recordAgentSpend(ctx.supabase, registry.id, costCents)
-    }
-
-    // Auto-save to output library
-    void ctx.supabase.from('outputs').insert({
-      user_id: ctx.userId,
-      brand_id: ctx.brandId,
-      conversation_id: ctx.conversationId,
-      output_type: outputTypeMap[dept] ?? 'other',
-      title: `[Meeting] ${AGENT_LABELS[dept as AgentType]}: ${brief.slice(0, 60)}`,
-      content: result.text,
-      metadata: { source: 'meeting', department: dept, tokensUsed: inputTokens + outputTokens, costCents },
-    })
-
-    // Audit log
-    await logAudit({
-      supabase: ctx.supabase,
-      userId: ctx.userId,
-      agentId: registry?.id,
-      action: 'meeting_contribution',
-      entityType: 'agent',
-      entityId: dept,
-      detail: { brief: brief.slice(0, 200), inputTokens, outputTokens, costCents },
-      costCents,
-    })
-
-    return {
-      department: dept,
-      result: result.text,
-      costCents,
-      tokensUsed: inputTokens + outputTokens,
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    console.error(`[meeting] ${dept} failed:`, message)
-    return { department: dept, result: '', costCents: 0, tokensUsed: 0, error: message }
-  }
-}
-
 export function createConveneMeetingTool(ctx: MeetingContext) {
+  const workerCtx: WorkerContext = {
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    brandId: ctx.brandId,
+    brand: ctx.brand,
+    conversationId: ctx.conversationId,
+  }
+
   return tool({
     description:
-      'Convene a meeting with multiple department heads. Use this when a request requires input from 2 or more specialist departments. Each department will produce their expert analysis in parallel. After receiving results, you (the Director) should write a synthesis summary.',
+      'Convene a meeting with multiple department heads. Each department runs as an INDEPENDENT agent with its own model, memory, and tools — all executing in PARALLEL. Use when a request requires deep specialist input from 2+ departments. After receiving results, synthesise them into a cohesive response.',
     inputSchema: z.object({
       brief: z.string().describe('Clear meeting brief — what should all departments address'),
       departments: z.array(z.enum(DEPARTMENT_TYPES)).min(2).max(6)
         .describe('Which departments to include in the meeting'),
     }),
     execute: async ({ brief, departments }) => {
-      console.log(`[meeting] Convening: ${departments.join(', ')} — "${brief.slice(0, 80)}"`)
+      console.log(`[meeting] Convening ${departments.length} independent agents: ${departments.join(', ')} — "${brief.slice(0, 80)}"`)
 
-      // Run all departments in parallel
-      const results = await Promise.allSettled(
-        departments.map(dept => runDepartment(dept, brief, departments, ctx))
+      // Spawn all department workers in parallel — each is genuinely independent
+      const { results, errors, totalCostCents, totalTokens, totalDurationMs } = await runParallelAgents(
+        departments.map(dept => ({
+          agentType: dept,
+          task: brief,
+          options: {
+            withWebSearch: true,
+            meetingDepartments: departments,
+            departmentBrief: DEPARTMENT_MEETING_BRIEFS[dept] ?? '',
+            timeoutMs: 180000,
+          },
+        })),
+        workerCtx,
       )
-
-      // Collect results
-      const departmentResults: { department: string; result: string; costCents: number; tokensUsed: number }[] = []
-      const errors: { department: string; error: string }[] = []
-
-      for (const res of results) {
-        if (res.status === 'fulfilled') {
-          if (res.value.error) {
-            errors.push({ department: res.value.department, error: res.value.error })
-          } else {
-            departmentResults.push(res.value)
-          }
-        } else {
-          errors.push({ department: 'unknown', error: res.reason?.message ?? 'Unknown failure' })
-        }
-      }
-
-      const totalCostCents = departmentResults.reduce((sum, r) => sum + r.costCents, 0)
-      const totalTokens = departmentResults.reduce((sum, r) => sum + r.tokensUsed, 0)
 
       // Audit the meeting as a whole
       await logAudit({
@@ -370,10 +203,12 @@ export function createConveneMeetingTool(ctx: MeetingContext) {
         detail: {
           brief: brief.slice(0, 200),
           departments,
-          departmentsCompleted: departmentResults.length,
+          departmentsCompleted: results.length,
           departmentsFailed: errors.length,
           totalTokens,
           totalCostCents,
+          totalDurationMs,
+          models: results.map(r => `${r.department}:${r.model}`),
         },
         costCents: totalCostCents,
       })
@@ -381,15 +216,18 @@ export function createConveneMeetingTool(ctx: MeetingContext) {
       return {
         type: 'meeting',
         brief,
-        departments: departmentResults.map(r => ({
+        departments: results.map(r => ({
           department: r.department,
-          name: AGENT_LABELS[r.department as AgentType] ?? r.department,
+          name: r.departmentName,
           result: r.result,
+          model: r.model,
           costCents: r.costCents,
+          durationMs: r.durationMs,
         })),
-        errors: errors.length > 0 ? errors : undefined,
+        errors: errors.length > 0 ? errors.map(e => ({ department: e.department, error: e.error })) : undefined,
         totalCostCents,
         totalTokens,
+        totalDurationMs,
       }
     },
   })

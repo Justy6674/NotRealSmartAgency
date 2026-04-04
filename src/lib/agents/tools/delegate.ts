@@ -1,12 +1,19 @@
-import { tool, ToolLoopAgent, stepCountIs, generateText } from 'ai'
-import { gateway } from '@ai-sdk/gateway'
+/**
+ * delegate_to_agent — Spawn an independent agent worker for a department.
+ *
+ * Each delegation creates a genuinely separate agent with its own:
+ * - Model (from agent_registry — can differ per department)
+ * - Memory context (retrieved independently per namespace)
+ * - Tool set (assembled per agent type)
+ * - Budget tracking
+ * - Audit trail
+ */
+
+import { tool } from 'ai'
 import { z } from 'zod/v3'
+import type { Brand } from '@/types/database'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AgentType, Brand, AgentConfig } from '@/types/database'
-import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
-import { getToolsForAgent } from './index'
-import { logAudit } from '@/lib/agents/audit'
-import { getOrCreateAgentRegistry, recordAgentSpend } from '@/lib/agents/registry'
+import { runAgentWorker, runParallelAgents, type WorkerContext } from '@/lib/agents/worker'
 
 interface DelegateContext {
   supabase: SupabaseClient
@@ -18,129 +25,70 @@ interface DelegateContext {
 
 const DEPARTMENT_TYPES = [
   'content', 'seo', 'paid_ads', 'strategy', 'email', 'growth',
-  'brand', 'competitor', 'website', 'compliance', 'analytics', 'automation',
+  'brand', 'competitor', 'website', 'compliance', 'analytics', 'automation', 'video',
 ] as const
 
 export function createDelegateTool(ctx: DelegateContext) {
+  const workerCtx: WorkerContext = {
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    brandId: ctx.brandId,
+    brand: ctx.brand,
+    conversationId: ctx.conversationId,
+  }
+
   return tool({
     description:
-      'Delegate a task to a specialist department. Use when the user needs work done by a specific team. The department agent will execute the task and return the result.',
+      'Delegate a task to one or more specialist departments. Each department runs as an INDEPENDENT agent with its own model, memory, and tools. When multiple departments are specified, they run in PARALLEL — not sequentially. Use this for any work that needs specialist expertise.',
     inputSchema: z.object({
-      agentType: z.enum(DEPARTMENT_TYPES).describe('Which department should handle this'),
+      agentType: z.enum(DEPARTMENT_TYPES).describe('Primary department to handle this task'),
       task: z.string().describe('Clear brief of what the department should produce'),
+      parallel: z.array(z.enum(DEPARTMENT_TYPES)).optional()
+        .describe('Additional departments to run in parallel with the primary. Each runs independently with its own model and tools.'),
     }),
-    execute: async ({ agentType, task }) => {
-      try {
-        // Fetch department agent config
-        const { data: agentConfig } = await ctx.supabase
-          .from('agent_configs')
-          .select('*')
-          .eq('agent_type', agentType)
-          .single()
+    execute: async ({ agentType, task, parallel }) => {
+      // If parallel departments specified, run ALL in parallel (including primary)
+      if (parallel?.length) {
+        const allDepts = [agentType, ...parallel.filter(d => d !== agentType)]
+        console.log(`[delegate] Parallel execution: ${allDepts.join(', ')} — "${task.slice(0, 80)}"`)
 
-        if (!agentConfig) {
-          return { error: `Department ${agentType} not found`, department: agentType }
-        }
-
-        // Get/create registry entry for budget tracking
-        const registry = await getOrCreateAgentRegistry(ctx.supabase, ctx.userId, agentType as AgentType)
-
-        // Build department system prompt with memory
-        const { prompt: departmentPrompt } = await buildSystemPromptWithMemory(
-          ctx.brand,
-          agentConfig as AgentConfig,
-          task
+        const { results, errors, totalCostCents, totalTokens, totalDurationMs } = await runParallelAgents(
+          allDepts.map(dept => ({ agentType: dept, task })),
+          workerCtx,
         )
 
-        // Get department tools
-        const departmentTools = getToolsForAgent(agentType as AgentType, {
-          supabase: ctx.supabase,
-          userId: ctx.userId,
-          brandId: ctx.brandId,
-          conversationId: ctx.conversationId,
-        })
-
-        // Gateway options — fallback, tracking, compliance
-        const isHealthBrand = ctx.brand.compliance_flags?.ahpra || ctx.brand.compliance_flags?.tga
-        const gatewayOptions = {
-          gateway: {
-            models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'] as string[],
-            user: ctx.userId,
-            tags: [agentType, ctx.brand.slug, 'delegation'],
-            ...(isHealthBrand && { zeroDataRetention: true }),
-          },
-        }
-
-        // Run subagent with 90s timeout (reduced from 120s to stay within Vercel function limits)
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 90000)
-
-        const result = await generateText({
-          model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
-          system: departmentPrompt,
-          prompt: task,
-          tools: departmentTools,
-          providerOptions: gatewayOptions,
-          abortSignal: controller.signal,
-        })
-        clearTimeout(timeout)
-
-        // Calculate cost
-        const inputTokens = result.usage?.inputTokens ?? 0
-        const outputTokens = result.usage?.outputTokens ?? 0
-        const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
-
-        // Record spend
-        if (registry) {
-          await recordAgentSpend(ctx.supabase, registry.id, costCents)
-        }
-
-        // Auto-save delegation result to output library
-        const outputTypeMap: Record<string, string> = {
-          content: 'social_post', seo: 'seo_audit', paid_ads: 'ad_copy',
-          strategy: 'strategy_doc', email: 'email_sequence', growth: 'strategy_doc',
-          brand: 'brand_guide', competitor: 'competitor_report', website: 'landing_page',
-          compliance: 'compliance_check', analytics: 'analytics_report', automation: 'automation_workflow',
-        }
-        // Auto-save to output library (fire and forget)
-        void ctx.supabase.from('outputs').insert({
-          user_id: ctx.userId,
-          brand_id: ctx.brandId,
-          conversation_id: ctx.conversationId,
-          output_type: outputTypeMap[agentType] ?? 'other',
-          title: `${agentType}: ${task.slice(0, 80)}`,
-          content: result.text,
-          metadata: { source: 'delegation', department: agentType, tokensUsed: inputTokens + outputTokens, costCents },
-        })
-
-        // Audit log
-        await logAudit({
-          supabase: ctx.supabase,
-          userId: ctx.userId,
-          agentId: registry?.id,
-          action: 'delegation_completed',
-          entityType: 'agent',
-          entityId: agentType,
-          detail: {
-            task: task.slice(0, 200),
-            inputTokens,
-            outputTokens,
-            costCents,
-            resultLength: result.text.length,
-          },
-          costCents,
-        })
-
         return {
-          department: agentType,
-          result: result.text,
-          tokensUsed: inputTokens + outputTokens,
-          costCents,
+          type: 'parallel_delegation',
+          departments: results.map(r => ({
+            department: r.department,
+            name: r.departmentName,
+            result: r.result,
+            model: r.model,
+            costCents: r.costCents,
+            durationMs: r.durationMs,
+          })),
+          errors: errors.length > 0 ? errors.map(e => ({ department: e.department, error: e.error })) : undefined,
+          totalCostCents,
+          totalTokens,
+          totalDurationMs,
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error'
-        console.error(`[delegate] ${agentType} failed:`, message)
-        return { error: message, department: agentType }
+      }
+
+      // Single department delegation — still a genuinely independent agent
+      console.log(`[delegate] ${agentType} — "${task.slice(0, 80)}"`)
+      const result = await runAgentWorker(agentType, task, workerCtx)
+
+      if (result.error) {
+        return { error: result.error, department: result.department }
+      }
+
+      return {
+        department: result.department,
+        result: result.result,
+        model: result.model,
+        tokensUsed: result.tokensUsed,
+        costCents: result.costCents,
+        durationMs: result.durationMs,
       }
     },
   })
