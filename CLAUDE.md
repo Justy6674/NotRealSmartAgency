@@ -11,7 +11,8 @@ Every feature, every screen, every interaction must follow this rule:
 > **The LLM drives tomorrow's complexity. The user just talks.**
 
 - **Conversation-first, not form-first.** If data is missing, the agent asks for it in chat — never show a blank form and expect the user to fill it.
-- **One obvious action per screen.** Not 14 sidebar options. Not 5 tabs. One thing to do next.
+- **One screen: brands + chat.** The sidebar shows brands and recent chats. Nothing else. No department buttons, no management links. The Director handles everything.
+- **The Director is the only face.** 14 departments work behind the scenes. The user never sees or picks departments. The Director presents all work as its own.
 - **Auto-fill everything possible.** Scan the website, sync GitHub, guess social handles — without being asked.
 - **Plain language, not jargon.** "Get more customers" not "Growth & Partnerships". "Make me a video" not "Generate video script output".
 - **Minimum clicks to value.** If the user says "make me a TikTok video", the agent should write the script AND trigger generation — not make them navigate to Outputs and click a button.
@@ -43,23 +44,56 @@ Downscale Weight Loss (AHPRA+TGA) | DownscaleDerm (TGA) | TeleCheck | TeleScribe
 
 | Department | Agent Type | Key Tools (all also get create_task, request_approval, handoff_to_department, query_outputs) |
 |---|---|---|
-| NRS Director | `overall` | delegate_to_agent, convene_meeting, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search |
-| Content & Copy | `content` | save_output, word_count, generate_image, generate_slides |
-| SEO & GEO | `seo` | save_output, word_count, scan_website, browse_page, web_search |
-| Paid Ads | `paid_ads` | save_output, word_count, generate_image |
-| Strategy & Launch | `strategy` | save_output, browse_page, generate_slides |
-| Email Marketing | `email` | save_output, word_count, send_email, read_gmail |
+| NRS Director | `overall` | delegate_to_agent, convene_meeting, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search, process_media, repurpose_content, fill_calendar, write_blog, write_ads, write_email_campaign, deep_competitor_scan, manage_posts, analyse_voice, design_graphic, export_design, create_video, save_brand_info, read_proforma, update_proforma, query_calendar, query_analytics, query_outputs, query_media |
+| Content & Copy | `content` | save_output, word_count, generate_image, generate_slides, repurpose_content, write_blog, analyse_voice |
+| SEO & GEO | `seo` | save_output, word_count, scan_website, browse_page, web_search, write_blog |
+| Paid Ads | `paid_ads` | save_output, word_count, generate_image, write_ads |
+| Strategy & Launch | `strategy` | save_output, browse_page, generate_slides, fill_calendar, manage_posts, query_calendar |
+| Email Marketing | `email` | save_output, word_count, send_email, read_gmail, write_email_campaign |
 | Growth & Partnerships | `growth` | save_output, word_count, scan_website, send_email, browse_page, read_gmail |
-| Brand | `brand` | save_output, generate_image |
-| Market Intelligence | `competitor` | save_output, scan_website, browse_page, web_search |
+| Brand | `brand` | save_output, generate_image, design_graphic, export_design, analyse_voice |
+| Market Intelligence | `competitor` | save_output, scan_website, browse_page, web_search, deep_competitor_scan |
 | Web & CRO | `website` | save_output, word_count, scan_website, browse_page, generate_image |
 | Compliance | `compliance` | save_output, scan_website, browse_page |
-| Analytics & Reporting | `analytics` | save_output, scan_website, browse_page |
+| Analytics & Reporting | `analytics` | save_output, scan_website, browse_page, query_analytics |
 | Automation & AI | `automation` | save_output, scan_github, browse_page |
-| Video & Scripting | `video` | save_output, word_count |
+| Video & Scripting | `video` | save_output, word_count, process_media, repurpose_content, create_video, query_media |
 
 > `martech` exists as an archived agent type for backward compat with old conversations — not shown in UI.
-> All agents get `query_outputs` for cross-agent learning (search past work from any department).
+> All agents get `read_proforma` + `query_outputs` for cross-agent learning.
+> Departments are INVISIBLE to the user — Director delegates behind the scenes.
+
+### Master Marketing Proforma
+Each brand has a 21-section structured living document stored in `brand_proforma_sections`:
+executive_snapshot, client_profile, brand_fundamentals, audience, market_context, compliance_profile,
+business_goals, funnel_map, channel_website, channel_seo, channel_social, channel_paid, channel_email,
+content_creative, competitors, kpi_dashboard, gaps_opportunities, wins_losses, risk_register, decision_log,
+thirty_sixty_ninety. Each has RAG status, review cadence, staleness tracking. Auto-populated from brand data.
+
+### Slash Commands (65+)
+Type `/` in chat input → Discord-style autocomplete dropdown. All commands just send natural language
+to the Director. Defined in `src/lib/slash-commands.ts`. Key commands: /post, /blog, /fill, /audit,
+/design, /video, /adcopy, /deepscan, /proforma, /calendar, /analytics, /help.
+
+### Inline Rich Cards
+Chat messages can contain `json:card` code blocks that render as visual cards: PostPreviewCard,
+CalendarWeekCard, AnalyticsSummaryCard, BrandSavedCard. Parser: `src/components/agency/inline/parseInlineCards.ts`.
+
+### Hybrid API Keys
+Canva, HeyGen, Ayrshare tools check `user_integrations` first (power users), fall back to env vars
+(CANVA_API_KEY, HEYGEN_API_KEY, AYRSHARE_API_KEY). Users get everything out of the box.
+
+### Brand Ecosystem
+When chatting about one brand, the Director sees all sibling brands owned by the same user.
+Enables cross-promotion suggestions between related products (TeleScribe + Tele360 + TeleCheck).
+
+### Mixpost Self-Hosted Publisher (LIVE)
+Mixpost Pro installed on BinaryLane VPS (`https://mixpost.notrealsmart.com.au/mixpost`).
+Docker at `/opt/mixpost/docker-compose.yml`. Connected: Facebook Pages, Instagram Business, LinkedIn.
+TikTok pending review. Cron publisher uses Mixpost first, Ayrshare as fallback.
+Env vars: `MIXPOST_API_URL`, `MIXPOST_API_TOKEN` (in .env.local + Vercel).
+Supports video publishing to TikTok, YouTube, Instagram Reels, Facebook Reels.
+Replaces Ayrshare ($299/mo) with $0/month self-hosted publishing.
 
 ## Architecture
 
@@ -168,7 +202,7 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /api/media/transcribe                → Deepgram/Whisper transcription
 /api/media/[mediaItemId]/generate    → AI generates 6 platform captions
 /api/media                           → GET/DELETE media items
-/api/cron/publish-posts              → Cron: publish scheduled posts via Ayrshare
+/api/cron/publish-posts              → Cron: publish via Mixpost (self-hosted) or Ayrshare fallback
 /api/stripe/checkout, portal, webhook → Stripe integration
 ```
 
@@ -178,8 +212,9 @@ Upload → Transcribe → Generate → Schedule → Publish pipeline:
 - 2-layer ASR: Deepgram nova-2 → OpenAI Whisper fallback (`lib/transcription/transcribe.ts`)
 - AI generates 6 platform-specific captions per video (YouTube, TikTok, Instagram, Facebook, LinkedIn, X)
 - `scheduled_posts` table tracks draft → scheduled → publishing → published flow
-- Cron publisher (`/api/cron/publish-posts`, every 5 min) via Ayrshare API
-- Provider settings: Ayrshare + Deepgram in Brand Settings → Video tab
+- Cron publisher (`/api/cron/publish-posts`, every 5 min) via Mixpost API (self-hosted on VPS) with Ayrshare fallback
+- Provider settings: Deepgram in Brand Settings → Video tab
+- Social publishing: Mixpost handles FB, IG, LinkedIn, TikTok, YouTube — connected via OAuth on the VPS
 
 ### Department-Specific Quick Actions
 `QuickActions.tsx` shows contextual buttons per department (not generic). 14 sets of 4-6 buttons with conditional AHPRA/TGA compliance prompts, website scan prompts, and GitHub scan prompts based on brand config.
