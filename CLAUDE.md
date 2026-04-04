@@ -97,19 +97,53 @@ Replaces Ayrshare ($299/mo) with $0/month self-hosted publishing.
 
 ## Architecture
 
-### Agent Execution (AI SDK v6 `streamText`)
-Chat route (`/api/chat/route.ts`) uses `streamText()` (NOT ToolLoopAgent — that breaks streaming). Each request:
+### Agent Execution — True Multi-Agent (AI SDK v6)
+**Director chat** (`/api/chat/route.ts`) uses `streamText()` (NOT ToolLoopAgent). Each request:
 1. Validates request (brandId, agentType, conversationId)
 2. Fetches brand (RLS-protected) + agent config from Supabase
 3. Gets/creates agent registry entry, checks budget (`429` if exceeded)
-4. Builds system prompt: base rules → user work context → brand context → agent system prompt → compliance rules (if AHPRA/TGA)
-5. Retrieves Ruflo memories for context
-6. For Director: runs intent router, appends routing hints to system prompt
-7. Streams via `gateway('anthropic/claude-sonnet-4')` with fallbacks `['openai/gpt-4.1', 'google/gemini-2.5-flash']`
-8. `stopWhen: stepCountIs(5)` — max 5 tool-use steps per turn
-9. `onFinish`: records spend, logs to `ai_usage` + `audit_log`, extracts memories
+4. Builds system prompt with independent memory retrieval per agent namespace
+5. For Director: runs intent router, appends routing hints to system prompt
+6. Streams via `gateway('anthropic/claude-sonnet-4')` with fallbacks
+7. `stopWhen: stepCountIs(5)` — max 5 tool-use steps per turn
+8. `onFinish`: records spend, logs to `ai_usage` + `audit_log`, extracts memories
 
-Director delegates to subagents via `delegate_to_agent` tool (uses `generateText()` internally). Web search (Perplexity via AI Gateway) available to Director, SEO, and Market Intelligence.
+**AgentWorker system** (`lib/agents/worker.ts`) — each department is a genuinely independent agent:
+- **Own model** — reads from `agent_registry.model` per department (configurable)
+- **Own memory** — `buildSystemPromptWithMemory()` searches the agent's own namespace + cross-department brand memories
+- **Own tools** — assembled per agent type via `getToolsForAgent()`
+- **Own budget** — checked and tracked independently, status set to `working`/`idle`
+- **Own audit trail** — model, tokens, cost, duration logged per execution
+- **Step limits** — `stopWhen: stepCountIs(3)` prevents runaway tool loops
+- **Concurrency** — max 4 workers simultaneously via `runParallelAgents()`
+
+**Delegation**: `delegate_to_agent` spawns an AgentWorker. Supports `parallel` field to run multiple departments simultaneously.
+**Meetings**: `convene_meeting` spawns N AgentWorkers in parallel via `Promise.allSettled()`.
+**Heartbeat**: `/api/heartbeat` also uses `runAgentWorker` for consistent execution.
+
+### 14 Agent Personalities (agency-agents pattern)
+Each agent has a deep specialist definition (5,000-6,400 chars) with:
+- Identity & Memory, Core Mission, Critical Rules, Decision Framework
+- Deliverable Templates, Quality Checklist, Success Metrics, Handoff Protocol
+
+| Agent Type | Personality | Specialisation |
+|---|---|---|
+| `overall` | The Orchestrator | Invisible delegation, single point of contact |
+| `content` | The Storyteller | Platform algorithms, voice matching, repurposing |
+| `seo` | The Search Scientist | Topic clusters, GEO/AI search, E-E-A-T |
+| `paid_ads` | The Performance Marketer | ROI-obsessed, platform ad policies |
+| `strategy` | The Strategist | 90-day plans, launch playbooks |
+| `email` | The Relationship Builder | Sequence architecture, Spam Act compliance |
+| `growth` | The Growth Hacker | Growth loops, partnerships, experiments |
+| `brand` | The Brand Guardian | Voice guides, visual identity, consistency |
+| `competitor` | The Intelligence Analyst | Evidence-based profiles, SWOT, gap analysis |
+| `website` | The Conversion Architect | CRO, Core Web Vitals, WCAG 2.1 AA |
+| `compliance` | The Regulatory Shield | AHPRA/TGA expert, risk severity ratings |
+| `analytics` | The Data Translator | Metrics with context, attribution |
+| `automation` | The Systems Architect | Workflow design, integration architecture |
+| `video` | The Visual Director | Platform-native scripts, AI video generation |
+
+Agent personalities are visible in chat during delegation/meetings (coloured badges, tree-structured progress).
 
 ### Intent Router (`lib/agents/intent-router.ts`)
 Rule-based keyword classification that analyses the user's message and suggests which department should handle it. Returns `{ suggestedAgent, confidence, shouldDelegate }`. Injected into Director's system prompt as routing hints — fast and free (no LLM call).
@@ -125,13 +159,34 @@ Rule-based keyword classification that analyses the user's message and suggests 
 - **Known limitations:** Keyword search only (no semantic), regex extraction misses ~40-60% of insights, no deduplication, no importance scoring, no memory decay
 - **Planned replacement:** mem0 self-hosted on Supabase pgvector — LLM-based fact extraction, semantic vector search, memory consolidation, graph relationships. See `project_memory_architecture.md` in memory files.
 
+### Team Members & Invitations
+`team_members` table with roles (`owner`, `admin`, `viewer`) and optional per-brand access (`brand_ids UUID[]`, NULL = all brands). Invite flow via Resend email with token link. Auto-accept on signup via updated `handle_new_user()` trigger.
+- **RLS**: 3 helper functions (`is_owner_or_team_member`, `can_write_for_owner`, `can_access_brand`) replace all 16 table policies
+- **UI**: `/agency/team` page, `InviteTeamDialog`, `/invite/[token]` public landing page
+- **API**: `/api/team` (GET list + POST invite), `/api/team/[id]` (PATCH + DELETE), `/api/team/accept`
+
+### Chat Image/Screenshot Support
+Users can paste (Cmd+V) or drag/drop images into chat. Images are sent as AI SDK v6 `FileUIPart` (base64 data URL) so Claude actually sees them. Video/audio still goes through the media upload pipeline.
+
+### Post Signature Branding
+Per-brand `post_signature` JSONB field on `brands` table. Three formats: plain text, `@mention`, or `#hashtag`. Injected into all agent system prompts as a mandatory attribution rule. Also appended by the cron publisher to scheduled posts before publishing via Mixpost/Ayrshare.
+
+### Mixpost Integration
+- **Client**: `lib/mixpost/client.ts` — fetches connected accounts from Mixpost API
+- **Brand mapping**: `lib/mixpost/brand-mapping.ts` — fuzzy matches Mixpost account names to NRS brands
+- **Auto-greet**: ChatInterface checks Mixpost accounts and shows "Socials: Instagram, Facebook, LinkedIn (connected via Mixpost)" instead of "Still missing: social profiles"
+- **API**: `/api/mixpost/accounts` — cached endpoint for brand-to-social mapping
+
+### Platform Algorithm Intelligence
+`lib/agents/knowledge/social-media-benchmarks.ts` includes deep platform-specific algorithm knowledge:
+TikTok (watch time, completion rate, hook requirements), Instagram (saves/shares weighted, carousel re-engagement, Reels priority), LinkedIn (dwell time, polls, document posts), Facebook (group engagement vs dead page reach), X/Twitter (reply visibility, thread structure, pain-signal discovery), YouTube (CTR + watch time, thumbnail importance). Cross-platform growth tactics: content capsule model, repurposing chains, anti-AI detection, feedback loops.
+
 ### Planned Major Builds (next sessions)
 1. **mem0 memory system** — replace Ruflo with semantic search, LLM extraction, graph memory
-2. **Director auto-greet** — conversation-first onboarding for incomplete brands
-3. **Self-updating knowledge** — daily research cron, agents stay current with AI/marketing trends
+2. **Self-updating knowledge** — daily research cron, agents stay current with AI/marketing trends
 
 ### Meeting Room (Multi-Department Collaboration)
-When the intent router detects 2+ departments needed, the Director uses `convene_meeting` instead of `delegate_to_agent`. All departments run in parallel via `Promise.allSettled`. Each gets meeting context ("you are in a meeting with X, Y, Z — focus on YOUR expertise"). Results returned as structured meeting output. Auto-saved to output library with `[Meeting]` prefix.
+When the intent router detects 2+ departments needed, the Director uses `convene_meeting` instead of `delegate_to_agent`. All departments run as independent AgentWorkers in parallel. Each gets meeting context + department-specific brief. Results returned as structured meeting output with agent personality attribution. Auto-saved to output library with `[Meeting]` prefix.
 
 Compound triggers: comprehensive audit, launch plan, campaign, rebrand, growth strategy, content strategy, competitive analysis, video campaign, review my brand.
 
@@ -190,6 +245,8 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /agency/outputs                → Output library
 /agency/media                  → Media library (upload, transcribe, generate captions)
 /agency/activity               → Activity feed
+/agency/team                   → Team member management
+/invite/[token]                → Public invite acceptance page
 /api/chat                      → streamText streaming endpoint
 /api/heartbeat                 → Cron endpoint
 /api/agents, tasks, goals, approvals, audit, conversations, outputs, brands → CRUD routes
@@ -207,6 +264,10 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /api/scheduled-posts                 → Scheduled posts CRUD
 /api/analytics                       → Analytics data endpoint
 /api/profile                         → User profile GET/PATCH
+/api/team                            → Team members GET list + POST invite
+/api/team/[id]                       → Team member PATCH role + DELETE
+/api/team/accept                     → Accept invitation by token
+/api/mixpost/accounts                → Mixpost connected accounts + brand mapping
 /api/stripe/checkout, portal, webhook → Stripe integration
 ```
 
@@ -229,7 +290,7 @@ users, brands, conversations, messages, outputs, agent_configs,
 agent_registry, agent_memories, goals, tasks, audit_log,
 approval_queue, heartbeats, project_scans, ai_usage,
 media_items, scheduled_posts, brand_proforma_sections,
-user_integrations
+user_integrations, team_members, brand_conversation_log
 ```
 
 ### Three Supabase Clients (don't mix)
