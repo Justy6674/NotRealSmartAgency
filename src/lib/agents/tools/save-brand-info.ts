@@ -47,6 +47,15 @@ export function createSaveBrandInfoTool(
         .describe('Products or services the brand offers'),
       compliance_ahpra: z.boolean().optional().describe('Whether this brand needs AHPRA compliance (Australian health practitioners)'),
       compliance_tga: z.boolean().optional().describe('Whether this brand needs TGA compliance (therapeutic goods)'),
+      channel_strategy: z.object({
+        channels: z.record(z.number()).optional().describe('Platform → percentage allocation, must sum to 100. e.g. { linkedin: 30, youtube: 25, instagram: 20, facebook: 15, tiktok: 10 }'),
+        content_mix: z.record(z.number()).optional().describe('Content type → percentage. e.g. { educational: 40, product: 25, behind_the_scenes: 15, social_proof: 10, engagement: 10 }'),
+        posting_frequency: z.enum(['daily', '3x_week', '2x_week', 'weekly', 'custom']).optional(),
+        avoid: z.array(z.string()).optional().describe('Things to avoid: email_campaigns, google_ads, etc.'),
+        growth_approach: z.enum(['organic', 'paid', 'hybrid', 'community']).optional(),
+        aeo_priority: z.boolean().optional().describe('Prioritise AI engine visibility (AEO/GEO)'),
+        notes: z.string().optional(),
+      }).optional().describe('Marketing channel strategy — the Marketing DNA for this brand'),
     }),
     execute: async (input) => {
       try {
@@ -186,6 +195,15 @@ async function updateBrand(
     products_services?: Array<{ name: string; description: string }>
     compliance_ahpra?: boolean
     compliance_tga?: boolean
+    channel_strategy?: {
+      channels?: Record<string, number>
+      content_mix?: Record<string, number>
+      posting_frequency?: string
+      avoid?: string[]
+      growth_approach?: string
+      aeo_priority?: boolean
+      notes?: string
+    }
   }
 ) {
   if (!brandId) {
@@ -257,6 +275,19 @@ async function updateBrand(
     if (input.compliance_tga !== undefined) flags.tga = input.compliance_tga
     updates.compliance_flags = flags
     changedFields.push('compliance flags')
+  }
+
+  // Update channel strategy (Marketing DNA)
+  if (input.channel_strategy) {
+    const existing = current.channel_strategy ?? {}
+    updates.channel_strategy = {
+      ...existing,
+      ...input.channel_strategy,
+      channels: input.channel_strategy.channels ?? existing.channels,
+      content_mix: input.channel_strategy.content_mix ?? existing.content_mix,
+      avoid: input.channel_strategy.avoid ?? existing.avoid,
+    }
+    changedFields.push('channel strategy')
   }
 
   if (changedFields.length === 0) {

@@ -234,6 +234,32 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`\n**Technical/GitHub Context:**\n${brand.github_context}`)
   }
 
+  // Channel Strategy — the Marketing DNA that drives all content decisions
+  const strategy = brand.channel_strategy
+  if (strategy?.channels && Object.keys(strategy.channels).length > 0) {
+    const channels = Object.entries(strategy.channels)
+      .filter(([, pct]) => pct > 0)
+      .sort(([, a], [, b]) => b - a)
+      .map(([ch, pct]) => `${ch}: ${pct}%`)
+      .join(', ')
+
+    lines.push(`\n**Channel Strategy (Marketing DNA — FOLLOW THIS):**`)
+    lines.push(`Channel allocation: ${channels}`)
+    if (strategy.content_mix) {
+      const mix = Object.entries(strategy.content_mix)
+        .filter(([, pct]) => pct > 0)
+        .map(([type, pct]) => `${type.replace(/_/g, ' ')}: ${pct}%`)
+        .join(', ')
+      lines.push(`Content mix: ${mix}`)
+    }
+    if (strategy.posting_frequency) lines.push(`Posting frequency: ${strategy.posting_frequency.replace(/_/g, ' ')}`)
+    if (strategy.growth_approach) lines.push(`Growth approach: ${strategy.growth_approach}`)
+    if (strategy.aeo_priority) lines.push(`AI Engine Optimisation (AEO): HIGH PRIORITY — optimise all content for AI search citation`)
+    if (strategy.avoid?.length) lines.push(`AVOID: ${strategy.avoid.map(a => a.replace(/_/g, ' ')).join(', ')}`)
+    if (strategy.notes) lines.push(`Strategy notes: ${strategy.notes}`)
+    lines.push(`When creating content, filling calendars, or planning campaigns — ALWAYS follow this channel allocation. Don't distribute equally unless the strategy says so.`)
+  }
+
   // Post Signature — branding appended to all content
   const sig = brand.post_signature
   if (sig?.enabled && sig.text) {

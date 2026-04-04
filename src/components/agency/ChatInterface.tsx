@@ -11,6 +11,7 @@ import type { Brand } from '@/types/database'
 import { Bot } from 'lucide-react'
 import { WelcomeScreen } from './WelcomeScreen'
 import { getFriendlyError } from '@/lib/errors/friendly-messages'
+import { MarketingDNABar } from './MarketingDNABar'
 
 interface ChatInterfaceProps {
   conversationId?: string
@@ -345,6 +346,9 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
           </div>
         )
       })()}
+
+      {/* Marketing DNA Bar — shows channel strategy for the active brand */}
+      {brand && <MarketingDNABar strategy={brand.channel_strategy} brandName={brand.name} />}
 
       {/* Input */}
       <ChatInput

@@ -338,6 +338,7 @@ export interface Brand {
   products_services: ProductService[]
   video_preferences: VideoPreferences
   github_context: string | null
+  channel_strategy: ChannelStrategy
   post_signature: PostSignature
   marketing_status: 'unknown' | 'no_marketing' | 'early_stage' | 'needs_strategy' | 'active' | 'scaling'
   marketing_notes: string | null
@@ -478,6 +479,16 @@ export type GoalStatus = 'planned' | 'active' | 'completed' | 'paused' | 'cancel
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 export type HeartbeatSource = 'cron' | 'event' | 'manual'
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+export interface ChannelStrategy {
+  channels?: Record<string, number>      // platform → percentage (must sum to 100)
+  content_mix?: Record<string, number>   // content type → percentage
+  posting_frequency?: 'daily' | '3x_week' | '2x_week' | 'weekly' | 'custom'
+  avoid?: string[]                       // things to skip: "email_campaigns", "google_ads", etc.
+  growth_approach?: 'organic' | 'paid' | 'hybrid' | 'community'
+  aeo_priority?: boolean                 // prioritise AI engine visibility
+  notes?: string                         // freeform strategy notes
+}
+
 export interface PostSignature {
   enabled?: boolean
   text?: string           // "Developed by Not Real (Artificial) Smart (Intelligence) - Agentic Marketing Agency"
