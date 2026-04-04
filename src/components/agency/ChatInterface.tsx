@@ -233,10 +233,16 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       })
   }, [conversationId, setMessages])
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages + refetch brand after assistant replies (strategy may have changed)
+  const prevMsgCount = useRef(messages.length)
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages])
+    // If a new assistant message arrived, refetch brand data (channel strategy / signature may have changed)
+    if (messages.length > prevMsgCount.current && messages[messages.length - 1]?.role === 'assistant') {
+      fetchBrand()
+    }
+    prevMsgCount.current = messages.length
+  }, [messages, fetchBrand])
 
   const handleSend = async (text: string, images?: { data: string; mimeType: string }[]) => {
     if (!activeBrandId) return // Guard: don't send without a brand
