@@ -4,7 +4,7 @@ import { getMarketingKnowledge } from './knowledge/au-health-marketing-2025'
 import { getSocialMediaKnowledge } from './knowledge/social-media-benchmarks'
 import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
-import { getNamespace, getGlobalNamespace } from '@/lib/ruflo/namespaces'
+import { getNamespace, getGlobalNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
 
 export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null, siblingBrands?: Partial<Brand>[], proformaSummary?: string | null): string {
   const sections: string[] = []
@@ -321,13 +321,16 @@ export async function buildSystemPromptWithMemory(
     const namespace = getNamespace(brand.slug, agentConfig.agent_type)
     const memories = await memorySearch(latestMessage, namespace, 10)
 
-    // Director also gets global agency memory
-    let globalMemories: typeof memories = []
+    // Director gets global agency memory; sub-agents get brand-wide shared memories
+    let crossMemories: typeof memories = []
     if (agentConfig.agent_type === 'overall') {
-      globalMemories = await memorySearch(latestMessage, getGlobalNamespace(), 5)
+      crossMemories = await memorySearch(latestMessage, getGlobalNamespace(), 5)
+    } else {
+      // Sub-agents get cross-department brand context (up to 5 brand-wide memories)
+      crossMemories = await memorySearch(latestMessage, getBrandNamespace(brand.slug), 5)
     }
 
-    const allMemories = [...memories, ...globalMemories]
+    const allMemories = [...memories, ...crossMemories]
 
     if (allMemories.length === 0) {
       return { prompt: basePrompt, memoryCount: 0 }

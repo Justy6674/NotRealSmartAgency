@@ -7,12 +7,15 @@
  * - Its own tool set (assembled per agent type)
  * - Its own budget tracking
  * - Its own audit trail
+ * - Its own status tracking (working/idle in registry)
  *
  * Workers run independently and in parallel via Promise.allSettled().
  * The Director orchestrates by spawning workers, not by prompt-switching.
+ *
+ * Concurrency is limited to MAX_CONCURRENT_WORKERS to prevent rate limits.
  */
 
-import { generateText } from 'ai'
+import { generateText, stepCountIs } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
@@ -20,7 +23,16 @@ import { AGENT_LABELS, AGENT_SUBTITLES } from '@/types/database'
 import { buildSystemPromptWithMemory } from './prompt-builder'
 import { getToolsForAgent } from './tools'
 import { logAudit } from './audit'
-import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from './registry'
+import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget, updateAgentStatus } from './registry'
+
+/** Maximum workers running simultaneously to prevent rate limit exhaustion */
+const MAX_CONCURRENT_WORKERS = 4
+
+/** Agents that should always get web_search during delegation */
+const WEB_SEARCH_AGENTS = new Set<string>(['seo', 'competitor'])
+
+/** Max tool-use steps per worker to prevent infinite loops */
+const MAX_WORKER_STEPS = 3
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -48,12 +60,14 @@ export interface WorkerOptions {
   contextOverride?: string
   /** Timeout in milliseconds (default: 120000 for delegation, 180000 for meetings) */
   timeoutMs?: number
-  /** Whether to add web search tool (default: false) */
+  /** Whether to add web search tool (default: auto-detected based on agent type) */
   withWebSearch?: boolean
   /** Meeting context: other departments in the meeting */
   meetingDepartments?: string[]
   /** Department-specific brief to append */
   departmentBrief?: string
+  /** Max tool-use steps (default: MAX_WORKER_STEPS) */
+  maxSteps?: number
 }
 
 // ─── Output type mapping ────────────────────────────────────────────────────
@@ -122,7 +136,12 @@ export async function runAgentWorker(
       }
     }
 
-    // 4. Build THIS agent's system prompt with ITS OWN memory retrieval
+    // 4. Set THIS agent's status to 'working'
+    if (registry) {
+      await updateAgentStatus(ctx.supabase, registry.id, 'working').catch(() => {})
+    }
+
+    // 5. Build THIS agent's system prompt with ITS OWN memory retrieval
     //    buildSystemPromptWithMemory searches the agent's namespace independently
     const { prompt: basePrompt, memoryCount } = await buildSystemPromptWithMemory(
       ctx.brand,
@@ -130,7 +149,7 @@ export async function runAgentWorker(
       task,
     )
 
-    // 5. Build final prompt with any context overrides
+    // 6. Build final prompt with any context overrides
     let systemPrompt = basePrompt
     if (options.contextOverride) {
       systemPrompt += '\n\n---\n\n' + options.contextOverride
@@ -165,7 +184,7 @@ Rules:
 - Flag risks, compliance concerns, or dependencies on other departments`
     }
 
-    // 6. Assemble THIS agent's tools independently
+    // 7. Assemble THIS agent's tools independently
     const departmentTools = getToolsForAgent(dept as AgentType, {
       supabase: ctx.supabase,
       userId: ctx.userId,
@@ -173,8 +192,9 @@ Rules:
       conversationId: ctx.conversationId,
     })
 
-    // Add web search if requested
-    const tools = options.withWebSearch
+    // 8. Add web search — auto-detect if agent type needs it, or honour explicit option
+    const shouldAddWebSearch = options.withWebSearch ?? WEB_SEARCH_AGENTS.has(dept)
+    const tools = shouldAddWebSearch
       ? {
           ...departmentTools,
           web_search: gateway.tools.perplexitySearch({
@@ -185,7 +205,7 @@ Rules:
         }
       : departmentTools
 
-    // 7. Gateway options — THIS agent's tags
+    // 9. Gateway options — THIS agent's tags
     const isHealthBrand = ctx.brand.compliance_flags?.ahpra || ctx.brand.compliance_flags?.tga
     const gatewayOptions = {
       gateway: {
@@ -196,22 +216,29 @@ Rules:
       },
     }
 
-    // 8. Execute THIS agent independently with ITS OWN model
+    // 10. Execute THIS agent independently with ITS OWN model + step limit
     const controller = new AbortController()
     const timeoutMs = options.timeoutMs ?? (options.meetingDepartments ? 180000 : 120000)
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const maxSteps = options.maxSteps ?? MAX_WORKER_STEPS
 
     const result = await generateText({
       model: gateway(model),
       system: systemPrompt,
       prompt: task,
       tools,
+      stopWhen: stepCountIs(maxSteps),
       providerOptions: gatewayOptions,
       abortSignal: controller.signal,
     })
     clearTimeout(timeout)
 
-    // 9. Track THIS agent's spend independently
+    // 11. Set THIS agent's status back to 'idle'
+    if (registry) {
+      await updateAgentStatus(ctx.supabase, registry.id, 'idle').catch(() => {})
+    }
+
+    // 12. Track THIS agent's spend independently
     const inputTokens = result.usage?.inputTokens ?? 0
     const outputTokens = result.usage?.outputTokens ?? 0
     const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
@@ -220,7 +247,7 @@ Rules:
       await recordAgentSpend(ctx.supabase, registry.id, costCents)
     }
 
-    // 10. Save THIS agent's output independently
+    // 13. Save THIS agent's output independently
     const source = options.meetingDepartments ? 'meeting' : 'delegation'
     void ctx.supabase.from('outputs').insert({
       user_id: ctx.userId,
@@ -232,7 +259,7 @@ Rules:
       metadata: { source, department: dept, model, tokensUsed: inputTokens + outputTokens, costCents, memoryCount },
     })
 
-    // 11. Audit THIS agent's execution independently
+    // 14. Audit THIS agent's execution independently
     await logAudit({
       supabase: ctx.supabase,
       userId: ctx.userId,
@@ -247,6 +274,7 @@ Rules:
         outputTokens,
         costCents,
         memoryCount,
+        maxSteps,
         resultLength: result.text.length,
         durationMs: Date.now() - startTime,
       },
@@ -265,6 +293,15 @@ Rules:
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error(`[worker:${dept}] Failed:`, message)
+
+    // Ensure status is reset to idle on failure
+    try {
+      const registry = await getOrCreateAgentRegistry(ctx.supabase, ctx.userId, dept as AgentType)
+      if (registry) {
+        await updateAgentStatus(ctx.supabase, registry.id, 'idle')
+      }
+    } catch { /* best-effort cleanup */ }
+
     return {
       department: dept,
       departmentName: deptName,
@@ -278,11 +315,12 @@ Rules:
   }
 }
 
-// ─── Parallel Execution ─────────────────────────────────────────────────────
+// ─── Parallel Execution with Concurrency Control ─────────────────────────────
 
 /**
- * Run multiple agent workers in parallel.
+ * Run multiple agent workers in parallel with concurrency limiting.
  * Each agent runs genuinely independently — own model, memory, tools, budget.
+ * Concurrency is capped at MAX_CONCURRENT_WORKERS to prevent rate limit exhaustion.
  */
 export async function runParallelAgents(
   agents: { agentType: string; task: string; options?: WorkerOptions }[],
@@ -296,35 +334,38 @@ export async function runParallelAgents(
 }> {
   const startTime = Date.now()
 
-  const settled = await Promise.allSettled(
-    agents.map(({ agentType, task, options }) =>
-      runAgentWorker(agentType, task, ctx, options)
+  // Concurrency-limited execution — run at most MAX_CONCURRENT_WORKERS at a time
+  const allResults: WorkerResult[] = []
+  const pending = [...agents]
+
+  while (pending.length > 0) {
+    const batch = pending.splice(0, MAX_CONCURRENT_WORKERS)
+    const settled = await Promise.allSettled(
+      batch.map(({ agentType, task, options }) =>
+        runAgentWorker(agentType, task, ctx, options)
+      )
     )
-  )
 
-  const results: WorkerResult[] = []
-  const errors: WorkerResult[] = []
-
-  for (const res of settled) {
-    if (res.status === 'fulfilled') {
-      if (res.value.error) {
-        errors.push(res.value)
+    for (const res of settled) {
+      if (res.status === 'fulfilled') {
+        allResults.push(res.value)
       } else {
-        results.push(res.value)
+        allResults.push({
+          department: 'unknown',
+          departmentName: 'Unknown',
+          result: '',
+          costCents: 0,
+          tokensUsed: 0,
+          model: 'none',
+          durationMs: 0,
+          error: res.reason?.message ?? 'Unknown failure',
+        })
       }
-    } else {
-      errors.push({
-        department: 'unknown',
-        departmentName: 'Unknown',
-        result: '',
-        costCents: 0,
-        tokensUsed: 0,
-        model: 'none',
-        durationMs: 0,
-        error: res.reason?.message ?? 'Unknown failure',
-      })
     }
   }
+
+  const results = allResults.filter(r => !r.error)
+  const errors = allResults.filter(r => !!r.error)
 
   return {
     results,

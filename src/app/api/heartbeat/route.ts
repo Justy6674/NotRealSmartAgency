@@ -1,12 +1,9 @@
-import { generateText } from 'ai'
-import { gateway } from '@ai-sdk/gateway'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildSystemPromptWithMemory } from '@/lib/agents/prompt-builder'
-import { getToolsForAgent } from '@/lib/agents/tools'
-import { recordAgentSpend, checkBudget } from '@/lib/agents/registry'
+import { runAgentWorker, type WorkerContext } from '@/lib/agents/worker'
+import { checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
-import type { Brand, AgentConfig, AgentRegistryEntry, Task } from '@/types/database'
+import type { Brand, AgentRegistryEntry, Task } from '@/types/database'
 
 // Fluid Compute — allow up to 5 minutes for processing multiple agents
 export const maxDuration = 300
@@ -87,36 +84,11 @@ export async function GET(request: Request) {
           ? await supabase.from('brands').select('*').eq('id', task.brand_id).single()
           : { data: null }
 
-        // Fetch agent config
-        const { data: agentConfig } = await supabase
-          .from('agent_configs')
-          .select('*')
-          .eq('agent_type', registry.agent_type)
-          .single()
-
-        if (!agentConfig) continue
-
-        // Build prompt
         const taskPrompt = [
           task.title,
           task.description,
           task.context ? `Context: ${JSON.stringify(task.context)}` : '',
         ].filter(Boolean).join('\n\n')
-
-        const { prompt: systemPrompt } = await buildSystemPromptWithMemory(
-          (brand ?? { slug: 'unknown', name: 'Unknown', niche: '', compliance_flags: { ahpra: false, tga: false, tga_categories: [] } }) as Brand,
-          agentConfig as AgentConfig,
-          taskPrompt
-        )
-
-        // Get tools
-        const tools = getToolsForAgent(registry.agent_type, {
-          supabase,
-          userId: task.user_id,
-          brandId: task.brand_id ?? '',
-          conversationId: null,
-          agentRegistryId: registry.id,
-        })
 
         // Update task status
         await supabase
@@ -124,41 +96,37 @@ export async function GET(request: Request) {
           .update({ status: 'in_progress', started_at: new Date().toISOString() })
           .eq('id', task.id)
 
-        // Execute with full Gateway features
-        const result = await generateText({
-          model: gateway(registry.model || 'anthropic/claude-sonnet-4'),
-          system: systemPrompt,
-          prompt: taskPrompt,
-          tools,
-          providerOptions: {
-            gateway: {
-              models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],
-              user: task.user_id,
-              tags: [registry.agent_type, 'heartbeat'],
-            },
-          },
+        // Execute using the shared AgentWorker — same independent execution as delegation
+        const workerCtx: WorkerContext = {
+          supabase,
+          userId: task.user_id,
+          brandId: task.brand_id ?? '',
+          brand: (brand ?? { slug: 'unknown', name: 'Unknown', niche: '', compliance_flags: { ahpra: false, tga: false, tga_categories: [] } }) as Brand,
+          conversationId: null,
+        }
+
+        const result = await runAgentWorker(registry.agent_type, taskPrompt, workerCtx, {
+          timeoutMs: 240000, // Allow more time for heartbeat tasks
+          maxSteps: 5,
         })
 
-        const inputTokens = result.usage?.inputTokens ?? 0
-        const outputTokens = result.usage?.outputTokens ?? 0
-        const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
+        if (result.error) {
+          throw new Error(result.error)
+        }
 
         // Update task as done
         await supabase
           .from('tasks')
           .update({
             status: 'done',
-            result: { text: result.text, toolResults: result.toolResults },
-            tokens_used: inputTokens + outputTokens,
-            cost_cents: costCents,
+            result: { text: result.result },
+            tokens_used: result.tokensUsed,
+            cost_cents: result.costCents,
             completed_at: new Date().toISOString(),
           })
           .eq('id', task.id)
 
-        // Record spend
-        await recordAgentSpend(supabase, registry.id, costCents)
-
-        // Audit
+        // Audit — worker already logs its own audit, but log the task completion too
         await logAudit({
           supabase,
           userId: task.user_id,
@@ -167,8 +135,13 @@ export async function GET(request: Request) {
           action: 'heartbeat_task_completed',
           entityType: 'task',
           entityId: task.id,
-          detail: { inputTokens, outputTokens, costCents },
-          costCents,
+          detail: {
+            model: result.model,
+            tokensUsed: result.tokensUsed,
+            costCents: result.costCents,
+            durationMs: result.durationMs,
+          },
+          costCents: result.costCents,
         })
 
         // Update heartbeat
