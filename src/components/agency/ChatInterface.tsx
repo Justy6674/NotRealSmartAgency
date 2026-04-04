@@ -148,10 +148,23 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       lines.push(`**Socials:** ${Object.keys(brand.social_urls).join(', ')}`)
     }
 
+    // Channel strategy
+    const cs = brand.channel_strategy
+    const hasChannels = cs?.channels && Object.keys(cs.channels).length > 0
+    if (hasChannels) {
+      const channels = Object.entries(cs!.channels!)
+        .filter(([, pct]) => pct > 0)
+        .sort(([, a], [, b]) => b - a)
+        .map(([ch, pct]) => `${ch} ${pct}%`)
+        .join(', ')
+      lines.push(`**Marketing DNA:** ${channels}`)
+    }
+
     // What's missing
     const missing: string[] = []
     const hasSocials = (brandMixpost?.length ?? 0) > 0 || (brand.social_urls && Object.keys(brand.social_urls).length > 0)
     if (!hasSocials) missing.push('social profiles')
+    if (!hasChannels) missing.push('marketing strategy (tell me which platforms to focus on)')
     if (!brand.competitors || brand.competitors.length === 0) missing.push('competitors')
     if (!brand.products_services?.length) missing.push('products')
     if (!brand.target_audience?.demographics) missing.push('target audience')
