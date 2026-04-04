@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   // Find posts due for publishing
   const { data: duePosts, error } = await supabase
     .from('scheduled_posts')
-    .select('*, brands(name, social_urls), media_items(file_url, file_name)')
+    .select('*, brands(name, social_urls, post_signature), media_items(file_url, file_name)')
     .eq('status', 'scheduled')
     .lte('scheduled_at', new Date().toISOString())
     .limit(20)
@@ -39,6 +39,15 @@ export async function GET(request: Request) {
       const mixpostUrl = process.env.MIXPOST_API_URL // e.g. https://mixpost.notrealsmart.com.au/mixpost
       const mixpostToken = process.env.MIXPOST_API_TOKEN
 
+      // Append brand post signature if configured
+      const sig = (post.brands as Record<string, unknown>)?.post_signature as { enabled?: boolean; text?: string; format?: string; mention?: string; hashtag?: string } | undefined
+      let signatureSuffix = ''
+      if (sig?.enabled) {
+        if (sig.format === 'mention' && sig.mention) signatureSuffix = `\n\n${sig.mention}`
+        else if (sig.format === 'hashtag' && sig.hashtag) signatureSuffix = ` ${sig.hashtag}`
+        else if (sig.text) signatureSuffix = `\n\n${sig.text}`
+      }
+
       let externalPostId: string | null = null
 
       if (mixpostUrl && mixpostToken) {
@@ -59,7 +68,7 @@ export async function GET(request: Request) {
             Authorization: `Bearer ${mixpostToken}`,
           },
           body: JSON.stringify({
-            body: [{ body: post.caption + (post.hashtags?.length ? '\n\n' + post.hashtags.map((h: string) => `#${h}`).join(' ') : '') }],
+            body: [{ body: post.caption + (post.hashtags?.length ? '\n\n' + post.hashtags.map((h: string) => `#${h}`).join(' ') : '') + signatureSuffix }],
             accounts: [], // Mixpost will use all connected accounts of the specified type
             schedule_at: new Date().toISOString(),
             status: 1, // 1 = published
@@ -95,7 +104,7 @@ export async function GET(request: Request) {
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            post: post.caption,
+            post: post.caption + signatureSuffix,
             platforms: [post.platform === 'twitter' ? 'twitter' : post.platform],
             ...(mediaUrl ? { mediaUrls: [mediaUrl] } : {}),
             ...(post.hashtags?.length ? { hashtags: post.hashtags } : {}),

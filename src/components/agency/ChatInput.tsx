@@ -7,12 +7,26 @@ import { useAgencyStore } from '@/stores/agency-store'
 import { filterCommands, type SlashCommand } from '@/lib/slash-commands'
 
 interface ChatInputProps {
-  onSend: (text: string) => void
+  onSend: (text: string, images?: { data: string; mimeType: string }[]) => void
   isLoading: boolean
   placeholder?: string
   brand?: Brand | null
   agentType?: AgentType
   showChips?: boolean
+}
+
+/** Read a File as base64 data (no data: prefix) */
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      // Strip the data:image/...;base64, prefix
+      resolve(result.split(',')[1])
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 // Contextual quick chips — short labels, not full prompts
@@ -180,6 +194,27 @@ export function ChatInput({
     if ((!trimmed && !selectedFile) || isLoading || isUploading) return
 
     if (selectedFile && activeBrandId) {
+      const isImage = selectedFile.type.startsWith('image/')
+
+      if (isImage) {
+        // Images: convert to base64 and send as multimodal message (AI sees the image)
+        setIsUploading(true)
+        try {
+          const base64 = await readFileAsBase64(selectedFile)
+          onSend(trimmed || '', [{ data: base64, mimeType: selectedFile.type }])
+          setSelectedFile(null)
+          setInput('')
+        } catch {
+          onSend(`I tried to attach ${selectedFile.name} but something went wrong. Please try again.`)
+          setSelectedFile(null)
+          setInput('')
+        } finally {
+          setIsUploading(false)
+        }
+        return
+      }
+
+      // Video/audio: upload to media pipeline as before
       setIsUploading(true)
       try {
         const formData = new FormData()
@@ -197,9 +232,7 @@ export function ChatInput({
         }
 
         const mediaItem = await uploadRes.json()
-        const fileType = selectedFile.type.startsWith('video/') ? 'video'
-          : selectedFile.type.startsWith('audio/') ? 'audio'
-          : 'image'
+        const fileType = selectedFile.type.startsWith('video/') ? 'video' : 'audio'
 
         const fileMsg = trimmed
           ? `${trimmed} [Uploaded ${fileType}: ${selectedFile.name}, media_item_id: ${mediaItem.id}]`
@@ -221,6 +254,19 @@ export function ChatInput({
     if (trimmed) {
       onSend(trimmed)
       setInput('')
+    }
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const file = item.getAsFile()
+        if (file) setSelectedFile(file)
+        return
+      }
     }
   }
 
@@ -311,7 +357,16 @@ export function ChatInput({
           {/* File attachment preview */}
           {selectedFile && (
             <div className="mx-4 mt-3 mb-1 flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-xs">
-              <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+              {selectedFile.type.startsWith('image/') ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={URL.createObjectURL(selectedFile)}
+                  alt="Preview"
+                  className="h-10 w-10 shrink-0 rounded object-cover"
+                />
+              ) : (
+                <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" />
+              )}
               <span className="truncate">{selectedFile.name}</span>
               <span className="shrink-0 text-muted-foreground">
                 ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)
@@ -336,6 +391,7 @@ export function ChatInput({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
+            onPaste={handlePaste}
             placeholder={placeholder}
             rows={1}
             disabled={isLoading || isUploading}

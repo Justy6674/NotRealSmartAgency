@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { LogOut, Settings, User } from 'lucide-react'
+import { LogOut, Settings, User, Users } from 'lucide-react'
 
 export function UserMenu() {
   const router = useRouter()
@@ -52,6 +52,13 @@ export function UserMenu() {
             >
               <Settings className="h-3.5 w-3.5" />
               Brand Settings
+            </button>
+            <button
+              onClick={() => { router.push('/agency/team'); setOpen(false) }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+            >
+              <Users className="h-3.5 w-3.5" />
+              Team
             </button>
             <button
               onClick={handleLogout}

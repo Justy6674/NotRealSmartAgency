@@ -338,6 +338,7 @@ export interface Brand {
   products_services: ProductService[]
   video_preferences: VideoPreferences
   github_context: string | null
+  post_signature: PostSignature
   marketing_status: 'unknown' | 'no_marketing' | 'early_stage' | 'needs_strategy' | 'active' | 'scaling'
   marketing_notes: string | null
   is_active: boolean
@@ -477,6 +478,33 @@ export type GoalStatus = 'planned' | 'active' | 'completed' | 'paused' | 'cancel
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
 export type HeartbeatSource = 'cron' | 'event' | 'manual'
 export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+export interface PostSignature {
+  enabled?: boolean
+  text?: string           // "Developed by Not Real (Artificial) Smart (Intelligence) - Agentic Marketing Agency"
+  format?: 'text' | 'mention' | 'hashtag'
+  mention?: string        // "@notrealsmart"
+  hashtag?: string        // "#NotRealSmart"
+  banner_url?: string     // URL to banner image
+}
+
+export type TeamRole = 'owner' | 'admin' | 'viewer'
+export type InviteStatus = 'pending' | 'accepted' | 'revoked'
+
+export interface TeamMember {
+  id: string
+  owner_id: string
+  member_email: string
+  member_id: string | null
+  role: TeamRole
+  brand_ids: string[] | null
+  invite_token: string | null
+  status: InviteStatus
+  invited_at: string
+  accepted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type GoalLevel = 'objective' | 'key_result' | 'task'
 
 export interface AgentRegistryEntry {

@@ -16,9 +16,16 @@ interface ChatInterfaceProps {
   conversationId?: string
 }
 
+interface MixpostBrandSocial {
+  platform: string
+  accountName: string
+  provider: string
+}
+
 export function ChatInterface({ conversationId }: ChatInterfaceProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [brand, setBrandLocal] = useState<Brand | null>(null)
+  const [mixpostSocials, setMixpostSocials] = useState<Record<string, MixpostBrandSocial[]>>({})
   const { activeBrandId, activeAgentType, setConversation, restoreContext } = useAgencyStore()
 
   // Refs so the transport always reads the LATEST values at send time
@@ -45,6 +52,19 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     setBrandLocal(null)
     fetchBrand()
   }, [fetchBrand])
+
+  // Fetch Mixpost connected accounts (cached endpoint, light call)
+  const mixpostFetched = useRef(false)
+  useEffect(() => {
+    if (mixpostFetched.current) return
+    mixpostFetched.current = true
+    fetch('/api/mixpost/accounts')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.brandMapping) setMixpostSocials(data.brandMapping)
+      })
+      .catch(() => {})
+  }, [])
 
   const transport = useMemo(
     () =>
@@ -118,13 +138,19 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       const flags = [brand.compliance_flags.ahpra && 'AHPRA', brand.compliance_flags.tga && 'TGA'].filter(Boolean).join(' + ')
       lines.push(`**Compliance:** ${flags}`)
     }
-    if (brand.social_urls && Object.keys(brand.social_urls).length > 0) {
+    // Social profiles: prefer Mixpost connected accounts, fall back to brand social_urls
+    const brandMixpost = mixpostSocials[brand.id]
+    if (brandMixpost?.length) {
+      const platforms = [...new Set(brandMixpost.map(s => s.platform))]
+      lines.push(`**Socials:** ${platforms.join(', ')} (connected via Mixpost)`)
+    } else if (brand.social_urls && Object.keys(brand.social_urls).length > 0) {
       lines.push(`**Socials:** ${Object.keys(brand.social_urls).join(', ')}`)
     }
 
     // What's missing
     const missing: string[] = []
-    if (!brand.social_urls || Object.keys(brand.social_urls).length === 0) missing.push('social profiles')
+    const hasSocials = (brandMixpost?.length ?? 0) > 0 || (brand.social_urls && Object.keys(brand.social_urls).length > 0)
+    if (!hasSocials) missing.push('social profiles')
     if (!brand.competitors || brand.competitors.length === 0) missing.push('competitors')
     if (!brand.products_services?.length) missing.push('products')
     if (!brand.target_audience?.demographics) missing.push('target audience')
@@ -198,9 +224,20 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
-  const handleSend = async (text: string) => {
+  const handleSend = async (text: string, images?: { data: string; mimeType: string }[]) => {
     if (!activeBrandId) return // Guard: don't send without a brand
-    await sendMessage({ text })
+
+    if (images?.length) {
+      // Multimodal message: text + file parts (AI SDK v6 FileUIPart format)
+      const files = images.map(img => ({
+        type: 'file' as const,
+        mediaType: img.mimeType,
+        url: `data:${img.mimeType};base64,${img.data}`,
+      }))
+      await sendMessage({ text: text || 'What do you see in this image?', files })
+    } else {
+      await sendMessage({ text })
+    }
 
     // Create conversation on first message if no conversationId
     if (!conversationId && activeBrandId && messages.length === 0) {

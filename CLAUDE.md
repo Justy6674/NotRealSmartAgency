@@ -203,6 +203,10 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /api/media/[mediaItemId]/generate    → AI generates 6 platform captions
 /api/media                           → GET/DELETE media items
 /api/cron/publish-posts              → Cron: publish via Mixpost (self-hosted) or Ayrshare fallback
+/api/cron/daily-intel                → Cron: daily intelligence research
+/api/scheduled-posts                 → Scheduled posts CRUD
+/api/analytics                       → Analytics data endpoint
+/api/profile                         → User profile GET/PATCH
 /api/stripe/checkout, portal, webhook → Stripe integration
 ```
 
@@ -224,7 +228,8 @@ Upload → Transcribe → Generate → Schedule → Publish pipeline:
 users, brands, conversations, messages, outputs, agent_configs,
 agent_registry, agent_memories, goals, tasks, audit_log,
 approval_queue, heartbeats, project_scans, ai_usage,
-media_items, scheduled_posts
+media_items, scheduled_posts, brand_proforma_sections,
+user_integrations
 ```
 
 ### Three Supabase Clients (don't mix)
@@ -250,7 +255,7 @@ All tools in `lib/agents/tools/`. Factory functions take context (supabase, user
 - **AHPRA/TGA compliance** — $60K/$120K penalties per offence
 - **Trigger function is `update_updated_at()`** not `update_updated_at_column()`
 - **Supabase creds in `.env.local`** — never ask for them, just use them
-- **DB password:** `IloveBB0307$$`
+- **DB password** is in `.env.local` — never hardcode or commit it
 - **streamText works, ToolLoopAgent breaks** — never switch to ToolLoopAgent for chat
 
 ## Key Conventions

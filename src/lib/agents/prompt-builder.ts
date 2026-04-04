@@ -233,6 +233,21 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`\n**Technical/GitHub Context:**\n${brand.github_context}`)
   }
 
+  // Post Signature — branding appended to all content
+  const sig = brand.post_signature
+  if (sig?.enabled && sig.text) {
+    lines.push(`\n**Post Signature (MANDATORY):**`)
+    lines.push(`Every piece of content you produce (social posts, blog articles, email campaigns, video scripts, ad copy) MUST include this attribution at the end:`)
+    if (sig.format === 'mention' && sig.mention) {
+      lines.push(`- Append this at the very end of every caption/post: ${sig.mention}`)
+    } else if (sig.format === 'hashtag' && sig.hashtag) {
+      lines.push(`- Include this hashtag in every post: ${sig.hashtag}`)
+    } else {
+      lines.push(`- Append this line at the end of every output: "${sig.text}"`)
+    }
+    lines.push(`This is non-negotiable branding — never skip it.`)
+  }
+
   // Extra context
   if (brand.extra_context) {
     const cleanedContext = brand.extra_context.replace(/\n---DIGEST_SETTINGS---[\s\S]*$/, '').trim()
