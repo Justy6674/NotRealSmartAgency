@@ -79,9 +79,16 @@ export async function POST(
   }
 
   try {
+    // Include visual analysis context if available
+    const metadata = mediaItem.metadata as Record<string, unknown> | null
+    const visualAnalysis = metadata?.visual_analysis as { summary?: string; products?: string[]; textOnScreen?: string[]; mood?: string } | undefined
+    const visualContext = visualAnalysis
+      ? `\n\nVisual content: ${visualAnalysis.summary ?? 'not available'}. Products visible: ${visualAnalysis.products?.join(', ') ?? 'none'}. Text on screen: ${visualAnalysis.textOnScreen?.join(', ') ?? 'none'}. Mood: ${visualAnalysis.mood ?? 'not analysed'}.`
+      : ''
+
     const { object: content } = await generateObject({
       model: gateway('anthropic/claude-sonnet-4'),
-      system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions from video transcriptions.
+      system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions from video transcriptions and visual analysis.
 
 ${brandContext}
 
@@ -89,10 +96,11 @@ Rules:
 - Each platform has specific character limits and formatting norms
 - Include relevant hashtags where appropriate
 - Be engaging, authentic, and brand-aligned
+- Reference what's VISIBLE in the video when visual analysis is available
 - For AHPRA/TGA brands: NEVER make therapeutic claims or use testimonials`,
       prompt: `Generate social media captions for all 6 platforms from this video transcription:
 
-${mediaItem.transcription}
+${mediaItem.transcription}${visualContext}
 
 File: ${mediaItem.file_name}`,
       schema: PlatformContentSchema,

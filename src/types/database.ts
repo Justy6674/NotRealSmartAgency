@@ -664,6 +664,15 @@ export interface MediaItem {
   updated_at: string
 }
 
+export interface VisualAnalysis {
+  scenes: string[]
+  products: string[]
+  textOnScreen: string[]
+  mood: string
+  thumbnailFrameIndex: number
+  summary: string
+}
+
 export interface ScheduledPost {
   id: string
   user_id: string

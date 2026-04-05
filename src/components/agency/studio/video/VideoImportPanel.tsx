@@ -2,8 +2,10 @@
 
 import { useState, useCallback } from 'react'
 import { Upload, FileVideo, CheckCircle2, Loader2, Sparkles, AlertCircle } from 'lucide-react'
-import type { Brand } from '@/types/database'
+import type { Brand, VisualAnalysis } from '@/types/database'
 import { sendToDirector } from '@/lib/chat-dispatch'
+import { extractFramesFromVideo } from '@/lib/video/extract-frames-browser'
+import { createClient } from '@/lib/supabase/client'
 
 interface VideoImportPanelProps {
   brand: Brand | null
@@ -12,9 +14,11 @@ interface VideoImportPanelProps {
 interface ImportedFile {
   id: string
   file: File
-  status: 'uploading' | 'uploaded' | 'transcribing' | 'transcribed' | 'generating' | 'done' | 'error'
+  status: 'uploading' | 'uploaded' | 'transcribing' | 'transcribed' | 'analysing' | 'analysed' | 'generating' | 'done' | 'error'
   mediaItemId?: string
   error?: string
+  analysis?: VisualAnalysis
+  thumbnailUrl?: string
 }
 
 export function VideoImportPanel({ brand }: VideoImportPanelProps) {
@@ -27,6 +31,8 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
   const uploadAndTranscribe = useCallback(async (importedFile: ImportedFile) => {
     if (!brand) return
+
+    const supabase = createClient()
 
     // 1. Upload to Supabase Storage
     updateFile(importedFile.id, { status: 'uploading' })
@@ -46,7 +52,38 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
       updateFile(importedFile.id, { status: 'uploaded', mediaItemId })
 
-      // 2. Transcribe
+      // 2. Extract frames in browser (non-blocking — runs alongside transcription)
+      const { data: { user } } = await supabase.auth.getUser()
+      let framesUploaded = false
+
+      if (user && importedFile.file.type.startsWith('video/')) {
+        try {
+          const frames = await extractFramesFromVideo(importedFile.file, 4)
+          const frameUrls: string[] = []
+
+          for (let i = 0; i < frames.length; i++) {
+            const framePath = `${user.id}/${brand.id}/frames/${mediaItemId}_frame_${i}.jpg`
+            const { data: frameData } = await supabase.storage
+              .from('media')
+              .upload(framePath, frames[i], { contentType: 'image/jpeg', upsert: true })
+            if (frameData) {
+              const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(framePath)
+              frameUrls.push(publicUrl)
+            }
+          }
+
+          if (frameUrls.length) {
+            await supabase.from('media_items').update({
+              metadata: { frame_urls: frameUrls },
+            }).eq('id', mediaItemId)
+            framesUploaded = true
+          }
+        } catch {
+          // Frame extraction failure is non-blocking
+        }
+      }
+
+      // 3. Transcribe
       updateFile(importedFile.id, { status: 'transcribing' })
       const transcribeRes = await fetch('/api/media/transcribe', {
         method: 'POST',
@@ -56,6 +93,27 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
       if (!transcribeRes.ok) throw new Error('Transcription failed')
       updateFile(importedFile.id, { status: 'transcribed' })
+
+      // 4. Visual analysis (only if frames were uploaded)
+      if (framesUploaded) {
+        updateFile(importedFile.id, { status: 'analysing' })
+        try {
+          const analyzeRes = await fetch(`/api/media/${mediaItemId}/analyze`, { method: 'POST' })
+          if (analyzeRes.ok) {
+            const { analysis, thumbnail_url } = await analyzeRes.json()
+            updateFile(importedFile.id, {
+              status: 'analysed',
+              analysis,
+              thumbnailUrl: thumbnail_url,
+            })
+          } else {
+            // Analysis failure is non-blocking — still mark as ready
+            updateFile(importedFile.id, { status: 'analysed' })
+          }
+        } catch {
+          updateFile(importedFile.id, { status: 'analysed' })
+        }
+      }
     } catch (err) {
       updateFile(importedFile.id, {
         status: 'error',
@@ -98,27 +156,29 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
   const handleGenerateAll = () => {
     if (!brand) return
-    const transcribedIds = files
-      .filter(f => f.status === 'transcribed' && f.mediaItemId)
+    const readyIds = files
+      .filter(f => (f.status === 'transcribed' || f.status === 'analysed') && f.mediaItemId)
       .map(f => f.mediaItemId)
 
-    if (transcribedIds.length === 0) return
+    if (readyIds.length === 0) return
 
     sendToDirector(
-      `Process these ${transcribedIds.length} uploaded videos for ${brand.name}: generate platform-specific captions for all 6 platforms (YouTube, TikTok, Instagram, Facebook, LinkedIn, X) and save as draft posts.\n\nMedia item IDs: ${transcribedIds.join(', ')}`
+      `Process these ${readyIds.length} uploaded videos for ${brand.name}: generate platform-specific captions for all 6 platforms (YouTube, TikTok, Instagram, Facebook, LinkedIn, X) and save as draft posts.\n\nMedia item IDs: ${readyIds.join(', ')}`
     )
   }
 
-  const transcribedCount = files.filter(f => f.status === 'transcribed' || f.status === 'done').length
-  const processingCount = files.filter(f => ['uploading', 'uploaded', 'transcribing'].includes(f.status)).length
+  const readyCount = files.filter(f => f.status === 'transcribed' || f.status === 'analysed' || f.status === 'done').length
+  const processingCount = files.filter(f => ['uploading', 'uploaded', 'transcribing', 'analysing'].includes(f.status)).length
 
   const statusIcon = (status: ImportedFile['status']) => {
     switch (status) {
       case 'uploading':
       case 'transcribing':
+      case 'analysing':
       case 'generating':
         return <Loader2 className="h-4 w-4 animate-spin text-[oklch(0.55_0.1_240)]" />
       case 'transcribed':
+      case 'analysed':
       case 'done':
         return <CheckCircle2 className="h-4 w-4 text-emerald-400" />
       case 'error':
@@ -134,6 +194,8 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
       uploaded: 'Uploaded',
       transcribing: 'Transcribing...',
       transcribed: 'Ready',
+      analysing: 'Analysing...',
+      analysed: 'Ready',
       generating: 'Generating captions...',
       done: 'Done',
       error: 'Error',
@@ -192,8 +254,19 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
                 key={f.id}
                 className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2"
               >
-                {statusIcon(f.status)}
-                <span className="flex-1 truncate text-sm text-foreground">{f.file.name}</span>
+                {f.thumbnailUrl ? (
+                  <img src={f.thumbnailUrl} alt="" className="h-8 w-8 rounded object-cover" />
+                ) : (
+                  statusIcon(f.status)
+                )}
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm text-foreground">{f.file.name}</span>
+                  {f.analysis?.summary && (
+                    <span className="truncate text-[10px] text-muted-foreground max-w-[200px]">
+                      {f.analysis.summary}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-muted-foreground">
                   {(f.file.size / (1024 * 1024)).toFixed(1)} MB
                 </span>
@@ -207,14 +280,14 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
       )}
 
       {/* Generate all captions button */}
-      {transcribedCount > 0 && (
+      {readyCount > 0 && (
         <button
           type="button"
           onClick={handleGenerateAll}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-3 text-sm font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors"
         >
           <Sparkles className="h-4 w-4" />
-          Generate Captions for All Platforms ({transcribedCount} video{transcribedCount !== 1 ? 's' : ''})
+          Generate Smart Captions for All Platforms ({readyCount} video{readyCount !== 1 ? 's' : ''})
         </button>
       )}
     </div>
