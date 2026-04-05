@@ -38,6 +38,72 @@ export async function extractAndStoreMemories(params: {
     }
   }
 
+  // 1b. Design & visual preferences
+  const designPatterns = [
+    // "I like/love/prefer [X] style/design/look/colour/font/layout"
+    /(?:i (?:like|love|prefer|want)|use|always use)\s+(.+?)\s+(?:style|design|look|colou?r|font|layout|aesthetic|vibe)/gi,
+    // "For Instagram/TikTok always/usually/prefer [X]"
+    /(?:for|on)\s+(instagram|facebook|linkedin|tiktok|youtube|twitter|x)\s+(?:always|usually|prefer|use)\s+(.{5,100})/gi,
+    // "Don't/never/avoid/stop use/using/make/making [X]"
+    /(?:don't|never|avoid|stop)\s+(?:use|using|make|making|include|including|add|adding)\s+(.{5,100})/gi,
+    // "Always [X] for/on/with [Y]"
+    /(?:always|must|should always)\s+(.{5,80}?)\s+(?:for|on|with)\s+(.{3,60})/gi,
+    // "Keep it [adjective]" or "Make it [adjective]"
+    /(?:keep it|make it|keep things|i want it)\s+([\w\s]{3,40})/gi,
+    // "No [X] in posts/content/designs"
+    /(?:no|zero|none)\s+(.{3,60}?)\s+(?:in|on|for)\s+(?:posts?|content|designs?|videos?|images?|graphics?)/gi,
+  ]
+  for (const pattern of designPatterns) {
+    const matches = userMessage.matchAll(pattern)
+    for (const match of matches) {
+      const content = match.length > 2 ? `${match[1]}: ${match[2]}` : (match[1] ?? match[0])
+      extractions.push({
+        key: `design-pref-${Date.now()}-${memoriesStored}`,
+        value: { type: 'design_preference', content: content.trim(), source: 'user', timestamp },
+        tags: [agentType, brandSlug, 'preference', 'design'],
+      })
+      memoriesStored++
+    }
+  }
+
+  // 1c. Platform-specific preferences
+  const platformPatterns = [
+    // "On Instagram I want/use/prefer [X]"
+    /(?:on|for)\s+(instagram|facebook|linkedin|tiktok|youtube|twitter|x|reels?|shorts?)\s+(?:i want|i use|i prefer|we use|we prefer|always)\s+(.{5,100})/gi,
+    // "[Platform] should be/have [X]"
+    /(instagram|facebook|linkedin|tiktok|youtube|twitter|x)\s+(?:should|must|needs to)\s+(?:be|have|include)\s+(.{5,100})/gi,
+  ]
+  for (const pattern of platformPatterns) {
+    const matches = userMessage.matchAll(pattern)
+    for (const match of matches) {
+      extractions.push({
+        key: `platform-pref-${Date.now()}-${memoriesStored}`,
+        value: { type: 'platform_preference', platform: match[1].trim().toLowerCase(), content: match[2].trim(), source: 'user', timestamp },
+        tags: [agentType, brandSlug, 'preference', 'platform', match[1].trim().toLowerCase()],
+      })
+      memoriesStored++
+    }
+  }
+
+  // 1d. Brand rules stated by user
+  const brandRulePatterns = [
+    // "We always/never [X]"
+    /(?:we always|we never|our rule is|our policy is)\s+(.{10,120})/gi,
+    // "For [brand] always/never [X]"
+    /(?:for\s+\w+\s+)(?:always|never)\s+(.{10,100})/gi,
+  ]
+  for (const pattern of brandRulePatterns) {
+    const matches = userMessage.matchAll(pattern)
+    for (const match of matches) {
+      extractions.push({
+        key: `brand-rule-${Date.now()}-${memoriesStored}`,
+        value: { type: 'brand_rule', content: match[1].trim(), source: 'user', timestamp },
+        tags: [agentType, brandSlug, 'rule', 'brand'],
+      })
+      memoriesStored++
+    }
+  }
+
   // 2. Decisions made (from assistant response)
   const decisionPatterns = [
     /(?:i recommend|i suggest|let's go with|the best approach|we should|the strategy is)\s+(.{20,200})/gi,

@@ -344,6 +344,7 @@ export interface Brand {
   emulation_wishlist: EmulationEntry[]
   channel_strategy: ChannelStrategy
   post_signature: PostSignature
+  watermark: BrandWatermark
   marketing_status: 'unknown' | 'no_marketing' | 'early_stage' | 'needs_strategy' | 'active' | 'scaling'
   marketing_notes: string | null
   is_active: boolean
@@ -538,6 +539,14 @@ export interface PostSignature {
   mention?: string        // "@notrealsmart"
   hashtag?: string        // "#NotRealSmart"
   banner_url?: string     // URL to banner image
+}
+
+export interface BrandWatermark {
+  logo_enabled?: boolean        // overlay brand logo on generated images/videos
+  logo_position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  logo_opacity?: number         // 0.3 - 1.0
+  nrs_watermark_enabled?: boolean  // "Created with NotRealSmart Digital Agency"
+  nrs_watermark_text?: string    // customisable text
 }
 
 export type TeamRole = 'owner' | 'admin' | 'viewer'

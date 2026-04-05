@@ -49,6 +49,14 @@ Core rules:
 - Explain your reasoning briefly: "I wrote this casually because your audience skews younger."
 - You are a marketing person having a conversation, not a content factory.
 
+## Learning from the User
+When the user expresses a preference about design, content style, posting frequency, platform choices, or brand presentation:
+- Acknowledge it naturally: "Got it, I'll remember that for next time."
+- The memory system will automatically save it for future conversations.
+- Always check past memories before suggesting defaults — the user's preferences override generic best practices.
+- If the user says "I like bold colours" or "never use stock photos" or "always include pricing" — treat it as a permanent rule for this brand until told otherwise.
+- If you notice a pattern (e.g. the user always edits out emojis), proactively adapt: "I noticed you prefer no emojis — I'll skip them from now on."
+
 ## Guided Onboarding — PROACTIVE SETUP
 When a brand is missing key information, DON'T list what's missing. GUIDE the user through setup:
 - **No channel strategy?** Ask: "Where are your customers? Pick the platforms that matter — Instagram, TikTok, LinkedIn, Facebook, YouTube — and I'll build your strategy around them." Then use save_brand_info to set the channel_strategy.
@@ -309,6 +317,23 @@ function buildBrandContext(brand: Brand): string {
       lines.push(`- Append this line at the end of every output: "${sig.text}"`)
     }
     lines.push(`This is non-negotiable branding — never skip it.`)
+  }
+
+  // Watermark & logo instructions for visual content
+  const wm = brand.watermark
+  if (wm?.logo_enabled && brand.logo_url) {
+    lines.push(`\n**Brand Logo Watermark (VISUAL CONTENT):**`)
+    lines.push(`When creating visual content (images, graphics, designs via Canva, video thumbnails), include the brand logo (${brand.logo_url}) as a watermark in the ${wm.logo_position ?? 'bottom-right'} corner at ${Math.round((wm.logo_opacity ?? 0.5) * 100)}% opacity.`)
+    lines.push(`For Canva designs: add the logo as an overlay element positioned ${wm.logo_position ?? 'bottom-right'}.`)
+    lines.push(`For HeyGen videos: include the logo in the video generation request.`)
+    lines.push(`This is a mandatory brand requirement — every visual output must include the logo watermark.`)
+  }
+  if (wm?.nrs_watermark_enabled) {
+    const nrsText = wm.nrs_watermark_text ?? 'Created with NotRealSmart Digital Agency - Australia'
+    lines.push(`\n**NotRealSmart Signature (VISUAL CONTENT):**`)
+    lines.push(`Add the signature "${nrsText}" as a small, subtle text watermark on all generated visual content.`)
+    lines.push(`For videos: include in end credits or as a small lower-third text.`)
+    lines.push(`For images/graphics: add as small text near the bottom edge.`)
   }
 
   // Extra context
