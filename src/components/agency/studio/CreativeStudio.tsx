@@ -150,7 +150,7 @@ export function CreativeStudio() {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto">
         {activeTab === 'all' && <StudioDashboard />}
         {activeTab === 'calendar' && <ContentCalendar />}
         {activeTab === 'media' && <StudioMedia />}
