@@ -14,9 +14,9 @@ interface VideoCreatePanelProps {
 type Provider = 'heygen' | 'openclaw'
 type AspectRatio = '9:16' | '16:9' | '1:1'
 
-const PROVIDERS: { id: Provider; label: string; description: string }[] = [
-  { id: 'heygen', label: 'HeyGen Avatar', description: 'AI presenter speaks your script' },
-  { id: 'openclaw', label: 'OpenClaw / Remotion', description: 'Template-based with AI voiceover' },
+const PROVIDERS: { id: Provider; label: string; description: string; disabled?: boolean }[] = [
+  { id: 'heygen', label: 'AI Presenter', description: 'An AI avatar speaks your script' },
+  { id: 'openclaw', label: 'AI Generated', description: 'AI creates visuals + voiceover — coming soon', disabled: true },
 ]
 
 const FORMATS: { id: AspectRatio; label: string; platforms: string }[] = [
@@ -104,11 +104,14 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
             <button
               key={p.id}
               type="button"
-              onClick={() => setProvider(p.id)}
+              onClick={() => !p.disabled && setProvider(p.id)}
+              disabled={p.disabled}
               className={`rounded-lg border p-3 text-left transition-all ${
-                provider === p.id
-                  ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10'
-                  : 'border-border bg-card hover:border-[oklch(0.55_0.1_240)]/30'
+                p.disabled
+                  ? 'border-border bg-muted/30 opacity-50 cursor-not-allowed'
+                  : provider === p.id
+                    ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10'
+                    : 'border-border bg-card hover:border-[oklch(0.55_0.1_240)]/30'
               }`}
             >
               <div className="text-sm font-medium text-foreground">{p.label}</div>
