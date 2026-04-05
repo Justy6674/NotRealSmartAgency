@@ -23,7 +23,7 @@ import { createRepurposeContentTool } from './repurpose-content'
 import { createFillCalendarTool } from './fill-calendar'
 import { createSaveBrandInfoTool } from './save-brand-info'
 import { createReadProformaTool, createUpdateProformaTool } from './proforma'
-import { createDesignGraphicTool, createExportDesignTool, createSearchDesignsTool, createSearchFoldersTool, createListFolderItemsTool, createListBrandKitsTool, createGetDesignTool } from './canva'
+import { createDesignGraphicTool, createExportDesignTool, createSearchDesignsTool, createSearchFoldersTool, createListFolderItemsTool, createListBrandKitsTool, createGetDesignTool, createStartEditingTransactionTool, createPerformEditingOperationsTool, createCommitEditingTransactionTool, createCancelEditingTransactionTool, createGetDesignContentTool, createGetDesignPagesTool, createGetDesignAssetsTool } from './canva'
 import { createCreateVideoTool } from './create-video'
 import { createWriteBlogTool } from './write-blog'
 import { createWriteEmailCampaignTool } from './write-email-campaign'
@@ -32,6 +32,9 @@ import { createManagePostsTool } from './manage-posts'
 import { createAnalyseVoiceTool } from './analyse-voice'
 import { createWriteAdsTool } from './write-ads'
 import { createAddInspirationTool, createSearchInspirationTool } from './inspiration'
+import { createVideoAgentTool } from './video-agent'
+import { createMultiSceneVideoTool } from './multi-scene-video'
+import { createRegisterWebhookTool } from './register-webhook'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -98,6 +101,13 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const listFolderItems = createListFolderItemsTool(ctx.supabase, ctx.userId)
   const listBrandKits = createListBrandKitsTool(ctx.supabase, ctx.userId)
   const getDesign = createGetDesignTool(ctx.supabase, ctx.userId)
+  const startEditingTransaction = createStartEditingTransactionTool(ctx.supabase, ctx.userId)
+  const performEditingOperations = createPerformEditingOperationsTool(ctx.supabase, ctx.userId)
+  const commitEditingTransaction = createCommitEditingTransactionTool(ctx.supabase, ctx.userId)
+  const cancelEditingTransaction = createCancelEditingTransactionTool(ctx.supabase, ctx.userId)
+  const getDesignContent = createGetDesignContentTool(ctx.supabase, ctx.userId)
+  const getDesignPages = createGetDesignPagesTool(ctx.supabase, ctx.userId)
+  const getDesignAssets = createGetDesignAssetsTool(ctx.supabase, ctx.userId)
   const createVideo = createCreateVideoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const writeBlog = createWriteBlogTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const writeEmailCampaign = createWriteEmailCampaignTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
@@ -107,6 +117,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const writeAds = createWriteAdsTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const addInspiration = createAddInspirationTool(ctx.supabase, ctx.userId)
   const searchInspiration = createSearchInspirationTool(ctx.supabase, ctx.userId)
+  const videoAgent = createVideoAgentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const multiSceneVideo = createMultiSceneVideoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const registerWebhook = createRegisterWebhookTool(ctx.supabase, ctx.userId)
 
   // Base management tools every agent gets
   const managementTools = {
@@ -146,6 +159,13 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       list_folder_items: listFolderItems,
       list_brand_kits: listBrandKits,
       get_design: getDesign,
+      start_editing_transaction: startEditingTransaction,
+      perform_editing_operations: performEditingOperations,
+      commit_editing_transaction: commitEditingTransaction,
+      cancel_editing_transaction: cancelEditingTransaction,
+      get_design_content: getDesignContent,
+      get_design_pages: getDesignPages,
+      get_design_assets: getDesignAssets,
       create_video: createVideo,
       write_blog: writeBlog,
       deep_competitor_scan: deepCompetitorScan,
@@ -155,9 +175,12 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       write_ads: writeAds,
       add_inspiration: addInspiration,
       search_inspiration: searchInspiration,
+      generate_video_agent: videoAgent,
+      create_multi_scene_video: multiSceneVideo,
+      register_webhook: registerWebhook,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, generate_video_agent: videoAgent, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
     strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, ...managementTools },
@@ -168,8 +191,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },
     brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_kits: listBrandKits, get_design: getDesign, analyse_voice: analyseVoice, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, ...managementTools },
-    automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, ...managementTools },
-    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, ...managementTools },
+    automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, register_webhook: registerWebhook, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, generate_video_agent: videoAgent, create_multi_scene_video: multiSceneVideo, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 
