@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { Video, Play, Loader2, AlertCircle, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -10,12 +11,13 @@ interface VideosCardProps {
 }
 
 export function VideosCard({ videos }: VideosCardProps) {
-  const { setChatPanelOpen, setPendingReviewMessage } = useAgencyStore()
+  const { setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
   const [playingId, setPlayingId] = useState<string | null>(null)
 
   const handleCreate = () => {
-    setChatPanelOpen(true)
     setPendingReviewMessage('Create a video for my brand')
+    router.push('/agency/chat')
   }
 
   if (videos.length === 0) {

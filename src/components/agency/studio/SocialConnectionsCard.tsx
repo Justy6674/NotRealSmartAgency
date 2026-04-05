@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useAgencyStore } from '@/stores/agency-store'
 import type { Brand } from '@/types/database'
 import type { SocialAccount } from '@/hooks/useStudioData'
@@ -25,7 +26,8 @@ interface SocialConnectionsCardProps {
 }
 
 export function SocialConnectionsCard({ brand, accounts, lastPublishedByPlatform }: SocialConnectionsCardProps) {
-  const { setChatPanelOpen, setPendingReviewMessage } = useAgencyStore()
+  const { setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
 
   // Get platforms from channel strategy
   const strategy = brand.channel_strategy as Record<string, unknown> | null
@@ -53,8 +55,8 @@ export function SocialConnectionsCard({ brand, accounts, lastPublishedByPlatform
   })
 
   const handleConnect = (platform: string) => {
-    setChatPanelOpen(true)
     setPendingReviewMessage(`Help me connect ${platform} for ${brand.name}`)
+    router.push('/agency/chat')
   }
 
   return (

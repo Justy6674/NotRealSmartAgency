@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import type { Brand } from '@/types/database'
@@ -24,7 +25,8 @@ interface StrategySummaryCardProps {
 }
 
 export function StrategySummaryCard({ brand }: StrategySummaryCardProps) {
-  const { setChatPanelOpen, setPendingReviewMessage } = useAgencyStore()
+  const { setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
 
   const strategy = brand.channel_strategy as Record<string, unknown> | null
   const channels = strategy?.channels as Record<string, number> | null
@@ -36,13 +38,13 @@ export function StrategySummaryCard({ brand }: StrategySummaryCardProps) {
   const hasPillars = pillars && pillars.length > 0
 
   const handleRefine = () => {
-    setChatPanelOpen(true)
     setPendingReviewMessage(`Let's review and update the marketing strategy for ${brand.name}`)
+    router.push('/agency/chat')
   }
 
   const handleBuild = () => {
-    setChatPanelOpen(true)
     setPendingReviewMessage(`Help me build a content strategy for ${brand.name}`)
+    router.push('/agency/chat')
   }
 
   if (!hasStrategy && !hasPillars) {

@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { Activity } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import type { AgentActivityEntry } from '@/hooks/useStudioData'
@@ -50,7 +51,8 @@ interface AgentActivityCardProps {
 }
 
 export function AgentActivityCard({ agentActivity }: AgentActivityCardProps) {
-  const { setChatPanelOpen, setPendingReviewMessage } = useAgencyStore()
+  const { setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
 
   if (agentActivity.length === 0) {
     return (
@@ -63,8 +65,8 @@ export function AgentActivityCard({ agentActivity }: AgentActivityCardProps) {
           <p className="text-xs text-muted-foreground mb-2">Your agents are ready — start a conversation to put them to work.</p>
           <button
             onClick={() => {
-              setChatPanelOpen(true)
               setPendingReviewMessage('What should we work on today?')
+              router.push('/agency/chat')
             }}
             className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
           >

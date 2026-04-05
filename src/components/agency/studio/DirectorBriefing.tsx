@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { UserCircle, ArrowRight } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import type { Brand, ScheduledPost } from '@/types/database'
@@ -139,13 +140,14 @@ interface DirectorBriefingProps {
 }
 
 export function DirectorBriefing({ brand, analytics, posts, accounts }: DirectorBriefingProps) {
-  const { setChatPanelOpen, setPendingReviewMessage } = useAgencyStore()
+  const { setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
 
   const items = buildBriefing(brand, analytics, posts, accounts)
 
   const handleAction = (message: string) => {
-    setChatPanelOpen(true)
     setPendingReviewMessage(message)
+    router.push('/agency/chat')
   }
 
   return (

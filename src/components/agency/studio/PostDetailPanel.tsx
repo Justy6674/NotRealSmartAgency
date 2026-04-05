@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   X,
   Instagram,
@@ -50,7 +51,8 @@ interface PostDetailPanelProps {
 }
 
 export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelProps) {
-  const { setChatPanelOpen, setPendingReviewMessage } = useAgencyStore()
+  const { setPendingReviewMessage } = useAgencyStore()
+  const router = useRouter()
 
   // ── Local edit state ─────────────────────────────────────────────────────
   const [editedCaption, setEditedCaption] = useState(item.caption)
@@ -135,8 +137,8 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
         ? `Improve this post caption for ${platform}: ${editedCaption}`
         : `Improve this ${item.outputType ?? 'output'}: ${item.caption}`
     setPendingReviewMessage(message)
-    setChatPanelOpen(true)
-  }, [item, editedCaption, setPendingReviewMessage, setChatPanelOpen])
+    router.push('/agency/chat')
+  }, [item, editedCaption, setPendingReviewMessage, router])
 
   // ── Copy ─────────────────────────────────────────────────────────────────
   const handleCopy = useCallback(async () => {

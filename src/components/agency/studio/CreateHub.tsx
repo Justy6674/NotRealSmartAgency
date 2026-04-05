@@ -119,8 +119,8 @@ export function CreateHub() {
   }
 
   const handleIntent = (message: string) => {
-    setChatPanelOpen(true)
     setPendingReviewMessage(message)
+    router.push('/agency/chat')
   }
 
   function togglePlatform(platformId: string) {
