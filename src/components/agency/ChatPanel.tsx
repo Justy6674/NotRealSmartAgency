@@ -134,30 +134,6 @@ export function ChatPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId])
 
-  // Auto-send pending review message — expand panel if minimised
-  useEffect(() => {
-    if (!pendingReviewMessage || !activeBrandId) return
-
-    // Ensure panel is open and expanded
-    if (!chatPanelOpen) setChatPanelOpen(true)
-    if (chatPanelMinimised) setChatPanelMinimised(false)
-
-    const msg = pendingReviewMessage
-    setPendingReviewMessage(null) // Clear immediately to prevent re-send
-
-    // Delay to let the panel render/expand first
-    const timer = setTimeout(() => {
-      handleSend(msg)
-    }, 500)
-    return () => clearTimeout(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingReviewMessage])
-
-  // Auto-scroll on new messages
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
-  }, [messages])
-
   const handleSend = useCallback(async (text: string) => {
     if (!activeBrandId) return
     await sendMessage({ text })
@@ -180,6 +156,34 @@ export function ChatPanel() {
       }
     }
   }, [activeBrandId, activeAgentType, panelConversationId, sendMessage, setConversation])
+
+  // Ref to always have latest handleSend
+  const handleSendRef = useRef(handleSend)
+  handleSendRef.current = handleSend
+
+  // Auto-send pending review message — expand panel if minimised
+  useEffect(() => {
+    if (!pendingReviewMessage || !activeBrandId) return
+
+    // Ensure panel is open and expanded
+    if (!chatPanelOpen) setChatPanelOpen(true)
+    if (chatPanelMinimised) setChatPanelMinimised(false)
+
+    const msg = pendingReviewMessage
+    setPendingReviewMessage(null)
+
+    // Delay to let the panel render/expand, use ref for latest handleSend
+    const timer = setTimeout(() => {
+      handleSendRef.current(msg)
+    }, 500)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingReviewMessage])
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [messages])
 
   // Don't render on the full chat pages — AFTER all hooks
   if (isFullChatPage) return null
