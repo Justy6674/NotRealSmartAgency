@@ -60,6 +60,7 @@ export async function GET(request: Request) {
           id: (p.brands as Record<string, unknown>).id as string,
           name: (p.brands as Record<string, unknown>).name as string,
           slug: (p.brands as Record<string, unknown>).slug as string,
+          social_urls: ((p.brands as Record<string, unknown>).social_urls as Record<string, string>) ?? {},
         }))
 
       // De-duplicate by brand ID

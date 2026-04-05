@@ -102,10 +102,10 @@ export async function GET(req: NextRequest) {
       // Mixpost connected accounts
       fetchMixpostAccounts(),
 
-      // All brands (for Mixpost mapping)
+      // All brands (for Mixpost mapping — includes social_urls for confirmed account overrides)
       supabase
         .from('brands')
-        .select('id, name, slug')
+        .select('id, name, slug, social_urls')
         .eq('user_id', user.id),
     ])
 

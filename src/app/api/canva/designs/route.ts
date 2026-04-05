@@ -112,9 +112,21 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Fetch designs
+  // Read pagination / search params
+  const query = req.nextUrl.searchParams.get('query') ?? undefined
+  const continuation = req.nextUrl.searchParams.get('continuation') ?? undefined
+  const sortBy = req.nextUrl.searchParams.get('sort_by') ?? 'modified_descending'
+
+  // Fetch designs with pagination support
   const fetchDesigns = async (token: string) => {
-    const res = await fetch(`${CANVA_BASE_URL}/designs?ownership=owned&sort_by=relevance`, {
+    const params = new URLSearchParams({
+      ownership: 'owned',
+      sort_by: sortBy,
+    })
+    if (query) params.set('query', query)
+    if (continuation) params.set('continuation', continuation)
+
+    const res = await fetch(`${CANVA_BASE_URL}/designs?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -147,8 +159,9 @@ export async function GET(req: NextRequest) {
 
     const data = await res.json()
     const items = data.items ?? data.designs ?? []
+    const nextContinuation: string | undefined = data.continuation ?? undefined
 
-    const designs = items.slice(0, 12).map((d: Record<string, unknown>) => ({
+    const designs = items.map((d: Record<string, unknown>) => ({
       id: d.id,
       title: (d.title as string) ?? 'Untitled',
       thumbnail_url: (d.thumbnail as Record<string, unknown>)?.url ?? (d.thumbnail_url as string) ?? null,
@@ -157,7 +170,11 @@ export async function GET(req: NextRequest) {
       updated_at: d.updated_at ?? d.created_at ?? null,
     }))
 
-    return NextResponse.json({ configured: true, designs })
+    return NextResponse.json({
+      configured: true,
+      designs,
+      ...(nextContinuation ? { continuation: nextContinuation } : {}),
+    })
   } catch (err) {
     console.error('[canva/designs] Error:', err)
     return NextResponse.json({

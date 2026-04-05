@@ -20,7 +20,7 @@ export async function GET() {
   // Fetch user's brands for mapping
   const { data: brands } = await supabase
     .from('brands')
-    .select('id, name, slug')
+    .select('id, name, slug, social_urls')
     .eq('user_id', user.id)
 
   const brandMapping = brands?.length
