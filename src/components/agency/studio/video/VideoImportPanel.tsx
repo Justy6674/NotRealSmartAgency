@@ -34,26 +34,47 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
     const supabase = createClient()
 
-    // 1. Upload to Supabase Storage
+    // 1. Upload directly to Supabase Storage (bypasses Vercel 4.5MB limit)
     updateFile(importedFile.id, { status: 'uploading' })
     try {
-      const formData = new FormData()
-      formData.append('file', importedFile.file)
-      formData.append('brandId', brand.id)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
 
-      const uploadRes = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      })
+      const timestamp = Date.now()
+      const safeName = importedFile.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const storagePath = `${user.id}/${brand.id}/${timestamp}_${safeName}`
 
-      if (!uploadRes.ok) throw new Error('Upload failed')
-      const uploadData = await uploadRes.json()
-      const mediaItemId = uploadData.mediaItem?.id ?? uploadData.id
+      const { error: storageError } = await supabase.storage
+        .from('media')
+        .upload(storagePath, importedFile.file, {
+          contentType: importedFile.file.type,
+          upsert: false,
+        })
+
+      if (storageError) throw new Error(`Upload failed: ${storageError.message}`)
+
+      const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+
+      const { data: mediaRecord, error: dbError } = await supabase
+        .from('media_items')
+        .insert({
+          user_id: user.id,
+          brand_id: brand.id,
+          file_url: urlData.publicUrl,
+          file_name: importedFile.file.name,
+          file_type: importedFile.file.type,
+          file_size_bytes: importedFile.file.size,
+          transcription_status: 'pending',
+        })
+        .select()
+        .single()
+
+      if (dbError || !mediaRecord) throw new Error('Failed to create media record')
+      const mediaItemId = mediaRecord.id
 
       updateFile(importedFile.id, { status: 'uploaded', mediaItemId })
 
       // 2. Extract frames in browser (non-blocking — runs alongside transcription)
-      const { data: { user } } = await supabase.auth.getUser()
       let framesUploaded = false
 
       if (user && importedFile.file.type.startsWith('video/')) {

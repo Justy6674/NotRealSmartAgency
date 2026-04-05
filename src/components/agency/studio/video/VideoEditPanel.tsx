@@ -162,27 +162,55 @@ export function VideoEditPanel({ brand, strategyContext }: VideoEditPanelProps) 
     setError(null)
 
     try {
-      // 1. Upload
+      // 1. Upload directly to Supabase Storage (bypasses Vercel 4.5MB limit)
       setProcessingStage('uploading')
-      const formData = new FormData()
-      formData.append('file', videoFile)
-      formData.append('brandId', brand.id)
-      const uploadRes = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      if (!uploadRes.ok) {
-        setError('Upload failed. Please try again.')
+      const supabaseUpload = createClient()
+      const { data: { user } } = await supabaseUpload.auth.getUser()
+      if (!user) {
+        setError('Not authenticated.')
         setProcessingStage('idle')
         return
       }
-      const uploadData = await uploadRes.json()
-      const itemId: string = uploadData.mediaItem?.id ?? uploadData.id
-      if (!itemId) {
-        setError('Upload succeeded but no media ID returned.')
+
+      const timestamp = Date.now()
+      const safeName = videoFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const storagePath = `${user.id}/${brand.id}/${timestamp}_${safeName}`
+
+      const { error: storageError } = await supabaseUpload.storage
+        .from('media')
+        .upload(storagePath, videoFile, {
+          contentType: videoFile.type,
+          upsert: false,
+        })
+
+      if (storageError) {
+        setError(`Upload failed: ${storageError.message}`)
         setProcessingStage('idle')
         return
       }
+
+      const { data: urlData } = supabaseUpload.storage.from('media').getPublicUrl(storagePath)
+
+      const { data: mediaRecord, error: dbError } = await supabaseUpload
+        .from('media_items')
+        .insert({
+          user_id: user.id,
+          brand_id: brand.id,
+          file_url: urlData.publicUrl,
+          file_name: videoFile.name,
+          file_type: videoFile.type,
+          file_size_bytes: videoFile.size,
+          transcription_status: 'pending',
+        })
+        .select()
+        .single()
+
+      if (dbError || !mediaRecord) {
+        setError('Upload succeeded but failed to create record.')
+        setProcessingStage('idle')
+        return
+      }
+      const itemId: string = mediaRecord.id
       setMediaItemId(itemId)
 
       // 2. Extract frames
