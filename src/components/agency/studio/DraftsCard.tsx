@@ -16,22 +16,27 @@ const PLATFORM_ICONS: Record<string, string> = {
 
 interface DraftsCardProps {
   posts: ScheduledPost[]
+  onReviewDrafts?: (posts: ScheduledPost[]) => void
 }
 
-export function DraftsCard({ posts }: DraftsCardProps) {
+export function DraftsCard({ posts, onReviewDrafts }: DraftsCardProps) {
   const { setPendingReviewMessage } = useAgencyStore()
   const router = useRouter()
 
-  const drafts = posts
-    .filter(p => p.status === 'draft')
+  const allDrafts = posts.filter(p => p.status === 'draft')
+  const drafts = [...allDrafts]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5)
 
-  const totalDrafts = posts.filter(p => p.status === 'draft').length
+  const totalDrafts = allDrafts.length
 
   const handleReviewAll = () => {
-    setPendingReviewMessage('Review and schedule all my draft posts')
-    router.push('/agency/chat')
+    if (onReviewDrafts) {
+      onReviewDrafts(allDrafts)
+    } else {
+      setPendingReviewMessage('Review and schedule all my draft posts')
+      router.push('/agency/chat')
+    }
   }
 
   const handleCreate = () => {
@@ -76,7 +81,11 @@ export function DraftsCard({ posts }: DraftsCardProps) {
           {drafts.map(draft => (
             <div
               key={draft.id}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50 transition-colors"
+              role="button"
+              tabIndex={0}
+              onClick={() => onReviewDrafts?.(allDrafts)}
+              onKeyDown={e => { if (e.key === 'Enter') onReviewDrafts?.(allDrafts) }}
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/50 transition-colors cursor-pointer"
             >
               <span className="shrink-0 text-sm">
                 {PLATFORM_ICONS[draft.platform] ?? '📄'}

@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
+import { useConnectedPlatforms } from '@/hooks/useConnectedPlatforms'
 import { StrategyBrief } from './StrategyBrief'
 import { DirectorBriefing } from './DirectorBriefing'
 import { SocialConnectionsCard } from './SocialConnectionsCard'
@@ -15,11 +17,15 @@ import { VideosCard } from './VideosCard'
 import { CompetitorIntelCard } from './CompetitorIntelCard'
 import { AgentActivityCard } from './AgentActivityCard'
 import { StudioFeed } from './StudioFeed'
+import { PostReviewPanel } from './PostReviewPanel'
+import type { ScheduledPost } from '@/types/database'
 
 export function StudioDashboard() {
   const { activeBrandId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
+  const { platforms: connectedPlatforms } = useConnectedPlatforms(activeBrandId)
+  const [reviewPosts, setReviewPosts] = useState<ScheduledPost[] | null>(null)
 
   if (!activeBrandId) {
     return (
@@ -75,7 +81,7 @@ export function StudioDashboard() {
 
       {/* D + E. Drafts + Strategy — 2 columns */}
       <div className="grid gap-4 md:grid-cols-2">
-        <DraftsCard posts={data.posts} />
+        <DraftsCard posts={data.posts} onReviewDrafts={setReviewPosts} />
         <StrategySummaryCard brand={data.brand} />
       </div>
 
@@ -99,6 +105,24 @@ export function StudioDashboard() {
         <h3 className="text-sm font-semibold text-foreground px-1">Recent Content</h3>
         <StudioFeed />
       </div>
+
+      {/* Post Review Panel overlay */}
+      {reviewPosts && data.brand && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-8 overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-2xl border border-border bg-background p-6">
+            <PostReviewPanel
+              posts={reviewPosts}
+              brand={data.brand}
+              connectedPlatforms={connectedPlatforms}
+              onClose={() => setReviewPosts(null)}
+              onUpdate={() => {
+                data.refetch?.()
+                setReviewPosts(null)
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

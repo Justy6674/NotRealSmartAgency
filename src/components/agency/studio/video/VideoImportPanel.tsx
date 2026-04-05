@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Upload, FileVideo, CheckCircle2, Loader2, Sparkles, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
-import type { Brand, VisualAnalysis, ContentVibe, HashtagStyle, CarouselMode, ContentType, ContentStyleSettings } from '@/types/database'
+import { Upload, FileVideo, FileText, CheckCircle2, Loader2, Sparkles, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import type { Brand, ScheduledPost, VisualAnalysis, ContentVibe, HashtagStyle, CarouselMode, ContentType, ContentStyleSettings } from '@/types/database'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { extractFramesFromVideo } from '@/lib/video/extract-frames-browser'
 import { createClient } from '@/lib/supabase/client'
+import { PostReviewPanel } from '../PostReviewPanel'
+import { useConnectedPlatforms } from '@/hooks/useConnectedPlatforms'
 
 interface VideoImportPanelProps {
   brand: Brand | null
@@ -24,6 +26,9 @@ interface ImportedFile {
 export function VideoImportPanel({ brand }: VideoImportPanelProps) {
   const [files, setFiles] = useState<ImportedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [showReview, setShowReview] = useState(false)
+  const [draftPosts, setDraftPosts] = useState<ScheduledPost[]>([])
+  const { platforms: connectedPlatforms } = useConnectedPlatforms(brand?.id ?? null)
   const [styleOpen, setStyleOpen] = useState(false)
   const [styleSettings, setStyleSettings] = useState<ContentStyleSettings>({
     vibe: 'informative',
@@ -257,6 +262,16 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
     sendToDirector(
       `Process these ${readyIds.length} uploaded files for ${brand.name}: generate platform-specific captions for these platforms: ${platformList}. Save as draft posts.${vibeText}${contentTypeText}${hashtagText}${carouselText}\n\nMedia item IDs: ${readyIds.join(', ')}`
     )
+  }
+
+  const handleViewDrafts = async () => {
+    if (!brand) return
+    const res = await fetch(`/api/scheduled-posts?brandId=${brand.id}&status=draft`)
+    if (res.ok) {
+      const posts = await res.json()
+      setDraftPosts(posts)
+      setShowReview(true)
+    }
   }
 
   const readyCount = files.filter(f => f.status === 'transcribed' || f.status === 'analysed' || f.status === 'done').length
@@ -526,6 +541,27 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
           <Sparkles className="h-4 w-4" />
           Generate Smart Captions ({readyCount} file{readyCount !== 1 ? 's' : ''} → {selectedPlatforms.size} platform{selectedPlatforms.size !== 1 ? 's' : ''})
         </button>
+      )}
+
+      {/* View drafts button */}
+      <button
+        type="button"
+        onClick={handleViewDrafts}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors"
+      >
+        <FileText className="h-4 w-4" />
+        View &amp; Schedule Drafts
+      </button>
+
+      {/* Inline post review panel */}
+      {showReview && brand && (
+        <PostReviewPanel
+          posts={draftPosts}
+          brand={brand}
+          connectedPlatforms={connectedPlatforms}
+          onClose={() => setShowReview(false)}
+          onUpdate={handleViewDrafts}
+        />
       )}
     </div>
   )
