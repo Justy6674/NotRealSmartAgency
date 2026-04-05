@@ -21,9 +21,11 @@ export function ChatPanel() {
     activeConversationId,
     chatPanelOpen,
     chatPanelMinimised,
+    pendingReviewMessage,
     setChatPanelOpen,
     setChatPanelMinimised,
     setConversation,
+    setPendingReviewMessage,
   } = useAgencyStore()
 
   // Always Director — the user never switches agents
@@ -131,6 +133,20 @@ export function ChatPanel() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId])
+
+  // Auto-send pending review message when chat panel opens
+  useEffect(() => {
+    if (pendingReviewMessage && chatPanelOpen && !chatPanelMinimised && activeBrandId) {
+      const msg = pendingReviewMessage
+      setPendingReviewMessage(null) // Clear immediately to prevent re-send
+      // Small delay to let the panel render first
+      const timer = setTimeout(() => {
+        handleSend(msg)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingReviewMessage, chatPanelOpen, chatPanelMinimised])
 
   // Auto-scroll on new messages
   useEffect(() => {
