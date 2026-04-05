@@ -100,3 +100,59 @@ export function mapMixpostAccountsToBrands(
 
   return result
 }
+
+/**
+ * Same matching logic as mapMixpostAccountsToBrands, but returns the raw
+ * MixpostAccount objects per brand — needed by the publisher to resolve
+ * account IDs for the Mixpost API.
+ */
+export function mapAccountsToBrandsRaw(
+  accounts: MixpostAccount[],
+  brands: BrandStub[],
+): Map<string, MixpostAccount[]> {
+  const result = new Map<string, MixpostAccount[]>()
+
+  const brandLookup = brands.map(b => ({
+    ...b,
+    norm: normalise(b.name),
+    normSlug: normalise(b.slug),
+  }))
+
+  for (const account of accounts) {
+    const normAccount = normalise(account.name)
+    const normUsername = account.username ? normalise(account.username) : ''
+
+    // 1. Check aliases first
+    const aliasTarget = ALIASES[normAccount] ?? ALIASES[normUsername]
+    if (aliasTarget === '') continue
+
+    let matchedBrand: BrandStub | undefined
+
+    if (aliasTarget) {
+      matchedBrand = brandLookup.find(b => b.norm === aliasTarget || b.normSlug === aliasTarget)
+    }
+
+    // 2. Substring match
+    if (!matchedBrand) {
+      matchedBrand = brandLookup.find(b =>
+        (b.norm.length >= 4 && (normAccount.includes(b.norm) || normUsername.includes(b.norm))) ||
+        (b.normSlug.length >= 4 && (normAccount.includes(b.normSlug) || normUsername.includes(b.normSlug)))
+      )
+    }
+
+    // 3. Reverse: account name within brand name
+    if (!matchedBrand && normAccount.length >= 5) {
+      matchedBrand = brandLookup.find(b =>
+        b.norm.includes(normAccount) || b.normSlug.includes(normAccount)
+      )
+    }
+
+    if (matchedBrand) {
+      const existing = result.get(matchedBrand.id) ?? []
+      existing.push(account)
+      result.set(matchedBrand.id, existing)
+    }
+  }
+
+  return result
+}

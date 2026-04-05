@@ -2,6 +2,14 @@ export const maxDuration = 300
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  fetchMixpostAccounts,
+  uploadMediaFromUrl,
+  createMixpostPost,
+  resolveAccountIdsForPlatform,
+  type MixpostVersion,
+} from '@/lib/mixpost/client'
+import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
 
 export async function GET(request: Request) {
   // Verify cron secret
@@ -15,13 +23,41 @@ export async function GET(request: Request) {
   // Find posts due for publishing
   const { data: duePosts, error } = await supabase
     .from('scheduled_posts')
-    .select('*, brands(name, social_urls, post_signature), media_items(file_url, file_name)')
+    .select('*, brands(id, name, slug, social_urls, post_signature), media_items(file_url, file_name)')
     .eq('status', 'scheduled')
     .lte('scheduled_at', new Date().toISOString())
     .limit(20)
 
   if (error || !duePosts?.length) {
     return NextResponse.json({ published: 0, message: 'No posts due' })
+  }
+
+  // Pre-fetch Mixpost accounts once for all posts
+  const mixpostUrl = process.env.MIXPOST_API_URL
+  const mixpostToken = process.env.MIXPOST_API_TOKEN
+  const useMixpost = Boolean(mixpostUrl && mixpostToken)
+
+  let brandAccountMap: Map<string, import('@/lib/mixpost/client').MixpostAccount[]> | null = null
+
+  if (useMixpost) {
+    const allAccounts = await fetchMixpostAccounts()
+    if (allAccounts) {
+      // Build brand stubs from the posts' brands for mapping
+      const brandStubs = duePosts
+        .filter(p => p.brands)
+        .map(p => ({
+          id: (p.brands as Record<string, unknown>).id as string,
+          name: (p.brands as Record<string, unknown>).name as string,
+          slug: (p.brands as Record<string, unknown>).slug as string,
+        }))
+
+      // De-duplicate by brand ID
+      const uniqueBrands = Array.from(
+        new Map(brandStubs.map(b => [b.id, b])).values()
+      )
+
+      brandAccountMap = mapAccountsToBrandsRaw(allAccounts, uniqueBrands)
+    }
   }
 
   let published = 0
@@ -35,12 +71,10 @@ export async function GET(request: Request) {
       .eq('id', post.id)
 
     try {
-      const mediaUrl = post.media_items?.file_url
-      const mixpostUrl = process.env.MIXPOST_API_URL // e.g. https://mixpost.notrealsmart.com.au/mixpost
-      const mixpostToken = process.env.MIXPOST_API_TOKEN
-
-      // Append brand post signature if configured
-      const sig = (post.brands as Record<string, unknown>)?.post_signature as { enabled?: boolean; text?: string; format?: string; mention?: string; hashtag?: string } | undefined
+      // Build post signature suffix
+      const sig = (post.brands as Record<string, unknown>)?.post_signature as
+        | { enabled?: boolean; text?: string; format?: string; mention?: string; hashtag?: string }
+        | undefined
       let signatureSuffix = ''
       if (sig?.enabled) {
         if (sig.format === 'mention' && sig.mention) signatureSuffix = `\n\n${sig.mention}`
@@ -50,43 +84,94 @@ export async function GET(request: Request) {
 
       let externalPostId: string | null = null
 
-      if (mixpostUrl && mixpostToken) {
+      if (useMixpost && brandAccountMap) {
         // ── Publish via Mixpost (self-hosted, free) ──
-        const platformMap: Record<string, string> = {
-          instagram: 'instagram',
-          facebook: 'facebook_page',
-          linkedin: 'linkedin',
-          twitter: 'x',
-          tiktok: 'tiktok',
-          youtube: 'youtube',
+
+        // 1. Resolve Mixpost account IDs for this brand + platform
+        const brandId = post.brand_id as string
+        const brandAccounts = brandAccountMap.get(brandId) ?? []
+        const accountIds = resolveAccountIdsForPlatform(post.platform, brandAccounts)
+
+        if (accountIds.length === 0) {
+          throw new Error(
+            `No Mixpost account found for platform "${post.platform}" on brand "${(post.brands as Record<string, unknown>)?.name ?? brandId}". Connect this platform in Mixpost first.`
+          )
         }
 
-        const mixpostWorkspace = process.env.MIXPOST_WORKSPACE_UUID
-        const postsPath = mixpostWorkspace
-          ? `${mixpostUrl}/api/${mixpostWorkspace}/posts`
-          : `${mixpostUrl}/api/posts`
-        const mixpostRes = await fetch(postsPath, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${mixpostToken}`,
-          },
-          body: JSON.stringify({
-            body: [{ body: post.caption + (post.hashtags?.length ? '\n\n' + post.hashtags.map((h: string) => `#${h}`).join(' ') : '') + signatureSuffix }],
-            accounts: [], // Mixpost will use all connected accounts of the specified type
-            schedule_at: new Date().toISOString(),
-            status: 1, // 1 = published
-          }),
+        // 2. Gather media URLs from media_items
+        const mediaUrls: string[] = []
+
+        // Carousel support: media_item_ids array
+        const mediaItemIds = (post as Record<string, unknown>).media_item_ids as string[] | undefined
+        if (mediaItemIds?.length) {
+          const { data: mediaItems } = await supabase
+            .from('media_items')
+            .select('file_url')
+            .in('id', mediaItemIds)
+          mediaUrls.push(...(mediaItems ?? []).map((m: { file_url: string }) => m.file_url))
+        }
+
+        // Single media fallback (joined relation)
+        if (mediaUrls.length === 0 && post.media_items?.file_url) {
+          mediaUrls.push(post.media_items.file_url as string)
+        }
+
+        // 3. Upload media to Mixpost
+        const mixpostMediaIds: number[] = []
+        for (const url of mediaUrls) {
+          const result = await uploadMediaFromUrl(url)
+          if (result) mixpostMediaIds.push(result.id)
+        }
+
+        // 4. Build caption with hashtags + signature
+        let caption = post.caption as string
+        const hashtags = post.hashtags as string[] | null
+        if (hashtags?.length) {
+          caption += '\n\n' + hashtags.map((h: string) => `#${h}`).join(' ')
+        }
+        caption += signatureSuffix
+
+        // 5. Build platform-specific options
+        const platformOptions: Record<string, unknown> = {}
+        const postType = (post as Record<string, unknown>).post_type as string | undefined
+
+        if (post.platform === 'instagram') {
+          platformOptions.type = postType === 'reel' ? 'reel' : 'post'
+        }
+        if (post.platform === 'tiktok') {
+          platformOptions.privacy_level = 'PUBLIC_TO_EVERYONE'
+          if (postType === 'carousel') platformOptions.auto_add_music = true
+        }
+        if (post.platform === 'linkedin') {
+          platformOptions.visibility = 'PUBLIC'
+        }
+
+        // 6. Build version (original version targets all selected accounts)
+        const version: MixpostVersion = {
+          account_id: 0,
+          is_original: true,
+          content: [{
+            body: caption,
+            media: mixpostMediaIds,
+            url: null,
+            video_thumbs: [],
+          }],
+          options: Object.keys(platformOptions).length > 0 ? platformOptions : undefined,
+        }
+
+        // 7. Create post in Mixpost
+        const result = await createMixpostPost({
+          accounts: accountIds,
+          versions: [version],
+          schedule_now: true,
         })
 
-        const result = await mixpostRes.json()
-
-        if (!mixpostRes.ok) {
-          throw new Error(result.message ?? `Mixpost error ${mixpostRes.status}`)
+        if (!result) {
+          throw new Error('Failed to create Mixpost post — API returned no result')
         }
 
-        externalPostId = result.data?.id ?? result.id ?? null
-      } else {
+        externalPostId = result.id
+      } else if (!useMixpost) {
         // ── Fallback: Ayrshare ──
         const { data: integration } = await supabase
           .from('user_integrations')
@@ -95,11 +180,18 @@ export async function GET(request: Request) {
           .eq('provider', 'ayrshare')
           .single()
 
-        const apiKey = (integration?.cached_data?.api_key as string) || process.env.AYRSHARE_API_KEY || null
+        const apiKey =
+          (integration?.cached_data?.api_key as string) ||
+          process.env.AYRSHARE_API_KEY ||
+          null
 
         if (!apiKey) {
-          throw new Error('No publishing service configured. Set MIXPOST_API_URL + MIXPOST_API_TOKEN or an Ayrshare API key.')
+          throw new Error(
+            'No publishing service configured. Set MIXPOST_API_URL + MIXPOST_API_TOKEN or an Ayrshare API key.'
+          )
         }
+
+        const mediaUrl = post.media_items?.file_url as string | undefined
 
         const ayrshareRes = await fetch('https://app.ayrshare.com/api/post', {
           method: 'POST',
@@ -108,10 +200,10 @@ export async function GET(request: Request) {
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            post: post.caption + signatureSuffix,
+            post: (post.caption as string) + signatureSuffix,
             platforms: [post.platform === 'twitter' ? 'twitter' : post.platform],
             ...(mediaUrl ? { mediaUrls: [mediaUrl] } : {}),
-            ...(post.hashtags?.length ? { hashtags: post.hashtags } : {}),
+            ...(post.hashtags ? { hashtags: post.hashtags } : {}),
           }),
         })
 
@@ -122,6 +214,9 @@ export async function GET(request: Request) {
         }
 
         externalPostId = result.id ?? result.postId ?? null
+      } else {
+        // Mixpost configured but accounts fetch failed — retry next cron tick
+        throw new Error('Mixpost configured but could not fetch accounts. Will retry.')
       }
 
       // Mark as published
