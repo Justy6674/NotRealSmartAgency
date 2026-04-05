@@ -470,6 +470,396 @@ export function createDesignGraphicTool(
 }
 
 // ---------------------------------------------------------------------------
+// Start editing transaction
+// ---------------------------------------------------------------------------
+export function createStartEditingTransactionTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Start an editing session on a Canva design. Returns a transaction ID needed for all edit operations. Always commit or cancel when done.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID to start editing'),
+    }),
+    execute: async ({ design_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/editing/transactions`,
+          { method: 'POST', body: JSON.stringify({}) }
+        )
+        const data = await res.json()
+        const transactionId =
+          data.transaction?.id ?? data.id ?? data.transaction_id
+
+        return {
+          success: true,
+          transaction_id: transactionId,
+          design_id,
+          message: `Editing session started on design ${design_id}. Transaction ID: ${transactionId}.\n\nYou can now perform edit operations (replace text, swap images, format text). Remember to commit when done or cancel to discard changes.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to start editing transaction',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Perform editing operations
+// ---------------------------------------------------------------------------
+export function createPerformEditingOperationsTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Perform editing operations on a Canva design — replace text, swap images, format text, delete elements. Requires an active editing transaction.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID being edited'),
+      transaction_id: z
+        .string()
+        .describe('Active transaction ID from start_editing_transaction'),
+      operations: z
+        .array(
+          z.object({
+            type: z
+              .enum([
+                'replace_text',
+                'find_and_replace_text',
+                'update_fill',
+                'delete_element',
+                'format_text',
+              ])
+              .describe('Type of editing operation'),
+            target: z
+              .string()
+              .optional()
+              .describe('Element ID to target'),
+            find: z
+              .string()
+              .optional()
+              .describe('Text to find (for find_and_replace)'),
+            replacement: z
+              .string()
+              .optional()
+              .describe('Replacement text'),
+            url: z
+              .string()
+              .optional()
+              .describe('Image/video URL for update_fill'),
+            font_size: z.number().optional().describe('Font size in points'),
+            font_weight: z
+              .string()
+              .optional()
+              .describe('Font weight (e.g. bold, normal)'),
+            color: z
+              .string()
+              .optional()
+              .describe('Hex colour (e.g. #FF0000)'),
+            text_align: z
+              .enum(['left', 'center', 'right'])
+              .optional()
+              .describe('Text alignment'),
+          })
+        )
+        .describe('Array of editing operations to perform'),
+    }),
+    execute: async ({ design_id, transaction_id, operations }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        // Map our schema to Canva's operation format
+        const canvaOps = operations.map((op) => {
+          const canvaOp: Record<string, unknown> = { type: op.type }
+
+          if (op.target) canvaOp.target = { element_id: op.target }
+          if (op.find !== undefined) canvaOp.find = op.find
+          if (op.replacement !== undefined) canvaOp.replacement = op.replacement
+          if (op.url) canvaOp.url = op.url
+
+          // Format text properties
+          const formatting: Record<string, unknown> = {}
+          if (op.font_size) formatting.font_size = op.font_size
+          if (op.font_weight) formatting.font_weight = op.font_weight
+          if (op.color) formatting.color = op.color
+          if (op.text_align) formatting.text_align = op.text_align
+          if (Object.keys(formatting).length > 0)
+            canvaOp.formatting = formatting
+
+          return canvaOp
+        })
+
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/editing/transactions/${transaction_id}/operations`,
+          { method: 'POST', body: JSON.stringify({ operations: canvaOps }) }
+        )
+        const data = await res.json()
+
+        return {
+          success: true,
+          design_id,
+          transaction_id,
+          operations_count: operations.length,
+          result: data,
+          message: `Successfully queued ${operations.length} editing operation(s) on design ${design_id}. Remember to commit the transaction to save changes.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to perform editing operations',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Commit editing transaction
+// ---------------------------------------------------------------------------
+export function createCommitEditingTransactionTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Save all pending changes to a Canva design. Must be called after performing edit operations.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID being edited'),
+      transaction_id: z
+        .string()
+        .describe('Active transaction ID to commit'),
+    }),
+    execute: async ({ design_id, transaction_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/editing/transactions/${transaction_id}/commit`,
+          { method: 'POST' }
+        )
+
+        return {
+          success: true,
+          design_id,
+          transaction_id,
+          message: `All changes have been saved to design ${design_id}. The editing session is now closed.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to commit editing transaction',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Cancel editing transaction
+// ---------------------------------------------------------------------------
+export function createCancelEditingTransactionTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Discard all pending changes to a Canva design without saving.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID being edited'),
+      transaction_id: z
+        .string()
+        .describe('Active transaction ID to cancel'),
+    }),
+    execute: async ({ design_id, transaction_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/editing/transactions/${transaction_id}/cancel`,
+          { method: 'POST' }
+        )
+
+        return {
+          success: true,
+          design_id,
+          transaction_id,
+          message: `All pending changes to design ${design_id} have been discarded. The editing session is now closed.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to cancel editing transaction',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Get design content (text)
+// ---------------------------------------------------------------------------
+export function createGetDesignContentTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Read all text content from a Canva design. Useful for checking copy, compliance review, or extracting text for repurposing.',
+    inputSchema: z.object({
+      design_id: z
+        .string()
+        .describe('Canva design ID to read content from'),
+    }),
+    execute: async ({ design_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(apiKey, `/designs/${design_id}/content`)
+        const data = await res.json()
+
+        return {
+          success: true,
+          design_id,
+          content: data,
+          message: `Retrieved text content from design ${design_id}. Review the content field for all text elements across pages.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to get design content',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Get design pages
+// ---------------------------------------------------------------------------
+export function createGetDesignPagesTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Get a list of all pages in a Canva design with thumbnails. Useful for presentations and multi-page designs.',
+    inputSchema: z.object({
+      design_id: z
+        .string()
+        .describe('Canva design ID to get pages from'),
+    }),
+    execute: async ({ design_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(apiKey, `/designs/${design_id}/pages`)
+        const data = await res.json()
+        const pages = data.items ?? data.pages ?? []
+
+        return {
+          success: true,
+          design_id,
+          page_count: pages.length,
+          pages,
+          message: `Design ${design_id} has ${pages.length} page(s).${pages.length > 0 ? '\n' + pages.map((p: { id?: string; title?: string }, i: number) => `${i + 1}. ${p.title || `Page ${i + 1}`} (ID: ${p.id})`).join('\n') : ''}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to get design pages',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Get design assets / elements
+// ---------------------------------------------------------------------------
+export function createGetDesignAssetsTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Get metadata for elements in a Canva design — IDs, types, positions. Needed to target specific elements for editing.',
+    inputSchema: z.object({
+      design_id: z
+        .string()
+        .describe('Canva design ID to get assets from'),
+      page_id: z
+        .string()
+        .optional()
+        .describe('Optional page ID to filter elements by page'),
+    }),
+    execute: async ({ design_id, page_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const path = page_id
+          ? `/designs/${design_id}/elements?page_id=${page_id}`
+          : `/designs/${design_id}/elements`
+        const res = await canvaFetch(apiKey, path)
+        const data = await res.json()
+        const elements = data.items ?? data.elements ?? []
+
+        return {
+          success: true,
+          design_id,
+          page_id: page_id ?? null,
+          element_count: elements.length,
+          elements,
+          message: `Found ${elements.length} element(s) in design ${design_id}${page_id ? ` (page ${page_id})` : ''}.${elements.length > 0 ? '\n' + elements.map((e: { id?: string; type?: string }, i: number) => `${i + 1}. ${e.type ?? 'unknown'} (ID: ${e.id})`).join('\n') : ''}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to get design assets',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Export design (unchanged)
 // ---------------------------------------------------------------------------
 export function createExportDesignTool(
