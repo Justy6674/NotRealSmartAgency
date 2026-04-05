@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Button } from '@/components/ui/button'
 import { Upload, Loader2, Check, X } from 'lucide-react'
+import { createBrowserClient } from '@supabase/ssr'
 
 interface UploadProgress {
   fileName: string
@@ -16,6 +16,9 @@ interface MediaUploaderProps {
   onUploadComplete: () => void
 }
 
+const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'video/webm']
+const MAX_SIZE = 100 * 1024 * 1024 // 100MB
+
 export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<UploadProgress[]>([])
@@ -26,24 +29,61 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
     setProgress(prev => [...prev, entry])
 
     try {
-      // Upload
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('brandId', brandId)
-
-      const uploadRes = await fetch('/api/media/upload', { method: 'POST', body: formData })
-      if (!uploadRes.ok) {
-        const err = await uploadRes.json()
-        throw new Error(err.error ?? 'Upload failed')
+      // Validate
+      if (!ALLOWED_TYPES.some(t => file.type.startsWith(t.split('/')[0]))) {
+        throw new Error('Unsupported file type. Upload MP4, MOV, MP3, M4A, or WebM.')
+      }
+      if (file.size > MAX_SIZE) {
+        throw new Error('File too large. Maximum 100MB.')
       }
 
-      const mediaItem = await uploadRes.json()
+      // Upload directly to Supabase Storage from the browser (bypasses Vercel 4.5MB limit)
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      )
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const timestamp = Date.now()
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const storagePath = `${user.id}/${brandId}/${timestamp}_${safeName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('media')
+        .upload(storagePath, file, {
+          contentType: file.type,
+          upsert: false,
+        })
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+
+      // Get public URL
+      const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+
+      // Create database record
+      const { data: mediaItem, error: dbError } = await supabase
+        .from('media_items')
+        .insert({
+          user_id: user.id,
+          brand_id: brandId,
+          file_url: urlData.publicUrl,
+          file_name: file.name,
+          file_type: file.type,
+          file_size_bytes: file.size,
+          transcription_status: 'pending',
+        })
+        .select()
+        .single()
+
+      if (dbError) throw new Error(dbError.message)
 
       setProgress(prev =>
         prev.map(p => p.fileName === file.name ? { ...p, status: 'transcribing', mediaItemId: mediaItem.id } : p)
       )
 
-      // Auto-transcribe
+      // Auto-transcribe via API (small JSON payload, no file)
       const transcribeRes = await fetch('/api/media/transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,13 +110,13 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
     setUploading(true)
     const fileArray = Array.from(files)
 
-    // Process sequentially to avoid overwhelming the server
     for (const file of fileArray) {
       await processFile(file)
     }
 
     setUploading(false)
     onUploadComplete()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId, onUploadComplete])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
