@@ -23,7 +23,7 @@ import { createRepurposeContentTool } from './repurpose-content'
 import { createFillCalendarTool } from './fill-calendar'
 import { createSaveBrandInfoTool } from './save-brand-info'
 import { createReadProformaTool, createUpdateProformaTool } from './proforma'
-import { createDesignGraphicTool, createExportDesignTool, createSearchDesignsTool, createSearchFoldersTool, createListFolderItemsTool, createListBrandKitsTool, createGetDesignTool, createStartEditingTransactionTool, createPerformEditingOperationsTool, createCommitEditingTransactionTool, createCancelEditingTransactionTool, createGetDesignContentTool, createGetDesignPagesTool, createGetDesignAssetsTool, createResizeDesignTool, createUploadAssetFromUrlTool, createDesignFromCandidateTool, createRequestOutlineReviewTool, createImportDesignFromUrlTool } from './canva'
+import { createDesignGraphicTool, createExportDesignTool, createSearchDesignsTool, createSearchFoldersTool, createListFolderItemsTool, createListBrandKitsTool, createGetDesignTool, createStartEditingTransactionTool, createPerformEditingOperationsTool, createCommitEditingTransactionTool, createCancelEditingTransactionTool, createGetDesignContentTool, createGetDesignPagesTool, createGetDesignAssetsTool, createResizeDesignTool, createUploadAssetFromUrlTool, createDesignFromCandidateTool, createRequestOutlineReviewTool, createImportDesignFromUrlTool, createCommentOnDesignTool, createListCommentsTool, createListRepliesTool, createReplyToCommentTool, createCreateFolderTool, createMoveItemToFolderTool, createGetExportFormatsTool, createResolveShortlinkTool, createGenerateDesignStructuredTool, createGetPresenterNotesTool } from './canva'
 import { createCreateVideoTool } from './create-video'
 import { createWriteBlogTool } from './write-blog'
 import { createWriteEmailCampaignTool } from './write-email-campaign'
@@ -41,6 +41,14 @@ import { createRegisterWebhookTool } from './register-webhook'
 import { createTranslateVideoTool } from './translate-video'
 import { createTranslationStatusTool } from './translation-status'
 import { createListHeyGenTemplatesTool, createGetHeyGenTemplateTool, createGenerateFromTemplateTool } from './heygen-templates'
+import { createListMixpostTemplatesTool, createCreateMixpostTemplateTool } from './mixpost-templates'
+import { createGeneratePhotoAvatarTool } from './photo-avatar'
+import { createTextToSpeechTool } from './text-to-speech'
+import { createListTalkingPhotosTool, createUploadTalkingPhotoTool } from './talking-photo'
+import { createListHeyGenAssetsTool } from './heygen-assets'
+import { createListHeyGenVideosTool, createGetVideoShareUrlTool } from './list-videos'
+import { createGetBrandGlossaryTool } from './brand-glossary'
+import { createListVoiceLocalesTool } from './voice-locales'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -119,6 +127,16 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const designFromCandidate = createDesignFromCandidateTool(ctx.supabase, ctx.userId)
   const requestOutlineReview = createRequestOutlineReviewTool(ctx.supabase, ctx.userId)
   const importDesignFromUrl = createImportDesignFromUrlTool(ctx.supabase, ctx.userId)
+  const commentOnDesign = createCommentOnDesignTool(ctx.supabase, ctx.userId)
+  const listComments = createListCommentsTool(ctx.supabase, ctx.userId)
+  const listReplies = createListRepliesTool(ctx.supabase, ctx.userId)
+  const replyToComment = createReplyToCommentTool(ctx.supabase, ctx.userId)
+  const createFolder = createCreateFolderTool(ctx.supabase, ctx.userId)
+  const moveItemToFolder = createMoveItemToFolderTool(ctx.supabase, ctx.userId)
+  const getExportFormats = createGetExportFormatsTool(ctx.supabase, ctx.userId)
+  const resolveShortlink = createResolveShortlinkTool(ctx.supabase, ctx.userId)
+  const generateDesignStructured = createGenerateDesignStructuredTool(ctx.supabase, ctx.userId)
+  const getPresenterNotes = createGetPresenterNotesTool(ctx.supabase, ctx.userId)
   const createVideo = createCreateVideoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const writeBlog = createWriteBlogTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const writeEmailCampaign = createWriteEmailCampaignTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
@@ -139,6 +157,17 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const listHeyGenTemplates = createListHeyGenTemplatesTool(ctx.supabase, ctx.userId)
   const getHeyGenTemplate = createGetHeyGenTemplateTool(ctx.supabase, ctx.userId)
   const generateFromTemplateTool = createGenerateFromTemplateTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const generatePhotoAvatar = createGeneratePhotoAvatarTool(ctx.supabase, ctx.userId)
+  const textToSpeechTool = createTextToSpeechTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
+  const listTalkingPhotos = createListTalkingPhotosTool(ctx.supabase, ctx.userId)
+  const uploadTalkingPhoto = createUploadTalkingPhotoTool(ctx.supabase, ctx.userId)
+  const listHeyGenAssets = createListHeyGenAssetsTool(ctx.supabase, ctx.userId)
+  const listHeyGenVideos = createListHeyGenVideosTool(ctx.supabase, ctx.userId)
+  const getVideoShareUrl = createGetVideoShareUrlTool(ctx.supabase, ctx.userId)
+  const getBrandGlossary = createGetBrandGlossaryTool(ctx.supabase, ctx.userId)
+  const listVoiceLocales = createListVoiceLocalesTool(ctx.supabase, ctx.userId)
+  const listMixpostTemplates = createListMixpostTemplatesTool()
+  const createMixpostTemplateTool = createCreateMixpostTemplateTool()
 
   // Base management tools every agent gets
   const managementTools = {
@@ -190,6 +219,16 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       design_from_candidate: designFromCandidate,
       request_outline_review: requestOutlineReview,
       import_design_from_url: importDesignFromUrl,
+      comment_on_design: commentOnDesign,
+      list_comments: listComments,
+      list_replies: listReplies,
+      reply_to_comment: replyToComment,
+      create_folder: createFolder,
+      move_item_to_folder: moveItemToFolder,
+      get_export_formats: getExportFormats,
+      resolve_shortlink: resolveShortlink,
+      generate_design_structured: generateDesignStructured,
+      get_presenter_notes: getPresenterNotes,
       create_video: createVideo,
       write_blog: writeBlog,
       deep_competitor_scan: deepCompetitorScan,
@@ -210,10 +249,21 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       query_social_analytics: querySocialAnalytics,
       manage_tags: manageTags,
       browse_mixpost_media: browseMixpostMedia,
+      generate_photo_avatar: generatePhotoAvatar,
+      text_to_speech: textToSpeechTool,
+      list_talking_photos: listTalkingPhotos,
+      upload_talking_photo: uploadTalkingPhoto,
+      list_heygen_assets: listHeyGenAssets,
+      list_heygen_videos: listHeyGenVideos,
+      get_video_share_url: getVideoShareUrl,
+      get_brand_glossary: getBrandGlossary,
+      list_voice_locales: listVoiceLocales,
+      list_mixpost_templates: listMixpostTemplates,
+      create_mixpost_template: createMixpostTemplateTool,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, generate_video_agent: videoAgent, translate_video: translateVideoTool, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, browse_mixpost_media: browseMixpostMedia, ...managementTools },
-    growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, generate_video_agent: videoAgent, translate_video: translateVideoTool, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, browse_mixpost_media: browseMixpostMedia, text_to_speech: textToSpeechTool, list_heygen_assets: listHeyGenAssets, list_heygen_videos: listHeyGenVideos, get_video_share_url: getVideoShareUrl, list_voice_locales: listVoiceLocales, ...managementTools },
+    growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, list_heygen_videos: listHeyGenVideos, get_video_share_url: getVideoShareUrl, ...managementTools },
     strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, query_social_analytics: querySocialAnalytics, manage_tags: manageTags, request_outline_review: requestOutlineReview, import_design_from_url: importDesignFromUrl, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
@@ -221,10 +271,10 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, write_blog: writeBlog, ...managementTools },
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },
-    brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_kits: listBrandKits, get_design: getDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, analyse_voice: analyseVoice, ...managementTools },
+    brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_kits: listBrandKits, get_design: getDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, analyse_voice: analyseVoice, generate_photo_avatar: generatePhotoAvatar, list_heygen_assets: listHeyGenAssets, get_brand_glossary: getBrandGlossary, ...managementTools },
     analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, query_social_analytics: querySocialAnalytics, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, register_webhook: registerWebhook, ...managementTools },
-    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, generate_video_agent: videoAgent, create_multi_scene_video: multiSceneVideo, translate_video: translateVideoTool, translation_status: translationStatus, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, upload_asset_from_url: uploadAssetFromUrl, browse_mixpost_media: browseMixpostMedia, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, generate_video_agent: videoAgent, create_multi_scene_video: multiSceneVideo, translate_video: translateVideoTool, translation_status: translationStatus, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, upload_asset_from_url: uploadAssetFromUrl, browse_mixpost_media: browseMixpostMedia, generate_photo_avatar: generatePhotoAvatar, text_to_speech: textToSpeechTool, list_talking_photos: listTalkingPhotos, upload_talking_photo: uploadTalkingPhoto, list_heygen_assets: listHeyGenAssets, list_heygen_videos: listHeyGenVideos, get_video_share_url: getVideoShareUrl, get_brand_glossary: getBrandGlossary, list_voice_locales: listVoiceLocales, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 
