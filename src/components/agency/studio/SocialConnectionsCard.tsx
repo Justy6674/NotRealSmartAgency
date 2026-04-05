@@ -1,7 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Settings2, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
+import { SocialAccountsManager } from '@/components/agency/SocialAccountsManager'
 import type { Brand } from '@/types/database'
 import type { SocialAccount } from '@/hooks/useStudioData'
 
@@ -28,6 +31,7 @@ interface SocialConnectionsCardProps {
 export function SocialConnectionsCard({ brand, accounts, lastPublishedByPlatform }: SocialConnectionsCardProps) {
   const { setPendingReviewMessage } = useAgencyStore()
   const router = useRouter()
+  const [showManager, setShowManager] = useState(false)
 
   // Get platforms from channel strategy
   const strategy = brand.channel_strategy as Record<string, unknown> | null
@@ -98,6 +102,28 @@ export function SocialConnectionsCard({ brand, accounts, lastPublishedByPlatform
           </div>
         ))}
       </div>
+
+      {/* Edit connections toggle */}
+      <button
+        onClick={() => setShowManager(prev => !prev)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full justify-center pt-1 border-t border-border/50"
+      >
+        <Settings2 className="h-3 w-3" />
+        {showManager ? 'Hide' : 'Edit connections'}
+        {showManager ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+
+      {/* Inline account manager */}
+      {showManager && (
+        <div className="pt-2 border-t border-border/50">
+          <SocialAccountsManager
+            brandId={brand.id}
+            brandName={brand.name}
+            compact
+            onSaved={() => setShowManager(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }

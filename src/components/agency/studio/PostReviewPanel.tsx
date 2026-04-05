@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { X, Check, Copy, Download, Calendar, Send } from 'lucide-react'
+import { X, Check, Copy, Download, Calendar, Send, Loader2, Rocket } from 'lucide-react'
 import type { ScheduledPost, Brand } from '@/types/database'
 
 const PLATFORM_CONFIG: Record<string, { label: string; maxChars: number; colour: string }> = {
@@ -42,6 +42,8 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
   const [addingHashtagId, setAddingHashtagId] = useState<string | null>(null)
   const [newHashtag, setNewHashtag] = useState('')
   const [scheduleTimes, setScheduleTimes] = useState<Record<string, string>>({})
+  const [publishingAll, setPublishingAll] = useState(false)
+  const [publishProgress, setPublishProgress] = useState<string | null>(null)
 
   const patchPost = useCallback(async (id: string, body: Record<string, unknown>) => {
     const res = await fetch('/api/scheduled-posts', {
@@ -85,6 +87,46 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
     )
     connectedDrafts.forEach(p => patchPost(p.id, { status: 'scheduled' }))
   }, [posts, connectedPlatforms, patchPost])
+
+  // Publishable posts: connected platforms, not yet published
+  const publishablePosts = posts.filter(
+    p => connectedPlatforms.includes(p.platform) && p.status !== 'published' && p.status !== 'publishing'
+  )
+
+  const handlePublishAllConnected = useCallback(async () => {
+    if (publishablePosts.length === 0) return
+    setPublishingAll(true)
+    setPublishProgress(`Publishing ${publishablePosts.length} post${publishablePosts.length !== 1 ? 's' : ''}...`)
+
+    try {
+      const res = await fetch('/api/scheduled-posts/publish-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postIds: publishablePosts.map(p => p.id) }),
+      })
+
+      if (!res.ok) {
+        setPublishProgress('Publishing failed. Please try again.')
+        return
+      }
+
+      const data = await res.json()
+      const { published, failed } = data as { published: number; failed: number }
+
+      if (failed === 0) {
+        setPublishProgress(`All ${published} post${published !== 1 ? 's' : ''} published successfully!`)
+      } else {
+        setPublishProgress(`${published} published, ${failed} failed. Check individual posts.`)
+      }
+
+      onUpdate()
+    } catch {
+      setPublishProgress('Something went wrong. Please try again.')
+    } finally {
+      setPublishingAll(false)
+      setTimeout(() => setPublishProgress(null), 5000)
+    }
+  }, [publishablePosts, onUpdate])
 
   const handleCopyCaption = useCallback(async (post: ScheduledPost) => {
     const hashtags = post.hashtags?.length ? '\n\n' + post.hashtags.map(h => `#${h}`).join(' ') : ''
@@ -157,6 +199,38 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
           </button>
         </div>
       </div>
+
+      {/* Publish All Connected — primary action */}
+      {publishablePosts.length > 0 && (
+        <button
+          onClick={handlePublishAllConnected}
+          disabled={publishingAll}
+          className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60 hover:bg-emerald-500 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+        >
+          {publishingAll ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {publishProgress}
+            </>
+          ) : (
+            <>
+              <Rocket className="h-4 w-4" />
+              Publish All Connected ({publishablePosts.length} post{publishablePosts.length !== 1 ? 's' : ''})
+            </>
+          )}
+        </button>
+      )}
+
+      {/* Progress / result message */}
+      {publishProgress && !publishingAll && (
+        <div className={`rounded-lg px-3 py-2 text-xs font-medium text-center ${
+          publishProgress.includes('failed') || publishProgress.includes('wrong')
+            ? 'bg-red-500/10 text-red-400'
+            : 'bg-emerald-500/10 text-emerald-400'
+        }`}>
+          {publishProgress}
+        </div>
+      )}
 
       {/* Per-platform cards */}
       {posts.map(post => {

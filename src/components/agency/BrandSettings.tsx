@@ -8,8 +8,10 @@ import { CompetitorEditor } from './CompetitorEditor'
 import { VoiceAudienceEditor } from './VoiceAudienceEditor'
 import { DigestSettings } from './DigestSettings'
 import { ProviderSettings } from './ProviderSettings'
-import type { Brand, Competitor, ToneOfVoice, TargetAudience } from '@/types/database'
-import { Settings, Swords, Volume2, Bell, Video } from 'lucide-react'
+import { BrandWatermarkEditor } from './BrandWatermarkEditor'
+import type { Brand, BrandWatermark, Competitor, ToneOfVoice, TargetAudience } from '@/types/database'
+import { Settings, Swords, Volume2, Bell, Video, Stamp, Share2 } from 'lucide-react'
+import { SocialAccountsManager } from './SocialAccountsManager'
 
 interface BrandSettingsProps {
   brand: Brand
@@ -17,8 +19,10 @@ interface BrandSettingsProps {
 
 const TABS = [
   { id: 'profile', label: 'Profile', icon: Settings },
+  { id: 'socials', label: 'Socials', icon: Share2 },
   { id: 'competitors', label: 'Competitors', icon: Swords },
   { id: 'voice', label: 'Voice & Audience', icon: Volume2 },
+  { id: 'watermark', label: 'Watermark', icon: Stamp },
   { id: 'digest', label: 'Digest', icon: Bell },
   { id: 'video', label: 'Video', icon: Video },
 ] as const
@@ -70,6 +74,17 @@ export function BrandSettings({ brand }: BrandSettingsProps) {
     router.refresh()
   }
 
+  const handleWatermarkSave = async (watermark: BrandWatermark) => {
+    setSaving(true)
+    await fetch('/api/brands', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: brand.id, watermark }),
+    })
+    setSaving(false)
+    router.refresh()
+  }
+
   return (
     <div className="space-y-4">
       {/* Tab nav */}
@@ -95,6 +110,10 @@ export function BrandSettings({ brand }: BrandSettingsProps) {
       <div className="max-w-2xl">
         {activeTab === 'profile' && (
           <BrandProfileForm brand={brand} />
+        )}
+
+        {activeTab === 'socials' && (
+          <SocialAccountsManager brandId={brand.id} brandName={brand.name} />
         )}
 
         {activeTab === 'competitors' && (
@@ -126,6 +145,10 @@ export function BrandSettings({ brand }: BrandSettingsProps) {
               {saving ? 'Saving...' : 'Save Voice & Audience'}
             </button>
           </div>
+        )}
+
+        {activeTab === 'watermark' && (
+          <BrandWatermarkEditor brand={brand} onSave={handleWatermarkSave} saving={saving} />
         )}
 
         {activeTab === 'digest' && (
