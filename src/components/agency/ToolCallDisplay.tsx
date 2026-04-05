@@ -177,6 +177,12 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
   const allStepsDone = !isComplete && currentStep >= steps.length - 1
     && elapsed * 1000 > lastStepDelay + 3000
 
+  // Safety timeout — if the tool hasn't returned after 3 minutes, assume it completed
+  // (the actual result may have been too large or the stream dropped)
+  const MAX_WAIT_SECONDS = 180
+  const timedOut = !isComplete && elapsed > MAX_WAIT_SECONDS
+  const effectiveComplete = isComplete || timedOut
+
   return (
     <div className="mt-2 space-y-1.5">
       {/* Agent personality header */}
@@ -185,14 +191,14 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
           <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', personality.colour)}>
             {personality.name}
           </span>
-          {!isComplete && (
+          {!effectiveComplete && (
             <span className="text-[10px] text-muted-foreground/60">{elapsed}s</span>
           )}
         </div>
       )}
       {steps.map((step, i) => {
-        const isDone = isComplete || i < currentStep
-        const isActive = !isComplete && i === currentStep
+        const isDone = effectiveComplete || i < currentStep
+        const isActive = !effectiveComplete && i === currentStep
 
         return (
           <div key={i} className="flex items-center gap-2 text-xs">
@@ -211,13 +217,13 @@ function DelegationProgress({ agentType, isComplete }: { agentType: string; isCo
           </div>
         )
       })}
-      {allStepsDone && (
+      {allStepsDone && !timedOut && (
         <div className="flex items-center gap-2 text-xs">
           <Loader2 className="h-3 w-3 animate-spin text-amber-400 shrink-0" />
           <span className="text-amber-400">Still working... complex tasks take a moment</span>
         </div>
       )}
-      {isComplete && (
+      {effectiveComplete && (
         <div className="flex items-center gap-2 text-xs">
           <Check className="h-3 w-3 text-emerald-500 shrink-0" />
           <span className="text-emerald-500 font-medium">Complete</span>
