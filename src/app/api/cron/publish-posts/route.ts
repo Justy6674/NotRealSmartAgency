@@ -20,6 +20,17 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient()
 
+  // Safety check: time out posts stuck in 'publishing' for more than 10 minutes
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  await supabase
+    .from('scheduled_posts')
+    .update({
+      status: 'failed',
+      error: 'Publishing timed out — no webhook confirmation received',
+    })
+    .eq('status', 'publishing')
+    .lt('updated_at', tenMinutesAgo)
+
   // Find posts due for publishing
   const { data: duePosts, error } = await supabase
     .from('scheduled_posts')
@@ -219,12 +230,11 @@ export async function GET(request: Request) {
         throw new Error('Mixpost configured but could not fetch accounts. Will retry.')
       }
 
-      // Mark as published
+      // Mark as publishing — webhook will confirm final 'published' status
       await supabase
         .from('scheduled_posts')
         .update({
-          status: 'published',
-          published_at: new Date().toISOString(),
+          status: 'publishing',
           external_post_id: externalPostId,
         })
         .eq('id', post.id)

@@ -15,6 +15,7 @@ import { StrategySummaryCard } from './StrategySummaryCard'
 import { CanvaDesignsCard } from './CanvaDesignsCard'
 import { VideosCard } from './VideosCard'
 import { CompetitorIntelCard } from './CompetitorIntelCard'
+import { SocialAnalyticsCard } from './SocialAnalyticsCard'
 import { AgentActivityCard } from './AgentActivityCard'
 import { StudioFeed } from './StudioFeed'
 import { PostReviewPanel } from './PostReviewPanel'
@@ -99,6 +100,9 @@ export function StudioDashboard() {
         <CompetitorIntelCard brand={data.brand} />
         <AgentActivityCard agentActivity={data.agentActivity} />
       </div>
+
+      {/* Social Analytics — full width */}
+      <SocialAnalyticsCard />
 
       {/* J. Recent Content Feed — full width */}
       <div className="space-y-3">
