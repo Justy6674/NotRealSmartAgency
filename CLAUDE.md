@@ -181,6 +181,9 @@ Per-brand `post_signature` JSONB field on `brands` table. Three formats: plain t
 `lib/agents/knowledge/social-media-benchmarks.ts` includes deep platform-specific algorithm knowledge:
 TikTok (watch time, completion rate, hook requirements), Instagram (saves/shares weighted, carousel re-engagement, Reels priority), LinkedIn (dwell time, polls, document posts), Facebook (group engagement vs dead page reach), X/Twitter (reply visibility, thread structure, pain-signal discovery), YouTube (CTR + watch time, thumbnail importance). Cross-platform growth tactics: content capsule model, repurposing chains, anti-AI detection, feedback loops.
 
+### Canva Integration
+`design_graphic` and `export_design` tools use Canva MCP (connected via `mcp__claude_ai_Canva__*`). Creative Studio's Create tab also provides direct Canva access. Brand agent and Director can generate designs, search templates, export to formats.
+
 ### Planned Major Builds (next sessions)
 1. **mem0 memory system** — replace Ruflo with semantic search, LLM extraction, graph memory
 2. **Self-updating knowledge** — daily research cron, agents stay current with AI/marketing trends
@@ -225,6 +228,32 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 - **IBM Plex Sans + Mono**, **lucide-react** icons
 - **zustand** (client state), **Zod v4** (`zod/v3` import for AI SDK tool schemas)
 
+### Room-Based Navigation (`lib/room-config.ts`)
+Agency UI is organised into 3 rooms (tabs in header):
+1. **Director's Office** (`/agency/chat`) — primary chat interface, conversations
+2. **Creative Studio** (`/agency/studio`) — intelligent agency dashboard with sub-tabs: All Content (dashboard), Calendar, Media, Create
+3. **Command Centre** (`/agency/tasks`) — operational dashboards with sub-tabs: Tasks, Agents, Approvals, Costs, Analytics, Activity
+
+Config: `src/lib/room-config.ts`. Components: `RoomTabs.tsx` (embedded in `AgencyHeader.tsx`), `RoomSubTabs.tsx`.
+
+### Creative Studio — Intelligent Agency Dashboard
+The "All Content" tab is an intelligent dashboard (`StudioDashboard.tsx`) with live feeds from all integrations. Chat panel auto-opens on Studio pages.
+
+**Dashboard sections** (in order): Director's Brief (deterministic alerts + action chips), Social Connections (Mixpost status per platform), Week-at-a-Glance (7-day calendar strip), Drafts Awaiting Action, Strategy & Pillars, Canva Designs (live thumbnails from Canva API), Videos (HeyGen outputs with player), Competitor Intel, Agent Activity Ticker, Recent Content Feed.
+
+**Data flow**: `useStudioData()` hook (`src/hooks/useStudioData.ts`) fetches from `GET /api/studio/overview?brandId=X` (aggregated endpoint) + `GET /api/canva/designs?brandId=X` (Canva proxy) in parallel.
+
+**CreateHub** (`Create` tab): 6 intent cards (Write a Post, Fill Calendar, Create Video, Design in Canva, Run Campaign, Repurpose Content) — each one-click opens chat. Quick Post form is a collapsible power-user section.
+
+### Guided Onboarding
+First-time users get a conversational onboarding flow. Instead of showing missing fields, the Director proactively guides the user: "Tell me about your business" → auto-populates brand fields. Built into `ChatInterface.tsx` auto-greet logic.
+
+### Brand DNA & Inspiration Library
+- **Brand DNA**: structured personality constraints (voice, tone, audience, values) stored on brand. Displayed as Marketing DNA Bar in chat. Director can update via conversation.
+- **Inspiration Library**: cross-industry marketing examples the brand can draw from. Agent tools (`save_output`) check against Brand DNA constraints.
+- **Emulation Wishlist**: brands/campaigns the user admires — feeds agent creative direction.
+- **Guardian Agent**: validates all outputs against Brand DNA + AHPRA/TGA rules.
+
 ### Route Structure (flat — no route groups)
 ```
 /                              → Landing page (water ripple hero — DO NOT TOUCH)
@@ -234,17 +263,18 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /privacy, /terms               → Legal pages
 /login, /signup, /forgot-password → Auth pages
 /agency                        → Agency dashboard redirect
-/agency/chat                   → Main chat interface (new conversation)
+/agency/chat                   → Director's Office (new conversation)
 /agency/chat/[conversationId]  → Existing conversation
-/agency/tasks                  → Task board
-/agency/agents                 → Org chart + budgets
-/agency/approvals              → Approval queue
-/agency/costs                  → Cost dashboard
+/agency/studio                 → Creative Studio (outputs, calendar, media, create)
+/agency/tasks                  → Command Centre → Tasks
+/agency/agents                 → Command Centre → Org chart + budgets
+/agency/approvals              → Command Centre → Approval queue
+/agency/costs                  → Command Centre → Cost dashboard
 /agency/brands                 → Brand list
 /agency/brands/[brandSlug]     → Brand profile editor
-/agency/outputs                → Output library
-/agency/media                  → Media library (upload, transcribe, generate captions)
-/agency/activity               → Activity feed
+/agency/outputs                → Output library (legacy — folded into Studio)
+/agency/media                  → Media library (legacy — folded into Studio)
+/agency/activity               → Command Centre → Activity feed
 /agency/team                   → Team member management
 /invite/[token]                → Public invite acceptance page
 /api/chat                      → streamText streaming endpoint
@@ -268,6 +298,8 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 /api/team/[id]                       → Team member PATCH role + DELETE
 /api/team/accept                     → Accept invitation by token
 /api/mixpost/accounts                → Mixpost connected accounts + brand mapping
+/api/studio/overview                 → Aggregated dashboard data (analytics, posts, outputs, videos, accounts, activity)
+/api/canva/designs                   → Canva designs proxy (thumbnails, edit URLs)
 /api/stripe/checkout, portal, webhook → Stripe integration
 ```
 

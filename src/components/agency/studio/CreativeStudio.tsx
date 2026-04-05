@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import { MediaUploader } from '@/components/agency/MediaUploader'
 import { MediaCard } from '@/components/agency/MediaCard'
-import { StudioFeed } from './StudioFeed'
+import { StudioDashboard } from './StudioDashboard'
 import { ContentCalendar } from '@/components/agency/ContentCalendar'
 import { CreateHub } from './CreateHub'
 import type { MediaItem } from '@/types/database'
@@ -122,6 +122,12 @@ function StudioMedia() {
 
 export function CreativeStudio() {
   const [activeTab, setActiveTab] = useState<TabId>('all')
+  const { setChatPanelOpen } = useAgencyStore()
+
+  // Auto-open chat panel so Director is always visible in the Studio
+  useEffect(() => {
+    setChatPanelOpen(true)
+  }, [setChatPanelOpen])
 
   return (
     <div className="flex h-full flex-col">
@@ -145,7 +151,7 @@ export function CreativeStudio() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
-        {activeTab === 'all' && <StudioFeed />}
+        {activeTab === 'all' && <StudioDashboard />}
         {activeTab === 'calendar' && <ContentCalendar />}
         {activeTab === 'media' && <StudioMedia />}
         {activeTab === 'create' && <CreateHub />}

@@ -140,7 +140,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   }
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r bg-card overflow-hidden">
+    <aside className="flex h-full w-80 flex-col border-r bg-card overflow-hidden">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b px-4">
         <Image
@@ -207,7 +207,7 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
                         {brand.name.charAt(0)}
                       </span>
                     )}
-                    <span className="truncate">{brand.name}</span>
+                    <span className="truncate" title={brand.name}>{brand.name}</span>
                   </button>
                 </li>
               ))}
