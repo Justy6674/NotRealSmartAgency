@@ -3,6 +3,8 @@
 import { Loader2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
+import { useStrategyContext } from '@/hooks/useStrategyContext'
+import { StrategyBrief } from './StrategyBrief'
 import { DirectorBriefing } from './DirectorBriefing'
 import { SocialConnectionsCard } from './SocialConnectionsCard'
 import { WeekAtGlance } from './WeekAtGlance'
@@ -17,6 +19,7 @@ import { StudioFeed } from './StudioFeed'
 export function StudioDashboard() {
   const { activeBrandId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
+  const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
 
   if (!activeBrandId) {
     return (
@@ -49,6 +52,9 @@ export function StudioDashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      {/* Strategy Brief */}
+      <StrategyBrief context={strategyContext} />
+
       {/* A. Director's Brief — full width hero */}
       <DirectorBriefing
         brand={data.brand}
