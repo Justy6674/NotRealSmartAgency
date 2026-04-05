@@ -33,6 +33,21 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
     hashtag_style: 'trending_niche',
     post_count: 'auto',
   })
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(
+    new Set(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'])
+  )
+
+  const togglePlatform = (platform: string) => {
+    setSelectedPlatforms(prev => {
+      const next = new Set(prev)
+      if (next.has(platform)) {
+        if (next.size > 1) next.delete(platform) // must keep at least 1
+      } else {
+        next.add(platform)
+      }
+      return next
+    })
+  }
 
   const updateFile = (id: string, updates: Partial<ImportedFile>) => {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f))
@@ -233,8 +248,14 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
       carouselText = `\nCarousel mode: group into sets of ${slideCount} for carousel posts. Write one unified caption per platform per carousel set, referencing the slide progression.`
     }
 
+    const platformNames: Record<string, string> = {
+      instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn',
+      tiktok: 'TikTok', youtube: 'YouTube', twitter: 'X',
+    }
+    const platformList = Array.from(selectedPlatforms).map(p => platformNames[p] ?? p).join(', ')
+
     sendToDirector(
-      `Process these ${readyIds.length} uploaded files for ${brand.name}: generate platform-specific captions for all 6 platforms (YouTube, TikTok, Instagram, Facebook, LinkedIn, X) and save as draft posts.${vibeText}${contentTypeText}${hashtagText}${carouselText}\n\nMedia item IDs: ${readyIds.join(', ')}`
+      `Process these ${readyIds.length} uploaded files for ${brand.name}: generate platform-specific captions for these platforms: ${platformList}. Save as draft posts.${vibeText}${contentTypeText}${hashtagText}${carouselText}\n\nMedia item IDs: ${readyIds.join(', ')}`
     )
   }
 
@@ -462,12 +483,40 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
                   ))}
                 </div>
               </div>
+
+              {/* Platforms */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Platforms</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { id: 'instagram', label: 'Instagram', colour: 'oklch(0.65_0.15_350)' },
+                    { id: 'facebook', label: 'Facebook', colour: 'oklch(0.55_0.15_250)' },
+                    { id: 'linkedin', label: 'LinkedIn', colour: 'oklch(0.55_0.12_230)' },
+                    { id: 'tiktok', label: 'TikTok', colour: 'oklch(0.70_0.15_180)' },
+                    { id: 'youtube', label: 'YouTube', colour: 'oklch(0.55_0.2_25)' },
+                    { id: 'twitter', label: 'X', colour: 'oklch(0.55_0.02_240)' },
+                  ]).map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => togglePlatform(p.id)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        selectedPlatforms.has(p.id)
+                          ? 'bg-[oklch(0.55_0.1_240)] text-white'
+                          : 'bg-muted text-muted-foreground hover:text-foreground line-through opacity-50'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Generate all captions button */}
+      {/* Generate captions button */}
       {readyCount > 0 && (
         <button
           type="button"
@@ -475,7 +524,7 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-3 text-sm font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors"
         >
           <Sparkles className="h-4 w-4" />
-          Generate Smart Captions for All Platforms ({readyCount} video{readyCount !== 1 ? 's' : ''})
+          Generate Smart Captions ({readyCount} file{readyCount !== 1 ? 's' : ''} → {selectedPlatforms.size} platform{selectedPlatforms.size !== 1 ? 's' : ''})
         </button>
       )}
     </div>
