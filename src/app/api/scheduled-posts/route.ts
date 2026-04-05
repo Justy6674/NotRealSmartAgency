@@ -42,6 +42,10 @@ const PatchSchema = z.object({
   scheduled_at: z.string().optional(),
   caption: z.string().optional(),
   status: z.enum(['draft', 'scheduled', 'publishing', 'published', 'failed', 'cancelled']).optional(),
+  post_type: z.enum(['single', 'carousel', 'reel', 'video']).optional(),
+  media_item_ids: z.array(z.string().uuid()).optional(),
+  content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
+  content_pillar: z.string().optional(),
 })
 
 export async function PATCH(request: Request) {
@@ -66,6 +70,10 @@ export async function PATCH(request: Request) {
   if (updates.scheduled_at !== undefined) fieldsToUpdate.scheduled_at = updates.scheduled_at
   if (updates.caption !== undefined) fieldsToUpdate.caption = updates.caption
   if (updates.status !== undefined) fieldsToUpdate.status = updates.status
+  if (updates.post_type !== undefined) fieldsToUpdate.post_type = updates.post_type
+  if (updates.media_item_ids !== undefined) fieldsToUpdate.media_item_ids = updates.media_item_ids
+  if (updates.content_type !== undefined) fieldsToUpdate.content_type = updates.content_type
+  if (updates.content_pillar !== undefined) fieldsToUpdate.content_pillar = updates.content_pillar
 
   if (Object.keys(fieldsToUpdate).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
@@ -92,6 +100,11 @@ const CreateSchema = z.object({
   hashtags: z.array(z.string()).optional().default([]),
   scheduled_at: z.string(),
   status: z.enum(['draft', 'scheduled']).optional().default('draft'),
+  media_item_id: z.string().uuid().optional(),
+  media_item_ids: z.array(z.string().uuid()).optional().default([]),
+  post_type: z.enum(['single', 'carousel', 'reel', 'video']).optional().default('single'),
+  content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
+  content_pillar: z.string().optional(),
 })
 
 export async function POST(request: Request) {
@@ -109,7 +122,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
   }
 
-  const { brandId, platform, caption, hashtags, scheduled_at, status } = parsed.data
+  const { brandId, platform, caption, hashtags, scheduled_at, status, media_item_id, media_item_ids, post_type, content_type, content_pillar } = parsed.data
 
   // Verify brand belongs to the user
   const { data: brand, error: brandError } = await supabase
@@ -123,17 +136,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Brand not found or access denied' }, { status: 403 })
   }
 
+  const insertData: Record<string, unknown> = {
+    user_id: user.id,
+    brand_id: brandId,
+    platform,
+    caption,
+    hashtags,
+    scheduled_at,
+    status,
+    post_type,
+    media_item_ids,
+  }
+  if (media_item_id) insertData.media_item_id = media_item_id
+  if (content_type) insertData.content_type = content_type
+  if (content_pillar) insertData.content_pillar = content_pillar
+
   const { data, error } = await supabase
     .from('scheduled_posts')
-    .insert({
-      user_id: user.id,
-      brand_id: brandId,
-      platform,
-      caption,
-      hashtags,
-      scheduled_at,
-      status,
-    })
+    .insert(insertData)
     .select()
     .single()
 

@@ -33,6 +33,22 @@ const PlatformContentSchema = z.object({
   }),
 })
 
+const VIBE_GUIDANCE: Record<string, string> = {
+  funny: 'Use wordplay, witty observations, and light humour. Be entertaining but not cringy.',
+  inspirational: 'Be uplifting and motivational. Use powerful language that inspires action.',
+  informative: 'Be clear, factual, and educational. Lead with the key insight.',
+  exciting: 'High energy! Use dynamic language, exclamation points sparingly, create urgency.',
+  educational: 'Teach something valuable. Break down complex topics simply. Use numbered tips or steps.',
+  provocative: 'Challenge assumptions. Ask thought-provoking questions. Take a bold stance.',
+}
+
+const HASHTAG_GUIDANCE: Record<string, string> = {
+  trending_niche: 'Include 5 trending hashtags for this niche on this platform PLUS 5 niche-specific hashtags.',
+  niche_only: 'Use only niche-specific hashtags relevant to the brand\'s content pillars. No generic trending tags.',
+  branded_only: 'Use only branded hashtags from the brand\'s keywords. Create memorable brand-specific tags.',
+  mix_all: 'Mix 3 trending hashtags + 3 niche hashtags + 2 branded hashtags from the brand\'s keywords.',
+}
+
 function buildBrandContext(brand: Brand): string {
   let ctx = `Brand: ${brand.name}\nNiche: ${brand.niche}\n`
   if (brand.tone_of_voice) {
@@ -111,8 +127,13 @@ export function createProcessMediaTool(
         .boolean()
         .optional()
         .describe('If true, save posts as drafts scheduled 24h from now. Default true.'),
+      style_settings: z.object({
+        vibe: z.enum(['funny', 'inspirational', 'informative', 'exciting', 'educational', 'provocative']).optional(),
+        content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
+        hashtag_style: z.enum(['trending_niche', 'niche_only', 'branded_only', 'mix_all']).optional(),
+      }).optional().describe('Optional content style settings for caption generation'),
     }),
-    execute: async ({ media_item_id, platforms, schedule }) => {
+    execute: async ({ media_item_id, platforms, schedule, style_settings }) => {
       const targetPlatforms: Platform[] = (platforms as Platform[] | undefined) ?? [...PLATFORMS]
       const shouldSchedule = schedule !== false
 
@@ -176,6 +197,15 @@ export function createProcessMediaTool(
       // 4. Generate platform-specific captions
       const brandContext = buildBrandContext(brand as Brand)
 
+      // Build style guidance from optional style_settings
+      const vibeGuidance = style_settings?.vibe && VIBE_GUIDANCE[style_settings.vibe]
+        ? VIBE_GUIDANCE[style_settings.vibe]
+        : undefined
+      const hashtagGuidance = style_settings?.hashtag_style && HASHTAG_GUIDANCE[style_settings.hashtag_style]
+        ? HASHTAG_GUIDANCE[style_settings.hashtag_style]
+        : undefined
+      const contentTypeText = style_settings?.content_type ?? undefined
+
       let content: z.infer<typeof PlatformContentSchema>
       try {
         const { object } = await generateObject({
@@ -183,6 +213,9 @@ export function createProcessMediaTool(
           system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions from video transcriptions.
 
 ${brandContext}
+${vibeGuidance ? `\nTone: ${vibeGuidance}` : ''}
+${contentTypeText ? `\nContent type: Frame this as ${contentTypeText} content.` : ''}
+${hashtagGuidance ? `\nHashtag strategy: ${hashtagGuidance}` : ''}
 
 Rules:
 - Each platform has specific character limits and formatting norms

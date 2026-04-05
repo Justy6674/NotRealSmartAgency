@@ -7,6 +7,22 @@ import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
 import type { Brand } from '@/types/database'
 
+const VIBE_GUIDANCE: Record<string, string> = {
+  funny: 'Use wordplay, witty observations, and light humour. Be entertaining but not cringy.',
+  inspirational: 'Be uplifting and motivational. Use powerful language that inspires action.',
+  informative: 'Be clear, factual, and educational. Lead with the key insight.',
+  exciting: 'High energy! Use dynamic language, exclamation points sparingly, create urgency.',
+  educational: 'Teach something valuable. Break down complex topics simply. Use numbered tips or steps.',
+  provocative: 'Challenge assumptions. Ask thought-provoking questions. Take a bold stance.',
+}
+
+const HASHTAG_GUIDANCE: Record<string, string> = {
+  trending_niche: 'Include 5 trending hashtags for this niche on this platform PLUS 5 niche-specific hashtags.',
+  niche_only: 'Use only niche-specific hashtags relevant to the brand\'s content pillars. No generic trending tags.',
+  branded_only: 'Use only branded hashtags from the brand\'s keywords. Create memorable brand-specific tags.',
+  mix_all: 'Mix 3 trending hashtags + 3 niche hashtags + 2 branded hashtags from the brand\'s keywords.',
+}
+
 const PlatformContentSchema = z.object({
   youtube: z.object({
     title: z.string().describe('YouTube title, max 60 chars'),
@@ -32,7 +48,7 @@ const PlatformContentSchema = z.object({
 })
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ mediaItemId: string }> }
 ) {
   const { mediaItemId } = await params
@@ -40,6 +56,16 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  // Parse optional style query params
+  const url = new URL(request.url)
+  const vibe = url.searchParams.get('vibe') ?? undefined
+  const contentType = url.searchParams.get('content_type') ?? undefined
+  const hashtagStyle = url.searchParams.get('hashtag_style') ?? undefined
+  const carouselMediaIdsRaw = url.searchParams.get('carousel_media_ids') ?? undefined
+  const carouselMediaIds = carouselMediaIdsRaw
+    ? carouselMediaIdsRaw.split(',').map((id) => id.trim()).filter(Boolean)
+    : undefined
 
   // Fetch media item with brand
   const { data: mediaItem, error: mediaError } = await supabase
@@ -60,7 +86,6 @@ export async function POST(
   const brand = mediaItem.brands as Brand
 
   // Build brand context for the AI
-  // Using the exported function from prompt-builder (need to make it accessible)
   let brandContext = ''
   if (brand) {
     brandContext = `Brand: ${brand.name}\nNiche: ${brand.niche}\n`
@@ -78,8 +103,36 @@ export async function POST(
     }
   }
 
+  // Build style guidance strings
+  const vibeGuidance = vibe && VIBE_GUIDANCE[vibe] ? VIBE_GUIDANCE[vibe] : undefined
+  const hashtagGuidance = hashtagStyle && HASHTAG_GUIDANCE[hashtagStyle] ? HASHTAG_GUIDANCE[hashtagStyle] : undefined
+  const contentTypeText = contentType ? contentType : undefined
+
+  // Build carousel context if carousel_media_ids provided
+  let carouselContext = ''
+  if (carouselMediaIds?.length) {
+    const { data: carouselItems } = await supabase
+      .from('media_items')
+      .select('id, metadata')
+      .in('id', carouselMediaIds)
+      .eq('user_id', user.id)
+
+    if (carouselItems?.length) {
+      const slideDescriptions = carouselMediaIds
+        .map((id, idx) => {
+          const item = carouselItems.find((ci) => ci.id === id)
+          const meta = item?.metadata as Record<string, unknown> | null
+          const va = meta?.visual_analysis as { summary?: string } | undefined
+          return `Slide ${idx + 1}: ${va?.summary ?? 'no visual analysis available'}`
+        })
+        .join('. ')
+
+      carouselContext = `This is a carousel post with ${carouselMediaIds.length} slides. Visual context: ${slideDescriptions}. Write ONE unified caption per platform that covers the story across all slides. Use slide progression language like 'Swipe to see...' or '→ Next slide'.`
+    }
+  }
+
   try {
-    // Include visual analysis context if available
+    // Include visual analysis context if available (single media)
     const metadata = mediaItem.metadata as Record<string, unknown> | null
     const visualAnalysis = metadata?.visual_analysis as { summary?: string; products?: string[]; textOnScreen?: string[]; mood?: string } | undefined
     const visualContext = visualAnalysis
@@ -91,6 +144,10 @@ export async function POST(
       system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions from video transcriptions and visual analysis.
 
 ${brandContext}
+${vibeGuidance ? `\nTone: ${vibeGuidance}` : ''}
+${contentTypeText ? `\nContent type: Frame this as ${contentTypeText} content.` : ''}
+${hashtagGuidance ? `\nHashtag strategy: ${hashtagGuidance}` : ''}
+${carouselContext ? `\n${carouselContext}` : ''}
 
 Rules:
 - Each platform has specific character limits and formatting norms
@@ -116,6 +173,9 @@ File: ${mediaItem.file_name}`,
       { platform: 'twitter', caption: content.twitter.tweet, hashtags: [] },
     ] as const
 
+    const postType = carouselMediaIds?.length ? 'carousel' : 'single'
+    const mediaItemIds = carouselMediaIds ?? []
+
     const scheduledPosts = []
     for (const p of platforms) {
       const { data: post, error: postError } = await supabase
@@ -124,11 +184,14 @@ File: ${mediaItem.file_name}`,
           user_id: user.id,
           brand_id: brand.id,
           media_item_id: mediaItemId,
+          media_item_ids: mediaItemIds,
           platform: p.platform,
           caption: p.caption,
           hashtags: p.hashtags,
           scheduled_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // Default: 24h from now
           status: 'draft',
+          post_type: postType,
+          content_type: contentType ?? null,
         })
         .select()
         .single()
