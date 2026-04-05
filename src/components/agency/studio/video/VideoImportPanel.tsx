@@ -38,9 +38,14 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
     hashtag_style: 'trending_niche',
     post_count: 'auto',
   })
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(
-    new Set(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'])
-  )
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(() => new Set())
+  const [platformsInitialised, setPlatformsInitialised] = useState(false)
+
+  // Default to connected platforms only (once loaded)
+  if (!platformsInitialised && connectedPlatforms.length > 0) {
+    setSelectedPlatforms(new Set(connectedPlatforms))
+    setPlatformsInitialised(true)
+  }
 
   const togglePlatform = (platform: string) => {
     setSelectedPlatforms(prev => {
@@ -501,29 +506,44 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
               {/* Platforms */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Platforms</label>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  Platforms {connectedPlatforms.length > 0 && <span className="normal-case font-normal">— connected shown first</span>}
+                </label>
                 <div className="flex flex-wrap gap-1.5">
                   {([
-                    { id: 'instagram', label: 'Instagram', colour: 'oklch(0.65_0.15_350)' },
-                    { id: 'facebook', label: 'Facebook', colour: 'oklch(0.55_0.15_250)' },
-                    { id: 'linkedin', label: 'LinkedIn', colour: 'oklch(0.55_0.12_230)' },
-                    { id: 'tiktok', label: 'TikTok', colour: 'oklch(0.70_0.15_180)' },
-                    { id: 'youtube', label: 'YouTube', colour: 'oklch(0.55_0.2_25)' },
-                    { id: 'twitter', label: 'X', colour: 'oklch(0.55_0.02_240)' },
-                  ]).map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => togglePlatform(p.id)}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                        selectedPlatforms.has(p.id)
-                          ? 'bg-[oklch(0.55_0.1_240)] text-white'
-                          : 'bg-muted text-muted-foreground hover:text-foreground line-through opacity-50'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                    { id: 'instagram', label: 'Instagram' },
+                    { id: 'facebook', label: 'Facebook' },
+                    { id: 'linkedin', label: 'LinkedIn' },
+                    { id: 'tiktok', label: 'TikTok' },
+                    { id: 'youtube', label: 'YouTube' },
+                    { id: 'twitter', label: 'X' },
+                  ])
+                    .sort((a, b) => {
+                      const aConn = connectedPlatforms.includes(a.id) ? 0 : 1
+                      const bConn = connectedPlatforms.includes(b.id) ? 0 : 1
+                      return aConn - bConn
+                    })
+                    .map(p => {
+                      const isConn = connectedPlatforms.includes(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => togglePlatform(p.id)}
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                            selectedPlatforms.has(p.id)
+                              ? isConn
+                                ? 'bg-[oklch(0.55_0.1_240)] text-white'
+                                : 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30'
+                              : 'bg-muted text-muted-foreground hover:text-foreground line-through opacity-50'
+                          }`}
+                          title={isConn ? `${p.label} — connected via Mixpost` : `${p.label} — not connected (download only)`}
+                        >
+                          {p.label}
+                          {!isConn && selectedPlatforms.has(p.id) && <span className="ml-1 text-[8px]">(manual)</span>}
+                        </button>
+                      )
+                    })}
                 </div>
               </div>
             </div>
