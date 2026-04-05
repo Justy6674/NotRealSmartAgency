@@ -202,7 +202,6 @@ export function ContentCalendar() {
                 onClick={() => {
                   setAgent('overall')
                   setPendingReviewMessage('Fill my calendar for the next 2 weeks with 5 posts per week across all my social platforms')
-                  router.push('/agency/chat')
                 }}
                 className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
               >

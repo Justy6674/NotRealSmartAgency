@@ -78,7 +78,6 @@ function StudioMedia() {
     setPendingReviewMessage(
       `Repurpose media item ${mediaItemId} into clips, quotes, blog, newsletter, and social posts`
     )
-    router.push('/agency/chat')
   }
 
   if (!activeBrandId) {
