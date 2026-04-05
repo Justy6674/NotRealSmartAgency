@@ -3,6 +3,50 @@ import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getHeyGenApiKey } from '@/lib/heygen/client'
 
+const BACKGROUND_COLOUR_MAP: Record<string, string> = {
+  office: '#f5f0eb',
+  studio: '#1a1a2e',
+  casual: '#faf8f5',
+  outdoor: '#e8f5e9',
+  minimal: '#ffffff',
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function buildBrandVoiceContext(brand: Record<string, any>): string {
+  const parts: string[] = []
+
+  const tone = brand.tone_of_voice as Record<string, any> | null
+  if (tone) {
+    const toneDesc: string[] = []
+    if (tone.formality) toneDesc.push(`${tone.formality} tone`)
+    if (tone.humour && tone.humour !== 'none') toneDesc.push(`${tone.humour} humour`)
+    if (toneDesc.length) parts.push(`Brand voice: ${toneDesc.join(', ')}.`)
+    if (tone.keywords?.length) parts.push(`Use keywords: ${tone.keywords.join(', ')}.`)
+    if (tone.avoid_words?.length) parts.push(`NEVER use: ${tone.avoid_words.join(', ')}.`)
+  }
+
+  const dna = brand.brand_dna_constraints as Record<string, any> | null
+  if (dna) {
+    if (dna.voice_rules) parts.push(`Voice rules: ${dna.voice_rules}.`)
+    if (dna.banned_words?.length) parts.push(`Banned words: ${Array.isArray(dna.banned_words) ? dna.banned_words.join(', ') : dna.banned_words}.`)
+    if (dna.content_philosophy) parts.push(`Content philosophy: ${dna.content_philosophy}.`)
+    if (dna.never_do?.length) parts.push(`Never do: ${Array.isArray(dna.never_do) ? dna.never_do.join(', ') : dna.never_do}.`)
+  }
+
+  const audience = brand.target_audience as Record<string, any> | null
+  if (audience) {
+    if (audience.demographics) parts.push(`Target audience: ${audience.demographics}.`)
+    if (audience.pain_points?.length) parts.push(`Audience pain points: ${Array.isArray(audience.pain_points) ? audience.pain_points.join(', ') : audience.pain_points}.`)
+  }
+
+  if (brand.content_pillars?.length) {
+    parts.push(`Content pillars: ${brand.content_pillars.join(', ')}.`)
+  }
+
+  return parts.length ? parts.join(' ') : ''
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 export function createCreateVideoTool(
   supabase: SupabaseClient,
   userId: string,
@@ -11,7 +55,7 @@ export function createCreateVideoTool(
 ) {
   return tool({
     description:
-      'Generate an AI avatar video using HeyGen. The avatar will speak the script you provide. Use for brand videos, explainers, social content, and product demos.',
+      'Generate an AI avatar video using HeyGen, styled to the brand\'s voice and tone. The avatar will speak the script you provide. Uses brand voice, target audience, and content pillars to guide script style. Use for brand videos, explainers, social content, and product demos.',
     inputSchema: z.object({
       script: z
         .string()
@@ -40,14 +84,15 @@ export function createCreateVideoTool(
         }
       }
 
-      // Fetch brand video preferences
+      // Fetch brand video preferences + voice/audience context
       const { data: brand } = await supabase
         .from('brands')
-        .select('name, video_preferences')
+        .select('name, video_preferences, tone_of_voice, brand_dna_constraints, target_audience, content_pillars, logo_url')
         .eq('id', brandId)
         .single()
 
       const videoPrefs = (brand?.video_preferences as Record<string, string>) ?? {}
+      const brandVoice = brand ? buildBrandVoiceContext(brand) : ''
       const videoTitle =
         title ?? `${(brand?.name ?? 'Brand')} — ${script.slice(0, 50)}${script.length > 50 ? '...' : ''}`
 
@@ -73,7 +118,7 @@ export function createCreateVideoTool(
                 },
                 background: {
                   type: 'color',
-                  value: '#ffffff',
+                  value: BACKGROUND_COLOUR_MAP[videoPrefs.background_preference ?? ''] ?? '#ffffff',
                 },
               },
             ],
@@ -118,7 +163,8 @@ export function createCreateVideoTool(
           output_id: videoOutput?.id,
           title: videoTitle,
           estimated_time: '2-5 minutes',
-          message: `I'm generating your video now. It usually takes 2-5 minutes for HeyGen to render it.\n\nTitle: "${videoTitle}"\nScript: "${script.slice(0, 100)}${script.length > 100 ? '...' : ''}"\n\nI'll save it to your output library once it's ready. You can check the status in your Outputs page.`,
+          brand_voice: brandVoice || undefined,
+          message: `I'm generating your video now. It usually takes 2-5 minutes for HeyGen to render it.\n\nTitle: "${videoTitle}"\nScript: "${script.slice(0, 100)}${script.length > 100 ? '...' : ''}"${brandVoice ? `\n\n${brandVoice}` : ''}\n\nI'll save it to your output library once it's ready. You can check the status in your Outputs page.`,
         }
       } catch (err) {
         return {

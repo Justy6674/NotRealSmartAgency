@@ -3,6 +3,14 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod/v3'
 import { getHeyGenApiKey } from '@/lib/heygen/client'
 
+const BACKGROUND_COLOUR_MAP: Record<string, string> = {
+  office: '#f5f0eb',
+  studio: '#1a1a2e',
+  casual: '#faf8f5',
+  outdoor: '#e8f5e9',
+  minimal: '#ffffff',
+}
+
 const GenerateVideoSchema = z.object({
   output_id: z.string().uuid(),
   provider: z.enum(['heygen', 'runway', 'synthesia', 'kling', 'google_veo']).default('heygen'),
@@ -28,7 +36,7 @@ export async function POST(request: Request) {
   // Fetch the script output
   const { data: output, error: outputError } = await supabase
     .from('outputs')
-    .select('*, brands(video_preferences)')
+    .select('*, brands(video_preferences, tone_of_voice, logo_url)')
     .eq('id', output_id)
     .single()
 
@@ -55,6 +63,7 @@ export async function POST(request: Request) {
   }
   const scriptContent = output.content
   const videoPrefs = output.brands?.video_preferences || {}
+  const bgColour = BACKGROUND_COLOUR_MAP[videoPrefs.background_preference ?? ''] ?? '#ffffff'
 
   try {
     let videoId = ''
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
             },
             background: {
               type: 'color',
-              value: '#ffffff',
+              value: bgColour,
             },
           }],
           dimension: { width: 1920, height: 1080 },

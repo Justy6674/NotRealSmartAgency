@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Image from 'next/image'
 import { Sparkles, Wand2, Loader2 } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { AvatarVoicePicker } from './AvatarVoicePicker'
-import type { Brand } from '@/types/database'
+import type { Brand, ToneOfVoice } from '@/types/database'
 import type { StrategyContext } from '@/hooks/useStrategyContext'
 
 interface VideoCreatePanelProps {
@@ -88,12 +89,18 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
     const avatarLine = avatarId ? `Avatar ID: ${avatarId}` : ''
     const voiceLine = voiceId ? `Voice ID: ${voiceId}` : ''
 
+    const tov = brand.tone_of_voice as ToneOfVoice | null
+
     const message = [
       `Create a ${format} video for ${brand.name} using ${provider === 'heygen' ? 'HeyGen (AI avatar presenter)' : 'OpenClaw/Remotion (template-based)'}.`,
       topicLine,
       avatarLine,
       voiceLine,
       `Platform format: ${FORMATS.find(f => f.id === format)?.platforms ?? format}.`,
+      `Brand voice: ${tov?.formality ?? 'not set'}, ${tov?.humour ?? 'no'} humour.`,
+      tov?.keywords?.length ? `Keywords to use: ${tov.keywords.join(', ')}.` : '',
+      tov?.avoid_words?.length ? `Words to AVOID: ${tov.avoid_words.join(', ')}.` : '',
+      (brand.content_pillars as string[] | null)?.length ? `Content pillars: ${(brand.content_pillars as string[]).join(', ')}.` : '',
       '',
       'Write the script, check compliance, then generate the video.',
       '',
@@ -110,9 +117,15 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
     if (!brand) return
     setSending(true)
 
+    const tovAI = brand.tone_of_voice as ToneOfVoice | null
+
     const message = [
       `Suggest the best video topic for ${brand.name} right now based on the strategy.`,
       'Consider what content type is needed, which platform is underserved, and what pillar to rotate to.',
+      `Brand voice: ${tovAI?.formality ?? 'not set'}, ${tovAI?.humour ?? 'no'} humour.`,
+      tovAI?.keywords?.length ? `Keywords to use: ${tovAI.keywords.join(', ')}.` : '',
+      tovAI?.avoid_words?.length ? `Words to AVOID: ${tovAI.avoid_words.join(', ')}.` : '',
+      (brand.content_pillars as string[] | null)?.length ? `Content pillars: ${(brand.content_pillars as string[]).join(', ')}.` : '',
       'Write the script and generate the video using HeyGen.',
       '',
       strategyContext?.agentContext ?? '',
@@ -146,6 +159,36 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
           </button>
         </div>
       </div>
+
+      {/* Brand voice summary */}
+      {brand?.tone_of_voice && (() => {
+        const tv = brand.tone_of_voice as ToneOfVoice
+        return (
+          <div className="rounded-lg border border-border bg-card/50 px-3 py-2">
+            <p className="text-[10px] font-medium text-muted-foreground mb-1">Brand Voice</p>
+            <div className="flex flex-wrap gap-1.5">
+              {tv.formality && (
+                <span className="rounded-full bg-[oklch(0.55_0.1_240)]/10 px-2 py-0.5 text-[10px] text-[oklch(0.55_0.1_240)]">
+                  {tv.formality}
+                </span>
+              )}
+              {tv.humour && tv.humour !== 'none' && (
+                <span className="rounded-full bg-[oklch(0.55_0.1_240)]/10 px-2 py-0.5 text-[10px] text-[oklch(0.55_0.1_240)]">
+                  {tv.humour} humour
+                </span>
+              )}
+              {tv.keywords?.slice(0, 3).map((k: string) => (
+                <span key={k} className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+                  {k}
+                </span>
+              ))}
+            </div>
+            {!tv.formality && (
+              <p className="text-[10px] text-amber-400 mt-1">Set your brand voice in Brand Settings for better videos</p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Avatar & Voice picker — HeyGen only */}
       {provider === 'heygen' && (
@@ -218,6 +261,15 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
             </>
           ) : (
             <>
+              {brand?.logo_url && (
+                <Image
+                  src={brand.logo_url}
+                  alt={brand.name ?? 'Brand'}
+                  width={20}
+                  height={20}
+                  className="rounded-full object-cover"
+                />
+              )}
               <Sparkles className="h-4 w-4" />
               Generate Video
             </>
