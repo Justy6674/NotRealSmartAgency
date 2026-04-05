@@ -31,8 +31,8 @@ export default async function AgencyLayout({
       {/* Mobile sidebar — rendered into a portal-like fixed overlay */}
       <MobileSidebar />
 
-      {/* Main content column */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Main content column — min-w-0 prevents flex child overflow past chat panel */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Thin header bar with mobile hamburger + active context */}
         <header className="flex shrink-0 items-center border-b bg-background">
           {/* Hamburger visible on mobile only */}
@@ -49,7 +49,7 @@ export default async function AgencyLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {children}
         </main>
       </div>
