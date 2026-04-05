@@ -8,6 +8,8 @@ import { MediaUploader } from '@/components/agency/MediaUploader'
 import { MediaCard } from '@/components/agency/MediaCard'
 import { StudioDashboard } from './StudioDashboard'
 import { ContentCalendar } from '@/components/agency/ContentCalendar'
+import { EnhancedCalendar } from './EnhancedCalendar'
+import { CalendarActions } from './CalendarActions'
 import { CreateHub } from './CreateHub'
 import type { MediaItem } from '@/types/database'
 
@@ -151,7 +153,12 @@ export function CreativeStudio() {
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'all' && <StudioDashboard />}
-        {activeTab === 'calendar' && <ContentCalendar />}
+        {activeTab === 'calendar' && (
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <CalendarActions />
+            <EnhancedCalendar />
+          </div>
+        )}
         {activeTab === 'media' && <StudioMedia />}
         {activeTab === 'create' && <CreateHub />}
       </div>
