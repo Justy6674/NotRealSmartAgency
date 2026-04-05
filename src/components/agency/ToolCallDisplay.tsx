@@ -68,167 +68,123 @@ const AGENT_PERSONALITIES: Record<string, { name: string; colour: string }> = {
   video: { name: 'The Visual Director', colour: 'bg-violet-500/10 text-violet-400' },
 }
 
-// ─── Delegation Progress Steps ──────────────────────────────────────────────
-
-const DELEGATION_STEPS: Record<string, { label: string; delay: number }[]> = {
-  content: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Reviewing compliance rules', delay: 2000 },
-    { label: 'Researching topic', delay: 6000 },
-    { label: 'Writing content', delay: 14000 },
-    { label: 'Reviewing draft', delay: 28000 },
-    { label: 'Checking word count & formatting', delay: 42000 },
-    { label: 'Applying brand voice', delay: 56000 },
-    { label: 'Finalising output', delay: 70000 },
-  ],
-  seo: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Analysing current SEO', delay: 3000 },
-    { label: 'Researching keywords', delay: 10000 },
-    { label: 'Evaluating competitor rankings', delay: 22000 },
-    { label: 'Building recommendations', delay: 40000 },
-    { label: 'Compiling technical audit', delay: 55000 },
-    { label: 'Finalising report', delay: 70000 },
-  ],
-  paid_ads: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Reviewing compliance rules', delay: 2000 },
-    { label: 'Analysing target audience', delay: 8000 },
-    { label: 'Writing ad copy variants', delay: 18000 },
-    { label: 'Building campaign structure', delay: 35000 },
-    { label: 'Optimising bidding strategy', delay: 50000 },
-    { label: 'Finalising output', delay: 65000 },
-  ],
-  strategy: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Analysing market position', delay: 4000 },
-    { label: 'Evaluating competitors', delay: 12000 },
-    { label: 'Building strategy framework', delay: 25000 },
-    { label: 'Developing action items', delay: 42000 },
-    { label: 'Aligning with brand goals', delay: 56000 },
-    { label: 'Finalising recommendations', delay: 70000 },
-  ],
-  email: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Reviewing compliance rules', delay: 2000 },
-    { label: 'Planning email sequence', delay: 8000 },
-    { label: 'Writing email copy', delay: 18000 },
-    { label: 'Crafting subject lines', delay: 35000 },
-    { label: 'Optimising send strategy', delay: 50000 },
-    { label: 'Finalising sequence', delay: 65000 },
-  ],
-  competitor: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Identifying competitors', delay: 4000 },
-    { label: 'Analysing positioning', delay: 12000 },
-    { label: 'Comparing pricing', delay: 25000 },
-    { label: 'Building SWOT analysis', delay: 40000 },
-    { label: 'Evaluating market gaps', delay: 55000 },
-    { label: 'Finalising report', delay: 70000 },
-  ],
-  compliance: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Checking AHPRA requirements', delay: 3000 },
-    { label: 'Checking TGA requirements', delay: 10000 },
-    { label: 'Scanning for violations', delay: 20000 },
-    { label: 'Assessing risk levels', delay: 35000 },
-    { label: 'Cross-referencing guidelines', delay: 52000 },
-    { label: 'Finalising compliance report', delay: 68000 },
-  ],
-  _default: [
-    { label: 'Loading brand context', delay: 0 },
-    { label: 'Reviewing requirements', delay: 3000 },
-    { label: 'Researching', delay: 10000 },
-    { label: 'Building output', delay: 24000 },
-    { label: 'Refining details', delay: 42000 },
-    { label: 'Quality checking', delay: 56000 },
-    { label: 'Finalising', delay: 70000 },
-  ],
-}
+// ─── Real-Time Delegation Progress ─────────────────────────────────────────
+//
+// Polls agent_registry.status to detect ACTUAL completion instead of fake timers.
+// The AgentWorker sets status='working' on start and status='idle' on finish.
+// This is the Anthropic pattern: terminal state (idle/completed) = done.
 
 function DelegationProgress({ agentType, isComplete }: { agentType: string; isComplete: boolean }) {
-  const [currentStep, setCurrentStep] = useState(0)
   const [elapsed, setElapsed] = useState(0)
-  const steps = DELEGATION_STEPS[agentType] ?? DELEGATION_STEPS._default
+  const [agentDone, setAgentDone] = useState(false)
   const personality = AGENT_PERSONALITIES[agentType]
+
+  const effectiveComplete = isComplete || agentDone
 
   // Elapsed timer
   useEffect(() => {
-    if (isComplete) return
-    const interval = setInterval(() => setElapsed((e) => e + 1), 1000)
+    if (effectiveComplete) return
+    const interval = setInterval(() => setElapsed(e => e + 1), 1000)
     return () => clearInterval(interval)
-  }, [isComplete])
+  }, [effectiveComplete])
 
+  // Poll agent_registry for real completion signal
   useEffect(() => {
-    if (isComplete) {
-      setCurrentStep(steps.length)
-      return
+    if (isComplete) return
+
+    let cancelled = false
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/agents?type=${agentType}`)
+        if (!res.ok) return
+        const data = await res.json()
+        // Agent registry returns status: 'working' | 'idle' | 'paused'
+        const agent = Array.isArray(data) ? data[0] : data
+        if (agent && agent.status === 'idle' && elapsed > 3) {
+          // Agent has returned to idle AFTER we started (elapsed > 3s prevents false positives)
+          if (!cancelled) setAgentDone(true)
+        }
+      } catch {
+        // Ignore polling errors
+      }
     }
 
-    const timers: ReturnType<typeof setTimeout>[] = []
-    for (let i = 1; i < steps.length; i++) {
-      timers.push(setTimeout(() => setCurrentStep(i), steps[i].delay))
+    // Poll every 3 seconds
+    const interval = setInterval(poll, 3000)
+    // Also poll immediately after 5 seconds
+    const initialPoll = setTimeout(poll, 5000)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      clearTimeout(initialPoll)
     }
+  }, [agentType, isComplete, elapsed])
 
-    return () => timers.forEach(clearTimeout)
-  }, [isComplete, steps])
-
-  const lastStepDelay = steps[steps.length - 1]?.delay ?? 0
-  const allStepsDone = !isComplete && currentStep >= steps.length - 1
-    && elapsed * 1000 > lastStepDelay + 3000
-
-  // Safety timeout — if the tool hasn't returned after 3 minutes, assume it completed
-  // (the actual result may have been too large or the stream dropped)
-  const MAX_WAIT_SECONDS = 180
-  const timedOut = !isComplete && elapsed > MAX_WAIT_SECONDS
-  const effectiveComplete = isComplete || timedOut
+  // Dynamic progress bar — fills based on elapsed time, caps at 95% until complete
+  const maxExpectedSeconds = 90
+  const progressPct = effectiveComplete
+    ? 100
+    : Math.min(95, Math.round((elapsed / maxExpectedSeconds) * 100))
 
   return (
-    <div className="mt-2 space-y-1.5">
+    <div className="mt-2 space-y-2">
       {/* Agent personality header */}
       {personality && (
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2">
           <span className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-semibold', personality.colour)}>
             {personality.name}
           </span>
           {!effectiveComplete && (
             <span className="text-[10px] text-muted-foreground/60">{elapsed}s</span>
           )}
+          {effectiveComplete && (
+            <span className="text-[10px] text-emerald-500 font-medium">Done</span>
+          )}
         </div>
       )}
-      {steps.map((step, i) => {
-        const isDone = effectiveComplete || i < currentStep
-        const isActive = !effectiveComplete && i === currentStep
 
-        return (
-          <div key={i} className="flex items-center gap-2 text-xs">
-            {isDone ? (
-              <Check className="h-3 w-3 text-emerald-500 shrink-0" />
-            ) : isActive ? (
-              <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
-            ) : (
-              <div className="h-3 w-3 rounded-full border border-border shrink-0" />
-            )}
-            <span className={cn(
-              isDone ? 'text-muted-foreground' : isActive ? 'text-foreground' : 'text-muted-foreground/50'
-            )}>
-              {step.label}
-            </span>
-          </div>
-        )
-      })}
-      {allStepsDone && !timedOut && (
-        <div className="flex items-center gap-2 text-xs">
-          <Loader2 className="h-3 w-3 animate-spin text-amber-400 shrink-0" />
-          <span className="text-amber-400">Still working... complex tasks take a moment</span>
-        </div>
-      )}
-      {effectiveComplete && (
-        <div className="flex items-center gap-2 text-xs">
-          <Check className="h-3 w-3 text-emerald-500 shrink-0" />
-          <span className="text-emerald-500 font-medium">Complete</span>
-        </div>
-      )}
+      {/* Progress bar */}
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn(
+            'h-full rounded-full transition-all duration-1000 ease-out',
+            effectiveComplete ? 'bg-emerald-500' : 'bg-blue-400'
+          )}
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+
+      {/* Status text */}
+      <div className="flex items-center gap-2 text-xs">
+        {effectiveComplete ? (
+          <>
+            <Check className="h-3 w-3 text-emerald-500 shrink-0" />
+            <span className="text-emerald-500 font-medium">Complete</span>
+          </>
+        ) : elapsed < 5 ? (
+          <>
+            <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
+            <span className="text-foreground">Loading context & preparing...</span>
+          </>
+        ) : elapsed < 20 ? (
+          <>
+            <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
+            <span className="text-foreground">Working on it...</span>
+          </>
+        ) : elapsed < 60 ? (
+          <>
+            <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
+            <span className="text-foreground">Deep work in progress — writing detailed output...</span>
+          </>
+        ) : (
+          <>
+            <Loader2 className="h-3 w-3 animate-spin text-amber-400 shrink-0" />
+            <span className="text-amber-400">Complex task — nearly there...</span>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -251,19 +207,18 @@ function MeetingProgress({ departments, isComplete }: { departments: string[]; i
         <span className="font-medium">
           {isComplete ? `${departments.length} agents delivered` : `${departments.length} agents working in parallel`}
         </span>
-        {!isComplete && elapsed > 0 && (
+        {!isComplete && (
           <span className="text-[10px] text-muted-foreground/60">{elapsed}s</span>
         )}
       </div>
-      <div className="space-y-1.5 pl-1">
+      <div className="space-y-1 ml-1">
         {departments.map((dept, i) => {
           const personality = AGENT_PERSONALITIES[dept]
           const isLast = i === departments.length - 1
-          const treeChar = isLast ? '└─' : '├─'
-
+          const prefix = isLast ? '└─' : '├─'
           return (
-            <div key={dept} className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground/40 font-mono text-[10px] w-4 shrink-0">{treeChar}</span>
+            <div key={dept} className="flex items-center gap-2 text-xs font-mono">
+              <span className="text-muted-foreground/40 shrink-0">{prefix}</span>
               {isComplete ? (
                 <Check className="h-3 w-3 text-emerald-500 shrink-0" />
               ) : (
@@ -333,7 +288,6 @@ function MeetingResultDisplay({ data }: { data: MeetingResult }) {
             ) : (
               <ChevronRight className="h-3 w-3 shrink-0" />
             )}
-            <Check className="h-3 w-3 text-emerald-500 shrink-0" />
             {personality ? (
               <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', personality.colour)}>
                 {personality.name}
@@ -341,7 +295,7 @@ function MeetingResultDisplay({ data }: { data: MeetingResult }) {
             ) : (
               <span>{name}</span>
             )}
-            <span className="ml-auto text-[10px] text-muted-foreground font-normal">
+            <span className="text-muted-foreground/50 ml-auto text-[10px]">
               {result.length.toLocaleString()} chars
             </span>
           </button>
@@ -437,7 +391,7 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
         />
       </button>
 
-      {/* Delegation progress steps — always visible during delegation */}
+      {/* Delegation progress — polls real agent status */}
       {isDelegation && (
         <div className="px-3 pb-2">
           <DelegationProgress
@@ -463,20 +417,21 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
         ) : null
       ) : null}
 
+      {/* Expanded details */}
       {expanded && (
         <div className="border-t px-3 py-2 space-y-2">
           <div>
-            <p className="text-xs font-medium text-muted-foreground">Input</p>
-            <pre className="mt-1 text-xs overflow-x-auto whitespace-pre-wrap text-muted-foreground">
+            <span className="text-[10px] text-muted-foreground/60">Input</span>
+            <pre className="mt-0.5 text-xs text-muted-foreground whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
               {JSON.stringify(args, null, 2)}
             </pre>
           </div>
-          {result !== undefined && (
+          {result !== undefined && result !== null && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Result</p>
-              <pre className="mt-1 text-xs overflow-x-auto whitespace-pre-wrap text-muted-foreground max-h-60 overflow-y-auto">
-                {typeof result === 'object' && result !== null && 'result' in (result as Record<string, unknown>)
-                  ? String((result as Record<string, unknown>).result).slice(0, 2000)
+              <span className="text-[10px] text-muted-foreground/60">Output</span>
+              <pre className="mt-0.5 text-xs text-muted-foreground whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+                {typeof result === 'string'
+                  ? (result as string).slice(0, 2000)
                   : JSON.stringify(result, null, 2).slice(0, 2000)}
               </pre>
             </div>
