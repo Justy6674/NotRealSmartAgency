@@ -121,6 +121,9 @@ export async function GET(req: NextRequest) {
     let accounts: Record<string, { platform: string; accountName: string; provider: string }[]> = {}
     if (mixpostAccounts && allBrandsResult.data) {
       accounts = mapMixpostAccountsToBrands(mixpostAccounts, allBrandsResult.data)
+      console.log('[studio/overview] Mixpost accounts:', mixpostAccounts.length, 'mapped brands:', Object.keys(accounts).length)
+    } else {
+      console.log('[studio/overview] Mixpost not available:', mixpostAccounts === null ? 'null (not configured or API error)' : 'no brands')
     }
 
     // Build analytics summary
@@ -148,6 +151,7 @@ export async function GET(req: NextRequest) {
       videos,
       agentActivity,
       accounts: accounts[brandId] ?? [],
+      _debug_accountBrandIds: Object.keys(accounts),
       lastPublishedByPlatform,
       analytics: {
         totalPosts,
