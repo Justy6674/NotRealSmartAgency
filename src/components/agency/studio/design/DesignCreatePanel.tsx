@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Sparkles, Wand2, Loader2 } from 'lucide-react'
+import { Sparkles, Wand2, Loader2, ExternalLink } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import type { Brand } from '@/types/database'
 import type { StrategyContext } from '@/hooks/useStrategyContext'
@@ -42,6 +42,13 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
   const [sending, setSending] = useState(false)
   const [brandKits, setBrandKits] = useState<CanvaBrandKit[]>([])
   const [selectedBrandKit, setSelectedBrandKit] = useState<CanvaBrandKit | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [generatedDesign, setGeneratedDesign] = useState<{
+    id: string
+    title: string
+    thumbnail_url?: string
+    edit_url?: string
+  } | null>(null)
 
   // Fetch Canva brand kits on mount
   useEffect(() => {
@@ -67,6 +74,8 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
   const handleGenerate = () => {
     if (!brand) return
     setSending(true)
+    setGeneratedDesign(null)
+    setGenerating(true)
 
     const selectedFormat = FORMATS.find(f => f.id === format)
     const brandKitLine = selectedBrandKit
@@ -74,12 +83,14 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
       : 'Use the brand kit if available.'
 
     const message = [
-      `Design a ${selectedFormat?.label ?? format} graphic for ${brand.name}.`,
+      `I'd like to create a ${selectedFormat?.label ?? format} design for ${brand.name}.`,
       prompt.trim()
-        ? `Design brief: "${prompt.trim()}"`
-        : 'Choose the best design based on the strategy context.',
+        ? `Topic: ${prompt.trim()}.`
+        : 'Choose a topic based on the current strategy.',
       `Format: ${format} (${selectedFormat?.dimensions}).`,
-      `${brandKitLine} Create it in Canva, then show me the result.`,
+      brandKitLine,
+      '',
+      'Before you generate it, can you suggest 2-3 design concepts and ask which one I prefer? Include style, colours, and layout ideas.',
       '',
       strategyContext?.agentContext ?? '',
     ].filter(Boolean).join('\n')
@@ -91,12 +102,14 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
   const handleLetAIChoose = () => {
     if (!brand) return
     setSending(true)
+    setGeneratedDesign(null)
+    setGenerating(true)
 
     sendToDirector(
       [
-        `Suggest and create the best graphic design for ${brand.name} right now based on the strategy.`,
-        'Consider which platform needs content and what visual would support the next post.',
-        'Create it in Canva using the brand kit.',
+        `I need a new graphic design for ${brand.name} but I'm not sure what to create.`,
+        'Based on the current strategy, which platform needs content most and what visual would work best?',
+        'Suggest 2-3 design concepts with style, colours, and layout ideas — then ask which one I'd like you to create in Canva.',
         '',
         strategyContext?.agentContext ?? '',
       ].filter(Boolean).join('\n')
@@ -190,6 +203,79 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
           </>
         )}
       </button>
+
+      {/* Generating — click to check for result */}
+      {generating && !generatedDesign && (
+        <button
+          type="button"
+          onClick={async () => {
+            if (!brand) return
+            try {
+              const res = await fetch(`/api/outputs?brandId=${brand.id}&limit=1`)
+              if (res.ok) {
+                const outputs = await res.json()
+                const latest = outputs[0]
+                if (latest && latest.output_type === 'design') {
+                  setGeneratedDesign({
+                    id: latest.id,
+                    title: latest.title,
+                    thumbnail_url: latest.metadata?.thumbnail_url,
+                    edit_url: latest.metadata?.edit_url,
+                  })
+                  setGenerating(false)
+                }
+              }
+            } catch {
+              // Silently ignore fetch errors
+            }
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Generating... (click to check)
+        </button>
+      )}
+
+      {/* Inline result display */}
+      {generatedDesign && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-medium text-foreground">{generatedDesign.title}</h4>
+            <span className="text-[10px] text-emerald-400">Generated</span>
+          </div>
+          {generatedDesign.thumbnail_url && (
+            <img
+              src={generatedDesign.thumbnail_url}
+              alt={generatedDesign.title}
+              className="w-full rounded-lg"
+            />
+          )}
+          <div className="flex gap-2">
+            {generatedDesign.edit_url && (
+              <a
+                href={generatedDesign.edit_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[oklch(0.55_0.1_240)] px-3 py-2 text-xs font-medium text-white hover:bg-[oklch(0.50_0.1_240)] transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open in Canva
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setGeneratedDesign(null)
+                setPrompt('')
+                setGenerating(false)
+              }}
+              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
+            >
+              Create Another
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
