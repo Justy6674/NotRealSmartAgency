@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useMemo, useCallback, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
@@ -18,6 +18,7 @@ export function ChatPanel() {
 
   const {
     activeBrandId,
+    activeConversationId,
     chatPanelOpen,
     chatPanelMinimised,
     setChatPanelOpen,
@@ -31,9 +32,14 @@ export function ChatPanel() {
   // Check if we're on a full chat page (all hooks must be ABOVE this check)
   const isFullChatPage = pathname?.startsWith('/agency/chat')
 
-  // Ref so the transport always reads latest brandId
+  // Track the conversation ID for this panel
+  const [panelConversationId, setPanelConversationId] = useState<string | null>(null)
+
+  // Refs so the transport always reads latest values
   const brandIdRef = useRef(activeBrandId)
   brandIdRef.current = activeBrandId
+  const convIdRef = useRef(panelConversationId)
+  convIdRef.current = panelConversationId
 
   const transport = useMemo(
     () =>
@@ -42,7 +48,7 @@ export function ChatPanel() {
         body: {
           get brandId() { return brandIdRef.current },
           agentType: activeAgentType,
-          conversationId: null,
+          get conversationId() { return convIdRef.current },
         },
       }),
     [activeAgentType]
@@ -57,10 +63,74 @@ export function ChatPanel() {
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
-  // Clear messages when brand or agent changes
+  // Load the most recent conversation and its messages when brand changes
   useEffect(() => {
-    setMessages([])
-  }, [activeBrandId, activeAgentType, setMessages])
+    if (!activeBrandId) {
+      setMessages([])
+      setPanelConversationId(null)
+      return
+    }
+
+    // Fetch most recent conversation for this brand
+    const params = new URLSearchParams({ brandId: activeBrandId })
+    fetch(`/api/conversations?${params}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(async (convs: Array<{ id: string; agent_type: string }>) => {
+        // Find most recent Director conversation
+        const latest = convs.find(c => c.agent_type === 'overall') ?? convs[0]
+        if (!latest) {
+          setMessages([])
+          setPanelConversationId(null)
+          return
+        }
+
+        setPanelConversationId(latest.id)
+
+        // Load its messages
+        const msgRes = await fetch(`/api/conversations/${latest.id}/messages`)
+        if (!msgRes.ok) return
+        const msgs = await msgRes.json()
+        if (Array.isArray(msgs) && msgs.length > 0) {
+          // Convert DB messages to useChat format
+          const chatMessages = msgs.map((m: { id: string; role: string; content: string; created_at?: string }) => ({
+            id: m.id,
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+            parts: [{ type: 'text' as const, text: m.content }],
+            createdAt: m.created_at ? new Date(m.created_at) : new Date(),
+          }))
+          setMessages(chatMessages)
+        }
+      })
+      .catch(() => {
+        setMessages([])
+        setPanelConversationId(null)
+      })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrandId])
+
+  // Also sync if the store's activeConversationId changes (e.g. from sidebar click)
+  useEffect(() => {
+    if (activeConversationId && activeConversationId !== panelConversationId) {
+      setPanelConversationId(activeConversationId)
+      // Load messages for this conversation
+      fetch(`/api/conversations/${activeConversationId}/messages`)
+        .then(r => r.ok ? r.json() : [])
+        .then((msgs: Array<{ id: string; role: string; content: string }>) => {
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            setMessages(msgs.map((m: { id: string; role: string; content: string; created_at?: string }) => ({
+              id: m.id,
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              parts: [{ type: 'text' as const, text: m.content }],
+              createdAt: m.created_at ? new Date(m.created_at) : new Date(),
+            })))
+          }
+        })
+        .catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversationId])
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -71,8 +141,8 @@ export function ChatPanel() {
     if (!activeBrandId) return
     await sendMessage({ text })
 
-    // Create conversation on first message
-    if (activeBrandId && messages.length === 0) {
+    // Create conversation on first message if no conversation exists
+    if (activeBrandId && !panelConversationId) {
       const res = await fetch('/api/conversations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,10 +154,11 @@ export function ChatPanel() {
       })
       const conv = await res.json()
       if (conv?.id) {
+        setPanelConversationId(conv.id)
         setConversation(conv.id)
       }
     }
-  }, [activeBrandId, activeAgentType, messages.length, sendMessage, setConversation])
+  }, [activeBrandId, activeAgentType, panelConversationId, sendMessage, setConversation])
 
   // Don't render on the full chat pages — AFTER all hooks
   if (isFullChatPage) return null
