@@ -157,28 +157,24 @@ export function ChatPanel() {
     }
   }, [activeBrandId, activeAgentType, panelConversationId, sendMessage, setConversation])
 
-  // Ref to always have latest handleSend
+  // Ref to always have latest handleSend — used by DOM event listener
   const handleSendRef = useRef(handleSend)
   handleSendRef.current = handleSend
 
-  // Auto-send pending review message — expand panel if minimised
+  // Listen for direct 'nrs-send-chat' events from action buttons
+  // Bypasses Zustand entirely — guaranteed to work
   useEffect(() => {
-    if (!pendingReviewMessage || !activeBrandId) return
-
-    // Ensure panel is open and expanded
-    if (!chatPanelOpen) setChatPanelOpen(true)
-    if (chatPanelMinimised) setChatPanelMinimised(false)
-
-    const msg = pendingReviewMessage
-    setPendingReviewMessage(null)
-
-    // Delay to let the panel render/expand, use ref for latest handleSend
-    const timer = setTimeout(() => {
-      handleSendRef.current(msg)
-    }, 500)
-    return () => clearTimeout(timer)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingReviewMessage])
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent).detail?.message
+      if (!msg) return
+      // Expand panel if minimised
+      if (chatPanelMinimised) setChatPanelMinimised(false)
+      if (!chatPanelOpen) setChatPanelOpen(true)
+      setTimeout(() => handleSendRef.current(msg), chatPanelOpen ? 0 : 300)
+    }
+    window.addEventListener('nrs-send-chat', handler)
+    return () => window.removeEventListener('nrs-send-chat', handler)
+  }, [chatPanelMinimised, chatPanelOpen, setChatPanelMinimised, setChatPanelOpen])
 
   // Auto-scroll on new messages
   useEffect(() => {
