@@ -32,6 +32,9 @@ import { createManagePostsTool } from './manage-posts'
 import { createAnalyseVoiceTool } from './analyse-voice'
 import { createWriteAdsTool } from './write-ads'
 import { createAddInspirationTool, createSearchInspirationTool } from './inspiration'
+import { createQuerySocialAnalyticsTool } from './query-social-analytics'
+import { createManageTagsTool } from './manage-tags'
+import { createBrowseMixpostMediaTool } from './browse-mixpost-media'
 import { createVideoAgentTool } from './video-agent'
 import { createMultiSceneVideoTool } from './multi-scene-video'
 import { createRegisterWebhookTool } from './register-webhook'
@@ -117,6 +120,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const writeAds = createWriteAdsTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const addInspiration = createAddInspirationTool(ctx.supabase, ctx.userId)
   const searchInspiration = createSearchInspirationTool(ctx.supabase, ctx.userId)
+  const querySocialAnalytics = createQuerySocialAnalyticsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const manageTags = createManageTagsTool()
+  const browseMixpostMedia = createBrowseMixpostMediaTool()
   const videoAgent = createVideoAgentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const multiSceneVideo = createMultiSceneVideoTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const registerWebhook = createRegisterWebhookTool(ctx.supabase, ctx.userId)
@@ -178,11 +184,14 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       generate_video_agent: videoAgent,
       create_multi_scene_video: multiSceneVideo,
       register_webhook: registerWebhook,
+      query_social_analytics: querySocialAnalytics,
+      manage_tags: manageTags,
+      browse_mixpost_media: browseMixpostMedia,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, generate_video_agent: videoAgent, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, generate_video_agent: videoAgent, browse_mixpost_media: browseMixpostMedia, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
-    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, ...managementTools },
+    strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, query_social_analytics: querySocialAnalytics, manage_tags: manageTags, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
     compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, get_design_content: getDesignContent, get_design_pages: getDesignPages, ...managementTools },
@@ -190,9 +199,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },
     brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_kits: listBrandKits, get_design: getDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, analyse_voice: analyseVoice, ...managementTools },
-    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, ...managementTools },
+    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, query_social_analytics: querySocialAnalytics, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, register_webhook: registerWebhook, ...managementTools },
-    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, generate_video_agent: videoAgent, create_multi_scene_video: multiSceneVideo, ...managementTools },
+    video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, create_video: createVideo, generate_video_agent: videoAgent, create_multi_scene_video: multiSceneVideo, browse_mixpost_media: browseMixpostMedia, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
   }
 

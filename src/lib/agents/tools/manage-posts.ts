@@ -1,6 +1,13 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import {
+  fetchMixpostPost,
+  updateMixpostPost,
+  deleteMixpostPost,
+  addMixpostPostToQueue,
+  approveMixpostPost,
+} from '@/lib/mixpost/client'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -58,16 +65,16 @@ export function createManagePostsTool(
 ) {
   return tool({
     description:
-      'Manage scheduled social media posts — schedule a draft for a specific time, approve all drafts to go live, or cancel a scheduled post. Always confirm with the user before making changes.',
+      'Manage scheduled social media posts — schedule, edit, delete, queue, approve, verify status, or cancel posts. Always confirm with the user before making changes.',
     inputSchema: z.object({
-      action: z.enum(['schedule', 'approve_all', 'cancel']).describe(
-        'schedule = set a draft post to scheduled status with a time. approve_all = move all drafts to scheduled. cancel = cancel a specific post.',
+      action: z.enum(['schedule', 'approve_all', 'cancel', 'edit', 'delete', 'queue', 'verify_status', 'approve']).describe(
+        'schedule = set a draft to scheduled. approve_all = move all drafts to scheduled. cancel = cancel a post. edit = update caption/schedule on Mixpost. delete = remove from Mixpost + cancel in NRS. queue = add to Mixpost publishing queue. verify_status = check Mixpost status vs NRS. approve = approve a single post in Mixpost.',
       ),
       post_id: z
         .string()
         .uuid()
         .optional()
-        .describe('Specific post ID for schedule or cancel actions'),
+        .describe('Specific post ID (required for schedule, cancel, edit, delete, queue, verify_status, approve)'),
       scheduled_at: z
         .string()
         .optional()
@@ -76,8 +83,12 @@ export function createManagePostsTool(
         .enum(['all_drafts', 'this_week', 'today'])
         .optional()
         .describe('Scope for approve_all action — which drafts to approve'),
+      new_caption: z
+        .string()
+        .optional()
+        .describe('Updated caption text (for edit action)'),
     }),
-    execute: async ({ action, post_id, scheduled_at, approve_scope }) => {
+    execute: async ({ action, post_id, scheduled_at, approve_scope, new_caption }) => {
       // ── SCHEDULE ─────────────────────────────────────────────────────────
       if (action === 'schedule') {
         if (!post_id) {
@@ -269,6 +280,278 @@ export function createManagePostsTool(
           message: `Cancelled **${platformLabel}** post: "${preview}"`,
           post_id,
           platform: post.platform,
+        }
+      }
+
+      // ── EDIT ──────────────────────────────────────────────────────────────
+      if (action === 'edit') {
+        if (!post_id) {
+          return { success: false, error: 'post_id is required for the edit action.' }
+        }
+
+        // Fetch the post
+        const { data: post, error: fetchError } = await supabase
+          .from('scheduled_posts')
+          .select('id, platform, caption, status, scheduled_at, mixpost_uuid')
+          .eq('id', post_id)
+          .eq('brand_id', brandId)
+          .single()
+
+        if (fetchError || !post) {
+          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+        }
+
+        if (post.status === 'published') {
+          return { success: false, error: 'This post has already been published and cannot be edited.' }
+        }
+
+        // Build updates for Supabase
+        const updates: Record<string, unknown> = {}
+        if (new_caption) updates.caption = new_caption
+        if (scheduled_at) {
+          const scheduledDate = new Date(scheduled_at)
+          if (isNaN(scheduledDate.getTime())) {
+            return { success: false, error: `Invalid datetime: "${scheduled_at}".` }
+          }
+          if (scheduledDate.getTime() < Date.now()) {
+            return { success: false, error: 'Cannot schedule a post in the past.' }
+          }
+          updates.scheduled_at = scheduledDate.toISOString()
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return { success: false, error: 'Nothing to edit. Provide new_caption or scheduled_at.' }
+        }
+
+        // Update Mixpost if we have a UUID
+        if (post.mixpost_uuid) {
+          const mixpostParams: Record<string, unknown> = {}
+          if (new_caption) {
+            mixpostParams.versions = [{
+              account_id: 0,
+              is_original: true,
+              content: [{ body: new_caption, media: [], url: null, video_thumbs: [] }],
+            }]
+          }
+          if (scheduled_at) {
+            const d = new Date(scheduled_at as string)
+            mixpostParams.date = d.toISOString().split('T')[0]
+            mixpostParams.time = d.toTimeString().slice(0, 5)
+          }
+          const mixpostOk = await updateMixpostPost(post.mixpost_uuid, mixpostParams as never)
+          if (!mixpostOk) {
+            // Log warning but still update NRS side
+            console.warn('[manage-posts] Mixpost update failed for', post.mixpost_uuid)
+          }
+        }
+
+        // Update Supabase
+        const { error: updateError } = await supabase
+          .from('scheduled_posts')
+          .update(updates)
+          .eq('id', post_id)
+
+        if (updateError) {
+          return { success: false, error: `Failed to update post: ${updateError.message}` }
+        }
+
+        return {
+          success: true,
+          message: `Updated post [${post_id.slice(0, 8)}].${new_caption ? ' Caption changed.' : ''}${scheduled_at ? ' Schedule updated.' : ''}`,
+          post_id,
+        }
+      }
+
+      // ── DELETE ─────────────────────────────────────────────────────────────
+      if (action === 'delete') {
+        if (!post_id) {
+          return { success: false, error: 'post_id is required for the delete action.' }
+        }
+
+        const { data: post, error: fetchError } = await supabase
+          .from('scheduled_posts')
+          .select('id, platform, caption, status, mixpost_uuid')
+          .eq('id', post_id)
+          .eq('brand_id', brandId)
+          .single()
+
+        if (fetchError || !post) {
+          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+        }
+
+        if (post.status === 'published') {
+          return { success: false, error: 'This post has already been published and cannot be deleted.' }
+        }
+
+        // Delete from Mixpost if UUID exists
+        if (post.mixpost_uuid) {
+          const mixpostOk = await deleteMixpostPost(post.mixpost_uuid)
+          if (!mixpostOk) {
+            console.warn('[manage-posts] Mixpost delete failed for', post.mixpost_uuid)
+          }
+        }
+
+        // Mark as cancelled in Supabase
+        const { error: updateError } = await supabase
+          .from('scheduled_posts')
+          .update({ status: 'cancelled' })
+          .eq('id', post_id)
+
+        if (updateError) {
+          return { success: false, error: `Failed to delete post: ${updateError.message}` }
+        }
+
+        const platformLabel = post.platform.charAt(0).toUpperCase() + post.platform.slice(1)
+        const preview = post.caption.length > 80 ? post.caption.slice(0, 77) + '...' : post.caption
+
+        return {
+          success: true,
+          message: `Deleted **${platformLabel}** post: "${preview}". Removed from Mixpost and cancelled in NRS.`,
+          post_id,
+        }
+      }
+
+      // ── QUEUE ──────────────────────────────────────────────────────────────
+      if (action === 'queue') {
+        if (!post_id) {
+          return { success: false, error: 'post_id is required for the queue action.' }
+        }
+
+        const { data: post, error: fetchError } = await supabase
+          .from('scheduled_posts')
+          .select('id, platform, caption, status, mixpost_uuid')
+          .eq('id', post_id)
+          .eq('brand_id', brandId)
+          .single()
+
+        if (fetchError || !post) {
+          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+        }
+
+        if (!post.mixpost_uuid) {
+          return { success: false, error: 'This post has no Mixpost UUID. It needs to be published via Mixpost first.' }
+        }
+
+        if (post.status === 'published') {
+          return { success: false, error: 'This post has already been published.' }
+        }
+
+        const queueOk = await addMixpostPostToQueue(post.mixpost_uuid)
+        if (!queueOk) {
+          return { success: false, error: 'Failed to add post to Mixpost queue. Check if the publishing server is running.' }
+        }
+
+        // Update NRS status to scheduled
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'scheduled' })
+          .eq('id', post_id)
+
+        const platformLabel = post.platform.charAt(0).toUpperCase() + post.platform.slice(1)
+        return {
+          success: true,
+          message: `Added **${platformLabel}** post to the Mixpost publishing queue. It will be published at the next queue slot.`,
+          post_id,
+        }
+      }
+
+      // ── VERIFY STATUS ──────────────────────────────────────────────────────
+      if (action === 'verify_status') {
+        if (!post_id) {
+          return { success: false, error: 'post_id is required for the verify_status action.' }
+        }
+
+        const { data: post, error: fetchError } = await supabase
+          .from('scheduled_posts')
+          .select('id, platform, caption, status, scheduled_at, mixpost_uuid')
+          .eq('id', post_id)
+          .eq('brand_id', brandId)
+          .single()
+
+        if (fetchError || !post) {
+          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+        }
+
+        if (!post.mixpost_uuid) {
+          return {
+            success: true,
+            message: `Post [${post_id.slice(0, 8)}] has no Mixpost UUID — NRS status is **${post.status}**. It hasn't been sent to Mixpost yet.`,
+            nrs_status: post.status,
+            mixpost_status: null,
+          }
+        }
+
+        const mixpostPost = await fetchMixpostPost(post.mixpost_uuid)
+
+        const MIXPOST_STATUS_LABELS: Record<number, string> = {
+          0: 'draft',
+          1: 'scheduled',
+          2: 'published',
+          3: 'failed',
+        }
+
+        if (!mixpostPost) {
+          return {
+            success: true,
+            message: `Post [${post_id.slice(0, 8)}] — NRS status: **${post.status}**, but could not fetch Mixpost status. The post may have been deleted from Mixpost.`,
+            nrs_status: post.status,
+            mixpost_status: 'unknown',
+          }
+        }
+
+        const mixpostLabel = MIXPOST_STATUS_LABELS[mixpostPost.status] ?? `unknown (${mixpostPost.status})`
+        const synced = post.status === mixpostLabel
+
+        return {
+          success: true,
+          message: `Post [${post_id.slice(0, 8)}] — NRS: **${post.status}**, Mixpost: **${mixpostLabel}**.${synced ? ' Statuses are in sync.' : ' **Statuses are out of sync** — may need manual reconciliation.'}`,
+          nrs_status: post.status,
+          mixpost_status: mixpostLabel,
+          in_sync: synced,
+        }
+      }
+
+      // ── APPROVE (single post) ──────────────────────────────────────────────
+      if (action === 'approve') {
+        if (!post_id) {
+          return { success: false, error: 'post_id is required for the approve action.' }
+        }
+
+        const { data: post, error: fetchError } = await supabase
+          .from('scheduled_posts')
+          .select('id, platform, caption, status, mixpost_uuid')
+          .eq('id', post_id)
+          .eq('brand_id', brandId)
+          .single()
+
+        if (fetchError || !post) {
+          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+        }
+
+        if (!post.mixpost_uuid) {
+          return { success: false, error: 'This post has no Mixpost UUID. It needs to be created in Mixpost first.' }
+        }
+
+        if (post.status === 'published') {
+          return { success: false, error: 'This post has already been published.' }
+        }
+
+        const approveOk = await approveMixpostPost(post.mixpost_uuid)
+        if (!approveOk) {
+          return { success: false, error: 'Failed to approve post in Mixpost.' }
+        }
+
+        // Update NRS status to scheduled
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'scheduled' })
+          .eq('id', post_id)
+
+        const platformLabel = post.platform.charAt(0).toUpperCase() + post.platform.slice(1)
+        return {
+          success: true,
+          message: `Approved **${platformLabel}** post [${post_id.slice(0, 8)}] in Mixpost and set to scheduled in NRS.`,
+          post_id,
         }
       }
 
