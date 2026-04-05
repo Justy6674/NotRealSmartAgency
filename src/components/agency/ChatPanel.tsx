@@ -134,19 +134,24 @@ export function ChatPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId])
 
-  // Auto-send pending review message when chat panel opens
+  // Auto-send pending review message — expand panel if minimised
   useEffect(() => {
-    if (pendingReviewMessage && chatPanelOpen && !chatPanelMinimised && activeBrandId) {
-      const msg = pendingReviewMessage
-      setPendingReviewMessage(null) // Clear immediately to prevent re-send
-      // Small delay to let the panel render first
-      const timer = setTimeout(() => {
-        handleSend(msg)
-      }, 300)
-      return () => clearTimeout(timer)
-    }
+    if (!pendingReviewMessage || !activeBrandId) return
+
+    // Ensure panel is open and expanded
+    if (!chatPanelOpen) setChatPanelOpen(true)
+    if (chatPanelMinimised) setChatPanelMinimised(false)
+
+    const msg = pendingReviewMessage
+    setPendingReviewMessage(null) // Clear immediately to prevent re-send
+
+    // Delay to let the panel render/expand first
+    const timer = setTimeout(() => {
+      handleSend(msg)
+    }, 500)
+    return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingReviewMessage, chatPanelOpen, chatPanelMinimised])
+  }, [pendingReviewMessage])
 
   // Auto-scroll on new messages
   useEffect(() => {
