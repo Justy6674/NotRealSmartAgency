@@ -11,6 +11,7 @@ interface AgencyState {
   activeView: AgencyView
   sidebarOpen: boolean
   chatPanelOpen: boolean
+  chatPanelMinimised: boolean
   pendingReviewMessage: string | null
   setBrand: (brandId: string) => void
   setAgent: (agentType: AgentType) => void
@@ -21,6 +22,7 @@ interface AgencyState {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setChatPanelOpen: (open: boolean) => void
+  setChatPanelMinimised: (minimised: boolean) => void
   setPendingReviewMessage: (message: string | null) => void
 }
 
@@ -33,6 +35,7 @@ export const useAgencyStore = create<AgencyState>()(
       activeView: 'chat',
       sidebarOpen: false,
       chatPanelOpen: false,
+      chatPanelMinimised: false,
       pendingReviewMessage: null,
       setBrand: (brandId) =>
         set({ activeBrandId: brandId, activeAgentType: 'overall', activeConversationId: null }),
@@ -51,7 +54,9 @@ export const useAgencyStore = create<AgencyState>()(
       setSidebarOpen: (open) =>
         set({ sidebarOpen: open }),
       setChatPanelOpen: (open) =>
-        set({ chatPanelOpen: open }),
+        set({ chatPanelOpen: open, ...(open ? { chatPanelMinimised: false } : {}) }),
+      setChatPanelMinimised: (minimised) =>
+        set({ chatPanelMinimised: minimised }),
       setPendingReviewMessage: (message) =>
         set({ pendingReviewMessage: message }),
     }),
@@ -64,6 +69,7 @@ export const useAgencyStore = create<AgencyState>()(
         activeView: state.activeView,
         sidebarOpen: state.sidebarOpen,
         chatPanelOpen: state.chatPanelOpen,
+        chatPanelMinimised: state.chatPanelMinimised,
         // pendingReviewMessage excluded — transient
       }),
     }
