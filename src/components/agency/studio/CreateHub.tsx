@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   PenLine,
@@ -94,7 +94,7 @@ export function CreateHub() {
 
   // Brand name for messages
   const [brandName, setBrandName] = useState('my brand')
-  useState(() => {
+  useEffect(() => {
     if (activeBrandId) {
       fetch('/api/brands')
         .then(r => r.ok ? r.json() : [])
@@ -104,7 +104,7 @@ export function CreateHub() {
         })
         .catch(() => {})
     }
-  })
+  }, [activeBrandId])
 
   if (!activeBrandId) {
     return (
