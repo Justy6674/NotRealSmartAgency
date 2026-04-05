@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Image from 'next/image'
-import { Sparkles, Wand2, Loader2 } from 'lucide-react'
+import { Sparkles, Wand2, Loader2, Palette } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { AvatarVoicePicker } from './AvatarVoicePicker'
 import type { Brand, ToneOfVoice } from '@/types/database'
@@ -245,6 +245,22 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
           ))}
         </div>
       </div>
+
+      {/* Generate thumbnail */}
+      {topic.trim() && brand && (
+        <button
+          type="button"
+          onClick={() => {
+            sendToDirector(
+              `Create a video thumbnail for ${brand.name} about "${topic.trim()}". Use Canva with our brand kit for consistent design. Format: ${format === '9:16' ? '1080x1920' : format === '16:9' ? '1280x720' : '1080x1080'}.`
+            )
+          }}
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30 hover:text-foreground transition-colors"
+        >
+          <Palette className="h-3.5 w-3.5" />
+          Generate Thumbnail
+        </button>
+      )}
 
       {/* Generate button + credits badge */}
       <div className="flex items-center gap-3">

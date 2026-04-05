@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Sparkles, Wand2, Loader2 } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import type { Brand } from '@/types/database'
 import type { StrategyContext } from '@/hooks/useStrategyContext'
+
+interface CanvaBrandKit {
+  id: string
+  name: string
+  is_default?: boolean
+}
 
 interface DesignCreatePanelProps {
   brand: Brand | null
@@ -34,19 +40,46 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
   const [prompt, setPrompt] = useState('')
   const [format, setFormat] = useState<DesignFormat>('instagram_post')
   const [sending, setSending] = useState(false)
+  const [brandKits, setBrandKits] = useState<CanvaBrandKit[]>([])
+  const [selectedBrandKit, setSelectedBrandKit] = useState<CanvaBrandKit | null>(null)
+
+  // Fetch Canva brand kits on mount
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/canva/brand-kits')
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled || !data.brand_kits?.length) return
+        const kits: CanvaBrandKit[] = data.brand_kits
+        setBrandKits(kits)
+        // Auto-select: match by brand name if possible, otherwise pick the default or first
+        const brandName = brand?.name?.toLowerCase() ?? ''
+        const matched =
+          kits.find((k) => k.name.toLowerCase().includes(brandName)) ??
+          kits.find((k) => k.is_default) ??
+          kits[0]
+        if (matched) setSelectedBrandKit(matched)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [brand?.name])
 
   const handleGenerate = () => {
     if (!brand) return
     setSending(true)
 
     const selectedFormat = FORMATS.find(f => f.id === format)
+    const brandKitLine = selectedBrandKit
+      ? `Use Canva brand kit ID "${selectedBrandKit.id}" for consistent brand colours and fonts.`
+      : 'Use the brand kit if available.'
+
     const message = [
       `Design a ${selectedFormat?.label ?? format} graphic for ${brand.name}.`,
       prompt.trim()
         ? `Design brief: "${prompt.trim()}"`
         : 'Choose the best design based on the strategy context.',
       `Format: ${format} (${selectedFormat?.dimensions}).`,
-      'Use the brand kit if available. Create it in Canva, then show me the result.',
+      `${brandKitLine} Create it in Canva, then show me the result.`,
       '',
       strategyContext?.agentContext ?? '',
     ].filter(Boolean).join('\n')
@@ -115,6 +148,29 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
           ))}
         </div>
       </div>
+
+      {/* Brand kit indicator */}
+      {selectedBrandKit && (
+        <div className="rounded-lg border border-border bg-card/50 px-3 py-2">
+          <p className="text-[10px] text-muted-foreground">
+            Using brand kit: <span className="font-medium text-foreground">{selectedBrandKit.name}</span>
+            {brandKits.length > 1 && (
+              <select
+                value={selectedBrandKit.id}
+                onChange={(e) => {
+                  const kit = brandKits.find((k) => k.id === e.target.value)
+                  if (kit) setSelectedBrandKit(kit)
+                }}
+                className="ml-2 rounded border border-border bg-background px-1 py-0.5 text-[10px] text-foreground"
+              >
+                {brandKits.map((k) => (
+                  <option key={k.id} value={k.id}>{k.name}</option>
+                ))}
+              </select>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Generate button */}
       <button
