@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Upload, FileVideo, CheckCircle2, Loader2, Sparkles, AlertCircle } from 'lucide-react'
-import type { Brand, VisualAnalysis } from '@/types/database'
+import { Upload, FileVideo, CheckCircle2, Loader2, Sparkles, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import type { Brand, VisualAnalysis, ContentVibe, HashtagStyle, CarouselMode, ContentType, ContentStyleSettings } from '@/types/database'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { extractFramesFromVideo } from '@/lib/video/extract-frames-browser'
 import { createClient } from '@/lib/supabase/client'
@@ -24,6 +24,15 @@ interface ImportedFile {
 export function VideoImportPanel({ brand }: VideoImportPanelProps) {
   const [files, setFiles] = useState<ImportedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [styleOpen, setStyleOpen] = useState(false)
+  const [styleSettings, setStyleSettings] = useState<ContentStyleSettings>({
+    vibe: 'informative',
+    content_type: 'entertainment',
+    carousel_mode: 'off',
+    carousel_slide_count: 5,
+    hashtag_style: 'trending_niche',
+    post_count: 'auto',
+  })
 
   const updateFile = (id: string, updates: Partial<ImportedFile>) => {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f))
@@ -212,8 +221,20 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
     if (readyIds.length === 0) return
 
+    const vibeText = styleSettings.vibe !== 'informative' ? `\nVibe: ${styleSettings.vibe} — write in a ${styleSettings.vibe} tone.` : ''
+    const hashtagText = `\nHashtag style: ${styleSettings.hashtag_style.replace(/_/g, ' ')}.`
+    const contentTypeText = `\nContent type: ${styleSettings.content_type}.`
+
+    let carouselText = ''
+    if (styleSettings.carousel_mode !== 'off' && readyCount > 1) {
+      const slideCount = styleSettings.carousel_mode === 'custom'
+        ? styleSettings.carousel_slide_count ?? 5
+        : Math.min(readyCount, 10)
+      carouselText = `\nCarousel mode: group into sets of ${slideCount} for carousel posts. Write one unified caption per platform per carousel set, referencing the slide progression.`
+    }
+
     sendToDirector(
-      `Process these ${readyIds.length} uploaded videos for ${brand.name}: generate platform-specific captions for all 6 platforms (YouTube, TikTok, Instagram, Facebook, LinkedIn, X) and save as draft posts.\n\nMedia item IDs: ${readyIds.join(', ')}`
+      `Process these ${readyIds.length} uploaded files for ${brand.name}: generate platform-specific captions for all 6 platforms (YouTube, TikTok, Instagram, Facebook, LinkedIn, X) and save as draft posts.${vibeText}${contentTypeText}${hashtagText}${carouselText}\n\nMedia item IDs: ${readyIds.join(', ')}`
     )
   }
 
@@ -326,6 +347,123 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Content Style Panel */}
+      {readyCount > 0 && (
+        <div className="rounded-xl border border-border bg-card/50">
+          <button
+            type="button"
+            onClick={() => setStyleOpen(!styleOpen)}
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-foreground"
+          >
+            Content Style
+            {styleOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+
+          {styleOpen && (
+            <div className="space-y-4 px-4 pb-4">
+              {/* Vibe */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Vibe</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['funny', 'inspirational', 'informative', 'exciting', 'educational', 'provocative'] as ContentVibe[]).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setStyleSettings(s => ({ ...s, vibe: v }))}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        styleSettings.vibe === v
+                          ? 'bg-[oklch(0.55_0.1_240)] text-white'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {v.charAt(0).toUpperCase() + v.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Content Type */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Content Type</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['entertainment', 'education', 'inspiration', 'promotional'] as ContentType[]).map(ct => (
+                    <button
+                      key={ct}
+                      type="button"
+                      onClick={() => setStyleSettings(s => ({ ...s, content_type: ct }))}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        styleSettings.content_type === ct
+                          ? 'bg-[oklch(0.55_0.1_240)] text-white'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {ct.charAt(0).toUpperCase() + ct.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Carousel Mode */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Carousel</label>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {(['off', 'auto_group', 'custom'] as CarouselMode[]).map(cm => (
+                    <button
+                      key={cm}
+                      type="button"
+                      onClick={() => setStyleSettings(s => ({ ...s, carousel_mode: cm }))}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        styleSettings.carousel_mode === cm
+                          ? 'bg-[oklch(0.55_0.1_240)] text-white'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {cm === 'off' ? 'Off' : cm === 'auto_group' ? 'Auto-group' : 'Custom'}
+                    </button>
+                  ))}
+                  {styleSettings.carousel_mode === 'custom' && (
+                    <input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={styleSettings.carousel_slide_count ?? 5}
+                      onChange={e => setStyleSettings(s => ({ ...s, carousel_slide_count: parseInt(e.target.value) || 5 }))}
+                      className="w-14 rounded-lg border border-border bg-background px-2 py-1 text-xs text-foreground text-center"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Hashtag Style */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Hashtags</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {([
+                    { id: 'trending_niche' as HashtagStyle, label: 'Trending + Niche' },
+                    { id: 'niche_only' as HashtagStyle, label: 'Niche Only' },
+                    { id: 'branded_only' as HashtagStyle, label: 'Branded Only' },
+                    { id: 'mix_all' as HashtagStyle, label: 'Mix of All' },
+                  ]).map(hs => (
+                    <button
+                      key={hs.id}
+                      type="button"
+                      onClick={() => setStyleSettings(s => ({ ...s, hashtag_style: hs.id }))}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                        styleSettings.hashtag_style === hs.id
+                          ? 'bg-[oklch(0.55_0.1_240)] text-white'
+                          : 'bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {hs.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
