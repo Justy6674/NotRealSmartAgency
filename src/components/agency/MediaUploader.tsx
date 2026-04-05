@@ -16,7 +16,7 @@ interface MediaUploaderProps {
   onUploadComplete: () => void
 }
 
-const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'video/webm']
+const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'video/webm', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic']
 const MAX_SIZE = 100 * 1024 * 1024 // 100MB
 
 export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps) {
@@ -63,6 +63,7 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
 
       // Create database record
+      const isImage = file.type.startsWith('image/')
       const { data: mediaItem, error: dbError } = await supabase
         .from('media_items')
         .insert({
@@ -72,32 +73,41 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
           file_name: file.name,
           file_type: file.type,
           file_size_bytes: file.size,
-          transcription_status: 'pending',
+          transcription_status: isImage ? 'transcribed' : 'pending',
+          file_created_at: new Date(file.lastModified).toISOString(),
+          uploaded_by_name: user.user_metadata?.full_name ?? user.email ?? 'Unknown',
         })
         .select()
         .single()
 
       if (dbError) throw new Error(dbError.message)
 
-      setProgress(prev =>
-        prev.map(p => p.fileName === file.name ? { ...p, status: 'transcribing', mediaItemId: mediaItem.id } : p)
-      )
+      if (isImage) {
+        // Images don't need transcription — mark done immediately
+        setProgress(prev =>
+          prev.map(p => p.fileName === file.name ? { ...p, status: 'done', mediaItemId: mediaItem.id } : p)
+        )
+      } else {
+        setProgress(prev =>
+          prev.map(p => p.fileName === file.name ? { ...p, status: 'transcribing', mediaItemId: mediaItem.id } : p)
+        )
 
-      // Auto-transcribe via API (small JSON payload, no file)
-      const transcribeRes = await fetch('/api/media/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mediaItemId: mediaItem.id }),
-      })
+        // Auto-transcribe via API (small JSON payload, no file)
+        const transcribeRes = await fetch('/api/media/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mediaItemId: mediaItem.id }),
+        })
 
-      if (!transcribeRes.ok) {
-        const err = await transcribeRes.json()
-        throw new Error(err.error ?? 'Transcription failed')
+        if (!transcribeRes.ok) {
+          const err = await transcribeRes.json()
+          throw new Error(err.error ?? 'Transcription failed')
+        }
+
+        setProgress(prev =>
+          prev.map(p => p.fileName === file.name ? { ...p, status: 'done' } : p)
+        )
       }
-
-      setProgress(prev =>
-        prev.map(p => p.fileName === file.name ? { ...p, status: 'done' } : p)
-      )
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed'
       setProgress(prev =>
@@ -133,12 +143,12 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
       >
         <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-sm font-medium">Drop videos here or click to upload</p>
-        <p className="text-xs text-muted-foreground mt-1">MP4, MOV, MP3, M4A, WebM — max 100MB per file</p>
+        <p className="text-sm font-medium">Drop files here or click to upload</p>
+        <p className="text-xs text-muted-foreground mt-1">Videos, photos, or audio — AI describes and captions everything</p>
         <input
           ref={inputRef}
           type="file"
-          accept="video/*,audio/*"
+          accept="video/*,audio/*,image/*"
           multiple
           className="hidden"
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
