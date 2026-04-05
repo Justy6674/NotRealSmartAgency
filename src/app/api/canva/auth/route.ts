@@ -32,12 +32,17 @@ export async function GET() {
   // State for CSRF protection
   const state = crypto.randomBytes(32).toString('base64url')
 
-  // Scopes we need for the dashboard
+  // Scopes we need for the dashboard + write operations
   const scopes = [
     'design:content:read',
+    'design:content:write',
     'design:meta:read',
     'folder:read',
+    'folder:write',
     'asset:read',
+    'asset:write',
+    'comment:read',
+    'comment:write',
     'profile:read',
   ].join(' ')
 

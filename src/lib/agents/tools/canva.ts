@@ -1,8 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
-
-const CANVA_BASE_URL = 'https://api.canva.com/rest/v1'
+import { getCanvaToken, canvaFetch } from '@/lib/canva/client'
 
 const FORMAT_DIMENSIONS: Record<string, { width: number; height: number; title_suffix: string }> = {
   instagram_post: { width: 1080, height: 1080, title_suffix: 'Instagram Post' },
@@ -16,51 +15,12 @@ const FORMAT_DIMENSIONS: Record<string, { width: number; height: number; title_s
   a4_document: { width: 595, height: 842, title_suffix: 'A4 Document' },
 }
 
-async function getCanvaApiKey(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  // User-specific key first (power users connect their own)
-  const { data } = await supabase
-    .from('user_integrations')
-    .select('cached_data')
-    .eq('user_id', userId)
-    .eq('provider', 'canva')
-    .single()
-
-  const userKey = (data?.cached_data?.api_key as string) ?? null
-  if (userKey) return userKey
-
-  // Fall back to platform-wide key (included in subscription)
-  return process.env.CANVA_API_KEY ?? null
-}
-
 function noKeyError() {
   return {
     success: false,
     error:
       'No Canva API key connected. To use Canva features, connect your Canva account: go to canva.com/developers to get an API key, then tell me and I\'ll save it for you.',
   }
-}
-
-async function canvaFetch(apiKey: string, path: string, options?: RequestInit) {
-  const res = await fetch(`${CANVA_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  })
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(
-      `Canva API error (${res.status}): ${err.message || err.code || 'Unknown error'}`
-    )
-  }
-
-  return res.json()
 }
 
 // ---------------------------------------------------------------------------
@@ -83,7 +43,7 @@ export function createSearchDesignsTool(
         .describe('Filter by ownership: any, owned, or shared'),
     }),
     execute: async ({ query, ownership }) => {
-      const apiKey = await getCanvaApiKey(supabase, userId)
+      const apiKey = await getCanvaToken(supabase, userId)
       if (!apiKey) return noKeyError()
 
       try {
@@ -93,7 +53,8 @@ export function createSearchDesignsTool(
           sort_by: 'relevance',
         })
 
-        const data = await canvaFetch(apiKey, `/designs?${params}`)
+        const res = await canvaFetch(apiKey, `/designs?${params}`)
+        const data = await res.json()
         const items = data.items ?? []
 
         if (items.length === 0) {
@@ -147,12 +108,13 @@ export function createSearchFoldersTool(
         .describe('Search term to match against folder names'),
     }),
     execute: async ({ query }) => {
-      const apiKey = await getCanvaApiKey(supabase, userId)
+      const apiKey = await getCanvaToken(supabase, userId)
       if (!apiKey) return noKeyError()
 
       try {
         const params = new URLSearchParams({ query, ownership: 'any' })
-        const data = await canvaFetch(apiKey, `/folders/search?${params}`)
+        const res = await canvaFetch(apiKey, `/folders/search?${params}`)
+        const data = await res.json()
         const items = data.items ?? []
 
         if (items.length === 0) {
@@ -208,7 +170,7 @@ export function createListFolderItemsTool(
         .describe('Filter by item type(s)'),
     }),
     execute: async ({ folder_id, item_types }) => {
-      const apiKey = await getCanvaApiKey(supabase, userId)
+      const apiKey = await getCanvaToken(supabase, userId)
       if (!apiKey) return noKeyError()
 
       try {
@@ -221,10 +183,11 @@ export function createListFolderItemsTool(
           }
         }
 
-        const data = await canvaFetch(
+        const res = await canvaFetch(
           apiKey,
           `/folders/${folder_id}/items?${params}`
         )
+        const data = await res.json()
         const items = data.items ?? []
 
         if (items.length === 0) {
@@ -295,11 +258,12 @@ export function createListBrandKitsTool(
       'List brand kits available in the connected Canva account. Brand kits contain colours, fonts, and logos. Use to find a brand_kit_id for on-brand design creation.',
     inputSchema: z.object({}),
     execute: async () => {
-      const apiKey = await getCanvaApiKey(supabase, userId)
+      const apiKey = await getCanvaToken(supabase, userId)
       if (!apiKey) return noKeyError()
 
       try {
-        const data = await canvaFetch(apiKey, '/brand-kits')
+        const res = await canvaFetch(apiKey, '/brand-kits')
+        const data = await res.json()
         const kits = data.items ?? []
 
         if (kits.length === 0) {
@@ -351,11 +315,12 @@ export function createGetDesignTool(
         .describe('Canva design ID (starts with D, 11 chars)'),
     }),
     execute: async ({ design_id }) => {
-      const apiKey = await getCanvaApiKey(supabase, userId)
+      const apiKey = await getCanvaToken(supabase, userId)
       if (!apiKey) return noKeyError()
 
       try {
-        const data = await canvaFetch(apiKey, `/designs/${design_id}`)
+        const res = await canvaFetch(apiKey, `/designs/${design_id}`)
+        const data = await res.json()
         const d = data.design
 
         return {
@@ -423,7 +388,7 @@ export function createDesignGraphicTool(
         .describe('Canva brand kit ID for on-brand colours and fonts (from list_brand_kits)'),
     }),
     execute: async ({ prompt, format, brand_name, brand_kit_id }) => {
-      const apiKey = await getCanvaApiKey(supabase, userId)
+      const apiKey = await getCanvaToken(supabase, userId)
 
       if (!apiKey) return noKeyError()
 
@@ -448,10 +413,11 @@ export function createDesignGraphicTool(
           body.brand_kit_id = brand_kit_id
         }
 
-        const createData = await canvaFetch(apiKey, '/designs', {
+        const createRes = await canvaFetch(apiKey, '/designs', {
           method: 'POST',
           body: JSON.stringify(body),
         })
+        const createData = await createRes.json()
 
         const designId = createData.design?.id
         const editUrl = createData.design?.urls?.edit_url
@@ -460,7 +426,8 @@ export function createDesignGraphicTool(
         let thumbnailUrl: string | null = null
         if (designId) {
           try {
-            const thumbData = await canvaFetch(apiKey, `/designs/${designId}`)
+            const thumbRes = await canvaFetch(apiKey, `/designs/${designId}`)
+            const thumbData = await thumbRes.json()
             thumbnailUrl = thumbData.design?.thumbnail?.url ?? null
           } catch {
             // Thumbnail fetch is best-effort
@@ -520,19 +487,20 @@ export function createExportDesignTool(
         .describe('Export format — png for social media, pdf for documents'),
     }),
     execute: async ({ design_id, format }) => {
-      const apiKey = await getCanvaApiKey(supabase, userId)
+      const apiKey = await getCanvaToken(supabase, userId)
 
       if (!apiKey) return noKeyError()
 
       try {
         // Step 1: Start the export
-        const exportData = await canvaFetch(apiKey, '/exports', {
+        const exportRes = await canvaFetch(apiKey, '/exports', {
           method: 'POST',
           body: JSON.stringify({
             design_id,
             format: { type: format },
           }),
         })
+        const exportData = await exportRes.json()
 
         const exportId = exportData.export?.id
 
@@ -548,10 +516,11 @@ export function createExportDesignTool(
           await new Promise((resolve) => setTimeout(resolve, pollInterval))
 
           try {
-            const statusData = await canvaFetch(
+            const statusRes = await canvaFetch(
               apiKey,
               `/exports/${exportId}`
             )
+            const statusData = await statusRes.json()
             const status = statusData.export?.status
 
             if (status === 'completed') {
