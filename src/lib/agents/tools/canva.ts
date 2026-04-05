@@ -860,6 +860,284 @@ export function createGetDesignAssetsTool(
 }
 
 // ---------------------------------------------------------------------------
+// Resize design to different dimensions
+// ---------------------------------------------------------------------------
+export function createResizeDesignTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Resize a Canva design to different dimensions — perfect for creating versions for each social platform from one design.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID to resize'),
+      width: z.number().describe('New width in pixels'),
+      height: z.number().describe('New height in pixels'),
+      title: z
+        .string()
+        .optional()
+        .describe('Optional title for the resized copy'),
+    }),
+    execute: async ({ design_id, width, height, title }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const body: Record<string, unknown> = { width, height }
+        if (title) body.title = title
+
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/resize`,
+          { method: 'POST', body: JSON.stringify(body) }
+        )
+        const data = await res.json()
+        const newDesign = data.design ?? data
+
+        return {
+          success: true,
+          design_id: newDesign.id,
+          edit_url: newDesign.urls?.edit_url,
+          dimensions: `${width}x${height}`,
+          message: `Resized design created (${width}x${height}). New design ID: ${newDesign.id}\n[Open in Canva](${newDesign.urls?.edit_url})`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to resize Canva design',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Upload asset from URL
+// ---------------------------------------------------------------------------
+export function createUploadAssetFromUrlTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Upload an image or video from a URL into Canva\'s asset library for use in designs.',
+    inputSchema: z.object({
+      url: z.string().describe('Public URL of the image or video to upload'),
+      name: z
+        .string()
+        .optional()
+        .describe('Optional display name for the asset'),
+    }),
+    execute: async ({ url, name }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const body: Record<string, unknown> = { url }
+        if (name) body.name = name
+
+        const res = await canvaFetch(apiKey, '/assets', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        const asset = data.asset ?? data
+
+        return {
+          success: true,
+          asset_id: asset.id,
+          name: asset.name ?? name ?? null,
+          message: `Asset uploaded to Canva successfully. Asset ID: ${asset.id}${name ? ` (${name})` : ''}. You can now use this asset in any design.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to upload asset to Canva',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Create design from candidate
+// ---------------------------------------------------------------------------
+export function createDesignFromCandidateTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Convert an AI-generated design candidate into an editable Canva design.',
+    inputSchema: z.object({
+      candidate_id: z
+        .string()
+        .describe('Design candidate ID from a previous generate-design call'),
+      title: z
+        .string()
+        .optional()
+        .describe('Optional title for the new design'),
+    }),
+    execute: async ({ candidate_id, title }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const body: Record<string, unknown> = {
+          design_candidate_id: candidate_id,
+        }
+        if (title) body.title = title
+
+        const res = await canvaFetch(apiKey, '/designs', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        const design = data.design ?? data
+
+        return {
+          success: true,
+          design_id: design.id,
+          edit_url: design.urls?.edit_url,
+          title: design.title ?? title ?? null,
+          message: `Design created from candidate. ID: ${design.id}\n[Open in Canva](${design.urls?.edit_url})`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to create design from candidate',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Request outline review (presentation outlines)
+// ---------------------------------------------------------------------------
+export function createRequestOutlineReviewTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Create a presentation outline for review before generating slides. Supports brand kit styling and audience targeting.',
+    inputSchema: z.object({
+      title: z.string().describe('Title of the presentation'),
+      topics: z
+        .array(z.string())
+        .describe('List of topics or sections to cover'),
+      brand_kit_id: z
+        .string()
+        .optional()
+        .describe('Canva brand kit ID for on-brand styling'),
+      style: z
+        .string()
+        .optional()
+        .describe('Visual style hint (e.g. "modern", "corporate", "playful")'),
+      audience: z
+        .string()
+        .optional()
+        .describe('Target audience description'),
+    }),
+    execute: async ({ title, topics, brand_kit_id, style, audience }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const body: Record<string, unknown> = { title, topics }
+        if (brand_kit_id) body.brand_kit_id = brand_kit_id
+        if (style) body.style = style
+        if (audience) body.audience = audience
+
+        const res = await canvaFetch(apiKey, '/autofills/outlines', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+
+        return {
+          success: true,
+          outline: data,
+          message: `Presentation outline created for "${title}" with ${topics.length} topic(s). Review the outline and confirm before generating slides.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to create presentation outline',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Import design from URL (PDF, PowerPoint, etc.)
+// ---------------------------------------------------------------------------
+export function createImportDesignFromUrlTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Import an external file (PDF, PowerPoint, etc.) into Canva as an editable design.',
+    inputSchema: z.object({
+      url: z
+        .string()
+        .describe('Public URL of the file to import (PDF, PPTX, etc.)'),
+      title: z
+        .string()
+        .optional()
+        .describe('Optional title for the imported design'),
+    }),
+    execute: async ({ url, title }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const body: Record<string, unknown> = { url }
+        if (title) body.title = title
+
+        const res = await canvaFetch(apiKey, '/imports', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        const imported = data.design ?? data.import ?? data
+
+        return {
+          success: true,
+          design_id: imported.id ?? imported.design_id,
+          edit_url: imported.urls?.edit_url,
+          title: imported.title ?? title ?? null,
+          message: `File imported into Canva successfully.${imported.id ? ` Design ID: ${imported.id}` : ''}${imported.urls?.edit_url ? `\n[Open in Canva](${imported.urls.edit_url})` : ''}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to import file into Canva',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Export design (unchanged)
 // ---------------------------------------------------------------------------
 export function createExportDesignTool(
