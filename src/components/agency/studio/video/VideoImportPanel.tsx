@@ -74,49 +74,19 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
 
       updateFile(importedFile.id, { status: 'uploaded', mediaItemId })
 
-      // 2. Extract frames in browser (non-blocking — runs alongside transcription)
+      const isImage = importedFile.file.type.startsWith('image/')
+      const isVideo = importedFile.file.type.startsWith('video/')
       let framesUploaded = false
 
-      if (user && importedFile.file.type.startsWith('video/')) {
-        try {
-          const frames = await extractFramesFromVideo(importedFile.file, 4)
-          const frameUrls: string[] = []
+      if (isImage) {
+        // For images: use the uploaded image itself as the "frame" for analysis
+        await supabase.from('media_items').update({
+          metadata: { frame_urls: [urlData.publicUrl] },
+          thumbnail_url: urlData.publicUrl,
+        }).eq('id', mediaItemId)
+        framesUploaded = true
 
-          for (let i = 0; i < frames.length; i++) {
-            const framePath = `${user.id}/${brand.id}/frames/${mediaItemId}_frame_${i}.jpg`
-            const { data: frameData } = await supabase.storage
-              .from('media')
-              .upload(framePath, frames[i], { contentType: 'image/jpeg', upsert: true })
-            if (frameData) {
-              const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(framePath)
-              frameUrls.push(publicUrl)
-            }
-          }
-
-          if (frameUrls.length) {
-            await supabase.from('media_items').update({
-              metadata: { frame_urls: frameUrls },
-            }).eq('id', mediaItemId)
-            framesUploaded = true
-          }
-        } catch {
-          // Frame extraction failure is non-blocking
-        }
-      }
-
-      // 3. Transcribe
-      updateFile(importedFile.id, { status: 'transcribing' })
-      const transcribeRes = await fetch('/api/media/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mediaItemId }),
-      })
-
-      if (!transcribeRes.ok) throw new Error('Transcription failed')
-      updateFile(importedFile.id, { status: 'transcribed' })
-
-      // 4. Visual analysis (only if frames were uploaded)
-      if (framesUploaded) {
+        // Skip transcription — go straight to analysis
         updateFile(importedFile.id, { status: 'analysing' })
         try {
           const analyzeRes = await fetch(`/api/media/${mediaItemId}/analyze`, { method: 'POST' })
@@ -125,14 +95,73 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
             updateFile(importedFile.id, {
               status: 'analysed',
               analysis,
-              thumbnailUrl: thumbnail_url,
+              thumbnailUrl: thumbnail_url ?? urlData.publicUrl,
             })
           } else {
-            // Analysis failure is non-blocking — still mark as ready
-            updateFile(importedFile.id, { status: 'analysed' })
+            updateFile(importedFile.id, { status: 'analysed', thumbnailUrl: urlData.publicUrl })
           }
         } catch {
-          updateFile(importedFile.id, { status: 'analysed' })
+          updateFile(importedFile.id, { status: 'analysed', thumbnailUrl: urlData.publicUrl })
+        }
+      } else {
+        // For video/audio: extract frames + transcribe + analyse
+        // 2. Extract frames in browser
+        if (user && isVideo) {
+          try {
+            const frames = await extractFramesFromVideo(importedFile.file, 4)
+            const frameUrls: string[] = []
+
+            for (let i = 0; i < frames.length; i++) {
+              const framePath = `${user.id}/${brand.id}/frames/${mediaItemId}_frame_${i}.jpg`
+              const { data: frameData } = await supabase.storage
+                .from('media')
+                .upload(framePath, frames[i], { contentType: 'image/jpeg', upsert: true })
+              if (frameData) {
+                const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(framePath)
+                frameUrls.push(publicUrl)
+              }
+            }
+
+            if (frameUrls.length) {
+              await supabase.from('media_items').update({
+                metadata: { frame_urls: frameUrls },
+              }).eq('id', mediaItemId)
+              framesUploaded = true
+            }
+          } catch {
+            // Frame extraction failure is non-blocking
+          }
+        }
+
+        // 3. Transcribe (video/audio only)
+        updateFile(importedFile.id, { status: 'transcribing' })
+        const transcribeRes = await fetch('/api/media/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mediaItemId }),
+        })
+
+        if (!transcribeRes.ok) throw new Error('Transcription failed')
+        updateFile(importedFile.id, { status: 'transcribed' })
+
+        // 4. Visual analysis (only if frames were uploaded)
+        if (framesUploaded) {
+          updateFile(importedFile.id, { status: 'analysing' })
+          try {
+            const analyzeRes = await fetch(`/api/media/${mediaItemId}/analyze`, { method: 'POST' })
+            if (analyzeRes.ok) {
+              const { analysis, thumbnail_url } = await analyzeRes.json()
+              updateFile(importedFile.id, {
+                status: 'analysed',
+                analysis,
+                thumbnailUrl: thumbnail_url,
+              })
+            } else {
+              updateFile(importedFile.id, { status: 'analysed' })
+            }
+          } catch {
+            updateFile(importedFile.id, { status: 'analysed' })
+          }
         }
       }
     } catch (err) {
@@ -148,7 +177,7 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
     setIsDragOver(false)
 
     const droppedFiles = Array.from(e.dataTransfer.files).filter(f =>
-      f.type.startsWith('video/') || f.type.startsWith('audio/')
+      f.type.startsWith('video/') || f.type.startsWith('audio/') || f.type.startsWith('image/')
     )
 
     const newFiles: ImportedFile[] = droppedFiles.map(f => ({
@@ -239,16 +268,16 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
       >
         <Upload className="h-10 w-10" />
         <div className="text-center">
-          <p className="text-sm font-medium text-foreground">Drop videos here</p>
+          <p className="text-sm font-medium text-foreground">Drop files here</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            MP4, MOV, WebM — auto-transcribed on upload
+            Videos, photos, or audio — AI describes and captions everything
           </p>
         </div>
         <label className="cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-xs text-foreground hover:bg-[oklch(0.55_0.1_240)]/5 transition-colors">
           Browse files
           <input
             type="file"
-            accept="video/*,audio/*"
+            accept="video/*,audio/*,image/*"
             multiple
             onChange={handleFileInput}
             className="hidden"
