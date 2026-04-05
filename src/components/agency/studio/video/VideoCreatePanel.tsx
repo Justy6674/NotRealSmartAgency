@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Sparkles, Wand2, Loader2 } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
+import { AvatarVoicePicker } from './AvatarVoicePicker'
 import type { Brand } from '@/types/database'
 import type { StrategyContext } from '@/hooks/useStrategyContext'
 
@@ -30,6 +31,51 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
   const [provider, setProvider] = useState<Provider>('heygen')
   const [format, setFormat] = useState<AspectRatio>('9:16')
   const [sending, setSending] = useState(false)
+  const [avatarId, setAvatarId] = useState(
+    (brand?.video_preferences as Record<string, string> | null)?.avatar_id ?? ''
+  )
+  const [voiceId, setVoiceId] = useState(
+    (brand?.video_preferences as Record<string, string> | null)?.accent ?? ''
+  )
+  const [credits, setCredits] = useState<number | null>(null)
+
+  // Fetch HeyGen credits when provider is heygen
+  useEffect(() => {
+    if (provider !== 'heygen') return
+    let cancelled = false
+    fetch('/api/heygen/credits')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled && data.configured) setCredits(data.credits)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [provider])
+
+  // Auto-save avatar/voice selection to brand video_preferences
+  const handleAvatarVoiceSelect = useCallback(
+    (selection: { avatarId: string; voiceId: string }) => {
+      setAvatarId(selection.avatarId)
+      setVoiceId(selection.voiceId)
+
+      if (!brand?.id) return
+      const updatedPrefs = {
+        ...(brand.video_preferences as Record<string, string> | null),
+        avatar_id: selection.avatarId,
+        accent: selection.voiceId,
+      }
+      // Fire-and-forget save
+      fetch('/api/brands', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: brand.id,
+          video_preferences: updatedPrefs,
+        }),
+      }).catch(() => {})
+    },
+    [brand]
+  )
 
   const handleGenerate = () => {
     if (!brand) return
@@ -39,9 +85,14 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
       ? `Topic: "${topic.trim()}"`
       : 'Choose the best topic based on the strategy context below.'
 
+    const avatarLine = avatarId ? `Avatar ID: ${avatarId}` : ''
+    const voiceLine = voiceId ? `Voice ID: ${voiceId}` : ''
+
     const message = [
       `Create a ${format} video for ${brand.name} using ${provider === 'heygen' ? 'HeyGen (AI avatar presenter)' : 'OpenClaw/Remotion (template-based)'}.`,
       topicLine,
+      avatarLine,
+      voiceLine,
       `Platform format: ${FORMATS.find(f => f.id === format)?.platforms ?? format}.`,
       '',
       'Write the script, check compliance, then generate the video.',
@@ -96,6 +147,15 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
         </div>
       </div>
 
+      {/* Avatar & Voice picker — HeyGen only */}
+      {provider === 'heygen' && (
+        <AvatarVoicePicker
+          onSelect={handleAvatarVoiceSelect}
+          initialAvatarId={avatarId || undefined}
+          initialVoiceId={voiceId || undefined}
+        />
+      )}
+
       {/* Provider selector */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">Video style</label>
@@ -143,25 +203,32 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
         </div>
       </div>
 
-      {/* Generate button */}
-      <button
-        type="button"
-        onClick={handleGenerate}
-        disabled={sending || !brand}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-3 text-sm font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors disabled:opacity-50"
-      >
-        {sending ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Sending to Director...
-          </>
-        ) : (
-          <>
-            <Sparkles className="h-4 w-4" />
-            Generate Video
-          </>
+      {/* Generate button + credits badge */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={sending || !brand}
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-3 text-sm font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors disabled:opacity-50"
+        >
+          {sending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Sending to Director...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Generate Video
+            </>
+          )}
+        </button>
+        {provider === 'heygen' && credits !== null && credits >= 0 && (
+          <span className="whitespace-nowrap rounded-md bg-[oklch(0.55_0.1_240)]/10 px-2.5 py-1.5 text-xs font-medium text-[oklch(0.55_0.1_240)]">
+            {credits} credits
+          </span>
         )}
-      </button>
+      </div>
     </div>
   )
 }

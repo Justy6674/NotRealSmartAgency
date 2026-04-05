@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod/v3'
+import { getHeyGenApiKey } from '@/lib/heygen/client'
 
 const GenerateVideoSchema = z.object({
   output_id: z.string().uuid(),
   provider: z.enum(['heygen', 'runway', 'synthesia', 'kling', 'google_veo']).default('heygen'),
+  avatar_id: z.string().optional(),
+  voice_id: z.string().optional(),
 })
 
 export async function POST(request: Request) {
@@ -20,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
   }
 
-  const { output_id, provider } = parsed.data
+  const { output_id, provider, avatar_id, voice_id } = parsed.data
 
   // Fetch the script output
   const { data: output, error: outputError } = await supabase
@@ -33,18 +36,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Output script not found' }, { status: 404 })
   }
 
-  // Fetch provider API key
-  const { data: integration, error: integrationError } = await supabase
-    .from('user_integrations')
-    .select('cached_data')
-    .eq('user_id', user.id)
-    .eq('provider', provider)
-    .single()
-
-  // User key first, then platform-wide env var fallback
-  const apiKey = (integration?.cached_data?.api_key as string)
-    || (provider === 'heygen' ? process.env.HEYGEN_API_KEY : undefined)
-    || undefined
+  // Resolve API key — shared helper for HeyGen, inline for other providers
+  let apiKey: string | undefined
+  if (provider === 'heygen') {
+    apiKey = (await getHeyGenApiKey(supabase, user.id)) ?? undefined
+  } else {
+    const { data: integration } = await supabase
+      .from('user_integrations')
+      .select('cached_data')
+      .eq('user_id', user.id)
+      .eq('provider', provider)
+      .single()
+    apiKey = (integration?.cached_data?.api_key as string) ?? undefined
+  }
 
   if (!apiKey) {
     return NextResponse.json({ error: `API key for ${provider} not configured. Add it in Brand Settings → Video tab.` }, { status: 400 })
@@ -66,13 +70,13 @@ export async function POST(request: Request) {
           video_inputs: [{
             character: {
               type: 'avatar',
-              avatar_id: videoPrefs.avatar_id || 'default_avatar_id',
+              avatar_id: avatar_id || videoPrefs.avatar_id || 'default_avatar_id',
               avatar_style: 'normal',
             },
             voice: {
               type: 'text',
               input_text: scriptContent,
-              voice_id: videoPrefs.accent || 'default_voice_id',
+              voice_id: voice_id || videoPrefs.accent || 'default_voice_id',
             },
             background: {
               type: 'color',

@@ -1,6 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getHeyGenApiKey } from '@/lib/heygen/client'
 
 export function createCreateVideoTool(
   supabase: SupabaseClient,
@@ -19,18 +20,17 @@ export function createCreateVideoTool(
         .string()
         .optional()
         .describe('Video title — defaults to first 50 chars of script'),
+      avatar_id: z
+        .string()
+        .optional()
+        .describe('HeyGen avatar ID — falls back to brand video_preferences'),
+      voice_id: z
+        .string()
+        .optional()
+        .describe('HeyGen voice ID — falls back to brand video_preferences'),
     }),
-    execute: async ({ script, title }) => {
-      // Fetch HeyGen API key
-      const { data: integration } = await supabase
-        .from('user_integrations')
-        .select('cached_data')
-        .eq('user_id', userId)
-        .eq('provider', 'heygen')
-        .single()
-
-      // User-specific key first, fall back to platform-wide key
-      const apiKey = (integration?.cached_data?.api_key as string) ?? process.env.HEYGEN_API_KEY ?? null
+    execute: async ({ script, title, avatar_id, voice_id }) => {
+      const apiKey = await getHeyGenApiKey(supabase, userId)
 
       if (!apiKey) {
         return {
@@ -63,13 +63,13 @@ export function createCreateVideoTool(
               {
                 character: {
                   type: 'avatar',
-                  avatar_id: videoPrefs.avatar_id || 'default_avatar_id',
+                  avatar_id: avatar_id || videoPrefs.avatar_id || 'default_avatar_id',
                   avatar_style: 'normal',
                 },
                 voice: {
                   type: 'text',
                   input_text: script,
-                  voice_id: videoPrefs.accent || 'default_voice_id',
+                  voice_id: voice_id || videoPrefs.accent || 'default_voice_id',
                 },
                 background: {
                   type: 'color',
