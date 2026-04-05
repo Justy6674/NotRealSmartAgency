@@ -1138,6 +1138,498 @@ export function createImportDesignFromUrlTool(
 }
 
 // ---------------------------------------------------------------------------
+// Comment on a design
+// ---------------------------------------------------------------------------
+export function createCommentOnDesignTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Add a comment to a Canva design — useful for leaving feedback, compliance notes, or revision requests.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID to comment on'),
+      message: z.string().describe('Comment text to leave on the design'),
+    }),
+    execute: async ({ design_id, message }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/comments`,
+          { method: 'POST', body: JSON.stringify({ message }) }
+        )
+        const data = await res.json()
+        const comment = data.comment ?? data
+
+        return {
+          success: true,
+          comment_id: comment.id,
+          design_id,
+          message: `Comment added to design ${design_id}: "${message}"`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to comment on Canva design',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// List comments on a design
+// ---------------------------------------------------------------------------
+export function createListCommentsTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'List all comments on a Canva design. Useful for reviewing feedback, compliance notes, or team discussion.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID to list comments for'),
+    }),
+    execute: async ({ design_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/comments`
+        )
+        const data = await res.json()
+        const comments = data.items ?? data.comments ?? []
+
+        return {
+          success: true,
+          design_id,
+          count: comments.length,
+          comments,
+          message: comments.length === 0
+            ? `No comments on design ${design_id}.`
+            : `Found ${comments.length} comment(s) on design ${design_id}:\n${comments.map((c: { id?: string; message?: string; author?: { display_name?: string } }, i: number) => `${i + 1}. ${c.author?.display_name ?? 'Unknown'}: "${c.message}" (ID: ${c.id})`).join('\n')}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to list comments on Canva design',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// List replies to a comment
+// ---------------------------------------------------------------------------
+export function createListRepliesTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'List replies to a specific comment on a Canva design. Use after list_comments to see threaded discussions.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID'),
+      comment_id: z.string().describe('Comment ID to list replies for'),
+    }),
+    execute: async ({ design_id, comment_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/comments/${comment_id}/replies`
+        )
+        const data = await res.json()
+        const replies = data.items ?? data.replies ?? []
+
+        return {
+          success: true,
+          design_id,
+          comment_id,
+          count: replies.length,
+          replies,
+          message: replies.length === 0
+            ? `No replies to comment ${comment_id}.`
+            : `Found ${replies.length} reply/replies to comment ${comment_id}:\n${replies.map((r: { id?: string; message?: string; author?: { display_name?: string } }, i: number) => `${i + 1}. ${r.author?.display_name ?? 'Unknown'}: "${r.message}"`).join('\n')}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to list replies on Canva comment',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Reply to a comment
+// ---------------------------------------------------------------------------
+export function createReplyToCommentTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Reply to an existing comment on a Canva design — useful for responding to feedback or compliance queries.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID'),
+      comment_id: z.string().describe('Comment ID to reply to'),
+      message: z.string().describe('Reply text'),
+    }),
+    execute: async ({ design_id, comment_id, message }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/comments/${comment_id}/replies`,
+          { method: 'POST', body: JSON.stringify({ message }) }
+        )
+        const data = await res.json()
+        const reply = data.reply ?? data
+
+        return {
+          success: true,
+          reply_id: reply.id,
+          comment_id,
+          design_id,
+          message: `Reply added to comment ${comment_id}: "${message}"`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to reply to Canva comment',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Create folder
+// ---------------------------------------------------------------------------
+export function createCreateFolderTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Create a new folder in Canva to organise designs by brand, campaign, or content type.',
+    inputSchema: z.object({
+      name: z.string().describe('Name for the new folder'),
+      parent_folder_id: z
+        .string()
+        .optional()
+        .describe('Optional parent folder ID to create a subfolder'),
+    }),
+    execute: async ({ name, parent_folder_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const body: Record<string, unknown> = { name }
+        if (parent_folder_id) body.parent_folder_id = parent_folder_id
+
+        const res = await canvaFetch(apiKey, '/folders', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        const folder = data.folder ?? data
+
+        return {
+          success: true,
+          folder_id: folder.id,
+          name: folder.name ?? name,
+          message: `Folder "${name}" created successfully. Folder ID: ${folder.id}${parent_folder_id ? ` (inside folder ${parent_folder_id})` : ''}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to create Canva folder',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Move item to folder
+// ---------------------------------------------------------------------------
+export function createMoveItemToFolderTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Move a design or asset into a Canva folder for organisation.',
+    inputSchema: z.object({
+      folder_id: z.string().describe('Destination folder ID'),
+      item_id: z.string().describe('ID of the item (design or asset) to move'),
+      item_type: z
+        .enum(['design', 'folder', 'image', 'video'])
+        .describe('Type of the item being moved'),
+    }),
+    execute: async ({ folder_id, item_id, item_type }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/folders/${folder_id}/items`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ item_id, item_type }),
+          }
+        )
+        await res.json()
+
+        return {
+          success: true,
+          folder_id,
+          item_id,
+          item_type,
+          message: `Moved ${item_type} ${item_id} into folder ${folder_id}.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to move item to Canva folder',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Get export formats for a design
+// ---------------------------------------------------------------------------
+export function createGetExportFormatsTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Get the available export formats for a Canva design (PNG, PDF, etc.). Check before exporting to know what options are available.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design ID to check export formats for'),
+    }),
+    execute: async ({ design_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/export-formats`
+        )
+        const data = await res.json()
+        const formats = data.items ?? data.formats ?? data
+
+        return {
+          success: true,
+          design_id,
+          formats,
+          message: `Available export formats for design ${design_id}: ${Array.isArray(formats) ? formats.map((f: { type?: string }) => f.type ?? JSON.stringify(f)).join(', ') : JSON.stringify(formats)}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to get export formats',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Resolve Canva shortlink
+// ---------------------------------------------------------------------------
+export function createResolveShortlinkTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Resolve a Canva shortlink (canva.design/...) to get the full design ID and metadata.',
+    inputSchema: z.object({
+      url: z.string().describe('Canva shortlink URL to resolve'),
+    }),
+    execute: async ({ url }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const params = new URLSearchParams({ url })
+        const res = await canvaFetch(
+          apiKey,
+          `/shortlinks/resolve?${params}`
+        )
+        const data = await res.json()
+
+        return {
+          success: true,
+          resolved: data,
+          design_id: data.design_id ?? data.id,
+          message: `Shortlink resolved. Design ID: ${data.design_id ?? data.id ?? 'unknown'}`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to resolve Canva shortlink',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Generate design (structured autofill)
+// ---------------------------------------------------------------------------
+export function createGenerateDesignStructuredTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Generate a Canva design using structured autofill — provide template data fields and the API fills them into a template automatically.',
+    inputSchema: z.object({
+      brand_template_id: z
+        .string()
+        .describe('Canva brand template ID to autofill'),
+      data: z
+        .record(z.string(), z.string())
+        .describe('Key-value pairs mapping template field names to values'),
+      title: z
+        .string()
+        .optional()
+        .describe('Optional title for the generated design'),
+    }),
+    execute: async ({ brand_template_id, data, title }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const body: Record<string, unknown> = {
+          brand_template_id,
+          data,
+        }
+        if (title) body.title = title
+
+        const res = await canvaFetch(apiKey, '/autofills', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+        const result = await res.json()
+        const job = result.job ?? result
+
+        return {
+          success: true,
+          job_id: job.id,
+          status: job.status,
+          design_id: job.result?.design?.id,
+          edit_url: job.result?.design?.urls?.edit_url,
+          message: job.result?.design?.id
+            ? `Design generated from template. Design ID: ${job.result.design.id}\n[Open in Canva](${job.result.design.urls?.edit_url})`
+            : `Autofill job created (ID: ${job.id}, status: ${job.status}). The design is being generated.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to generate design via autofill',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Get presenter notes for a design page
+// ---------------------------------------------------------------------------
+export function createGetPresenterNotesTool(
+  supabase: SupabaseClient,
+  userId: string
+) {
+  return tool({
+    description:
+      'Get the presenter/speaker notes for a specific page in a Canva presentation. Useful for reviewing or extracting talk tracks.',
+    inputSchema: z.object({
+      design_id: z.string().describe('Canva design (presentation) ID'),
+      page_id: z.string().describe('Page ID within the presentation'),
+    }),
+    execute: async ({ design_id, page_id }) => {
+      const apiKey = await getCanvaToken(supabase, userId)
+      if (!apiKey) return noKeyError()
+
+      try {
+        const res = await canvaFetch(
+          apiKey,
+          `/designs/${design_id}/pages/${page_id}/presenter-notes`
+        )
+        const data = await res.json()
+        const notes = data.notes ?? data.presenter_notes ?? data
+
+        return {
+          success: true,
+          design_id,
+          page_id,
+          notes,
+          message: typeof notes === 'string' && notes.length > 0
+            ? `Presenter notes for page ${page_id}:\n${notes}`
+            : `No presenter notes found for page ${page_id} in design ${design_id}.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Failed to get presenter notes',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Export design (unchanged)
 // ---------------------------------------------------------------------------
 export function createExportDesignTool(
