@@ -61,7 +61,11 @@ export async function GET(request: Request) {
           youtube: 'youtube',
         }
 
-        const mixpostRes = await fetch(`${mixpostUrl}/api/posts`, {
+        const mixpostWorkspace = process.env.MIXPOST_WORKSPACE_UUID
+        const postsPath = mixpostWorkspace
+          ? `${mixpostUrl}/api/${mixpostWorkspace}/posts`
+          : `${mixpostUrl}/api/posts`
+        const mixpostRes = await fetch(postsPath, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
