@@ -278,6 +278,8 @@ export interface TargetAudience {
   desires: string[]
 }
 
+export type ContentType = 'entertainment' | 'education' | 'inspiration' | 'promotional'
+
 export type CompetitorCategory = 'direct' | 'adjacent' | 'aspirational' | 'indirect'
 
 export interface Competitor {
@@ -395,6 +397,8 @@ export interface Output {
   title: string
   content: string
   metadata: Record<string, unknown>
+  content_type?: 'entertainment' | 'education' | 'inspiration' | 'promotional' | null
+  content_pillar?: string | null
   is_approved: boolean
   created_at: string
   updated_at: string
@@ -675,6 +679,8 @@ export interface ScheduledPost {
   external_post_id: string | null
   error: string | null
   metadata: Record<string, unknown>
+  content_type?: 'entertainment' | 'education' | 'inspiration' | 'promotional' | null
+  content_pillar?: string | null
   created_at: string
   updated_at: string
 }
