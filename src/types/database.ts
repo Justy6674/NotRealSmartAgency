@@ -660,8 +660,18 @@ export interface MediaItem {
   transcription_model: string | null
   transcription_status: MediaStatus
   metadata: Record<string, unknown>
+  tags: string[]
+  file_created_at: string | null
+  uploaded_by_name: string | null
+  is_archived: boolean
   created_at: string
   updated_at: string
+}
+
+export interface MediaItemWithUsage extends MediaItem {
+  brands?: { name: string; slug: string }
+  usage_count: number
+  last_published_at: string | null
 }
 
 export interface VisualAnalysis {
