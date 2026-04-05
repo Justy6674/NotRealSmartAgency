@@ -16,9 +16,9 @@ interface VideoCreatePanelProps {
 type Provider = 'heygen' | 'openclaw'
 type AspectRatio = '9:16' | '16:9' | '1:1'
 
-const PROVIDERS: { id: Provider; label: string; description: string; disabled?: boolean }[] = [
+const PROVIDERS: { id: Provider; label: string; description: string; requiresSetup?: boolean }[] = [
   { id: 'heygen', label: 'AI Presenter', description: 'An AI avatar speaks your script' },
-  { id: 'openclaw', label: 'AI Generated', description: 'AI creates visuals + voiceover — coming soon', disabled: true },
+  { id: 'openclaw', label: 'AI Generated', description: 'AI visuals + voiceover + music', requiresSetup: true },
 ]
 
 const FORMATS: { id: AspectRatio; label: string; platforms: string }[] = [
@@ -39,6 +39,9 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
     (brand?.video_preferences as Record<string, string> | null)?.accent ?? ''
   )
   const [credits, setCredits] = useState<number | null>(null)
+  const [toolkitConfigured, setToolkitConfigured] = useState(false)
+  const [aiVoice, setAiVoice] = useState('Ryan')
+  const [includeMusic, setIncludeMusic] = useState(true)
 
   // Fetch HeyGen credits when provider is heygen
   useEffect(() => {
@@ -52,6 +55,18 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
       .catch(() => {})
     return () => { cancelled = true }
   }, [provider])
+
+  // Check if AI toolkit endpoints are configured
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/video-toolkit/status')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setToolkitConfigured(data.configured === true)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // Auto-save avatar/voice selection to brand video_preferences
   const handleAvatarVoiceSelect = useCallback(
@@ -82,30 +97,55 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
     if (!brand) return
     setSending(true)
 
-    const topicLine = topic.trim()
-      ? `Topic: "${topic.trim()}"`
-      : 'Choose the best topic based on the strategy context below.'
-
-    const avatarLine = avatarId ? `Avatar ID: ${avatarId}` : ''
-    const voiceLine = voiceId ? `Voice ID: ${voiceId}` : ''
-
     const tov = brand.tone_of_voice as ToneOfVoice | null
 
-    const message = [
-      `Create a ${format} video for ${brand.name} using ${provider === 'heygen' ? 'HeyGen (AI avatar presenter)' : 'OpenClaw/Remotion (template-based)'}.`,
-      topicLine,
-      avatarLine,
-      voiceLine,
-      `Platform format: ${FORMATS.find(f => f.id === format)?.platforms ?? format}.`,
-      `Brand voice: ${tov?.formality ?? 'not set'}, ${tov?.humour ?? 'no'} humour.`,
-      tov?.keywords?.length ? `Keywords to use: ${tov.keywords.join(', ')}.` : '',
-      tov?.avoid_words?.length ? `Words to AVOID: ${tov.avoid_words.join(', ')}.` : '',
-      (brand.content_pillars as string[] | null)?.length ? `Content pillars: ${(brand.content_pillars as string[]).join(', ')}.` : '',
-      '',
-      'Write the script, check compliance, then generate the video.',
-      '',
-      strategyContext?.agentContext ?? '',
-    ].filter(Boolean).join('\n')
+    let message: string
+
+    if (provider === 'openclaw') {
+      const topicLine = topic.trim()
+        ? `Topic: "${topic.trim()}"`
+        : 'Choose the best topic based on the strategy context below.'
+
+      message = [
+        `Create a video for ${brand.name} using AI generation tools.`,
+        topicLine,
+        `Voice: ${aiVoice} (Qwen3-TTS).`,
+        includeMusic ? 'Include background music (ACE-Step).' : 'No background music.',
+        'Generate scene images with FLUX.2 to match the script.',
+        `Platform format: ${FORMATS.find(f => f.id === format)?.platforms ?? format}.`,
+        `Brand voice: ${tov?.formality ?? 'not set'}, ${tov?.humour ?? 'no'} humour.`,
+        tov?.keywords?.length ? `Keywords to use: ${tov.keywords.join(', ')}.` : '',
+        tov?.avoid_words?.length ? `Words to AVOID: ${tov.avoid_words.join(', ')}.` : '',
+        (brand.content_pillars as string[] | null)?.length ? `Content pillars: ${(brand.content_pillars as string[]).join(', ')}.` : '',
+        '',
+        'Write the script, check compliance, then generate the video.',
+        '',
+        strategyContext?.agentContext ?? '',
+      ].filter(Boolean).join('\n')
+    } else {
+      const topicLine = topic.trim()
+        ? `Topic: "${topic.trim()}"`
+        : 'Choose the best topic based on the strategy context below.'
+
+      const avatarLine = avatarId ? `Avatar ID: ${avatarId}` : ''
+      const voiceLine = voiceId ? `Voice ID: ${voiceId}` : ''
+
+      message = [
+        `Create a ${format} video for ${brand.name} using HeyGen (AI avatar presenter).`,
+        topicLine,
+        avatarLine,
+        voiceLine,
+        `Platform format: ${FORMATS.find(f => f.id === format)?.platforms ?? format}.`,
+        `Brand voice: ${tov?.formality ?? 'not set'}, ${tov?.humour ?? 'no'} humour.`,
+        tov?.keywords?.length ? `Keywords to use: ${tov.keywords.join(', ')}.` : '',
+        tov?.avoid_words?.length ? `Words to AVOID: ${tov.avoid_words.join(', ')}.` : '',
+        (brand.content_pillars as string[] | null)?.length ? `Content pillars: ${(brand.content_pillars as string[]).join(', ')}.` : '',
+        '',
+        'Write the script, check compliance, then generate the video.',
+        '',
+        strategyContext?.agentContext ?? '',
+      ].filter(Boolean).join('\n')
+    }
 
     sendToDirector(message)
 
@@ -203,26 +243,58 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground">Video style</label>
         <div className="grid grid-cols-2 gap-3">
-          {PROVIDERS.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => !p.disabled && setProvider(p.id)}
-              disabled={p.disabled}
-              className={`rounded-lg border p-3 text-left transition-all ${
-                p.disabled
-                  ? 'border-border bg-muted/30 opacity-50 cursor-not-allowed'
-                  : provider === p.id
-                    ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10'
-                    : 'border-border bg-card hover:border-[oklch(0.55_0.1_240)]/30'
-              }`}
-            >
-              <div className="text-sm font-medium text-foreground">{p.label}</div>
-              <div className="mt-0.5 text-[10px] text-muted-foreground">{p.description}</div>
-            </button>
-          ))}
+          {PROVIDERS.map(p => {
+            const isDisabled = p.requiresSetup && !toolkitConfigured
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => !isDisabled && setProvider(p.id)}
+                disabled={isDisabled}
+                className={`rounded-lg border p-3 text-left transition-all ${
+                  isDisabled
+                    ? 'border-border bg-muted/30 opacity-50 cursor-not-allowed'
+                    : provider === p.id
+                      ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10'
+                      : 'border-border bg-card hover:border-[oklch(0.55_0.1_240)]/30'
+                }`}
+              >
+                <div className="text-sm font-medium text-foreground">{p.label}</div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                  {isDisabled ? 'Set up AI tools to enable' : p.description}
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
+
+      {/* AI Generated controls — Qwen3-TTS voice + music toggle */}
+      {provider === 'openclaw' && toolkitConfigured && (
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-medium text-muted-foreground">AI Voice</label>
+            <select
+              value={aiVoice}
+              onChange={e => setAiVoice(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
+            >
+              {['Aria', 'Roger', 'Sarah', 'George', 'Amelia', 'Ryan', 'Emma', 'Liam', 'Isabella'].map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeMusic}
+              onChange={e => setIncludeMusic(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-xs text-foreground">Add background music</span>
+          </label>
+        </div>
+      )}
 
       {/* Platform format selector */}
       <div className="space-y-2">
