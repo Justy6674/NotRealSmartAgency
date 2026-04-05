@@ -673,11 +673,15 @@ export interface VisualAnalysis {
   summary: string
 }
 
+export type PostType = 'single' | 'carousel' | 'reel' | 'video'
+
 export interface ScheduledPost {
   id: string
   user_id: string
   brand_id: string
   media_item_id: string | null
+  media_item_ids: string[]
+  post_type: PostType
   output_id: string | null
   platform: PostPlatform
   caption: string
@@ -688,10 +692,25 @@ export interface ScheduledPost {
   external_post_id: string | null
   error: string | null
   metadata: Record<string, unknown>
-  content_type?: 'entertainment' | 'education' | 'inspiration' | 'promotional' | null
+  content_type?: ContentType | null
   content_pillar?: string | null
   created_at: string
   updated_at: string
+}
+
+// ─── Content Style Settings ─────────────────────────────────────────────────
+
+export type ContentVibe = 'funny' | 'inspirational' | 'informative' | 'exciting' | 'educational' | 'provocative'
+export type HashtagStyle = 'trending_niche' | 'niche_only' | 'branded_only' | 'mix_all'
+export type CarouselMode = 'off' | 'auto_group' | 'custom'
+
+export interface ContentStyleSettings {
+  vibe: ContentVibe
+  content_type: ContentType
+  carousel_mode: CarouselMode
+  carousel_slide_count?: number
+  hashtag_style: HashtagStyle
+  post_count: 'auto' | 'one_per_file' | number
 }
 
 export interface Heartbeat {
