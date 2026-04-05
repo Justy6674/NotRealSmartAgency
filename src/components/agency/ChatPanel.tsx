@@ -94,25 +94,26 @@ export function ChatPanel() {
 
   return (
     <>
-      {/* Toggle pill — visible when panel is closed */}
+      {/* Toggle pill — visible when panel is closed (mobile only, or desktop when closed) */}
       {!chatPanelOpen && (
         <button
           onClick={() => setChatPanelOpen(true)}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 md:hidden"
         >
           <MessageCircle className="h-4 w-4" />
           Chat
         </button>
       )}
 
-      {/* Panel */}
+      {/* Panel — inline on desktop (part of layout flow), fixed overlay on mobile */}
       <div
         className={cn(
-          'fixed right-0 top-0 z-40 flex w-[380px] flex-col border-l bg-background shadow-xl transition-all duration-300 ease-in-out',
-          chatPanelOpen ? 'translate-x-0' : 'translate-x-full',
-          chatPanelMinimised ? 'h-auto' : 'h-screen',
-          // Mobile: full width
-          'max-md:w-full'
+          'flex flex-col border-l bg-background transition-all duration-200 ease-in-out',
+          // Desktop: inline flow, shrink to width
+          'hidden md:flex',
+          chatPanelOpen
+            ? chatPanelMinimised ? 'w-[380px] h-auto' : 'w-[380px] h-full'
+            : 'w-0 overflow-hidden border-l-0',
         )}
       >
         {/* Header — always visible, acts as expand trigger when minimised */}
@@ -212,12 +213,63 @@ export function ChatPanel() {
         )}
       </div>
 
-      {/* Backdrop on mobile when panel is open */}
+      {/* Desktop toggle — thin vertical bar when panel is closed */}
+      {!chatPanelOpen && (
+        <button
+          onClick={() => setChatPanelOpen(true)}
+          className="hidden md:flex h-full w-10 shrink-0 items-center justify-center border-l bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="Open chat"
+        >
+          <MessageCircle className="h-4 w-4" />
+        </button>
+      )}
+
+      {/* Mobile: fixed overlay panel */}
       {chatPanelOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
-          onClick={() => setChatPanelOpen(false)}
-        />
+        <>
+          <div
+            className="fixed inset-0 z-30 bg-black/50 md:hidden"
+            onClick={() => setChatPanelOpen(false)}
+          />
+          <div
+            className={cn(
+              'fixed right-0 top-0 z-40 flex w-full flex-col border-l bg-background shadow-xl md:hidden',
+              chatPanelMinimised ? 'h-auto' : 'h-screen',
+            )}
+          >
+            <div
+              className={cn('flex shrink-0 items-center gap-2 border-b px-3 py-2.5', chatPanelMinimised && 'cursor-pointer')}
+              onClick={chatPanelMinimised ? () => setChatPanelMinimised(false) : undefined}
+            >
+              <AgentAvatar agentType={activeAgentType} size="sm" />
+              <span className="flex-1 text-sm font-medium text-foreground">{AGENT_LABELS[activeAgentType]}</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setChatPanelOpen(false) }}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+            </div>
+            {!chatPanelMinimised && (
+              <>
+                <div ref={scrollRef} className="flex-1 overflow-y-auto px-3">
+                  {messages.length === 0 ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                      <AgentAvatar agentType={activeAgentType} size="lg" />
+                      <p className="text-sm font-medium text-foreground">{AGENT_LABELS[activeAgentType]}</p>
+                      <p className="text-xs text-muted-foreground">Ask me anything about your brand.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/50">
+                      {messages.map((message) => (<ChatMessage key={message.id} message={message} />))}
+                    </div>
+                  )}
+                </div>
+                <ChatInput onSend={handleSend} isLoading={isLoading} placeholder="Ask your agent..." agentType={activeAgentType} showChips={messages.length === 0} />
+              </>
+            )}
+          </div>
+        </>
       )}
     </>
   )
