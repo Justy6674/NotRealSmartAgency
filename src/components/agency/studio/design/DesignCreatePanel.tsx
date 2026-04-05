@@ -109,7 +109,7 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
       [
         `I need a new graphic design for ${brand.name} but I'm not sure what to create.`,
         'Based on the current strategy, which platform needs content most and what visual would work best?',
-        'Suggest 2-3 design concepts with style, colours, and layout ideas — then ask which one I'd like you to create in Canva.',
+        `Suggest 2-3 design concepts with style, colours, and layout ideas — then ask which one I'd like you to create in Canva.`,
         '',
         strategyContext?.agentContext ?? '',
       ].filter(Boolean).join('\n')
