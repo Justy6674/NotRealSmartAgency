@@ -6,6 +6,7 @@ import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
 import { memorySearchV2 } from '@/lib/memory/store'
 import { getNamespace, getGlobalNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
+import { getSessionMemoryForPrompt } from '@/lib/memory/session-memory'
 
 export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null, siblingBrands?: Partial<Brand>[], proformaSummary?: string | null): string {
   const sections: string[] = []
@@ -497,6 +498,31 @@ Use this context to provide continuity. Apply brand rules strictly. Follow prefe
       sections.splice(2, 0, memorySection)
     } else {
       sections.push(memorySection)
+    }
+
+    // Session memory — compounding brand knowledge (Anthropic pattern)
+    if (userId) {
+      try {
+        const sessionMemory = await getSessionMemoryForPrompt(brand.slug, userId)
+        if (sessionMemory) {
+          const sessionSection = `## Brand Learning — What I've Learned Over Time
+
+This is my accumulated knowledge about ${brand.name} from past conversations. This compounds over time — each session adds to it.
+
+${sessionMemory}
+
+Apply these learnings. Brand rules are non-negotiable. Preferences guide my work unless the user overrides them. Use past performance data to inform content decisions.`
+
+          // Insert after the individual memories section (which was just spliced in at index 2)
+          if (sections.length >= 4) {
+            sections.splice(3, 0, sessionSection)
+          } else {
+            sections.push(sessionSection)
+          }
+        }
+      } catch (err) {
+        console.error('[prompt-builder] Session memory retrieval failed:', err)
+      }
     }
 
     return {

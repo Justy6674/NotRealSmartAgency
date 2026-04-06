@@ -9,6 +9,7 @@ import { getToolsForAgent } from '@/lib/agents/tools'
 import { createDelegateTool } from '@/lib/agents/tools/delegate'
 import { createConveneMeetingTool } from '@/lib/agents/tools/convene-meeting'
 import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
+import { recordTurn, shouldExtractSessionMemory, extractSessionMemory } from '@/lib/memory/session-memory'
 import { extractFacts } from '@/lib/memory/fact-extractor'
 import { memoryStoreV2 } from '@/lib/memory/store'
 import { classifyIntent, classifyIntentMulti, buildRoutingContext } from '@/lib/agents/intent-router'
@@ -282,6 +283,21 @@ export async function POST(request: Request) {
             }
           })
           .catch((err) => console.error('[chat] Memory v2 extraction failed:', err))
+      }
+
+      // Session memory — compounding per-brand learning (Anthropic pattern)
+      if (conversationId) {
+        recordTurn(conversationId)
+        if (shouldExtractSessionMemory(conversationId)) {
+          extractSessionMemory({
+            brandSlug: typedBrand.slug,
+            brandName: typedBrand.name,
+            userId: user.id,
+            userMessage: lastMessageText,
+            assistantResponse: text,
+            conversationId,
+          }).catch(err => console.error('[chat] Session memory failed:', err))
+        }
       }
     },
   })
