@@ -62,6 +62,35 @@ export function createNRSMcpServer(userId: string): McpServer {
     }
   })
 
+  // Register list_brands as a TOOL (not just a resource) — Claude clients
+  // reliably call tools but don't always read resources
+  server.registerTool('list_brands', {
+    description: 'List all your brands. Call this FIRST to get brand IDs needed by other tools. Returns brand ID, name, slug, and description for each brand.',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }, async (_args: any) => {
+    const supabase = createAdminClient()
+    const { data: brands, error } = await supabase
+      .from('brands')
+      .select('id, name, slug, description, niche, website_url')
+      .eq('user_id', userId)
+      .order('name')
+
+    if (error || !brands) {
+      return {
+        content: [{ type: 'text' as const, text: 'Error: Failed to load brands.' }],
+        isError: true,
+      }
+    }
+
+    const formatted = brands.map(b =>
+      `- **${b.name}** (${b.slug})\n  ID: ${b.id}\n  ${b.description || 'No description'}\n  ${b.website_url || ''}`
+    ).join('\n\n')
+
+    return {
+      content: [{ type: 'text' as const, text: `Your brands:\n\n${formatted}` }],
+    }
+  })
+
   // Register chat_with_director — the flagship tool
   registerDirectorChatTool(server, userId)
 
@@ -109,7 +138,7 @@ Here's what you can do:
 
 5. **See past work**: query_outputs searches everything your agents have created.
 
-Start by reading the brands://list resource to see your brands, then use chat_with_director with a brand_id and your request.
+Start by calling list_brands to see your brands and get their IDs, then use chat_with_director with a brand_id and your request.
 
 Example: "Write a blog post about AI in healthcare for [brand] and publish it to LinkedIn"`,
         },
