@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/favicon.ico',
-        destination: '/Favicon.png',
+        destination: '/favicon-64.png',
       },
       {
         source: '/.well-known/oauth-authorization-server',
