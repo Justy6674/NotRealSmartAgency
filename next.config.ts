@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
+        source: '/favicon.ico',
+        destination: '/Favicon.png',
+      },
+      {
         source: '/.well-known/oauth-authorization-server',
         destination: '/api/well-known/oauth-authorization-server',
       },
