@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { generateApiKey } from '@/lib/auth/api-key'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -113,6 +114,25 @@ export async function POST(request: Request) {
     brandNames = brands?.map(b => b.name).join(', ') || 'selected brands'
   }
 
+  // Generate an API key for the invitee (for Claude Desktop / Cowork access)
+  let apiKeyRaw: string | null = null
+  const targetUserId = existingUser?.id ?? member.member_id
+  if (targetUserId) {
+    try {
+      const { raw, hash, prefix } = generateApiKey()
+      const keyHash = await hash
+      await admin.from('api_keys').insert({
+        user_id: targetUserId,
+        name: `${ownerName}'s agency`,
+        prefix,
+        key_hash: keyHash,
+      })
+      apiKeyRaw = raw
+    } catch (err) {
+      console.error('[team] Failed to generate API key for invitee:', err)
+    }
+  }
+
   // Send invite email via Resend
   if (member.invite_token || existingUser) {
     const inviteUrl = existingUser
@@ -123,6 +143,21 @@ export async function POST(request: Request) {
     const statusText = existingUser
       ? `You already have an account, so you're all set. Click below to get started.`
       : `Click the button below to create your account and get started.`
+
+    // Claude Desktop / Cowork setup section (only if we have an API key)
+    const claudeSection = apiKeyRaw ? `
+            <div style="margin:24px 0;padding:20px;background:#f4f4f5;border-radius:12px;">
+              <h2 style="font-size:16px;margin:0 0 8px;">Use it in Claude Desktop &amp; Cowork too</h2>
+              <p style="font-size:13px;color:#666;line-height:1.5;margin:0 0 12px;">
+                Open Claude and say this:
+              </p>
+              <div style="background:#1a1a1a;color:#e4e4e7;padding:16px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;word-break:break-all;">
+                Add an MCP server called "notrealsmart" with URL https://www.notrealsmart.com.au/api/mcp and authorization header "Bearer ${apiKeyRaw}"
+              </div>
+              <p style="font-size:12px;color:#999;margin:8px 0 0;">
+                That's it. Claude handles the rest. Your marketing agency tools will appear in every conversation.
+              </p>
+            </div>` : ''
 
     try {
       await resend.emails.send({
@@ -144,6 +179,7 @@ export async function POST(request: Request) {
                 ${actionText}
               </a>
             </div>
+            ${claudeSection}
             <p style="font-size:12px;color:#999;margin-top:32px;">
               NRS Agency by NotRealSmart &mdash; notrealsmart.com.au
             </p>
