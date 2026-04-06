@@ -314,12 +314,25 @@ function ApiKeysSection() {
   return (
     <section className="space-y-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        API Keys (CLI / MCP Access)
+        Connect from Claude Desktop, Mobile &amp; Code
       </p>
-      <p className="text-[11px] text-muted-foreground">
-        Connect Claude Code, Claude Desktop, or any MCP-compatible AI client to your agency.
-        Create a key, add it to your AI client, and talk to the Director from anywhere.
-      </p>
+
+      <div className="rounded-lg border p-4 space-y-2">
+        <p className="text-sm font-medium">Quick connect (Claude Desktop &amp; Mobile)</p>
+        <p className="text-[11px] text-muted-foreground">
+          Settings → Integrations → Add custom connector → Name: <strong>NotRealSmart</strong>,
+          URL: <strong>https://www.notrealsmart.com.au/api/mcp</strong> → Click Add → Log in → Done.
+          Your 12 agency tools appear in every conversation.
+        </p>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-xs font-medium text-muted-foreground">API Keys (Claude Code / Cowork / Terminal)</p>
+        <p className="text-[11px] text-muted-foreground">
+          For Claude Code or Cowork, create a key below and tell Claude to add it.
+          Or add it to ~/.mcp.json manually.
+        </p>
+      </div>
 
       {/* Created key banner — shown once */}
       {createdKey && (

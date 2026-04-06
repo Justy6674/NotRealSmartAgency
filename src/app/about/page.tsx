@@ -438,6 +438,86 @@ export default function AboutPage() {
             </div>
           </div>
 
+          {/* Card 4 — Connect */}
+          <div
+            style={{
+              maxWidth: '720px',
+              margin: '0 auto 3rem',
+              padding: '1.75rem 2rem',
+              background: 'oklch(0.1 0.005 240)',
+              border: '1px solid oklch(0.2 0.01 240)',
+              borderRadius: '10px',
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace",
+                fontSize: '0.7rem',
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'oklch(0.75 0.15 75)',
+                marginBottom: '1rem',
+              }}
+            >
+              // connect from anywhere
+            </h3>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '0.92rem',
+                lineHeight: 1.7,
+                color: 'oklch(0.55 0 0)',
+                marginBottom: '1rem',
+              }}
+            >
+              Your agency lives wherever your AI lives. Use the web app, or connect
+              from Claude Desktop, Claude Mobile, VS Code (Cowork), or Claude Code.
+              One click to connect — your 14 agents appear as native tools in any
+              Claude conversation.
+            </p>
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem',
+              }}
+            >
+              {[
+                'Web app — notrealsmart.com.au',
+                'Claude Desktop & Mobile — one-click connector',
+                'VS Code (Cowork) — agency tools while you code',
+                'Claude Code — terminal access for power users',
+                'Any MCP-compatible AI client',
+              ].map((item) => (
+                <li
+                  key={item}
+                  style={{
+                    fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace",
+                    fontSize: '0.8rem',
+                    lineHeight: 1.6,
+                    color: 'oklch(0.65 0 0)',
+                    paddingLeft: '1rem',
+                    position: 'relative',
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      color: 'oklch(0.4 0.01 240)',
+                    }}
+                  >
+                    -
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
           {/* Bottom tagline */}
           <p
             style={{

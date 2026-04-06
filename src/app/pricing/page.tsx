@@ -31,6 +31,8 @@ const FEATURES = [
   { label: 'Post notifications — get emailed when content goes live' },
   { label: 'Shorts vs full-length video classification' },
   { label: 'Drag and drop video upload with auto-transcription' },
+  { label: 'Connect via Claude Desktop, Mobile, or Cowork — use your agency from any AI' },
+  { label: 'API keys for Claude Code and terminal access' },
 ]
 
 export default function PricingPage() {

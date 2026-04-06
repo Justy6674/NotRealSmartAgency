@@ -143,6 +143,37 @@ const FAQ_DATA: FaqCategory[] = [
     ],
   },
   {
+    id: 'connect',
+    label: 'connect',
+    items: [
+      {
+        question: 'Can I use it from Claude Desktop or mobile?',
+        answer:
+          'Yes. Go to Settings → Integrations → Add custom connector. Name it "NotRealSmart", enter https://www.notrealsmart.com.au/api/mcp as the URL, click Add, and log in. Your 12 agency tools appear in every Claude conversation — desktop, mobile, and web.',
+      },
+      {
+        question: 'What about VS Code (Cowork)?',
+        answer:
+          'Same thing. Cowork reads the same configuration. Once connected, you can write content, publish to social media, and manage your brands while you work — without leaving your editor.',
+      },
+      {
+        question: 'Can I use it from the terminal?',
+        answer:
+          'Yes. Create an API key in Settings, then tell Claude Code to add the MCP server. Or add it to your ~/.mcp.json manually. Same 12 tools, same Director, same agents.',
+      },
+      {
+        question: 'How do I set up my team?',
+        answer:
+          'Invite them from the Team page. They get an email with step-by-step setup for the web app, Claude Desktop/Mobile, and Claude Code. Each person gets their own API key and audit trail.',
+      },
+      {
+        question: 'What tools are available via Claude?',
+        answer:
+          'chat_with_director (talk to the Director), publish_to_social, write_blog, write_ads, write_email_campaign, manage_posts, query_calendar, query_outputs, query_analytics, save_output, generate_image, and scan_website. The Director can also delegate to all 13 departments behind the scenes.',
+      },
+    ],
+  },
+  {
     id: 'technical',
     label: 'technical',
     items: [
