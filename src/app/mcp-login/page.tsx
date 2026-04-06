@@ -38,16 +38,20 @@ function McpLoginForm() {
         password,
       })
 
-      if (authError || !data.user) {
+      if (authError || !data.session) {
         setError(authError?.message ?? 'Login failed')
         setLoading(false)
         return
       }
 
-      // Generate auth code on the server
+      // Generate auth code on the server — pass access token directly
+      // (cookies aren't ready yet due to Supabase lock timing)
       const res = await fetch('/api/mcp/code', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`,
+        },
         body: JSON.stringify({
           client_id: clientId,
           code_challenge: codeChallenge,

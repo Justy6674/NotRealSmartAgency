@@ -1,21 +1,35 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
 /**
  * Generate an OAuth authorization code after the user logs in.
- * Called by the /mcp-login page after successful Supabase auth.
+ * Called by the /mcp-login page with the Supabase access token in Authorization header.
  */
 export async function POST(request: Request) {
-  // Verify the user is authenticated (via Supabase session cookie)
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+  // Verify user via Bearer token (passed directly from signInWithPassword result)
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json(
-      { error: 'unauthorized', error_description: 'Not logged in' },
+      { error: 'unauthorized', error_description: 'Missing authorization' },
+      { status: 401 }
+    )
+  }
+
+  const accessToken = authHeader.slice(7)
+
+  // Validate the Supabase JWT to get the user
+  const supabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
+  const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
+
+  if (authError || !user) {
+    return NextResponse.json(
+      { error: 'unauthorized', error_description: 'Invalid token' },
       { status: 401 }
     )
   }
