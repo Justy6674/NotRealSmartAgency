@@ -9,8 +9,9 @@ import { VoiceAudienceEditor } from './VoiceAudienceEditor'
 import { DigestSettings } from './DigestSettings'
 import { ProviderSettings } from './ProviderSettings'
 import { BrandWatermarkEditor } from './BrandWatermarkEditor'
+import { MemoryBrowser } from './MemoryBrowser'
 import type { Brand, BrandWatermark, Competitor, ToneOfVoice, TargetAudience } from '@/types/database'
-import { Settings, Swords, Volume2, Bell, Video, Stamp, Share2 } from 'lucide-react'
+import { Settings, Swords, Volume2, Bell, Video, Stamp, Share2, Brain } from 'lucide-react'
 import { SocialAccountsManager } from './SocialAccountsManager'
 
 interface BrandSettingsProps {
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'competitors', label: 'Competitors', icon: Swords },
   { id: 'voice', label: 'Voice & Audience', icon: Volume2 },
   { id: 'watermark', label: 'Watermark', icon: Stamp },
+  { id: 'memory', label: 'Memory', icon: Brain },
   { id: 'digest', label: 'Digest', icon: Bell },
   { id: 'video', label: 'Video', icon: Video },
 ] as const
@@ -149,6 +151,10 @@ export function BrandSettings({ brand }: BrandSettingsProps) {
 
         {activeTab === 'watermark' && (
           <BrandWatermarkEditor brand={brand} onSave={handleWatermarkSave} saving={saving} />
+        )}
+
+        {activeTab === 'memory' && (
+          <MemoryBrowser brandId={brand.id} />
         )}
 
         {activeTab === 'digest' && (
