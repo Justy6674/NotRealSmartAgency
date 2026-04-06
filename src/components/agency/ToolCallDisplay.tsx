@@ -365,10 +365,20 @@ function getToolLabel(toolName: string, args: Record<string, unknown>, state: st
 
 export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDisplayProps) {
   const [expanded, setExpanded] = useState(false)
-  const label = getToolLabel(toolName, args, state)
+  const [timedOut, setTimedOut] = useState(false)
   const isDelegation = toolName === 'delegate_to_agent'
   const isMeeting = toolName === 'convene_meeting'
-  const isComplete = state === 'result' || result !== undefined
+  const isComplete = state === 'result' || result !== undefined || timedOut
+
+  // For simple tools (not delegation/meeting), auto-complete after 15s
+  // These tools rarely take more than a few seconds
+  useEffect(() => {
+    if (isDelegation || isMeeting || isComplete) return
+    const timeout = setTimeout(() => setTimedOut(true), 15000)
+    return () => clearTimeout(timeout)
+  }, [isDelegation, isMeeting, isComplete])
+
+  const label = getToolLabel(toolName, args, isComplete ? 'result' : state)
 
   return (
     <div className="rounded-lg border bg-background/50 text-sm">

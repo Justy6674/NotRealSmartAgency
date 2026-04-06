@@ -105,13 +105,17 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
             if (part.type.startsWith('tool-')) {
               const toolPart = part as { type: string; toolCallId: string; state: string; input?: unknown; output?: unknown }
               const toolName = part.type.replace(/^tool-/, '')
+              // If there's any text part AFTER this tool call, the tool has finished
+              // (the AI continued speaking, meaning the tool completed)
+              const hasTextAfter = message.parts?.slice(i + 1).some(p => p.type === 'text' && (p as { text: string }).text.trim().length > 0)
+              const effectiveState = hasTextAfter ? 'result' : toolPart.state
               return (
                 <ToolCallDisplay
                   key={i}
                   toolName={toolName}
                   args={(toolPart.input as Record<string, unknown>) ?? {}}
-                  result={toolPart.state === 'result' ? toolPart.output : undefined}
-                  state={toolPart.state}
+                  result={effectiveState === 'result' ? (toolPart.output ?? true) : undefined}
+                  state={effectiveState}
                 />
               )
             }
