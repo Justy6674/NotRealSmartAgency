@@ -256,6 +256,35 @@ TikTok (watch time, completion rate, hook requirements), Instagram (saves/shares
 ### Canva Integration
 `design_graphic` and `export_design` tools use Canva MCP (connected via `mcp__claude_ai_Canva__*`). Creative Studio's Create tab also provides direct Canva access. Brand agent and Director can generate designs, search templates, export to formats.
 
+### MCP Server — CLI & AI Client Access (LIVE)
+NRS is an MCP server. Users connect from Claude Desktop, Claude Mobile, Claude Code, Cowork (VS Code), or any MCP-compatible AI client.
+
+**Endpoint:** `https://www.notrealsmart.com.au/api/mcp` (Streamable HTTP, stateless)
+
+**Two auth methods:**
+1. **Bearer token** — user creates API key in Settings, adds to config. Key prefix `nrs_sk_`, SHA-256 hashed in `api_keys` table.
+2. **OAuth 2.0** — user clicks "Add custom connector" in Claude Desktop/Mobile, logs in via `/mcp-login`, token issued automatically. Full RFC 8414 + RFC 7591 + PKCE S256.
+
+**Access token = nrs_sk_ API key.** Both auth methods produce the same key type. The MCP server's `resolveApiKey()` validates both. Zero duplication.
+
+**12 MVP tools:** `chat_with_director` (flagship — full Director with delegation), `publish_to_social`, `write_blog`, `write_ads`, `write_email_campaign`, `manage_posts`, `query_calendar`, `query_outputs`, `save_output`, `generate_image`, `scan_website`, `query_analytics`.
+
+**Resources:** `brands://list` — all user's brands.
+
+**Key files:**
+- `src/app/api/mcp/route.ts` — MCP HTTP handler
+- `src/lib/mcp/server.ts` — McpServer factory (tool registration)
+- `src/lib/mcp/director-chat.ts` — chat_with_director tool (generateText, not streamText)
+- `src/lib/mcp/tool-adapter.ts` — wraps AI SDK tools as MCP tools
+- `src/lib/auth/api-key.ts` — key generation + validation
+- `src/app/api/mcp/authorize/route.ts` — OAuth authorize
+- `src/app/api/mcp/token/route.ts` — OAuth token exchange
+- `src/app/mcp-login/page.tsx` — branded OAuth login page
+
+**Adding more tools:** Add tool name to `MVP_TOOLS` set in `src/lib/mcp/server.ts`. No other changes.
+
+**Team invite emails** include step-by-step setup for web, Claude Desktop/Mobile (OAuth), and Claude Code/Cowork (API key + "tell Claude to connect").
+
 ### Planned Major Builds
 1. **mem0 memory system** — replace Ruflo with semantic search, LLM extraction, graph memory
 2. **Self-updating knowledge** — daily research cron, agents stay current with AI/marketing trends
@@ -373,6 +402,15 @@ First-time users get a conversational onboarding flow. Instead of showing missin
 /api/studio/overview                 → Aggregated dashboard data (analytics, posts, outputs, videos, accounts, activity)
 /api/canva/designs                   → Canva designs proxy (thumbnails, edit URLs)
 /api/stripe/checkout, portal, webhook → Stripe integration
+/api/mcp                             → MCP server (Streamable HTTP, Bearer token auth)
+/api/mcp/authorize                   → OAuth 2.0 authorization endpoint
+/api/mcp/token                       → OAuth 2.0 token exchange (PKCE)
+/api/mcp/register                    → OAuth 2.0 dynamic client registration (RFC 7591)
+/api/mcp/code                        → Generate auth code after login
+/api/keys                            → API key CRUD (create, list, revoke)
+/mcp-login                           → OAuth login page ("Connect your agency")
+/.well-known/oauth-authorization-server → RFC 8414 discovery (rewrite → /api/well-known/)
+/.well-known/oauth-protected-resource   → RFC 9728 resource metadata
 ```
 
 ### Content Automation Machine (CAM)

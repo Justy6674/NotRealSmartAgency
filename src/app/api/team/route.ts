@@ -144,20 +144,52 @@ export async function POST(request: Request) {
       ? `You already have an account, so you're all set. Click below to get started.`
       : `Click the button below to create your account and get started.`
 
-    // Claude Desktop / Cowork setup section (only if we have an API key)
-    const claudeSection = apiKeyRaw ? `
-            <div style="margin:24px 0;padding:20px;background:#f4f4f5;border-radius:12px;">
-              <h2 style="font-size:16px;margin:0 0 8px;">Use it in Claude Desktop &amp; Cowork too</h2>
-              <p style="font-size:13px;color:#666;line-height:1.5;margin:0 0 12px;">
-                Open Claude and say this:
-              </p>
-              <div style="background:#1a1a1a;color:#e4e4e7;padding:16px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;word-break:break-all;">
-                Add an MCP server called "notrealsmart" with URL https://www.notrealsmart.com.au/api/mcp and authorization header "Bearer ${apiKeyRaw}"
+    // Step-by-step setup section for all platforms
+    const mcpUrl = 'https://www.notrealsmart.com.au/api/mcp'
+    const setupSection = `
+            <div style="margin:28px 0;padding:24px;background:#f4f4f5;border-radius:12px;">
+              <h2 style="font-size:18px;margin:0 0 16px;">How to use your agency</h2>
+
+              <div style="margin:0 0 20px;">
+                <h3 style="font-size:14px;margin:0 0 6px;color:#1a1a1a;">Option 1: Web app (easiest)</h3>
+                <p style="font-size:13px;color:#666;line-height:1.5;margin:0;">
+                  Just go to <a href="https://notrealsmart.com.au/agency" style="color:#1a1a1a;font-weight:500;">notrealsmart.com.au</a> and log in. Talk to the Director — it runs your marketing.
+                </p>
               </div>
-              <p style="font-size:12px;color:#999;margin:8px 0 0;">
-                That's it. Claude handles the rest. Your marketing agency tools will appear in every conversation.
-              </p>
-            </div>` : ''
+
+              <div style="margin:0 0 20px;">
+                <h3 style="font-size:14px;margin:0 0 6px;color:#1a1a1a;">Option 2: Claude Desktop or Mobile (recommended)</h3>
+                <ol style="font-size:13px;color:#666;line-height:1.8;margin:0;padding-left:20px;">
+                  <li>Open Claude Desktop (or the Claude app on your phone)</li>
+                  <li>Go to <strong>Settings → Integrations</strong></li>
+                  <li>Click <strong>"Add custom connector"</strong></li>
+                  <li>Name: <strong>NotRealSmart</strong></li>
+                  <li>URL: <strong>${mcpUrl}</strong></li>
+                  <li>Click <strong>Add</strong> — log in when prompted</li>
+                  <li>Done! Your agency tools appear in every conversation</li>
+                </ol>
+              </div>
+
+              <div style="margin:0 0 20px;">
+                <h3 style="font-size:14px;margin:0 0 6px;color:#1a1a1a;">Option 3: Claude Code / Cowork (VS Code)</h3>
+                <p style="font-size:13px;color:#666;line-height:1.5;margin:0 0 8px;">
+                  Open Claude Code or Cowork and say:
+                </p>
+                <div style="background:#1a1a1a;color:#e4e4e7;padding:14px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.6;word-break:break-all;">
+                  Add an MCP server called "notrealsmart" with URL ${mcpUrl}${apiKeyRaw ? ` and authorization header "Bearer ${apiKeyRaw}"` : ''}
+                </div>
+                <p style="font-size:11px;color:#999;margin:6px 0 0;">
+                  Claude does the config for you. No files to edit.
+                </p>
+              </div>
+
+              <div style="padding:12px 16px;background:#fff;border-radius:8px;border:1px solid #e4e4e7;">
+                <p style="font-size:13px;color:#444;margin:0;line-height:1.5;">
+                  <strong>What you can do once connected:</strong><br/>
+                  "Write a blog about X" · "Post this to Facebook" · "What's scheduled this week?" · "Audit my website" · "Write Instagram captions" · "Run a competitor scan"
+                </p>
+              </div>
+            </div>`
 
     try {
       await resend.emails.send({
@@ -179,7 +211,7 @@ export async function POST(request: Request) {
                 ${actionText}
               </a>
             </div>
-            ${claudeSection}
+            ${setupSection}
             <p style="font-size:12px;color:#999;margin-top:32px;">
               NRS Agency by NotRealSmart &mdash; notrealsmart.com.au
             </p>
