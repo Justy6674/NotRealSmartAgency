@@ -1,7 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+
+interface ApiKeyDisplay {
+  id: string
+  name: string
+  prefix: string
+  last_used_at: string | null
+  created_at: string
+}
 
 interface GlobalSettingsProps {
   userId: string
@@ -243,6 +251,169 @@ export function GlobalSettings({ userId, userEmail, workContext }: GlobalSetting
       >
         {saving ? 'Saving...' : 'Save Settings'}
       </button>
+
+      <div className="h-px bg-border" />
+
+      {/* API Keys for CLI / MCP Access */}
+      <ApiKeysSection />
     </div>
+  )
+}
+
+function ApiKeysSection() {
+  const [keys, setKeys] = useState<ApiKeyDisplay[]>([])
+  const [newKeyName, setNewKeyName] = useState('')
+  const [createdKey, setCreatedKey] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const loadKeys = useCallback(async () => {
+    const res = await fetch('/api/keys')
+    if (res.ok) {
+      const data = await res.json()
+      setKeys(data.keys ?? [])
+    }
+  }, [])
+
+  useEffect(() => { loadKeys() }, [loadKeys])
+
+  const handleCreate = async () => {
+    if (!newKeyName.trim()) return
+    setCreating(true)
+    setCreatedKey(null)
+    try {
+      const res = await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setCreatedKey(data.key)
+        setNewKeyName('')
+        loadKeys()
+      }
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleRevoke = async (id: string) => {
+    await fetch(`/api/keys?id=${id}`, { method: 'DELETE' })
+    loadKeys()
+  }
+
+  const handleCopy = () => {
+    if (createdKey) {
+      navigator.clipboard.writeText(createdKey)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        API Keys (CLI / MCP Access)
+      </p>
+      <p className="text-[11px] text-muted-foreground">
+        Connect Claude Code, Claude Desktop, or any MCP-compatible AI client to your agency.
+        Create a key, add it to your AI client, and talk to the Director from anywhere.
+      </p>
+
+      {/* Created key banner — shown once */}
+      {createdKey && (
+        <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4 space-y-2">
+          <p className="text-sm font-medium text-green-400">Key created — copy it now. You won&apos;t see it again.</p>
+          <div className="flex gap-2">
+            <code className="flex-1 rounded bg-background px-3 py-2 text-xs font-mono break-all select-all">
+              {createdKey}
+            </code>
+            <button
+              onClick={handleCopy}
+              className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted transition-colors"
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <details className="text-[10px] text-muted-foreground">
+            <summary className="cursor-pointer">Setup instructions</summary>
+            <pre className="mt-2 rounded bg-background p-3 overflow-x-auto text-[10px]">{`// Add to ~/.claude/settings.json (Claude Code)
+// or Claude Desktop MCP config
+{
+  "mcpServers": {
+    "notrealsmart": {
+      "url": "https://notrealsmart.com.au/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${createdKey}"
+      }
+    }
+  }
+}`}</pre>
+          </details>
+        </div>
+      )}
+
+      {/* Create new key */}
+      <div className="flex gap-2">
+        <input
+          value={newKeyName}
+          onChange={e => setNewKeyName(e.target.value)}
+          placeholder="Key name (e.g. Claude Code laptop)"
+          className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+          onKeyDown={e => e.key === 'Enter' && handleCreate()}
+        />
+        <button
+          onClick={handleCreate}
+          disabled={creating || !newKeyName.trim()}
+          className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {creating ? 'Creating...' : 'Create Key'}
+        </button>
+      </div>
+
+      {/* Existing keys */}
+      {keys.length > 0 && (
+        <div className="rounded-lg border overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Key</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Last used</th>
+                <th className="px-3 py-2 text-right font-medium text-muted-foreground" />
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map(k => (
+                <tr key={k.id} className="border-b last:border-0">
+                  <td className="px-3 py-2">{k.name}</td>
+                  <td className="px-3 py-2 font-mono text-muted-foreground">{k.prefix}...</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {k.last_used_at
+                      ? new Date(k.last_used_at).toLocaleDateString('en-AU')
+                      : 'Never'}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => handleRevoke(k.id)}
+                      className="text-red-400 hover:text-red-300 transition-colors"
+                    >
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {keys.length === 0 && !createdKey && (
+        <p className="text-[11px] text-muted-foreground italic">
+          No API keys yet. Create one to connect your AI client.
+        </p>
+      )}
+    </section>
   )
 }
