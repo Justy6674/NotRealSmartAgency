@@ -5,22 +5,11 @@ import { adaptToolsForMCP } from './tool-adapter'
 import { registerDirectorChatTool } from './director-chat'
 
 /**
- * MVP tools to expose via MCP.
- * Adding more later = adding names to this set.
+ * Register ALL tools upfront. Tool list must never change after launch —
+ * MCP clients cache the list and won't re-fetch without a reconnect.
+ * Tools that aren't ready yet should return "coming soon" rather than
+ * being omitted from the list.
  */
-const MVP_TOOLS = new Set([
-  'publish_to_social',
-  'write_blog',
-  'write_ads',
-  'write_email_campaign',
-  'manage_posts',
-  'query_calendar',
-  'query_outputs',
-  'save_output',
-  'generate_image',
-  'scan_website',
-  'query_analytics',
-])
 
 /**
  * Create a fully configured MCP server for a given user.
@@ -94,7 +83,7 @@ export function createNRSMcpServer(userId: string): McpServer {
   // Register chat_with_director — the flagship tool
   registerDirectorChatTool(server, userId)
 
-  // Register MVP tools from the existing AI SDK tool set
+  // Register ALL tools from the Director's tool set
   const supabase = createAdminClient()
   const dummyCtx = {
     supabase,
@@ -104,15 +93,7 @@ export function createNRSMcpServer(userId: string): McpServer {
     agentRegistryId: null,
   }
   const allTools = getToolsForAgent('overall', dummyCtx)
-
-  // Filter to MVP set and adapt
-  const mvpTools: Record<string, unknown> = {}
-  for (const [name, tool] of Object.entries(allTools)) {
-    if (MVP_TOOLS.has(name)) {
-      mvpTools[name] = tool
-    }
-  }
-  adaptToolsForMCP(mvpTools, server, userId)
+  adaptToolsForMCP(allTools, server, userId)
 
   // Register quick_start prompt
   server.registerPrompt('quick_start', {
