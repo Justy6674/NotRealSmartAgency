@@ -157,6 +157,11 @@ export async function GET(request: Request) {
         if (post.platform === 'linkedin') {
           platformOptions.visibility = 'PUBLIC'
         }
+        if (post.platform === 'youtube') {
+          platformOptions.privacy_status = 'public'
+          // AI-generated content disclosure (HeyGen videos, etc.)
+          platformOptions.contains_synthetic_media = true
+        }
 
         // 6. Build version (original version targets all selected accounts)
         const version: MixpostVersion = {
