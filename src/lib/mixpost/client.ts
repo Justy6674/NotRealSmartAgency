@@ -76,7 +76,7 @@ export async function fetchMixpostAccounts(): Promise<MixpostAccount[] | null> {
   try {
     const res = await fetch(accountsPath, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      next: { revalidate: 300 }, // cache for 5 min in Next.js fetch cache
+      cache: 'no-store', // no cache — tools need fresh data
     })
 
     if (!res.ok) {
