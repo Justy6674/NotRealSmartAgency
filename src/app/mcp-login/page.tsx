@@ -35,13 +35,17 @@ function McpLoginForm() {
         { auth: { persistSession: false, autoRefreshToken: false } }
       )
 
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (authError || !data.session) {
-        setError(authError?.message ?? 'Login failed')
+      let session: { access_token: string } | null = null
+      try {
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        })
+        if (authError) throw new Error(authError.message)
+        if (!data?.session?.access_token) throw new Error('No session returned')
+        session = data.session
+      } catch (loginErr) {
+        setError(loginErr instanceof Error ? loginErr.message : 'Login failed')
         setLoading(false)
         return
       }
@@ -52,7 +56,7 @@ function McpLoginForm() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${data.session.access_token}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           client_id: clientId,
