@@ -46,5 +46,6 @@ export async function POST(request: Request) {
     client_name: client_name ?? 'Claude',
     redirect_uris,
     token_endpoint_auth_method: 'client_secret_post',
+    logo_uri: 'https://www.notrealsmart.com.au/Favicon.png',
   }, { status: 201 })
 }

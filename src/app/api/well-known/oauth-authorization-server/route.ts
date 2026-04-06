@@ -13,5 +13,9 @@ export async function GET() {
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['client_secret_post'],
     scopes_supported: ['mcp'],
+    service_documentation: `${BASE}`,
+    op_policy_uri: `${BASE}/privacy`,
+    op_tos_uri: `${BASE}/terms`,
+    logo_uri: `${BASE}/Favicon.png`,
   })
 }
