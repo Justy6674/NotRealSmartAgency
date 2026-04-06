@@ -21,10 +21,28 @@ import type { Brand, AgentConfig } from '@/types/database'
  */
 export function registerDirectorChatTool(mcpServer: McpServer, userId: string) {
   mcpServer.registerTool('chat_with_director', {
-    description: 'Send a message to the NRS Director. The Director manages 13 marketing departments and can write content, publish to social media, analyse competitors, design graphics, generate videos, and more. Just tell it what you need in plain language.',
+    description: `Send a message to the NRS Director — the central orchestrator of a 14-agent AI marketing agency. The Director delegates to 13 specialist departments automatically: Content & Copy, SEO & GEO, Paid Ads, Strategy & Launch, Email Marketing, Growth & Partnerships, Brand, Market Intelligence, Web & CRO, Compliance (AHPRA/TGA), Analytics & Reporting, Automation & AI, Video & Scripting.
+
+USE THIS TOOL for complex or multi-step marketing requests. The Director can chain tools, delegate to departments, and run multi-agent meetings.
+
+ALWAYS call list_brands first to get brand IDs before using this tool.
+
+Example messages:
+- "Write a blog post about telehealth benefits and publish it to LinkedIn"
+- "Run a full marketing audit"
+- "Create a 2-week content calendar"
+- "Post 'Free trial this week' to Facebook and Instagram"
+- "Scan my website and tell me what's wrong"
+- "Write 3 Google Ads for weight loss consultations"
+- "Design a social media graphic for our new product"
+- "What did my agency do this month?"
+- "Analyse my competitors"
+- "Write a welcome email sequence"
+
+The Director answers in plain language and takes action. For simple single-tool tasks (like just checking the calendar), you can call the individual tools directly instead.`,
     inputSchema: {
-      brand_id: z.string().describe('Brand ID — get from brands://list resource'),
-      message: z.string().describe('Your message to the Director'),
+      brand_id: z.string().describe('Brand ID — call list_brands first to get IDs'),
+      message: z.string().describe('Your message to the Director — plain language, any marketing request'),
     },
   }, async ({ brand_id, message }: { brand_id: string; message: string }) => {
     const supabase = createAdminClient()

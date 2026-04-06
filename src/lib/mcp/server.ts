@@ -54,7 +54,7 @@ export function createNRSMcpServer(userId: string): McpServer {
   // Register list_brands as a TOOL (not just a resource) — Claude clients
   // reliably call tools but don't always read resources
   server.registerTool('list_brands', {
-    description: 'List all your brands. Call this FIRST to get brand IDs needed by other tools. Returns brand ID, name, slug, and description for each brand.',
+    description: 'List all your brands. CALL THIS FIRST before using any other NotRealSmart tool — every tool requires a brand_id. Returns brand ID, name, slug, description, and website URL for each brand.',
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }, async (_args: any) => {
     const supabase = createAdminClient()
