@@ -1,9 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Settings2, ChevronDown, ChevronUp } from 'lucide-react'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import { SocialAccountsManager } from '@/components/agency/SocialAccountsManager'
 import type { Brand } from '@/types/database'
 import type { SocialAccount } from '@/hooks/useStudioData'
@@ -29,8 +28,6 @@ interface SocialConnectionsCardProps {
 }
 
 export function SocialConnectionsCard({ brand, accounts, lastPublishedByPlatform }: SocialConnectionsCardProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
   const [showManager, setShowManager] = useState(false)
 
   // Get platforms from channel strategy
@@ -59,8 +56,7 @@ export function SocialConnectionsCard({ brand, accounts, lastPublishedByPlatform
   })
 
   const handleConnect = (platform: string) => {
-    setPendingReviewMessage(`Help me connect ${platform} for ${brand.name}`)
-    router.push('/agency/chat')
+    sendToDirector(`Help me connect ${platform} for ${brand.name}`)
   }
 
   return (

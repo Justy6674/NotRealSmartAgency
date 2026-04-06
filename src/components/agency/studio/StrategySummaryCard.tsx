@@ -1,8 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import type { Brand } from '@/types/database'
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -25,9 +24,6 @@ interface StrategySummaryCardProps {
 }
 
 export function StrategySummaryCard({ brand }: StrategySummaryCardProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
-
   const strategy = brand.channel_strategy as Record<string, unknown> | null
   const channels = strategy?.channels as Record<string, number> | null
   const frequency = strategy?.posting_frequency as string | null
@@ -38,13 +34,11 @@ export function StrategySummaryCard({ brand }: StrategySummaryCardProps) {
   const hasPillars = pillars && pillars.length > 0
 
   const handleRefine = () => {
-    setPendingReviewMessage(`Let's review and update the marketing strategy for ${brand.name}`)
-    router.push('/agency/chat')
+    sendToDirector(`Let's review and update the marketing strategy for ${brand.name}`)
   }
 
   const handleBuild = () => {
-    setPendingReviewMessage(`Help me build a content strategy for ${brand.name}`)
-    router.push('/agency/chat')
+    sendToDirector(`Help me build a content strategy for ${brand.name}`)
   }
 
   if (!hasStrategy && !hasPillars) {

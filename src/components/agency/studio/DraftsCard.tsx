@@ -1,8 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { FileText, ArrowRight } from 'lucide-react'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import type { ScheduledPost } from '@/types/database'
 
 const PLATFORM_ICONS: Record<string, string> = {
@@ -20,9 +19,6 @@ interface DraftsCardProps {
 }
 
 export function DraftsCard({ posts, onReviewDrafts }: DraftsCardProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
-
   const allDrafts = posts.filter(p => p.status === 'draft')
   const drafts = [...allDrafts]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -34,14 +30,12 @@ export function DraftsCard({ posts, onReviewDrafts }: DraftsCardProps) {
     if (onReviewDrafts) {
       onReviewDrafts(allDrafts)
     } else {
-      setPendingReviewMessage('Review and schedule all my draft posts')
-      router.push('/agency/chat')
+      sendToDirector('Review and schedule all my draft posts')
     }
   }
 
   const handleCreate = () => {
-    setPendingReviewMessage('Write me some social media posts')
-    router.push('/agency/chat')
+    sendToDirector('Write me some social media posts')
   }
 
   return (

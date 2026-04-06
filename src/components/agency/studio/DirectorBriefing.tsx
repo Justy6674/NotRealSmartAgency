@@ -1,8 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { UserCircle, ArrowRight } from 'lucide-react'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import type { Brand, ScheduledPost } from '@/types/database'
 import type { StudioAnalytics, SocialAccount } from '@/hooks/useStudioData'
 
@@ -140,14 +139,10 @@ interface DirectorBriefingProps {
 }
 
 export function DirectorBriefing({ brand, analytics, posts, accounts }: DirectorBriefingProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
-
   const items = buildBriefing(brand, analytics, posts, accounts)
 
   const handleAction = (message: string) => {
-    setPendingReviewMessage(message)
-    router.push('/agency/chat')
+    sendToDirector(message)
   }
 
   return (

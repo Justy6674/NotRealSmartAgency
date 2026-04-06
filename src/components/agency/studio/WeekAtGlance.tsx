@@ -1,9 +1,8 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import type { ScheduledPost } from '@/types/database'
 
 const PLATFORM_DOT_COLOURS: Record<string, string> = {
@@ -44,8 +43,6 @@ interface WeekAtGlanceProps {
 }
 
 export function WeekAtGlance({ posts }: WeekAtGlanceProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
   const weekDays = getWeekDays()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -62,8 +59,7 @@ export function WeekAtGlance({ posts }: WeekAtGlanceProps) {
 
   const handleFillDay = (day: Date) => {
     const dayName = day.toLocaleDateString('en-AU', { weekday: 'long' })
-    setPendingReviewMessage(`Create a post for ${dayName}`)
-    router.push('/agency/chat')
+    sendToDirector(`Create a post for ${dayName}`)
   }
 
   return (

@@ -1,8 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { Eye, ArrowRight, Plus, Globe } from 'lucide-react'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import type { Brand } from '@/types/database'
 
 interface Competitor {
@@ -17,19 +16,14 @@ interface CompetitorIntelCardProps {
 }
 
 export function CompetitorIntelCard({ brand }: CompetitorIntelCardProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
-
   const competitors = (brand.competitors as Competitor[] | null) ?? []
 
   const handleScan = () => {
-    setPendingReviewMessage('Run a deep competitor scan and tell me what changed')
-    router.push('/agency/chat')
+    sendToDirector('Run a deep competitor scan and tell me what changed')
   }
 
   const handleAdd = () => {
-    setPendingReviewMessage(`Add a competitor to my watchlist for ${brand.name}`)
-    router.push('/agency/chat')
+    sendToDirector(`Add a competitor to my watchlist for ${brand.name}`)
   }
 
   if (competitors.length === 0) {

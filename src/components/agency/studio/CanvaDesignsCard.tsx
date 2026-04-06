@@ -1,8 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { Palette, ExternalLink, Plus } from 'lucide-react'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import type { CanvaDesign } from '@/hooks/useStudioData'
 
 interface CanvaDesignsCardProps {
@@ -11,17 +10,12 @@ interface CanvaDesignsCardProps {
 }
 
 export function CanvaDesignsCard({ configured, designs }: CanvaDesignsCardProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
-
   const handleNewDesign = () => {
-    setPendingReviewMessage('Design a graphic for my brand')
-    router.push('/agency/chat')
+    sendToDirector('Design a graphic for my brand')
   }
 
   const handleSetup = () => {
-    setPendingReviewMessage('Help me connect my Canva account')
-    router.push('/agency/chat')
+    sendToDirector('Help me connect my Canva account')
   }
 
   if (!configured) {

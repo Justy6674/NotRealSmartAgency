@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Tag } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import { MediaUploader } from '@/components/agency/MediaUploader'
 import { MediaLibraryFilters } from './MediaLibraryFilters'
 import { MediaLibraryCard } from './MediaLibraryCard'
@@ -12,7 +13,7 @@ type TypeFilter = 'all' | 'image' | 'video' | 'audio'
 type SortOption = 'newest' | 'oldest' | 'name' | 'most_used'
 
 export function MediaLibrary() {
-  const { activeBrandId, setPendingReviewMessage } = useAgencyStore()
+  const { activeBrandId } = useAgencyStore()
 
   const [items, setItems] = useState<MediaItemWithUsage[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,7 +129,7 @@ export function MediaLibrary() {
   }
 
   const handleRepurpose = (id: string) => {
-    setPendingReviewMessage(
+    sendToDirector(
       `Repurpose media item ${id} into clips, quotes, blog, newsletter, and social posts`
     )
   }

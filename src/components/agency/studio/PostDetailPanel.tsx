@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import {
   X,
   Instagram,
@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAgencyStore } from '@/stores/agency-store'
+
 import type { StudioItem } from './StudioFeedCard'
 
 // ─── Platform Icons ──────────────────────────────────────────────────────────
@@ -51,8 +51,7 @@ interface PostDetailPanelProps {
 }
 
 export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
+
 
   // ── Local edit state ─────────────────────────────────────────────────────
   const [editedCaption, setEditedCaption] = useState(item.caption)
@@ -136,9 +135,8 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
       item.type === 'post'
         ? `Improve this post caption for ${platform}: ${editedCaption}`
         : `Improve this ${item.outputType ?? 'output'}: ${item.caption}`
-    setPendingReviewMessage(message)
-    router.push('/agency/chat')
-  }, [item, editedCaption, setPendingReviewMessage, router])
+    sendToDirector(message)
+  }, [item, editedCaption])
 
   // ── Copy ─────────────────────────────────────────────────────────────────
   const handleCopy = useCallback(async () => {

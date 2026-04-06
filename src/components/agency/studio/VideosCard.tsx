@@ -1,9 +1,8 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { Video, Play, Loader2, AlertCircle, Plus } from 'lucide-react'
 import { useState } from 'react'
-import { useAgencyStore } from '@/stores/agency-store'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import type { Output } from '@/types/database'
 
 interface VideosCardProps {
@@ -11,13 +10,10 @@ interface VideosCardProps {
 }
 
 export function VideosCard({ videos }: VideosCardProps) {
-  const { setPendingReviewMessage } = useAgencyStore()
-  const router = useRouter()
   const [playingId, setPlayingId] = useState<string | null>(null)
 
   const handleCreate = () => {
-    setPendingReviewMessage('Create a video for my brand')
-    router.push('/agency/chat')
+    sendToDirector('Create a video for my brand')
   }
 
   if (videos.length === 0) {
