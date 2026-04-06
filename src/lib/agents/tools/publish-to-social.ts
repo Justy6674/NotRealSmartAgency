@@ -44,6 +44,8 @@ export function createPublishToSocialTool(
     }),
     execute: async ({ platforms, caption, hashtags, image_url, schedule_date, schedule_time }) => {
       try {
+      console.log('[publish_to_social] Starting for platforms:', platforms.join(', '))
+
       // Fetch the brand for name matching
       const { data: brand } = await supabase
         .from('brands')
@@ -54,16 +56,38 @@ export function createPublishToSocialTool(
       if (!brand) return 'Error: Brand not found.'
 
       // Fetch all Mixpost accounts
-      const allAccounts = await fetchMixpostAccounts()
+      console.log('[publish_to_social] Fetching Mixpost accounts...')
+      let allAccounts: MixpostAccount[] | null = null
+      try {
+        allAccounts = await fetchMixpostAccounts()
+      } catch (fetchErr) {
+        console.error('[publish_to_social] fetchMixpostAccounts crashed:', fetchErr)
+        return `Error fetching social accounts: ${fetchErr instanceof Error ? fetchErr.message : 'unknown'}`
+      }
       if (!allAccounts?.length) {
         return 'Error: Could not connect to the publishing system. Check Mixpost configuration.'
       }
+      console.log('[publish_to_social] Got', allAccounts.length, 'accounts')
 
-      // Get confirmed account IDs if set, otherwise use all accounts
+      // Get confirmed account IDs if set, otherwise fuzzy-match by brand name
       const confirmedIds = getConfirmedAccountIds(brand)
-      const brandAccounts: MixpostAccount[] = confirmedIds.length
-        ? allAccounts.filter((a) => confirmedIds.includes(a.id))
-        : allAccounts
+      let brandAccounts: MixpostAccount[]
+      if (confirmedIds.length) {
+        brandAccounts = allAccounts.filter((a) => confirmedIds.includes(a.id))
+      } else {
+        // Fuzzy match: find accounts whose name contains the brand name (or vice versa)
+        const brandLower = brand.name.toLowerCase()
+        const slugLower = brand.slug.toLowerCase()
+        brandAccounts = allAccounts.filter((a) => {
+          const nameLower = (a.name || '').toLowerCase()
+          const userLower = (a.username || '').toLowerCase()
+          return nameLower.includes(brandLower) || brandLower.includes(nameLower) ||
+                 nameLower.includes(slugLower) || userLower.includes(slugLower) ||
+                 slugLower.includes(nameLower.replace(/[^a-z0-9]/g, ''))
+        })
+        // If no fuzzy match found, fall back to all accounts (better than nothing)
+        if (!brandAccounts.length) brandAccounts = allAccounts
+      }
 
       // Build full caption with hashtags
       const fullCaption = hashtags?.length
