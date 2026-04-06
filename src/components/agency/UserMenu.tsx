@@ -29,14 +29,10 @@ export function UserMenu() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-muted"
+        className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors hover:bg-muted border border-transparent hover:border-border"
       >
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
-          <User className="h-3 w-3 text-primary" />
-        </div>
-        <span className="hidden sm:inline text-muted-foreground truncate max-w-[120px]">
-          {email}
-        </span>
+        <Settings className="h-4 w-4 text-muted-foreground" />
+        <span className="hidden sm:inline text-muted-foreground font-medium">Settings</span>
       </button>
 
       {open && (

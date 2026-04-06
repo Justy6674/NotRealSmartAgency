@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   Plus,
   MessageSquare,
+  Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -207,7 +208,17 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
                         {brand.name.charAt(0)}
                       </span>
                     )}
-                    <span className="truncate" title={brand.name}>{brand.name}</span>
+                    <span className="truncate flex-1" title={brand.name}>{brand.name}</span>
+                    {brand.id === activeBrandId && (
+                      <Settings
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/agency/brands/${brand.slug}`)
+                          onClose?.()
+                        }}
+                      />
+                    )}
                   </button>
                 </li>
               ))}
