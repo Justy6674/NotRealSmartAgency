@@ -32,7 +32,7 @@ export async function extractAndStoreMemories(params: {
       extractions.push({
         key: `pref-${Date.now()}-${memoriesStored}`,
         value: { type: 'preference', content: match[1].trim(), source: 'user', timestamp },
-        tags: [agentType, brandSlug, 'preference'],
+        tags: [agentType, brandSlug, 'preference', 'user_preference'],
       })
       memoriesStored++
     }
@@ -57,10 +57,12 @@ export async function extractAndStoreMemories(params: {
     const matches = userMessage.matchAll(pattern)
     for (const match of matches) {
       const content = match.length > 2 ? `${match[1]}: ${match[2]}` : (match[1] ?? match[0])
+      const matchText = match[0].toLowerCase()
+      const isNegative = /don't|never|avoid|stop|no\s/.test(matchText)
       extractions.push({
         key: `design-pref-${Date.now()}-${memoriesStored}`,
         value: { type: 'design_preference', content: content.trim(), source: 'user', timestamp },
-        tags: [agentType, brandSlug, 'preference', 'design'],
+        tags: [agentType, brandSlug, 'preference', 'design', 'user_preference', ...(isNegative ? ['negative_preference'] : [])],
       })
       memoriesStored++
     }
@@ -98,7 +100,7 @@ export async function extractAndStoreMemories(params: {
       extractions.push({
         key: `brand-rule-${Date.now()}-${memoriesStored}`,
         value: { type: 'brand_rule', content: match[1].trim(), source: 'user', timestamp },
-        tags: [agentType, brandSlug, 'rule', 'brand'],
+        tags: [agentType, brandSlug, 'rule', 'brand', 'brand_rule'],
       })
       memoriesStored++
     }

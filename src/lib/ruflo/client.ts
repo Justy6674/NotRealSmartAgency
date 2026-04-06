@@ -60,25 +60,71 @@ export async function memorySearch(
   const supabase = getAdminClient()
 
   try {
-    // Search by namespace + order by recency (most recent = most relevant)
+    // Strategy: fetch more memories than needed, then rank by keyword relevance
+    // This gives us the best of both: recent + relevant
+    const fetchLimit = Math.max(limit * 5, 50) // Over-fetch to allow ranking
+
     const { data, error } = await supabase
       .from('agent_memories')
-      .select('key, namespace, value, tags, created_at')
+      .select('key, namespace, value, tags, created_at, updated_at')
       .eq('namespace', namespace)
       .order('updated_at', { ascending: false })
-      .limit(limit)
+      .limit(fetchLimit)
 
     if (error) {
       console.error('[ruflo/memory] Search error:', error.message)
       return []
     }
 
-    return (data ?? []).map((row) => ({
+    if (!data?.length) return []
+
+    // Score each memory by keyword relevance + recency
+    const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+    const now = Date.now()
+
+    const scored = data.map((row) => {
+      const text = `${row.key} ${typeof row.value === 'string' ? row.value : JSON.stringify(row.value)}`.toLowerCase()
+      const tags = (row.tags ?? []) as string[]
+
+      // Keyword match score (0-1): how many query words appear in the memory
+      let keywordHits = 0
+      for (const word of queryWords) {
+        if (text.includes(word)) keywordHits++
+        if (tags.some(t => t.toLowerCase().includes(word))) keywordHits += 0.5
+      }
+      const keywordScore = queryWords.length > 0 ? keywordHits / queryWords.length : 0
+
+      // Recency score (0-1): exponential decay, half-life of 14 days
+      const ageMs = now - new Date(row.updated_at ?? row.created_at).getTime()
+      const ageDays = ageMs / (1000 * 60 * 60 * 24)
+      const recencyScore = Math.exp(-ageDays / 14)
+
+      // Priority boost for important memory types (brand rules, user preferences)
+      let priorityBoost = 0
+      const keyLower = row.key.toLowerCase()
+      if (keyLower.includes('rule') || keyLower.includes('never') || keyLower.includes('always')) priorityBoost = 0.3
+      if (keyLower.includes('prefer') || keyLower.includes('voice') || keyLower.includes('brand')) priorityBoost = 0.2
+      if (keyLower.includes('decision') || keyLower.includes('strategy')) priorityBoost = 0.15
+      if (tags.includes('user_preference') || tags.includes('brand_rule')) priorityBoost = 0.3
+      if (tags.includes('negative_preference')) priorityBoost = 0.25
+
+      // Combined score: 50% keyword relevance + 30% recency + 20% priority
+      const totalScore = (keywordScore * 0.5) + (recencyScore * 0.3) + (priorityBoost * 0.2)
+      // If no query words, fall back to recency + priority only
+      const finalScore = queryWords.length > 0 ? totalScore : (recencyScore * 0.7) + (priorityBoost * 0.3)
+
+      return { row, score: finalScore }
+    })
+
+    // Sort by score descending, take top N
+    scored.sort((a, b) => b.score - a.score)
+
+    return scored.slice(0, limit).map(({ row, score }) => ({
       key: row.key,
       namespace: row.namespace,
       value: tryParseJson(row.value),
-      similarity: 1, // No semantic similarity in Supabase — sorted by recency
-      tags: row.tags ?? [],
+      similarity: score,
+      tags: (row.tags ?? []) as string[],
     }))
   } catch {
     // Timeout or network error — return empty, chat continues without memory
