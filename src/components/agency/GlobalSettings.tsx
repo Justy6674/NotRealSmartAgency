@@ -17,6 +17,8 @@ interface DigestGlobalSettings {
   frequency: 'daily' | 'weekly'
   time_aest: string
   recipients: string
+  notify_post_published: boolean
+  notify_post_failed: boolean
 }
 
 function parseSettings(workContext: string): DigestGlobalSettings {
@@ -32,6 +34,8 @@ function parseSettings(workContext: string): DigestGlobalSettings {
     frequency: 'daily',
     time_aest: '06:00',
     recipients: '',
+    notify_post_published: true,
+    notify_post_failed: true,
   }
 }
 
@@ -188,6 +192,44 @@ export function GlobalSettings({ userId, userEmail, workContext }: GlobalSetting
             className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs mt-0.5"
           />
         </div>
+      </section>
+
+      <div className="h-px bg-border" />
+
+      {/* Post Notifications */}
+      <section className="space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Post Notifications
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Get emailed when your scheduled posts go live or fail to publish.
+        </p>
+
+        <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+          <input
+            type="checkbox"
+            checked={settings.notify_post_published}
+            onChange={e => setSettings({ ...settings, notify_post_published: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <p className="text-sm font-medium">Notify when a post goes live</p>
+            <p className="text-[11px] text-muted-foreground">Email confirmation when your content publishes to any platform</p>
+          </div>
+        </label>
+
+        <label className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+          <input
+            type="checkbox"
+            checked={settings.notify_post_failed}
+            onChange={e => setSettings({ ...settings, notify_post_failed: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <p className="text-sm font-medium">Notify when a post fails</p>
+            <p className="text-[11px] text-muted-foreground">Get alerted if publishing fails so you can fix it quickly</p>
+          </div>
+        </label>
       </section>
 
       {error && (

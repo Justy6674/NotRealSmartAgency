@@ -7,14 +7,14 @@ import { ArrowRight } from 'lucide-react'
 export const metadata = {
   title: 'Pricing | NotRealSmart Agency',
   description:
-    'Everything a real marketing agency does. No staff. 14 AI specialist agents, 65+ slash commands, social publishing, video generation, and AHPRA compliance.',
+    'Your own marketing agency for a fraction of the cost. 14 AI specialists, AHPRA compliance, social publishing, video generation. Australian-built.',
 }
 
 const FEATURES = [
   { label: '14 AI specialist agents with unique expertise' },
   { label: '65+ slash commands for instant actions' },
   { label: 'Content calendar with auto-scheduling' },
-  { label: 'Social publishing to 6 platforms via Mixpost' },
+  { label: 'Social publishing across Instagram, Facebook, LinkedIn, YouTube, TikTok, X' },
   { label: 'HeyGen AI video generation' },
   { label: 'Canva graphic design' },
   { label: 'AHPRA/TGA compliance checking' },
@@ -27,6 +27,10 @@ const FEATURES = [
   { label: 'Email campaigns (Spam Act compliant)' },
   { label: 'Blog writing (SEO optimised)' },
   { label: 'Multi-brand support (unlimited brands)' },
+  { label: 'Content gap analysis — know what you are missing' },
+  { label: 'Post notifications — get emailed when content goes live' },
+  { label: 'Shorts vs full-length video classification' },
+  { label: 'Drag and drop video upload with auto-transcription' },
 ]
 
 export default function PricingPage() {
@@ -102,7 +106,7 @@ export default function PricingPage() {
                 textShadow: '0 0 18px oklch(0.6 0.01 240 / 0.35)',
               }}
             >
-              Everything a Real Agency Does. No Staff.
+              Your Own Marketing Agency
             </h1>
             <p
               style={{
@@ -110,12 +114,13 @@ export default function PricingPage() {
                 fontSize: '1rem',
                 lineHeight: 1.7,
                 color: 'oklch(0.5 0 0)',
-                maxWidth: '560px',
+                maxWidth: '620px',
                 margin: '0 auto',
               }}
             >
-              Plans and pricing are being finalised. Here is everything that is
-              included when you sign up.
+              Work on your business, not in your marketing. Everything a
+              $5,000/month agency does — without the retainer, the reports,
+              or the excuses.
             </p>
           </div>
 
@@ -167,25 +172,87 @@ export default function PricingPage() {
             ))}
           </div>
 
-          {/* Coming soon badge + CTA */}
-          <div style={{ textAlign: 'center' }}>
-            <div
+          {/* Agency comparison */}
+          <div
+            style={{
+              maxWidth: '560px',
+              margin: '0 auto 2.5rem',
+              padding: '1.75rem 2rem',
+              background: 'oklch(0.1 0.005 240)',
+              border: '1px solid oklch(0.2 0.01 240)',
+              borderRadius: '10px',
+            }}
+          >
+            <p
               style={{
-                display: 'inline-block',
-                background: 'oklch(0.15 0.01 240)',
-                color: 'oklch(0.6 0.01 240)',
-                borderRadius: '9999px',
-                padding: '0.35rem 1.25rem',
                 fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace",
                 fontSize: '0.7rem',
-                fontWeight: 600,
-                letterSpacing: '0.12em',
+                letterSpacing: '0.18em',
                 textTransform: 'uppercase',
-                marginBottom: '1.5rem',
+                color: 'oklch(0.75 0.15 75)',
+                marginBottom: '1.25rem',
               }}
             >
-              Pricing coming soon
+              // the comparison
+            </p>
+            {[
+              { label: 'Social media manager', cost: '$3,000 – 5,000/month' },
+              { label: 'Marketing agency', cost: '$5,000 – 10,000/month' },
+              { label: 'Freelancer', cost: '$1,000 – 2,000/month (when they show up)' },
+            ].map((row) => (
+              <div
+                key={row.label}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  padding: '0.5rem 0',
+                  borderBottom: '1px solid oklch(0.15 0.005 240)',
+                }}
+              >
+                <span style={{ fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace", fontSize: '0.8rem', color: 'oklch(0.5 0 0)' }}>
+                  {row.label}
+                </span>
+                <span style={{ fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace", fontSize: '0.8rem', color: 'oklch(0.65 0 0)' }}>
+                  {row.cost}
+                </span>
+              </div>
+            ))}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                padding: '0.75rem 0 0',
+              }}
+            >
+              <span style={{ fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif", fontSize: '0.9rem', fontWeight: 600, color: 'oklch(0.9 0.005 240)' }}>
+                NotRealSmart
+              </span>
+              <span style={{ fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif", fontSize: '0.9rem', fontWeight: 600, color: 'oklch(0.68 0.2 145)' }}>
+                A fraction of the above
+              </span>
             </div>
+          </div>
+
+          {/* Trust line */}
+          <p
+            style={{
+              fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+              fontSize: '0.82rem',
+              lineHeight: 1.6,
+              color: 'oklch(0.45 0 0)',
+              textAlign: 'center',
+              maxWidth: '560px',
+              margin: '0 auto 2.5rem',
+            }}
+          >
+            Australian-built. Not outsourced. Built by business owners running 10 brands.
+            AHPRA/TGA compliant. Every plan includes tomorrow&apos;s features as they ship.
+          </p>
+
+          {/* CTA */}
+          <div style={{ textAlign: 'center' }}>
             <p
               style={{
                 fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",

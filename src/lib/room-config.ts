@@ -46,6 +46,9 @@ export const ROOMS: RoomConfig[] = [
       '/agency/costs',
       '/agency/analytics',
       '/agency/activity',
+      '/agency/settings',
+      '/agency/team',
+      '/agency/brands',
     ],
     subTabs: [
       { label: 'Tasks', href: '/agency/tasks', matchPrefixes: ['/agency/tasks'] },
@@ -54,6 +57,9 @@ export const ROOMS: RoomConfig[] = [
       { label: 'Costs', href: '/agency/costs', matchPrefixes: ['/agency/costs'] },
       { label: 'Analytics', href: '/agency/analytics', matchPrefixes: ['/agency/analytics'] },
       { label: 'Activity', href: '/agency/activity', matchPrefixes: ['/agency/activity'] },
+      { label: 'Settings', href: '/agency/settings', matchPrefixes: ['/agency/settings'] },
+      { label: 'Team', href: '/agency/team', matchPrefixes: ['/agency/team'] },
+      { label: 'Brands', href: '/agency/brands', matchPrefixes: ['/agency/brands'] },
     ],
   },
 ]

@@ -6,7 +6,7 @@ import { AgencyFooter } from '@/components/landing/AgencyFooter'
 export const metadata = {
   title: 'About | NotRealSmart Agency',
   description:
-    'Meet the AI-powered marketing agency built for Australian health businesses. 14 AI specialist agents run your marketing. Learn how it works.',
+    'Built by Australian business owners running 10 brands. Not Real = Artificial, Smart = Intelligence. Your own AI marketing agency with AHPRA/TGA compliance.',
 }
 
 export default function AboutPage() {
@@ -55,7 +55,7 @@ export default function AboutPage() {
             padding: '0 1.5rem',
           }}
         >
-          {/* Heading */}
+          {/* The Story */}
           <p
             style={{
               fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace",
@@ -76,27 +76,156 @@ export default function AboutPage() {
               fontWeight: 600,
               color: 'oklch(0.9 0.005 240)',
               textAlign: 'center',
-              marginBottom: '1.25rem',
+              marginBottom: '0.75rem',
               textShadow: '0 0 18px oklch(0.6 0.01 240 / 0.35)',
             }}
           >
-            Your AI Marketing Team
+            Not Real. Smart.
           </h2>
           <p
             style={{
-              fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
-              fontSize: '1.05rem',
-              lineHeight: 1.7,
-              color: 'oklch(0.6 0 0)',
+              fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace",
+              fontSize: '0.85rem',
+              lineHeight: 1.6,
+              color: 'oklch(0.55 0.1 240)',
               textAlign: 'center',
-              maxWidth: '780px',
-              margin: '0 auto 3.5rem',
+              marginBottom: '2.5rem',
             }}
           >
-            14 independent AI specialists that run your marketing. You talk to
-            one person — the Director. Behind the scenes, a team of specialists
-            writes your content, designs your graphics, shoots your videos, fills
-            your calendar, publishes to all platforms, and keeps you compliant.
+            Not Real = Artificial. Smart = Intelligence. AI — said differently.
+          </p>
+
+          {/* Narrative paragraphs */}
+          <div style={{ maxWidth: '720px', margin: '0 auto 3rem' }}>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '1.05rem',
+                lineHeight: 1.8,
+                color: 'oklch(0.65 0 0)',
+                marginBottom: '1.5rem',
+              }}
+            >
+              We didn&apos;t set out to build an AI company. We run 10 Australian
+              businesses — health clinics, telehealth, skincare, fragrance. We needed
+              marketing done properly. What we found was a $5,000/month agency sending
+              PDF reports, a freelancer who disappeared after month three, and an intern
+              who nearly got us fined by AHPRA.
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '1.05rem',
+                lineHeight: 1.8,
+                color: 'oklch(0.65 0 0)',
+                marginBottom: '1.5rem',
+              }}
+            >
+              So we built our own marketing agency. One that actually does the work.
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '1.05rem',
+                lineHeight: 1.8,
+                color: 'oklch(0.65 0 0)',
+                marginBottom: '1.5rem',
+              }}
+            >
+              Not a dashboard. Not a scheduling tool. Not another app selling you
+              integrations dressed up as innovation. An actual agency — 14 AI specialists
+              that write your content, design your graphics, schedule your posts, monitor
+              your competitors, and keep you compliant. You just talk to the Director.
+              Like you would a real agency. Except this one doesn&apos;t ghost you.
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '1.05rem',
+                lineHeight: 1.8,
+                color: 'oklch(0.65 0 0)',
+                marginBottom: '1.5rem',
+              }}
+            >
+              We built it for healthcare first because that&apos;s the hardest. AHPRA
+              compliance. TGA advertising rules. A $60,000 fine for getting an Instagram
+              post wrong. If it handles that, it handles anything.
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '1.05rem',
+                lineHeight: 1.8,
+                color: 'oklch(0.65 0 0)',
+                marginBottom: '1.5rem',
+              }}
+            >
+              This is Australian. Not outsourced. We use it every day across our own
+              brands. We stake our businesses on it.
+            </p>
+          </div>
+
+          {/* The tech promise */}
+          <div
+            style={{
+              maxWidth: '720px',
+              margin: '0 auto 3rem',
+              padding: '1.75rem 2rem',
+              background: 'oklch(0.1 0.005 240)',
+              border: '1px solid oklch(0.2 0.01 240)',
+              borderRadius: '10px',
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '1rem',
+                fontWeight: 600,
+                color: 'oklch(0.85 0.01 240)',
+                marginBottom: '0.75rem',
+              }}
+            >
+              The tech behind it changes. The promise doesn&apos;t.
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '0.92rem',
+                lineHeight: 1.7,
+                color: 'oklch(0.55 0 0)',
+                marginBottom: '0.75rem',
+              }}
+            >
+              Today it uses the best AI available. Tomorrow it&apos;ll use better. The
+              apps you install now will be gone in two years — AI will live in your phone,
+              your laptop, your watch, and it&apos;ll just do things. We&apos;re building
+              for that. Always moving forward. Always ready for what&apos;s next.
+            </p>
+            <p
+              style={{
+                fontFamily: "var(--font-sans), 'IBM Plex Sans', sans-serif",
+                fontSize: '0.92rem',
+                lineHeight: 1.7,
+                color: 'oklch(0.55 0 0)',
+              }}
+            >
+              You don&apos;t need to understand any of it. You just need to talk to your agency.
+            </p>
+          </div>
+
+          {/* Section break — what it does */}
+          <p
+            style={{
+              fontFamily: "var(--font-mono), 'IBM Plex Mono', monospace",
+              fontSize: '0.7rem',
+              letterSpacing: '0.18em',
+              textTransform: 'uppercase',
+              color: 'oklch(0.75 0.15 75)',
+              textAlign: 'center',
+              marginBottom: '2.5rem',
+            }}
+          >
+            // what your agency does
           </p>
 
           {/* Three columns */}
@@ -208,11 +337,11 @@ export default function AboutPage() {
               >
                 {[
                   'Content calendar with auto-scheduling',
-                  'Facebook publishing via Mixpost',
-                  'Instagram publishing via Mixpost',
-                  'LinkedIn publishing via Mixpost',
-                  'TikTok publishing via Mixpost',
-                  'YouTube publishing via Mixpost',
+                  'Facebook publishing',
+                  'Instagram publishing',
+                  'LinkedIn publishing',
+                  'TikTok publishing',
+                  'YouTube publishing',
                   'Post signatures and branding',
                   'Platform algorithm intelligence',
                 ].map((item) => (
@@ -321,9 +450,7 @@ export default function AboutPage() {
               margin: '0 auto',
             }}
           >
-            Built for Australian business owners who can&apos;t afford a
-            $5,000/month agency. AHPRA and TGA compliant for health
-            practitioners.
+            Work on your business. Not in your marketing.
           </p>
         </div>
       </section>

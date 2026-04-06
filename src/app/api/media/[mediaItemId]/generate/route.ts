@@ -139,6 +139,14 @@ export async function POST(
       ? `\n\nVisual content: ${visualAnalysis.summary ?? 'not available'}. Products visible: ${visualAnalysis.products?.join(', ') ?? 'none'}. Text on screen: ${visualAnalysis.textOnScreen?.join(', ') ?? 'none'}. Mood: ${visualAnalysis.mood ?? 'not analysed'}.`
       : ''
 
+    // Format-aware guidance based on video duration
+    const durationSeconds = mediaItem.duration_seconds as number | null
+    const formatGuidance = durationSeconds && durationSeconds < 60
+      ? '\nFORMAT: This is a SHORT-FORM video (<60s). Write hook-first, punchy captions optimised for TikTok and Instagram Reels. YouTube title should include "Shorts" or be Shorts-optimised. Keep energy high and front-load the hook.'
+      : durationSeconds && durationSeconds > 120
+      ? '\nFORMAT: This is a FULL-LENGTH video. Write SEO-optimised YouTube descriptions with timestamps/chapters if the transcript suggests segments. LinkedIn and Facebook get thoughtful, detailed captions. Prioritise discoverability.'
+      : ''
+
     const { object: content } = await generateObject({
       model: gateway('anthropic/claude-sonnet-4'),
       system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions from video transcriptions and visual analysis.
@@ -148,6 +156,7 @@ ${vibeGuidance ? `\nTone: ${vibeGuidance}` : ''}
 ${contentTypeText ? `\nContent type: Frame this as ${contentTypeText} content.` : ''}
 ${hashtagGuidance ? `\nHashtag strategy: ${hashtagGuidance}` : ''}
 ${carouselContext ? `\n${carouselContext}` : ''}
+${formatGuidance}
 
 Rules:
 - Each platform has specific character limits and formatting norms

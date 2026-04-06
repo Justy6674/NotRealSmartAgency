@@ -14,7 +14,6 @@ const VIDEO_PROVIDERS = [
 ]
 
 const SOCIAL_PROVIDERS = [
-  { id: 'ayrshare', name: 'Ayrshare', description: 'Post to Instagram, TikTok, YouTube, LinkedIn, Facebook, X — single API ($29/mo)' },
   { id: 'deepgram', name: 'Deepgram', description: 'Video/audio transcription for content automation' },
 ]
 
@@ -100,7 +99,7 @@ export function ProviderSettings() {
       <div className="pt-4 border-t">
         <h2 className="text-lg font-semibold mb-2">Social Media & Transcription</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Connect Ayrshare to auto-post across all platforms. Add Deepgram for video transcription.
+          Add Deepgram for higher-quality video transcription. Publishing is handled automatically via Mixpost.
         </p>
       </div>
 

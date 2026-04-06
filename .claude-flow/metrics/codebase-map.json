@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-03-25T03:02:04.087Z",
+  "projectRoot": "/Users/jb-downscale/NotRealSmartAgency",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": true,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1774407724087
+}

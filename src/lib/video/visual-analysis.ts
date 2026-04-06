@@ -8,6 +8,7 @@ export interface VisualAnalysis {
   mood: string
   thumbnailFrameIndex: number
   summary: string
+  recommended_format: 'short' | 'full' | 'either'
 }
 
 /**
@@ -19,7 +20,8 @@ export interface VisualAnalysis {
  */
 export async function analyseVideoFrames(
   frameUrls: string[],
-  transcription?: string | null
+  transcription?: string | null,
+  durationSeconds?: number | null
 ): Promise<VisualAnalysis | null> {
   if (!frameUrls.length) return null
 
@@ -63,8 +65,16 @@ Return ONLY valid JSON, no markdown fences.`,
 
     // Parse the JSON response — strip any accidental markdown fences
     const cleaned = text.replace(/```json\n?|\n?```/g, '').trim()
-    const parsed = JSON.parse(cleaned) as VisualAnalysis
-    return parsed
+    const parsed = JSON.parse(cleaned) as Omit<VisualAnalysis, 'recommended_format'>
+
+    // Classify format based on duration
+    const recommended_format: VisualAnalysis['recommended_format'] =
+      !durationSeconds ? 'either'
+      : durationSeconds < 60 ? 'short'
+      : durationSeconds > 120 ? 'full'
+      : 'either'
+
+    return { ...parsed, recommended_format }
   } catch (err) {
     console.error('Visual analysis failed:', err)
     return null

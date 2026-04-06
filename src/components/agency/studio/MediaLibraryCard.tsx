@@ -118,7 +118,7 @@ export function MediaLibraryCard({
       </button>
 
       {/* Thumbnail */}
-      <div className="h-40 w-full overflow-hidden rounded-t-lg bg-muted">
+      <div className="relative h-40 w-full overflow-hidden rounded-t-lg bg-muted">
         {item.file_type.startsWith('image/') ? (
           <img
             src={item.file_url}
@@ -136,6 +136,33 @@ export function MediaLibraryCard({
             <Music className="h-10 w-10 text-muted-foreground" />
           </div>
         )}
+
+        {/* Format badge + duration */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1">
+          {item.duration_seconds != null && (
+            <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              {item.duration_seconds >= 60
+                ? `${Math.floor(item.duration_seconds / 60)}:${String(Math.floor(item.duration_seconds % 60)).padStart(2, '0')}`
+                : `${Math.floor(item.duration_seconds)}s`}
+            </span>
+          )}
+          {(() => {
+            const va = (item.metadata as Record<string, unknown>)?.visual_analysis as { recommended_format?: string } | undefined
+            if (!va?.recommended_format || va.recommended_format === 'either') return null
+            return (
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+                style={{
+                  background: va.recommended_format === 'short'
+                    ? 'oklch(0.5 0.15 280)'
+                    : 'oklch(0.5 0.12 230)',
+                }}
+              >
+                {va.recommended_format === 'short' ? 'Short' : 'Full'}
+              </span>
+            )
+          })()}
+        </div>
       </div>
 
       {/* Content */}

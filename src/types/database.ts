@@ -690,6 +690,7 @@ export interface VisualAnalysis {
   mood: string
   thumbnailFrameIndex: number
   summary: string
+  recommended_format: 'short' | 'full' | 'either'
 }
 
 export type PostType = 'single' | 'carousel' | 'reel' | 'video'

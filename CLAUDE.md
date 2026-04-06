@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Rule Zero — Tomorrow's Tech for Marketing
+
+> **Use today's tech to get things done. Build for tomorrow's tech to get better. Leave yesterday's tech behind.**
+
+NRS must ALWAYS be at the frontier of marketing technology. Not just AI agents — everything: how content is created, how posts are published, how analytics work, how compliance is enforced, how users interact. Before building anything, ask: **is this how marketing will work in 12 months?** If not, research the frontier first, then build to it.
+
+- **Build our own technology.** Third-party tools are temporary bridges until we build our own. Never sell or position plug-ins as the product.
+- **Publishing:** Direct platform APIs (Meta Graph, YouTube Data, TikTok Content, LinkedIn). No middleware dependencies. CLI agentic pattern — agent calls platform API directly as a tool.
+- **Never show plumbing.** Users don't know what Mixpost, Postiz, or OAuth are. They just talk.
+- **Always evolving.** AI marketing tech moves every 2 weeks. When MCP servers, A2A protocols, or platform-native agent APIs ship — we adopt them. "Medium term" = 2 weeks.
+
 ## First Principle — Read This Before Every Build
 
 **The user of this app is a non-technical business owner trying to be their own marketing agency.** They are not a developer. They do not know what "SEO & GEO" means. They cannot write JSON. They should never have to.
@@ -33,7 +44,7 @@ npm run lint         # ESLint (flat config v9)
 
 **NotRealSmart Agency** — a self-owned agentic AI marketing agency platform. 1 Director + 13 department heads run marketing autonomously across 8 brands.
 
-**Name:** Not(Artificial) Real(Intelligence) Smart. **Owner:** Black Health Intelligence Pty Ltd, ABN 23 693 026 112.
+**Name:** Not Real (Artificial) Smart (Intelligence) = Artificial Intelligence. The name IS "AI" hidden in plain English. **Owner:** Black Health Intelligence Pty Ltd, ABN 23 693 026 112. Runs 10 Australian businesses — health clinics, telehealth, skincare, fragrance. Built NRS because we needed it ourselves. Australian-built, Australian-owned, specialising in healthcare, works for all.
 
 **Repo:** `~/NotRealSmartAgency` (NOT `~/notrealsmart` — that's the old repo, superseded).
 
@@ -95,7 +106,68 @@ Env vars: `MIXPOST_API_URL`, `MIXPOST_API_TOKEN` (in .env.local + Vercel).
 Supports video publishing to TikTok, YouTube, Instagram Reels, Facebook Reels.
 Replaces Ayrshare ($299/mo) with $0/month self-hosted publishing.
 
+## Required Reference: AI Agent Architecture
+
+Before building or modifying agent execution, tool systems, memory, MCP integrations, or any agentic features in NotRealSmart, **load the Claude Code architecture skill first**:
+
+```
+/ai-agent-architecture
+```
+
+This provides production-proven patterns from Claude Code's source (2,200 files analysed) including:
+- **Agent loop**: async generator pattern, state machine, error recovery
+- **Tool system**: concurrency partitioning, streaming execution, fail-closed defaults
+- **Sub-agents**: 5 agent types, context inheritance, coordinator mode
+- **Permissions**: multi-layer security model
+- **Context management**: 4 compaction strategies for long conversations
+- **Memory**: auto-extraction, 4-type taxonomy, injection patterns
+
+Full reference: `~/Obsidian/Reference/claude-code-architecture.md`
+
+### Superpowers Development Workflow (MANDATORY)
+
+The Superpowers skills are installed globally and **must be used** for all NotRealSmart development:
+
+- **Before building**: Use `brainstorming` skill — spec first, then plan, then code
+- **Before coding**: Use `writing-plans` skill — bite-sized tasks with file mappings
+- **During coding**: Use `test-driven-development` — RED-GREEN-REFACTOR, no code without failing test
+- **For parallel work**: Use `dispatching-parallel-agents` — one agent per independent domain
+- **For multi-task execution**: Use `subagent-driven-development` — fresh subagent per task with two-stage review
+- **When debugging**: Use `systematic-debugging` — root cause investigation before fixes
+- **Before completing**: Use `verification-before-completion` — evidence before claims
+- **For code review**: Use `requesting-code-review` + `receiving-code-review`
+- **For branches**: Use `finishing-a-development-branch` — verify tests, present options, clean up
+
+### Video Toolkit (Available for Video Agent)
+
+The `openclaw-video-toolkit` skill is installed globally. Use it when building or improving the Video & Scripting department:
+
+- **Open-source alternative to HeyGen**: Remotion (React) + cloud GPU (Modal/RunPod) for programmatic video
+- **AI voiceover**: Qwen3-TTS voice cloning — free, runs on your GPU, brand voice matching
+- **Image generation**: FLUX.2 for video scene frames — free on Modal's $30/mo starter
+- **AI music**: ACE-Step royalty-free music generation
+- **Commands**: `/video-setup`, `/video-video`, `/video-template`, `/video-brand`, `/video-generate-voiceover`
+- **Python tools**: `~/.claude/video-toolkit-tools/` (22 scripts: voiceover, image gen, music, upscale, face animation)
+- **Templates**: Product demos, sprint reviews — extensible for marketing content
+
+Integration points in NotRealSmart:
+- `lib/agents/tools/create-video.ts` — can be extended to use toolkit alongside HeyGen
+- `lib/agents/tools/process-media.ts` — toolkit's FFmpeg tools for post-processing
+- Video agent personality (`video` type) — add toolkit awareness to system prompt
+- Cron publisher (`/api/cron/publish-posts`) — rendered MP4s can be published via Mixpost
+
+Apply these patterns when working on: Director chat, AgentWorker system, tool implementations, memory system (mem0 replacement), heartbeat execution, intent router, delegation, meetings.
+
 ## Architecture
+
+### Middleware & Auth
+`src/middleware.ts` runs Supabase session refresh on every request (except static assets/images). Uses `lib/supabase/middleware.ts` `updateSession()`. All `/agency/*` routes require auth.
+
+### Next.js Config
+`next.config.ts`: `transpilePackages: ['three']`. Allowed remote image domains: `uyhtrwlotoriblicqqrl.supabase.co` (Supabase storage), `www.google.com` (favicons), `**.com.au`. Security headers: X-Frame-Options SAMEORIGIN, nosniff, HSTS.
+
+### ESLint
+No project-level `eslint.config.*` — uses Next.js v9 flat config defaults. Run `npm run lint`.
 
 ### Agent Execution — True Multi-Agent (AI SDK v6)
 **Director chat** (`/api/chat/route.ts`) uses `streamText()` (NOT ToolLoopAgent). Each request:
@@ -184,7 +256,7 @@ TikTok (watch time, completion rate, hook requirements), Instagram (saves/shares
 ### Canva Integration
 `design_graphic` and `export_design` tools use Canva MCP (connected via `mcp__claude_ai_Canva__*`). Creative Studio's Create tab also provides direct Canva access. Brand agent and Director can generate designs, search templates, export to formats.
 
-### Planned Major Builds (next sessions)
+### Planned Major Builds
 1. **mem0 memory system** — replace Ruflo with semantic search, LLM extraction, graph memory
 2. **Self-updating knowledge** — daily research cron, agents stay current with AI/marketing trends
 
@@ -237,13 +309,13 @@ Agency UI is organised into 3 rooms (tabs in header):
 Config: `src/lib/room-config.ts`. Components: `RoomTabs.tsx` (embedded in `AgencyHeader.tsx`), `RoomSubTabs.tsx`.
 
 ### Creative Studio — Intelligent Agency Dashboard
-The "All Content" tab is an intelligent dashboard (`StudioDashboard.tsx`) with live feeds from all integrations. Chat panel auto-opens on Studio pages.
+`StudioDashboard.tsx` — live feeds from all integrations. Chat panel auto-opens on Studio pages.
 
-**Dashboard sections** (in order): Director's Brief (deterministic alerts + action chips), Social Connections (Mixpost status per platform), Week-at-a-Glance (7-day calendar strip), Drafts Awaiting Action, Strategy & Pillars, Canva Designs (live thumbnails from Canva API), Videos (HeyGen outputs with player), Competitor Intel, Agent Activity Ticker, Recent Content Feed.
+**Dashboard sections** (in order): Director's Brief, Social Connections (Mixpost), Week-at-a-Glance, Drafts Awaiting Action, Strategy & Pillars, Canva Designs, Videos (HeyGen), Competitor Intel, Agent Activity Ticker, Recent Content Feed.
 
-**Data flow**: `useStudioData()` hook (`src/hooks/useStudioData.ts`) fetches from `GET /api/studio/overview?brandId=X` (aggregated endpoint) + `GET /api/canva/designs?brandId=X` (Canva proxy) in parallel.
+**Data flow**: `useStudioData()` hook fetches from `GET /api/studio/overview?brandId=X` + `GET /api/canva/designs?brandId=X` in parallel.
 
-**CreateHub** (`Create` tab): 6 intent cards (Write a Post, Fill Calendar, Create Video, Design in Canva, Run Campaign, Repurpose Content) — each one-click opens chat. Quick Post form is a collapsible power-user section.
+**CreateHub** (`Create` tab): 6 intent cards — each one-click opens chat. Quick Post form is a collapsible power-user section.
 
 ### Guided Onboarding
 First-time users get a conversational onboarding flow. Instead of showing missing fields, the Director proactively guides the user: "Tell me about your business" → auto-populates brand fields. Built into `ChatInterface.tsx` auto-greet logic.

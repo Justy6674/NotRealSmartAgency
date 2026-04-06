@@ -43,6 +43,7 @@ export function createPublishToSocialTool(
         .describe('Schedule time in HH:mm format (24hr AEST). Omit to publish immediately.'),
     }),
     execute: async ({ platforms, caption, hashtags, image_url, schedule_date, schedule_time }) => {
+      try {
       // Fetch the brand for name matching
       const { data: brand } = await supabase
         .from('brands')
@@ -180,6 +181,11 @@ export function createPublishToSocialTool(
         : image_url
         ? `Published (image upload had issues — posted as text):\n${summary}`
         : `Published:\n${summary}`
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        console.error('[publish_to_social] Error:', message)
+        return `Publishing failed: ${message}. This might be a configuration issue — please try again or check the publishing settings.`
+      }
     },
   })
 }

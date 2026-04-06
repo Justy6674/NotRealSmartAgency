@@ -35,7 +35,7 @@ export async function POST(
   }
 
   // Run visual analysis with Claude multimodal
-  const analysis = await analyseVideoFrames(frameUrls, mediaItem.transcription)
+  const analysis = await analyseVideoFrames(frameUrls, mediaItem.transcription, mediaItem.duration_seconds)
 
   if (!analysis) {
     return NextResponse.json({ error: 'Visual analysis failed' }, { status: 500 })

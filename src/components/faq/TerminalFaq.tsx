@@ -29,7 +29,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What is NotRealSmart Agency?',
         answer:
-          'An AI-powered marketing agency with 14 independent AI specialist agents — 1 Director and 13 department heads. You brief the Director, it routes work to the right department or convenes a meeting with multiple departments. Built specifically for Australian businesses, with deep compliance for health practitioners.',
+          'The name says it all — Not Real = Artificial, Smart = Intelligence. NotRealSmart is Artificial Intelligence, said differently. It is your own AI marketing agency — 14 independent AI specialists, 1 Director. You just talk to the Director. Built by Black Health Intelligence, which runs 10 Australian businesses. We built it because we needed it ourselves. Specialises in healthcare with AHPRA/TGA compliance baked in, but works for any business.',
       },
       {
         question: 'How does it work?',
@@ -60,12 +60,12 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What tools are built in?',
         answer:
-          'Canva graphic design, HeyGen AI video generation, Mixpost social publishing (Facebook, Instagram, LinkedIn, TikTok, YouTube), Perplexity web search, Deepgram and Whisper transcription, Resend transactional email, and Stripe payments. All tools work out of the box with platform keys — power users can connect their own accounts.',
+          'Canva graphic design, HeyGen AI video generation, social publishing (Facebook, Instagram, LinkedIn, TikTok, YouTube), web search, Deepgram and Whisper transcription, email campaigns, and Stripe payments. All tools work out of the box — power users can connect their own accounts for video generation and transcription.',
       },
       {
         question: 'Can I upload images and videos?',
         answer:
-          'Yes. Paste screenshots directly in chat for the agents to analyse. Upload videos to automatically transcribe, generate captions for 6 platforms, schedule, and publish via Mixpost — all from the Media Library.',
+          'Yes. Paste screenshots directly in chat for the agents to analyse. Upload videos to automatically transcribe, generate captions for 6 platforms, schedule, and publish — all from the Media Library. Drag and drop.',
       },
       {
         question: 'What are slash commands?',
@@ -128,7 +128,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'How much does it cost?',
         answer:
-          "Pricing is coming soon. We're finalising plans that work for solo practitioners through to multi-location practices.",
+          "Plans start with a free trial — no credit card required. For context: a traditional marketing agency charges $5,000–10,000/month. A social media manager costs $3,000–5,000/month. NotRealSmart gives you the same capability at a fraction of that. We are finalising pricing tiers for solo practitioners through to multi-location practices.",
       },
       {
         question: 'Is there a free trial?',
