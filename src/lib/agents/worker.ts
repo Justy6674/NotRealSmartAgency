@@ -150,6 +150,10 @@ export async function runAgentWorker(
       ctx.brand,
       agentConfig as AgentConfig,
       task,
+      undefined, // userWorkContext
+      undefined, // siblingBrands
+      undefined, // proformaSummary
+      ctx.userId, // userId for v2 semantic search
     )
 
     // 6. Build final prompt with any context overrides

@@ -9,6 +9,8 @@ import { getToolsForAgent } from '@/lib/agents/tools'
 import { createDelegateTool } from '@/lib/agents/tools/delegate'
 import { createConveneMeetingTool } from '@/lib/agents/tools/convene-meeting'
 import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
+import { extractFacts } from '@/lib/memory/fact-extractor'
+import { memoryStoreV2 } from '@/lib/memory/store'
 import { classifyIntent, classifyIntentMulti, buildRoutingContext } from '@/lib/agents/intent-router'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
@@ -159,7 +161,8 @@ export async function POST(request: Request) {
     lastMessageText,
     userProfile?.work_context,
     (siblingBrands as Brand[]) ?? [],
-    proformaSummary
+    proformaSummary,
+    user.id
   )
 
   // Intent classification + auto-routing for Director
@@ -257,15 +260,28 @@ export async function POST(request: Request) {
         costCents,
       })
 
-      // Smart memory extraction
+      // Smart memory extraction — v2 (LLM) + v1 (regex) in parallel
       if (text && text.length > 20) {
+        // v1: Regex extraction (fast, immediate, catches common patterns)
         extractAndStoreMemories({
           brandSlug: typedBrand.slug,
           agentType,
           userMessage: lastMessageText,
           assistantResponse: text,
           conversationId: conversationId ?? null,
-        }).catch((err) => console.error('[chat] Memory extraction failed:', err))
+        }).catch((err) => console.error('[chat] Memory v1 extraction failed:', err))
+
+        // v2: LLM extraction (Haiku — deeper understanding, structured facts)
+        extractFacts(lastMessageText, text, typedBrand.name)
+          .then(async (facts) => {
+            if (facts.length === 0) return
+            const ns = `nrs-${typedBrand.slug}-${agentType}`
+            for (const fact of facts) {
+              await memoryStoreV2(fact, ns, user.id, conversationId ?? undefined)
+                .catch((err) => console.error('[chat] Memory v2 store failed:', err))
+            }
+          })
+          .catch((err) => console.error('[chat] Memory v2 extraction failed:', err))
       }
     },
   })

@@ -4,6 +4,7 @@ import { getMarketingKnowledge } from './knowledge/au-health-marketing-2025'
 import { getSocialMediaKnowledge } from './knowledge/social-media-benchmarks'
 import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
+import { memorySearchV2 } from '@/lib/memory/store'
 import { getNamespace, getGlobalNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
 
 export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null, siblingBrands?: Partial<Brand>[], proformaSummary?: string | null): string {
@@ -422,45 +423,72 @@ export async function buildSystemPromptWithMemory(
   latestMessage: string,
   userWorkContext?: string | null,
   siblingBrands?: Partial<Brand>[],
-  proformaSummary?: string | null
+  proformaSummary?: string | null,
+  userId?: string | null
 ): Promise<{ prompt: string; memoryCount: number }> {
   const basePrompt = buildSystemPrompt(brand, agentConfig, userWorkContext, siblingBrands, proformaSummary)
 
   try {
     const namespace = getNamespace(brand.slug, agentConfig.agent_type)
-    const memories = await memorySearch(latestMessage, namespace, 10)
 
-    // Director gets global agency memory; sub-agents get brand-wide memories
-    // from OTHER departments' work on the same brand (cross-department learning)
-    let crossMemories: typeof memories = []
-    if (agentConfig.agent_type === 'overall') {
-      crossMemories = await memorySearch(latestMessage, getGlobalNamespace(), 5)
-    } else {
-      // Sub-agents get cross-department brand context (up to 5 brand-wide memories)
-      crossMemories = await memorySearch(latestMessage, getBrandNamespace(brand.slug), 5)
+    // Try semantic search (v2) first, fall back to keyword search (v1)
+    let allMemories: { key: string; value: string | Record<string, unknown>; similarity?: number; memory_type?: string; confidence?: number; tags?: string[] }[] = []
+
+    if (userId) {
+      // v2: Semantic vector search
+      const memories = await memorySearchV2(latestMessage, namespace, userId, 10)
+      let crossMemories: typeof memories = []
+      if (agentConfig.agent_type === 'overall') {
+        crossMemories = await memorySearchV2(latestMessage, getGlobalNamespace(), userId, 5)
+      } else {
+        crossMemories = await memorySearchV2(latestMessage, getBrandNamespace(brand.slug), userId, 5)
+      }
+      allMemories = [...memories, ...crossMemories]
     }
 
-    const allMemories = [...memories, ...crossMemories]
+    // Fallback to v1 keyword search if v2 returned nothing
+    if (allMemories.length === 0) {
+      const memories = await memorySearch(latestMessage, namespace, 10)
+      let crossMemories: typeof memories = []
+      if (agentConfig.agent_type === 'overall') {
+        crossMemories = await memorySearch(latestMessage, getGlobalNamespace(), 5)
+      } else {
+        crossMemories = await memorySearch(latestMessage, getBrandNamespace(brand.slug), 5)
+      }
+      allMemories = [...memories, ...crossMemories]
+    }
 
     if (allMemories.length === 0) {
       return { prompt: basePrompt, memoryCount: 0 }
     }
 
-    // Format memories into a prompt section
-    const memoryLines = allMemories.map((m, i) => {
-      const val = typeof m.value === 'string' ? m.value : JSON.stringify(m.value)
-      // Truncate individual memories to keep total under control
-      const truncated = val.length > 300 ? val.slice(0, 300) + '...' : val
-      return `${i + 1}. ${truncated}`
+    // Sort: brand_rules first, then preferences, then decisions, then others
+    const typePriority: Record<string, number> = {
+      brand_rule: 0, preference: 1, decision: 2, observation: 3, metric: 4, conversation: 5,
+    }
+    allMemories.sort((a, b) => {
+      const aPri = typePriority[(a as { memory_type?: string }).memory_type ?? 'conversation'] ?? 5
+      const bPri = typePriority[(b as { memory_type?: string }).memory_type ?? 'conversation'] ?? 5
+      return aPri - bPri
     })
 
-    const memorySection = `## Context from Previous Sessions
+    // Format memories with type labels for the agent
+    const memoryLines = allMemories.map((m, i) => {
+      const val = typeof m.value === 'string' ? m.value : JSON.stringify(m.value)
+      const truncated = val.length > 300 ? val.slice(0, 300) + '...' : val
+      const typeLabel = (m as { memory_type?: string }).memory_type ?? 'note'
+      const conf = (m as { confidence?: number }).confidence
+      const confLabel = conf && conf >= 0.8 ? 'high' : conf && conf >= 0.5 ? 'medium' : 'low'
+      return `${i + 1}. [${typeLabel}, ${confLabel} confidence] ${truncated}`
+    })
 
-You have worked with this brand before. Here are relevant memories from past conversations:
+    const memorySection = `## What I Remember About This Brand
+
+These are facts I've learned from previous conversations. Brand rules are non-negotiable. Preferences guide my work unless the user says otherwise.
 
 ${memoryLines.join('\n')}
 
-Use this context to provide continuity. Reference past work where relevant. Do not repeat information the user has already provided.`
+Use this context to provide continuity. Apply brand rules strictly. Follow preferences unless overridden. Reference past decisions where relevant.`
 
     // Insert memory section between brand context and agent instructions
     const sections = basePrompt.split('\n\n---\n\n')
