@@ -10,6 +10,9 @@ import { createConveneMeetingTool } from '@/lib/agents/tools/convene-meeting'
 import { classifyIntent, classifyIntentMulti, buildRoutingContext } from '@/lib/agents/intent-router'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
+import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
+import { extractFacts } from '@/lib/memory/fact-extractor'
+import { memoryStoreV2 } from '@/lib/memory/store'
 import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import type { Brand, AgentConfig } from '@/types/database'
@@ -220,6 +223,30 @@ The Director answers in plain language and takes action. For simple single-tool 
         detail: { brand: typedBrand.slug, inputTokens, outputTokens, costCents },
         costCents,
       })
+
+      // ── Memory extraction — same as web app, learning from MCP conversations ──
+      if (result.text && result.text.length > 20) {
+        // v1: Regex extraction (fast, catches common patterns)
+        extractAndStoreMemories({
+          brandSlug: typedBrand.slug,
+          agentType: 'overall',
+          userMessage: message,
+          assistantResponse: result.text,
+          conversationId: null,
+        }).catch((err) => console.error('[mcp] Memory v1 extraction failed:', err))
+
+        // v2: LLM extraction (Haiku — deeper understanding, structured facts)
+        extractFacts(message, result.text, typedBrand.name)
+          .then(async (facts) => {
+            if (facts.length === 0) return
+            const ns = `nrs-${typedBrand.slug}-overall`
+            for (const fact of facts) {
+              await memoryStoreV2(fact, ns, userId)
+                .catch((err) => console.error('[mcp] Memory v2 store failed:', err))
+            }
+          })
+          .catch((err) => console.error('[mcp] Memory v2 extraction failed:', err))
+      }
 
       return {
         content: [{ type: 'text' as const, text: result.text || 'Done.' }],
