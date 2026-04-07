@@ -2,7 +2,7 @@ export const SITE_CONFIG = {
   name: 'NotRealSmart Agency',
   domain: 'notrealsmart.com.au',
   url: 'https://notrealsmart.com.au',
-  description: 'AI marketing agency — 10 specialist agents, brand-aware, compliance-smart, Australian-first.',
+  description: 'AI marketing agency — 14 AI agents (1 Director + 13 specialists), brand-aware, compliance-smart, Australian-first.',
   abn: '23 693 026 112',
   company: 'Black Health Intelligence Pty Ltd',
   tagline: 'Your AI Marketing Agency',

@@ -5,11 +5,14 @@ import { Sparkles, PenLine, FileText, Loader2, Send } from 'lucide-react'
 import { PostEditor } from './PostEditor'
 import { PlatformPreview } from './PlatformPreview'
 import { PostScheduler } from './PostScheduler'
+import { PostTypeSelector } from './PostTypeSelector'
+import { MediaSelector } from './MediaSelector'
+import { CarouselPreview } from './CarouselPreview'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
-import type { PostPlatform, ScheduledPost } from '@/types/database'
+import type { PostPlatform, PostType, ScheduledPost } from '@/types/database'
 
 type ComposerMode = 'ai' | 'write' | 'drafts'
 
@@ -32,6 +35,8 @@ export function PostComposerRoom() {
   const [hashtags, setHashtags] = useState('')
   const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>(['instagram'])
   const [aiPrompt, setAiPrompt] = useState('')
+  const [postType, setPostType] = useState<PostType>('single')
+  const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([])
   const [drafts, setDrafts] = useState<DraftPost[]>([])
   const [loadingDrafts, setLoadingDrafts] = useState(false)
 
@@ -108,16 +113,18 @@ export function PostComposerRoom() {
           caption: content,
           hashtags: hashtags.split(/\s+/).filter(h => h.startsWith('#')),
           status: publishMode === 'draft' ? 'draft' : 'scheduled',
-          scheduledAt: scheduledAt ?? new Date().toISOString(),
-          contentType: strategyContext?.suggestedContentType ?? null,
-          contentPillar: strategyContext?.suggestedPillar ?? null,
+          scheduled_at: scheduledAt ?? new Date().toISOString(),
+          post_type: postType,
+          media_item_ids: selectedMediaIds,
+          content_type: strategyContext?.suggestedContentType ?? undefined,
+          content_pillar: strategyContext?.suggestedPillar ?? undefined,
         }),
       })
     }
 
     // Refresh studio data
     data.refetch()
-  }, [activeBrandId, content, hashtags, selectedPlatforms, strategyContext, data])
+  }, [activeBrandId, content, hashtags, selectedPlatforms, strategyContext, data, postType, selectedMediaIds])
 
   const handleLoadDraft = useCallback((draft: DraftPost) => {
     setContent(draft.caption)
@@ -214,6 +221,24 @@ export function PostComposerRoom() {
                 </div>
               </div>
 
+              {/* Post type selector */}
+              <PostTypeSelector
+                value={postType}
+                onChange={setPostType}
+                mediaCount={selectedMediaIds.length}
+              />
+
+              {/* Media selector for non-single post types */}
+              {postType !== 'single' && activeBrandId && (
+                <MediaSelector
+                  brandId={activeBrandId}
+                  selectedIds={selectedMediaIds}
+                  onChange={setSelectedMediaIds}
+                  maxCount={postType === 'carousel' ? 10 : 1}
+                  acceptTypes={postType === 'reel' || postType === 'video' ? ['video'] : ['image']}
+                />
+              )}
+
               <button
                 type="button"
                 onClick={handleAiGenerate}
@@ -229,14 +254,23 @@ export function PostComposerRoom() {
               </p>
             </div>
 
-            {/* Right: preview (shows placeholder) */}
+            {/* Right: preview */}
             <div className="flex-1 lg:max-w-sm">
-              <PlatformPreview
-                content={content}
-                hashtags={hashtags}
-                selectedPlatforms={selectedPlatforms}
-                brandName={data.brand?.name ?? 'Brand'}
-              />
+              {postType === 'carousel' && selectedMediaIds.length > 0 && activeBrandId ? (
+                <CarouselPreview
+                  mediaIds={selectedMediaIds}
+                  brandId={activeBrandId}
+                  caption={content}
+                  brandName={data.brand?.name ?? 'Brand'}
+                />
+              ) : (
+                <PlatformPreview
+                  content={content}
+                  hashtags={hashtags}
+                  selectedPlatforms={selectedPlatforms}
+                  brandName={data.brand?.name ?? 'Brand'}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -255,16 +289,43 @@ export function PostComposerRoom() {
               hashtags={hashtags}
               onHashtagsChange={setHashtags}
             />
+
+            {/* Post type selector */}
+            <PostTypeSelector
+              value={postType}
+              onChange={setPostType}
+              mediaCount={selectedMediaIds.length}
+            />
+
+            {/* Media selector for non-single post types */}
+            {postType !== 'single' && activeBrandId && (
+              <MediaSelector
+                brandId={activeBrandId}
+                selectedIds={selectedMediaIds}
+                onChange={setSelectedMediaIds}
+                maxCount={postType === 'carousel' ? 10 : 1}
+                acceptTypes={postType === 'reel' || postType === 'video' ? ['video'] : ['image']}
+              />
+            )}
           </div>
 
           {/* Right: preview */}
           <div className="flex-1 lg:max-w-sm">
-            <PlatformPreview
-              content={content}
-              hashtags={hashtags}
-              selectedPlatforms={selectedPlatforms}
-              brandName={data.brand?.name ?? 'Brand'}
-            />
+            {postType === 'carousel' && selectedMediaIds.length > 0 && activeBrandId ? (
+              <CarouselPreview
+                mediaIds={selectedMediaIds}
+                brandId={activeBrandId}
+                caption={content}
+                brandName={data.brand?.name ?? 'Brand'}
+              />
+            ) : (
+              <PlatformPreview
+                content={content}
+                hashtags={hashtags}
+                selectedPlatforms={selectedPlatforms}
+                brandName={data.brand?.name ?? 'Brand'}
+              />
+            )}
           </div>
         </div>
       )}
