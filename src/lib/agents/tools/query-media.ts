@@ -40,12 +40,12 @@ export function createQueryMediaTool(
     execute: async ({ status, limit }) => {
       let query = supabase
         .from('media_items')
-        .select('id, file_name, duration_seconds, transcription, status, created_at')
+        .select('id, file_name, file_url, file_type, duration_seconds, transcription, transcription_status, metadata, created_at')
         .eq('brand_id', brandId)
         .order('created_at', { ascending: false })
 
       if (status) {
-        query = query.eq('status', status)
+        query = query.eq('transcription_status', status)
       }
 
       const { data: items, error } = await query.limit(limit)
@@ -64,13 +64,18 @@ export function createQueryMediaTool(
       items.forEach((item, idx) => {
         const name = item.file_name ?? 'Untitled'
         const duration = formatDuration(item.duration_seconds as number | null)
-        const statusLabel = STATUS_LABELS[item.status as string] ?? (item.status as string)
-        const statusIcon = item.status === 'transcribed' || item.status === 'captions_generated' ? ' ✓' : ''
+        const itemStatus = item.transcription_status as string
+        const statusLabel = STATUS_LABELS[itemStatus] ?? itemStatus
+        const statusIcon = itemStatus === 'transcribed' || itemStatus === 'captions_generated' ? ' ✓' : ''
+        const fileUrl = item.file_url as string | null
+        const tags = (item.metadata as Record<string, unknown>)?.tags as string[] | undefined
 
         let line = `${idx + 1}. **${name}**`
         if (duration) line += ` — ${duration}`
         line += `, ${statusLabel}${statusIcon}`
+        if (tags?.length) line += ` [${tags.join(', ')}]`
         lines.push(line)
+        if (fileUrl) lines.push(`   URL: ${fileUrl}`)
 
         // Show transcription preview for transcribed items
         const transcription = item.transcription as string | null
@@ -85,8 +90,8 @@ export function createQueryMediaTool(
       })
 
       // Helpful prompt
-      const pending = items.filter((i) => i.status === 'pending').length
-      const transcribed = items.filter((i) => i.status === 'transcribed').length
+      const pending = items.filter((i) => i.transcription_status === 'pending').length
+      const transcribed = items.filter((i) => i.transcription_status === 'transcribed').length
 
       if (pending > 0) {
         lines.push(`${pending} item${pending === 1 ? '' : 's'} waiting to be transcribed. Want me to process ${pending === 1 ? 'it' : 'them'}?`)
