@@ -6,7 +6,7 @@ import { MobileSidebar } from '@/components/agency/MobileSidebar'
 import { SidebarToggle } from '@/components/agency/SidebarToggle'
 import { UserMenu } from '@/components/agency/UserMenu'
 import Link from 'next/link'
-import { Settings } from 'lucide-react'
+import { Settings, CircleHelp } from 'lucide-react'
 import { ChatPanelWrapper } from '@/components/agency/ChatPanelWrapper'
 
 export default async function AgencyLayout({
@@ -46,6 +46,14 @@ export default async function AgencyLayout({
             <AgencyHeader />
           </div>
           <div className="shrink-0 flex items-center gap-1 px-2">
+            <Link
+              href="/help"
+              target="_blank"
+              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Help Centre"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </Link>
             <Link
               href="/agency/settings"
               className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
