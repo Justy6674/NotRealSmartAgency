@@ -16,7 +16,7 @@ export default async function SettingsPage() {
     .single()
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 overflow-y-auto h-full">
       <h1 className="text-xl font-bold">Agency Settings</h1>
       <GlobalSettings
         userId={user.id}

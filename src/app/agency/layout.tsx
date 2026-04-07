@@ -8,6 +8,7 @@ import { UserMenu } from '@/components/agency/UserMenu'
 import Link from 'next/link'
 import { Settings, CircleHelp } from 'lucide-react'
 import { ChatPanelWrapper } from '@/components/agency/ChatPanelWrapper'
+import { ThemeToggle } from '@/components/agency/ThemeToggle'
 
 export default async function AgencyLayout({
   children,
@@ -46,6 +47,7 @@ export default async function AgencyLayout({
             <AgencyHeader />
           </div>
           <div className="shrink-0 flex items-center gap-1 px-2">
+            <ThemeToggle />
             <Link
               href="/help"
               target="_blank"
