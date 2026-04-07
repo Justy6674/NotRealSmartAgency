@@ -128,32 +128,62 @@ export function createPublishToSocialTool(
           ? `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}`
           : caption
 
-        // Upload media if provided
+        // Upload media if provided — use Mixpost remote/initiate (URL-based, more reliable)
         let mediaId: number | null = null
         if (image_url) {
           try {
-            const imgRes = await fetch(image_url)
-            if (imgRes.ok) {
-              const blob = await imgRes.blob()
-              const formData = new FormData()
-              formData.append('file', blob, 'upload.jpg')
-              const uploadRes = await fetch(`${apiBase}/media`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-                body: formData,
-              })
-              if (uploadRes.ok) {
-                const data = await uploadRes.json()
-                mediaId = Number(data.id ?? data.data?.id)
+            // Method 1: Remote URL upload (preferred — no need to download first)
+            const remoteRes = await fetch(`${apiBase}/media/remote/initiate`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ url: image_url, alt_text: '' }),
+            })
+            if (remoteRes.ok) {
+              const remoteData = await remoteRes.json()
+              if (remoteData.status === 'completed' && remoteData.media?.id) {
+                mediaId = Number(remoteData.media.id)
+              } else if (remoteData.id) {
+                mediaId = Number(remoteData.id)
+              } else if (remoteData.data?.id) {
+                mediaId = Number(remoteData.data.id)
               }
             }
-          } catch {
-            // Continue without media
+
+            // Method 2: Fallback to binary upload if remote failed
+            if (!mediaId) {
+              const imgRes = await fetch(image_url)
+              if (imgRes.ok) {
+                const blob = await imgRes.blob()
+                const formData = new FormData()
+                formData.append('file', blob, 'upload.jpg')
+                const uploadRes = await fetch(`${apiBase}/media`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${token}` },
+                  body: formData,
+                })
+                if (uploadRes.ok) {
+                  const data = await uploadRes.json()
+                  mediaId = Number(data.id ?? data.data?.id)
+                }
+              }
+            }
+
+            console.log(`[publish_to_social] Media upload: image_url=${image_url} | mediaId=${mediaId}`)
+
+            if (!mediaId) {
+              console.error('[publish_to_social] Failed to upload media to Mixpost')
+            }
+          } catch (err) {
+            console.error('[publish_to_social] Media upload error:', err)
           }
         }
 
         const isScheduled = !!(schedule_date && schedule_time)
         const results: string[] = []
+        const postResults: Array<{ platform: string; externalId: string | null; success: boolean }> = []
 
         for (const platform of platforms) {
           const providers = providerMap[platform] ?? [platform]
@@ -184,6 +214,14 @@ export function createPublishToSocialTool(
 
           if (!account) {
             results.push(`${platform}: No ${brandName} account found in Mixpost. Available accounts for this platform: ${accounts.filter(a => providers.includes(a.provider)).map(a => a.name).join(', ')}`)
+            postResults.push({ platform, externalId: null, success: false })
+            continue
+          }
+
+          // Instagram REQUIRES an image — block text-only posts
+          if (platform === 'instagram' && !mediaId) {
+            results.push(`Instagram: BLOCKED — Instagram requires an image. No image was provided or the image upload to Mixpost failed. Use generate_image or upload_media first, then try again with the image_url.`)
+            postResults.push({ platform, externalId: null, success: false })
             continue
           }
 
@@ -214,31 +252,37 @@ export function createPublishToSocialTool(
           })
 
           if (postRes.ok) {
+            const postData = await postRes.json().catch(() => ({}))
+            const externalId = String(postData.data?.uuid ?? postData.uuid ?? postData.data?.id ?? postData.id ?? '')
             const label = platform.charAt(0).toUpperCase() + platform.slice(1)
             results.push(isScheduled
               ? `${label}: Scheduled for ${schedule_date} at ${schedule_time} AEST via ${account.name}`
-              : `${label}: Publishing now via ${account.name} (30-60 seconds to go live)`)
+              : `${label}: Publishing now via ${account.name}${mediaId ? ' (with image)' : ''} (30-60 seconds to go live)`)
+            postResults.push({ platform, externalId: externalId || null, success: true })
           } else {
             const errText = await postRes.text().catch(() => '')
             results.push(`${platform}: Failed (${postRes.status}) ${errText.slice(0, 100)}`)
+            postResults.push({ platform, externalId: null, success: false })
           }
         }
 
-        // Track in scheduled_posts table (include image_url so cron publisher can find it)
-        for (const platform of platforms) {
+        // Track in scheduled_posts table (include image_url + external_post_id)
+        for (const pr of postResults) {
           try {
             await supabase.from('scheduled_posts').insert({
               user_id: userId,
               brand_id: brandId,
-              platform,
+              platform: pr.platform,
               caption: fullCaption,
               hashtags: hashtags ?? [],
-              status: isScheduled ? 'scheduled' : 'publishing',
+              status: isScheduled ? 'scheduled' : (pr.success ? 'publishing' : 'failed'),
               scheduled_at: isScheduled
                 ? new Date(`${schedule_date}T${schedule_time}:00+10:00`).toISOString()
                 : new Date().toISOString(),
               post_type: 'single',
               ...(image_url ? { image_url } : {}),
+              ...(pr.externalId ? { external_post_id: pr.externalId } : {}),
+              ...(!pr.success ? { error: `Failed to publish to ${pr.platform}` } : {}),
             })
           } catch {
             // Non-blocking
