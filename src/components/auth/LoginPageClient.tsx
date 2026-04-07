@@ -21,11 +21,24 @@ export function LoginPageClient() {
   const touchMapRef = useRef<Map<string, { x: number; y: number }>>(new Map())
   const [isMobile, setIsMobile] = useState(false)
   const [rippleReady, setRippleReady] = useState(false)
+  const [existingUser, setExistingUser] = useState<{ email: string; name: string } | null>(null)
 
   useEffect(() => {
     setIsMobile(window.matchMedia('(hover: none)').matches || window.innerWidth < 768)
     // Show form after a beat
     const t = setTimeout(() => setFormVisible(true), 600)
+
+    // Check if already logged in
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setExistingUser({
+          email: data.user.email ?? '',
+          name: data.user.user_metadata?.full_name ?? data.user.email?.split('@')[0] ?? '',
+        })
+      }
+    })
+
     return () => clearTimeout(t)
   }, [])
 
@@ -279,6 +292,36 @@ void main() {
               boxShadow: '0 8px 32px oklch(0 0 0 / 0.4), inset 0 1px 0 oklch(0.4 0 0 / 0.08)',
             }}
           >
+            {existingUser && (
+              <div className="mb-4 rounded-lg p-4 text-center" style={{ background: 'oklch(0.15 0.02 220 / 0.4)', border: '1px solid oklch(0.3 0.02 220 / 0.3)' }}>
+                <p className="text-sm mb-1" style={{ color: 'oklch(0.8 0 0)' }}>
+                  You&apos;re already logged in as <strong>{existingUser.name}</strong>
+                </p>
+                <p className="text-xs mb-3" style={{ color: 'oklch(0.5 0 0)' }}>{existingUser.email}</p>
+                <div className="flex gap-2 justify-center">
+                  <a
+                    href="/agency/chat"
+                    className="rounded-lg px-4 py-2 text-xs font-semibold"
+                    style={{ background: 'oklch(0.75 0 0)', color: 'oklch(0.06 0 0)' }}
+                  >
+                    Continue to Agency
+                  </a>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const supabase = createClient()
+                      await supabase.auth.signOut()
+                      setExistingUser(null)
+                    }}
+                    className="rounded-lg px-4 py-2 text-xs font-medium"
+                    style={{ background: 'oklch(0.2 0 0 / 0.5)', color: 'oklch(0.6 0 0)' }}
+                  >
+                    Log out &amp; switch account
+                  </button>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="mb-4 rounded-lg p-3 text-sm" style={{ background: 'oklch(0.2 0.05 25 / 0.3)', color: 'oklch(0.75 0.15 25)' }}>
                 {error}
