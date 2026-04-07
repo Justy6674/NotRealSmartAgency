@@ -48,15 +48,48 @@ export function createPublishToSocialTool(
 
         const apiBase = workspace ? `${base}/api/${workspace}` : `${base}/api`
 
-        // Fetch brand name for account matching
+        // Fetch brand with compliance flags + DNA for Guardian check
         const { data: brand } = await supabase
           .from('brands')
-          .select('name, slug, social_urls')
+          .select('name, slug, social_urls, compliance_flags, brand_dna')
           .eq('id', brandId)
           .single()
 
         const brandName = brand?.name ?? ''
         const brandSlug = brand?.slug ?? ''
+
+        // ── AHPRA/TGA Compliance Gate — runs BEFORE publishing ──
+        const complianceFlags = brand?.compliance_flags ?? {}
+        if (complianceFlags.ahpra || complianceFlags.tga) {
+          try {
+            const { runComplianceFilter } = await import('@/lib/agents/compliance-filter')
+            const fullText = hashtags?.length
+              ? `${caption}\n\n${hashtags.map((h: string) => `#${h}`).join(' ')}`
+              : caption
+            const check = await runComplianceFilter(
+              fullText,
+              complianceFlags,
+              brand?.brand_dna ?? undefined
+            )
+            if (!check.isValid) {
+              const issues = [
+                ...check.flags.map((f: string) => `BLOCKED: ${f}`),
+                ...check.brandVoiceIssues.map((v: string) => `BRAND VOICE: ${v}`),
+              ].join('\n')
+              return `COMPLIANCE CHECK FAILED — post NOT published.\n\n${issues}\n\nFix the content and try again. AHPRA/TGA penalties: up to $60,000 per offence.`
+            }
+            if (check.warnings.length > 0) {
+              // Warnings are non-blocking but logged
+              console.log(`[publish_to_social] Compliance warnings for ${brandSlug}:`, check.warnings)
+            }
+          } catch (err) {
+            console.error('[publish_to_social] Compliance check error:', err)
+            // Fail open for non-health brands, fail closed for health brands
+            if (complianceFlags.ahpra) {
+              return 'COMPLIANCE CHECK ERROR — post NOT published. The AHPRA compliance check failed to run. Cannot publish health content without compliance verification.'
+            }
+          }
+        }
 
         // Fetch all Mixpost accounts
         const accountsRes = await fetch(`${apiBase}/accounts`, {
