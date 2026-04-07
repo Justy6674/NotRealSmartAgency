@@ -102,6 +102,25 @@ export function createUploadMediaTool(
         const fullName = `${safeName}.${extension}`
         const storagePath = `${userId}/${brandId}/${fullName}`
 
+        // Check for duplicates — same file name for same brand
+        const { data: existing } = await supabase
+          .from('media_items')
+          .select('id, file_url')
+          .eq('brand_id', brandId)
+          .eq('file_name', fullName)
+          .limit(1)
+
+        if (existing && existing.length > 0) {
+          return {
+            success: true,
+            image_url: existing[0].file_url,
+            media_item_id: existing[0].id,
+            file_name: fullName,
+            message: `This file already exists in the library. URL: ${existing[0].file_url}`,
+            duplicate: true,
+          }
+        }
+
         // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from('media')
