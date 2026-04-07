@@ -292,7 +292,7 @@ export function createManagePostsTool(
         // Fetch the post
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, scheduled_at, mixpost_uuid')
+          .select('id, platform, caption, status, scheduled_at, external_post_id')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -324,7 +324,7 @@ export function createManagePostsTool(
         }
 
         // Update Mixpost if we have a UUID
-        if (post.mixpost_uuid) {
+        if (post.external_post_id) {
           const mixpostParams: Record<string, unknown> = {}
           if (new_caption) {
             mixpostParams.versions = [{
@@ -338,10 +338,10 @@ export function createManagePostsTool(
             mixpostParams.date = d.toISOString().split('T')[0]
             mixpostParams.time = d.toTimeString().slice(0, 5)
           }
-          const mixpostOk = await updateMixpostPost(post.mixpost_uuid, mixpostParams as never)
+          const mixpostOk = await updateMixpostPost(post.external_post_id, mixpostParams as never)
           if (!mixpostOk) {
             // Log warning but still update NRS side
-            console.warn('[manage-posts] Mixpost update failed for', post.mixpost_uuid)
+            console.warn('[manage-posts] Mixpost update failed for', post.external_post_id)
           }
         }
 
@@ -370,7 +370,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, mixpost_uuid')
+          .select('id, platform, caption, status, external_post_id')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -384,10 +384,10 @@ export function createManagePostsTool(
         }
 
         // Delete from Mixpost if UUID exists
-        if (post.mixpost_uuid) {
-          const mixpostOk = await deleteMixpostPost(post.mixpost_uuid)
+        if (post.external_post_id) {
+          const mixpostOk = await deleteMixpostPost(post.external_post_id)
           if (!mixpostOk) {
-            console.warn('[manage-posts] Mixpost delete failed for', post.mixpost_uuid)
+            console.warn('[manage-posts] Mixpost delete failed for', post.external_post_id)
           }
         }
 
@@ -419,7 +419,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, mixpost_uuid')
+          .select('id, platform, caption, status, external_post_id')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -428,7 +428,7 @@ export function createManagePostsTool(
           return { success: false, error: `Post not found (${post_id}).` }
         }
 
-        if (!post.mixpost_uuid) {
+        if (!post.external_post_id) {
           return { success: false, error: 'This post has no Mixpost UUID. It needs to be published via Mixpost first.' }
         }
 
@@ -436,7 +436,7 @@ export function createManagePostsTool(
           return { success: false, error: 'This post has already been published.' }
         }
 
-        const queueOk = await addMixpostPostToQueue(post.mixpost_uuid)
+        const queueOk = await addMixpostPostToQueue(post.external_post_id)
         if (!queueOk) {
           return { success: false, error: 'Failed to add post to Mixpost queue. Check if the publishing server is running.' }
         }
@@ -463,7 +463,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, scheduled_at, mixpost_uuid')
+          .select('id, platform, caption, status, scheduled_at, external_post_id')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -472,7 +472,7 @@ export function createManagePostsTool(
           return { success: false, error: `Post not found (${post_id}).` }
         }
 
-        if (!post.mixpost_uuid) {
+        if (!post.external_post_id) {
           return {
             success: true,
             message: `Post [${post_id}] has no Mixpost UUID — NRS status is **${post.status}**. It hasn't been sent to Mixpost yet.`,
@@ -481,7 +481,7 @@ export function createManagePostsTool(
           }
         }
 
-        const mixpostPost = await fetchMixpostPost(post.mixpost_uuid)
+        const mixpostPost = await fetchMixpostPost(post.external_post_id)
 
         const MIXPOST_STATUS_LABELS: Record<number, string> = {
           0: 'draft',
@@ -519,7 +519,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, mixpost_uuid')
+          .select('id, platform, caption, status, external_post_id')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -528,7 +528,7 @@ export function createManagePostsTool(
           return { success: false, error: `Post not found (${post_id}).` }
         }
 
-        if (!post.mixpost_uuid) {
+        if (!post.external_post_id) {
           return { success: false, error: 'This post has no Mixpost UUID. It needs to be created in Mixpost first.' }
         }
 
@@ -536,7 +536,7 @@ export function createManagePostsTool(
           return { success: false, error: 'This post has already been published.' }
         }
 
-        const approveOk = await approveMixpostPost(post.mixpost_uuid)
+        const approveOk = await approveMixpostPost(post.external_post_id)
         if (!approveOk) {
           return { success: false, error: 'Failed to approve post in Mixpost.' }
         }
