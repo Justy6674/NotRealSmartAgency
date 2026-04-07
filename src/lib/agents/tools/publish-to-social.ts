@@ -48,10 +48,10 @@ export function createPublishToSocialTool(
 
         const apiBase = workspace ? `${base}/api/${workspace}` : `${base}/api`
 
-        // Fetch brand with compliance flags + DNA for Guardian check
+        // Fetch brand with compliance flags for Guardian check
         const { data: brand } = await supabase
           .from('brands')
-          .select('name, slug, social_urls, compliance_flags, brand_dna')
+          .select('name, slug, social_urls, compliance_flags')
           .eq('id', brandId)
           .single()
 
@@ -73,7 +73,7 @@ export function createPublishToSocialTool(
             const check = await runComplianceFilter(
               fullText,
               complianceFlags,
-              brand?.brand_dna ?? undefined
+              undefined
             )
             if (!check.isValid) {
               const issues = [
