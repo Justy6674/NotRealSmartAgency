@@ -29,7 +29,7 @@ export function SignupForm() {
     if (prefillEmail) setEmail(decodeURIComponent(prefillEmail))
   }, [searchParams])
 
-  const redirectTo = searchParams.get('redirect') || '/dashboard'
+  const redirectTo = searchParams.get('redirect') || '/agency/chat'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

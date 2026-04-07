@@ -18,7 +18,7 @@ export function LoginForm() {
   const [error, setError] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirect = searchParams.get('redirect') ?? '/dashboard'
+  const redirect = searchParams.get('redirect') ?? '/agency/chat'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

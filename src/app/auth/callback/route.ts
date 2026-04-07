@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin, hash } = new URL(request.url)
   const code = searchParams.get('code')
   const type = searchParams.get('type')
-  const redirect = searchParams.get('redirect') ?? '/dashboard'
+  const redirect = searchParams.get('redirect') ?? '/agency/chat'
 
   // Supabase PKCE flow: code is in query params
   if (code) {
