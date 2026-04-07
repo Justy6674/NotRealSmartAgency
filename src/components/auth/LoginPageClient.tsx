@@ -328,6 +328,18 @@ void main() {
               </div>
             )}
 
+            <OAuthButtons />
+
+            <div className="relative my-6">
+              <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, oklch(0.3 0 0 / 0.5), transparent)' }} />
+              <span
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-3 text-xs"
+                style={{ background: 'oklch(0.1 0 0 / 0.6)', color: 'oklch(0.45 0 0)' }}
+              >
+                or continue with email
+              </span>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <label htmlFor="email" className="text-xs font-medium uppercase tracking-wider" style={{ color: 'oklch(0.55 0 0)' }}>
