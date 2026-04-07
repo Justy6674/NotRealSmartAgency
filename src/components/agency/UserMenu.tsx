@@ -8,12 +8,19 @@ import { LogOut, Settings, User, Users } from 'lucide-react'
 export function UserMenu() {
   const router = useRouter()
   const [email, setEmail] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null)
+      const user = data.user
+      setEmail(user?.email ?? null)
+      const name =
+        user?.user_metadata?.full_name ??
+        user?.user_metadata?.name ??
+        null
+      setDisplayName(name)
     })
   }, [])
 
@@ -31,16 +38,26 @@ export function UserMenu() {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs transition-colors hover:bg-muted border border-transparent hover:border-border"
       >
-        <Settings className="h-4 w-4 text-muted-foreground" />
-        <span className="hidden sm:inline text-muted-foreground font-medium">Settings</span>
+        <div
+          className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold shrink-0"
+          style={{ background: 'oklch(0.25 0.04 240)', color: 'oklch(0.75 0.06 240)' }}
+        >
+          {(displayName ?? email ?? '?').charAt(0).toUpperCase()}
+        </div>
+        <span className="hidden sm:inline text-muted-foreground font-medium max-w-[120px] truncate">
+          {displayName ?? email?.split('@')[0] ?? 'Account'}
+        </span>
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-card p-1 shadow-lg">
-            <div className="px-3 py-2 text-xs text-muted-foreground truncate border-b border-border mb-1">
-              {email}
+            <div className="px-3 py-2 border-b border-border mb-1">
+              {displayName && (
+                <div className="text-xs font-medium text-foreground">{displayName}</div>
+              )}
+              <div className="text-xs text-muted-foreground truncate">{email}</div>
             </div>
             <button
               onClick={() => { router.push('/agency/settings'); setOpen(false) }}
