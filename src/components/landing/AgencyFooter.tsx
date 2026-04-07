@@ -12,6 +12,7 @@ export function AgencyFooter() {
           <div className="flex gap-6 text-xs uppercase tracking-widest" style={{ color: 'oklch(0.4 0 0)' }}>
             <Link href="/privacy" className="transition-colors hover:text-white">Privacy</Link>
             <Link href="/terms" className="transition-colors hover:text-white">Terms</Link>
+            <Link href="/help" className="transition-colors hover:text-white">Help</Link>
             <a href={`mailto:${SITE_CONFIG.contactEmail}`} className="transition-colors hover:text-white">Contact</a>
           </div>
 

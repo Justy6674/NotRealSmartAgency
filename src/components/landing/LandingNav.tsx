@@ -6,6 +6,7 @@ import Link from 'next/link'
 const NAV_LINKS = [
   { href: '/about', label: 'About' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/help', label: 'Help' },
 ]
 
 export function LandingNav() {

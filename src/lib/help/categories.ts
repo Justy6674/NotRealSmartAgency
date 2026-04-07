@@ -1,0 +1,88 @@
+import type { HelpCategory } from './types'
+
+export const HELP_CATEGORIES: HelpCategory[] = [
+  {
+    slug: 'getting-started',
+    title: 'Getting Started',
+    description: 'Set up your agency in 5 minutes',
+    icon: 'Rocket',
+    colour: 'oklch(0.75 0.15 150)',
+  },
+  {
+    slug: 'talking-to-director',
+    title: 'Talking to Your Director',
+    description: 'How to ask for what you need',
+    icon: 'MessageCircle',
+    colour: 'oklch(0.75 0.15 220)',
+  },
+  {
+    slug: 'creating-content',
+    title: 'Creating Content',
+    description: 'Posts, blogs, emails, and more',
+    icon: 'PenTool',
+    colour: 'oklch(0.75 0.15 280)',
+  },
+  {
+    slug: 'publishing',
+    title: 'Publishing & Scheduling',
+    description: 'Get content out to the world',
+    icon: 'Send',
+    colour: 'oklch(0.75 0.15 30)',
+  },
+  {
+    slug: 'video-and-design',
+    title: 'Video & Design',
+    description: 'Create videos and graphics',
+    icon: 'Film',
+    colour: 'oklch(0.75 0.15 330)',
+  },
+  {
+    slug: 'your-brand',
+    title: 'Your Brand',
+    description: 'Voice, DNA, and identity',
+    icon: 'Fingerprint',
+    colour: 'oklch(0.75 0.15 75)',
+  },
+  {
+    slug: 'team-and-sharing',
+    title: 'Team & Sharing',
+    description: 'Invite people, share work',
+    icon: 'Users',
+    colour: 'oklch(0.75 0.15 190)',
+  },
+  {
+    slug: 'connecting-devices',
+    title: 'Use From Anywhere',
+    description: 'Connect via Claude, VS Code, mobile',
+    icon: 'Laptop',
+    colour: 'oklch(0.75 0.15 260)',
+  },
+  {
+    slug: 'compliance',
+    title: 'Staying Compliant',
+    description: 'AHPRA, TGA, and advertising rules',
+    icon: 'Shield',
+    colour: 'oklch(0.75 0.15 10)',
+  },
+  {
+    slug: 'understanding-reports',
+    title: 'Understanding Reports',
+    description: 'Analytics, audits, and insights',
+    icon: 'BarChart3',
+    colour: 'oklch(0.75 0.15 120)',
+  },
+  {
+    slug: 'account-and-billing',
+    title: 'Account & Billing',
+    description: 'Plans, payments, and settings',
+    icon: 'CreditCard',
+    colour: 'oklch(0.75 0.15 50)',
+  },
+  {
+    slug: 'troubleshooting',
+    title: 'Troubleshooting',
+    description: 'When something does not work',
+    icon: 'LifeBuoy',
+    colour: 'oklch(0.75 0.15 0)',
+  },
+]

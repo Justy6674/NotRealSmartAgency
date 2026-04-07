@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import { Providers } from '@/providers/Providers'
+import { HelpSearchOverlay } from '@/components/help/HelpSearchOverlay'
 import { constructMetadata } from '@/lib/seo'
 import './globals.css'
 
@@ -33,7 +34,10 @@ export default function RootLayout({
         className={`${ibmSans.variable} ${ibmMono.variable} antialiased`}
         style={{ fontFamily: 'var(--font-sans), system-ui, sans-serif' }}
       >
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <HelpSearchOverlay />
+        </Providers>
       </body>
     </html>
   )
