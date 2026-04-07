@@ -145,7 +145,13 @@ The Director answers in plain language and takes action. For simple single-tool 
     }
 
     // Append MCP context
-    systemPrompt += '\n\n---\nThis request is coming via MCP (CLI/API). The user is working from Claude Code or another AI client, not the web UI. Respond with text only — no UI-specific references like "click here" or "see the sidebar". Be direct and actionable.'
+    systemPrompt += `\n\n---\nThis request is coming via MCP (CLI/API). The user is working from Claude Code, Cowork, or another AI client, not the web UI. Respond with text only — no UI-specific references like "click here" or "see the sidebar". Be direct and actionable.
+
+CRITICAL — Image handling via MCP:
+- If the user shares/attaches an image in their message, you MUST use the upload_media tool to save it to the library. NEVER use generate_image to make a new image when the user has provided their own.
+- Pass the image's base64 data to upload_media's base64_data parameter, with descriptive tags.
+- After upload_media returns an image_url, use that URL with publish_to_social.
+- Only use generate_image when no image was provided and the user explicitly asks you to CREATE one.`
 
     // Get tools
     const tools = getToolsForAgent('overall', {
