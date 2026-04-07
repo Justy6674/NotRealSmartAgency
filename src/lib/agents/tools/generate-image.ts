@@ -78,7 +78,7 @@ export function createGenerateImageTool(
               file_name: fileName,
               file_type: 'image/png',
               file_size_bytes: sizeBytes,
-              storage_path: storagePath,
+
               metadata: {
                 generated_by: 'generate_image',
                 prompt,

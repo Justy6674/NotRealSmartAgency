@@ -12,13 +12,15 @@ export async function POST(request: Request) {
   const formData = await request.formData()
   const file = formData.get('file') as File | null
   const brandId = formData.get('brandId') as string | null
+  const tagsRaw = formData.get('tags') as string | null
+  const description = formData.get('description') as string | null
 
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   if (!brandId) return NextResponse.json({ error: 'No brandId provided' }, { status: 400 })
 
-  const allowedTypes = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'video/webm']
-  if (!allowedTypes.some(t => file.type.startsWith(t.split('/')[0]))) {
-    return NextResponse.json({ error: 'Unsupported file type. Upload MP4, MOV, MP3, M4A, or WebM.' }, { status: 400 })
+  const allowedPrefixes = ['video/', 'audio/', 'image/']
+  if (!allowedPrefixes.some(p => file.type.startsWith(p))) {
+    return NextResponse.json({ error: 'Unsupported file type. Upload images (PNG, JPG, WebP, GIF), videos (MP4, MOV, WebM), or audio (MP3, M4A).' }, { status: 400 })
   }
 
   // Max 100MB
@@ -55,7 +57,11 @@ export async function POST(request: Request) {
       file_name: file.name,
       file_type: file.type,
       file_size_bytes: file.size,
-      transcription_status: 'pending',
+      transcription_status: file.type.startsWith('image/') ? 'transcribed' : 'pending',
+      metadata: {
+        ...(tagsRaw ? { tags: JSON.parse(tagsRaw) } : {}),
+        ...(description ? { description } : {}),
+      },
     })
     .select()
     .single()

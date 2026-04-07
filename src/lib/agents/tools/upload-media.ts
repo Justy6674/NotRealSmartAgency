@@ -129,7 +129,7 @@ export function createUploadMediaTool(
             file_name: fullName,
             file_type: contentType,
             file_size_bytes: buffer.length,
-            storage_path: storagePath,
+
             metadata: {
               tags: tags ?? [],
               description: description ?? '',

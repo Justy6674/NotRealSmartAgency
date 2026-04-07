@@ -66,7 +66,7 @@ export default function MediaPage() {
       <div>
         <h1 className="text-xl font-bold">Media Library</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Upload videos and audio — AI transcribes and generates platform-specific captions.
+          Upload images, videos, and audio. Images are saved to your brand library. Videos get AI transcription and platform-specific captions.
         </p>
       </div>
 
