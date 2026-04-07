@@ -402,6 +402,7 @@ First-time users get a conversational onboarding flow. Instead of showing missin
 /api/studio/overview                 → Aggregated dashboard data (analytics, posts, outputs, videos, accounts, activity)
 /api/canva/designs                   → Canva designs proxy (thumbnails, edit URLs)
 /api/stripe/checkout, portal, webhook → Stripe integration
+/api/calendar/feed                       → iCal feed for Google/Apple Calendar sync (auth via ?key=nrs_sk_...)
 /api/mcp                             → MCP server (Streamable HTTP, Bearer token auth)
 /api/mcp/authorize                   → OAuth 2.0 authorization endpoint
 /api/mcp/token                       → OAuth 2.0 token exchange (PKCE)

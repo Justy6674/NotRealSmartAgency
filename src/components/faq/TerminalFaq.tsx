@@ -167,6 +167,11 @@ const FAQ_DATA: FaqCategory[] = [
           'Invite them from the Team page. They get an email with step-by-step setup for the web app, Claude Desktop/Mobile, and Claude Code. Each person gets their own API key and audit trail.',
       },
       {
+        question: 'Can I see my content plan in Google Calendar?',
+        answer:
+          'Yes. Go to Settings and copy your calendar feed URL. In Google Calendar, click the + next to "Other calendars", select "From URL", and paste it. Every scheduled post appears as a calendar event with the platform, brand name, and caption. Works with Apple Calendar too — add your Google account to your Mac and it syncs automatically. You can filter by brand for separate calendar feeds.',
+      },
+      {
         question: 'What tools are available via Claude?',
         answer:
           'chat_with_director (talk to the Director), publish_to_social, write_blog, write_ads, write_email_campaign, manage_posts, query_calendar, query_outputs, query_analytics, save_output, generate_image, and scan_website. The Director can also delegate to all 13 departments behind the scenes.',

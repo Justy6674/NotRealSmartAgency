@@ -13,7 +13,7 @@ export const metadata = {
 const FEATURES = [
   { label: '14 AI specialist agents with unique expertise' },
   { label: '65+ slash commands for instant actions' },
-  { label: 'Content calendar with auto-scheduling' },
+  { label: 'Content calendar with auto-scheduling + Google Calendar / Apple Calendar sync' },
   { label: 'Social publishing across Instagram, Facebook, LinkedIn, YouTube, TikTok, X' },
   { label: 'HeyGen AI video generation' },
   { label: 'Canva graphic design' },

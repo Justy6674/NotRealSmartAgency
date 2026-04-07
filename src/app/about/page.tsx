@@ -490,6 +490,7 @@ export default function AboutPage() {
                 'Claude Desktop & Mobile — one-click connector',
                 'VS Code (Cowork) — agency tools while you code',
                 'Claude Code — terminal access for power users',
+                'Google Calendar / Apple Calendar — auto-synced content plan',
                 'Any MCP-compatible AI client',
               ].map((item) => (
                 <li

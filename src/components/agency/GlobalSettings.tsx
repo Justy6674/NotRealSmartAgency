@@ -254,9 +254,56 @@ export function GlobalSettings({ userId, userEmail, workContext }: GlobalSetting
 
       <div className="h-px bg-border" />
 
+      {/* Calendar Sync */}
+      <CalendarFeedSection />
+
+      <div className="h-px bg-border" />
+
       {/* API Keys for CLI / MCP Access */}
       <ApiKeysSection />
     </div>
+  )
+}
+
+function CalendarFeedSection() {
+  const [keys, setKeys] = useState<ApiKeyDisplay[]>([])
+  const [copiedFeed, setCopiedFeed] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/keys').then(r => r.ok ? r.json() : { keys: [] }).then(d => setKeys(d.keys ?? []))
+  }, [])
+
+  const firstKey = keys[0]
+  const feedUrl = firstKey
+    ? `https://www.notrealsmart.com.au/api/calendar/feed?key=${firstKey.prefix}...`
+    : null
+
+  // We can't show the full key (only prefix stored). User needs to use a key they know.
+  // Show instructions instead.
+
+  return (
+    <section className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Calendar Sync (Google Calendar / Apple Calendar)
+      </p>
+      <p className="text-[11px] text-muted-foreground">
+        See all your scheduled posts in Google Calendar or Apple Calendar.
+        Colour-coded by brand. Auto-updates every hour.
+      </p>
+
+      <div className="rounded-lg border p-4 space-y-3">
+        <p className="text-sm font-medium">How to subscribe</p>
+        <ol className="text-[12px] text-muted-foreground space-y-1 list-decimal list-inside">
+          <li>Create an API key below (if you haven&apos;t already)</li>
+          <li>Copy your calendar feed URL: <code className="text-[11px] bg-muted px-1 rounded">https://www.notrealsmart.com.au/api/calendar/feed?key=YOUR_API_KEY</code></li>
+          <li>In Google Calendar: <strong>+ Other calendars → From URL</strong> → paste</li>
+          <li>For one brand only, add <code className="text-[11px] bg-muted px-1 rounded">&amp;brand=your-brand-slug</code></li>
+        </ol>
+        <p className="text-[11px] text-muted-foreground">
+          Works with Apple Calendar too — add your Google account to your Mac and it syncs automatically.
+        </p>
+      </div>
+    </section>
   )
 }
 
