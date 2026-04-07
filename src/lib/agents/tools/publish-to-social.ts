@@ -154,24 +154,26 @@ export function createPublishToSocialTool(
         for (const platform of platforms) {
           const providers = providerMap[platform] ?? [platform]
 
-          // Find account: prefer brand-name match, fall back to first match
+          // Find account: STRICT brand-name match only — NEVER fall back to another brand's account
           const brandLower = brandName.toLowerCase()
           const slugLower = brandSlug.toLowerCase()
-          let account = accounts.find((a) => {
+
+          // Build all matching candidates for this provider
+          const candidates = accounts.filter((a) => {
             if (!providers.includes(a.provider)) return false
             const n = (a.name || '').toLowerCase()
             const u = (a.username || '').toLowerCase()
+            // Match brand name or slug in account name/username
             return n.includes(brandLower) || n.includes(slugLower) ||
-                   u.includes(slugLower) || brandLower.includes(n.replace(/[^a-z0-9]/g, ''))
+                   u.includes(slugLower) || u.includes(brandLower.replace(/\s+/g, ''))
           })
 
-          // Fall back to any account on this provider
-          if (!account) {
-            account = accounts.find((a) => providers.includes(a.provider))
-          }
+          const account = candidates[0] ?? null
+
+          console.log(`[publish_to_social] Brand: "${brandName}" (${brandSlug}) | Platform: ${platform} | Candidates: ${candidates.map(c => c.name).join(', ') || 'NONE'} | Selected: ${account?.name ?? 'NONE'}`)
 
           if (!account) {
-            results.push(`${platform}: No connected account found`)
+            results.push(`${platform}: No ${brandName} account found in Mixpost. Available accounts for this platform: ${accounts.filter(a => providers.includes(a.provider)).map(a => a.name).join(', ')}`)
             continue
           }
 
