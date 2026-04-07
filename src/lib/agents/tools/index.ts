@@ -96,7 +96,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
 
   // New capability tools
   const sendEmail = createSendEmailTool()
-  const generateImageTool = createGenerateImageTool()
+  const generateImageTool = createGenerateImageTool(ctx.supabase, ctx.userId, ctx.brandId)
   const browsePage = createBrowsePageTool()
   const readGmail = createReadGmailTool()
   const generateSlides = createGenerateSlidesTool()

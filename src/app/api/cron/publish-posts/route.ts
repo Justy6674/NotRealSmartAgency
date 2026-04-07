@@ -128,6 +128,11 @@ export async function GET(request: Request) {
           mediaUrls.push(post.media_items.file_url as string)
         }
 
+        // image_url fallback (from publish_to_social or generate_image)
+        if (mediaUrls.length === 0 && (post as Record<string, unknown>).image_url) {
+          mediaUrls.push((post as Record<string, unknown>).image_url as string)
+        }
+
         // 3. Upload media to Mixpost
         const mixpostMediaIds: number[] = []
         for (const url of mediaUrls) {

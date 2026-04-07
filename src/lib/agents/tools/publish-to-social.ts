@@ -214,7 +214,7 @@ export function createPublishToSocialTool(
           }
         }
 
-        // Track in scheduled_posts table
+        // Track in scheduled_posts table (include image_url so cron publisher can find it)
         for (const platform of platforms) {
           try {
             await supabase.from('scheduled_posts').insert({
@@ -228,6 +228,7 @@ export function createPublishToSocialTool(
                 ? new Date(`${schedule_date}T${schedule_time}:00+10:00`).toISOString()
                 : new Date().toISOString(),
               post_type: 'single',
+              ...(image_url ? { image_url } : {}),
             })
           } catch {
             // Non-blocking

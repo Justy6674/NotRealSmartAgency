@@ -31,7 +31,7 @@ function formatPostSummary(post: {
         timeZone: 'Australia/Sydney',
       })
     : 'unscheduled'
-  return `- **${platformLabel}** (${time}): "${preview}" [${post.id.slice(0, 8)}]`
+  return `- **${platformLabel}** (${time}): "${preview}" [id: ${post.id}]`
 }
 
 function startOfToday(): string {
@@ -117,7 +117,7 @@ export function createManagePostsTool(
           .single()
 
         if (fetchError || !post) {
-          return { success: false, error: `Post not found (${post_id.slice(0, 8)}). Check the ID and make sure it belongs to this brand.` }
+          return { success: false, error: `Post not found (${post_id}). Check the ID and make sure it belongs to this brand.` }
         }
 
         if (post.status === 'published') {
@@ -253,7 +253,7 @@ export function createManagePostsTool(
           .single()
 
         if (fetchError || !post) {
-          return { success: false, error: `Post not found (${post_id.slice(0, 8)}). Check the ID and make sure it belongs to this brand.` }
+          return { success: false, error: `Post not found (${post_id}). Check the ID and make sure it belongs to this brand.` }
         }
 
         if (post.status === 'published') {
@@ -298,7 +298,7 @@ export function createManagePostsTool(
           .single()
 
         if (fetchError || !post) {
-          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+          return { success: false, error: `Post not found (${post_id}).` }
         }
 
         if (post.status === 'published') {
@@ -357,7 +357,7 @@ export function createManagePostsTool(
 
         return {
           success: true,
-          message: `Updated post [${post_id.slice(0, 8)}].${new_caption ? ' Caption changed.' : ''}${scheduled_at ? ' Schedule updated.' : ''}`,
+          message: `Updated post [${post_id}].${new_caption ? ' Caption changed.' : ''}${scheduled_at ? ' Schedule updated.' : ''}`,
           post_id,
         }
       }
@@ -376,7 +376,7 @@ export function createManagePostsTool(
           .single()
 
         if (fetchError || !post) {
-          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+          return { success: false, error: `Post not found (${post_id}).` }
         }
 
         if (post.status === 'published') {
@@ -425,7 +425,7 @@ export function createManagePostsTool(
           .single()
 
         if (fetchError || !post) {
-          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+          return { success: false, error: `Post not found (${post_id}).` }
         }
 
         if (!post.mixpost_uuid) {
@@ -469,13 +469,13 @@ export function createManagePostsTool(
           .single()
 
         if (fetchError || !post) {
-          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+          return { success: false, error: `Post not found (${post_id}).` }
         }
 
         if (!post.mixpost_uuid) {
           return {
             success: true,
-            message: `Post [${post_id.slice(0, 8)}] has no Mixpost UUID — NRS status is **${post.status}**. It hasn't been sent to Mixpost yet.`,
+            message: `Post [${post_id}] has no Mixpost UUID — NRS status is **${post.status}**. It hasn't been sent to Mixpost yet.`,
             nrs_status: post.status,
             mixpost_status: null,
           }
@@ -493,7 +493,7 @@ export function createManagePostsTool(
         if (!mixpostPost) {
           return {
             success: true,
-            message: `Post [${post_id.slice(0, 8)}] — NRS status: **${post.status}**, but could not fetch Mixpost status. The post may have been deleted from Mixpost.`,
+            message: `Post [${post_id}] — NRS status: **${post.status}**, but could not fetch Mixpost status. The post may have been deleted from Mixpost.`,
             nrs_status: post.status,
             mixpost_status: 'unknown',
           }
@@ -504,7 +504,7 @@ export function createManagePostsTool(
 
         return {
           success: true,
-          message: `Post [${post_id.slice(0, 8)}] — NRS: **${post.status}**, Mixpost: **${mixpostLabel}**.${synced ? ' Statuses are in sync.' : ' **Statuses are out of sync** — may need manual reconciliation.'}`,
+          message: `Post [${post_id}] — NRS: **${post.status}**, Mixpost: **${mixpostLabel}**.${synced ? ' Statuses are in sync.' : ' **Statuses are out of sync** — may need manual reconciliation.'}`,
           nrs_status: post.status,
           mixpost_status: mixpostLabel,
           in_sync: synced,
@@ -525,7 +525,7 @@ export function createManagePostsTool(
           .single()
 
         if (fetchError || !post) {
-          return { success: false, error: `Post not found (${post_id.slice(0, 8)}).` }
+          return { success: false, error: `Post not found (${post_id}).` }
         }
 
         if (!post.mixpost_uuid) {
@@ -550,7 +550,7 @@ export function createManagePostsTool(
         const platformLabel = post.platform.charAt(0).toUpperCase() + post.platform.slice(1)
         return {
           success: true,
-          message: `Approved **${platformLabel}** post [${post_id.slice(0, 8)}] in Mixpost and set to scheduled in NRS.`,
+          message: `Approved **${platformLabel}** post [${post_id}] in Mixpost and set to scheduled in NRS.`,
           post_id,
         }
       }
