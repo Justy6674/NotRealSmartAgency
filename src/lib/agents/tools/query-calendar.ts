@@ -125,7 +125,7 @@ export function createQueryCalendarTool(
             : `"${post.caption}"`
           : '(no caption)'
 
-        lines.push(`**${when}** — ${emoji} ${post.platform} (${statusLabel})`)
+        lines.push(`**${when}** — ${emoji} ${post.platform} (${statusLabel}) [id: ${post.id}]`)
         lines.push(`${preview}\n`)
       }
 

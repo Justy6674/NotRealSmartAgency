@@ -55,8 +55,12 @@ export function createPublishToSocialTool(
           .eq('id', brandId)
           .single()
 
-        const brandName = brand?.name ?? ''
-        const brandSlug = brand?.slug ?? ''
+        if (!brand) {
+          return `Cannot publish — brand not found (ID: ${brandId}). Make sure you selected the right brand.`
+        }
+
+        const brandName = brand.name
+        const brandSlug = brand.slug
 
         // ── AHPRA/TGA Compliance Gate — runs BEFORE publishing ──
         const complianceFlags = brand?.compliance_flags ?? {}
@@ -157,6 +161,12 @@ export function createPublishToSocialTool(
           // Find account: STRICT brand-name match only — NEVER fall back to another brand's account
           const brandLower = brandName.toLowerCase()
           const slugLower = brandSlug.toLowerCase()
+
+          // Safety: if brand name is empty, refuse to match (empty string matches everything)
+          if (!brandLower) {
+            results.push(`${platform}: Cannot match accounts — brand name is empty. This is a bug.`)
+            continue
+          }
 
           // Build all matching candidates for this provider
           const candidates = accounts.filter((a) => {
