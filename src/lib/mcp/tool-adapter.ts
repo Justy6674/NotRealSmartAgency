@@ -1,13 +1,16 @@
 import { z } from 'zod/v3'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { ToolContext } from '@/lib/agents/tools'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getToolsForAgent } from '@/lib/agents/tools'
 
 type ZodShape = Record<string, z.ZodTypeAny>
 
 /**
  * Adapt an AI SDK tool to register it as an MCP tool.
- * Adds brand_id as a required parameter. Verifies brand ownership.
+ *
+ * CRITICAL: AI SDK tools have brandId baked into their closure at creation time.
+ * We can't reuse a pre-built tool with a different brandId. Instead, we rebuild
+ * the tool fresh for each MCP call with the correct brandId from the args.
  */
 export function adaptToolForMCP(
   name: string,
@@ -15,16 +18,15 @@ export function adaptToolForMCP(
   aiSdkTool: any,
   mcpServer: McpServer,
   userId: string,
+  toolFactory: (brandId: string) => Record<string, unknown>,
 ) {
   if (!aiSdkTool.execute) return
 
-  // The AI SDK tool() function stores the zod schema as .inputSchema
-  // with a .shape property containing { paramName: z.string(), ... }
   const zodSchema = aiSdkTool.inputSchema ?? aiSdkTool.parameters
   const originalShape: ZodShape = zodSchema?.shape ?? {}
 
   const mcpShape: ZodShape = {
-    brand_id: z.string().describe('Brand ID — get from brands://list resource'),
+    brand_id: z.string().describe('Brand ID — call list_brands first to get IDs'),
     ...originalShape,
   }
 
@@ -53,8 +55,20 @@ export function adaptToolForMCP(
       }
     }
 
+    // Rebuild the tool with the CORRECT brandId — not the dummy placeholder
+    const freshTools = toolFactory(brandId)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const freshTool = freshTools[name] as any
+
+    if (!freshTool?.execute) {
+      return {
+        content: [{ type: 'text' as const, text: `Error: Tool "${name}" not available for this brand.` }],
+        isError: true,
+      }
+    }
+
     try {
-      const result = await aiSdkTool.execute(toolArgs, {
+      const result = await freshTool.execute(toolArgs, {
         toolCallId: crypto.randomUUID(),
         messages: [],
       })
@@ -80,16 +94,17 @@ export function adaptToolForMCP(
 
 /**
  * Register a batch of AI SDK tools as MCP tools.
- * Only registers tools that have both description and execute.
+ * The toolFactory rebuilds tools with the correct brandId per call.
  */
 export function adaptToolsForMCP(
   tools: Record<string, unknown>,
   mcpServer: McpServer,
   userId: string,
+  toolFactory: (brandId: string) => Record<string, unknown>,
 ) {
   for (const [name, tool] of Object.entries(tools)) {
     if (tool && typeof tool === 'object' && 'execute' in tool) {
-      adaptToolForMCP(name, tool, mcpServer, userId)
+      adaptToolForMCP(name, tool, mcpServer, userId, toolFactory)
     }
   }
 }

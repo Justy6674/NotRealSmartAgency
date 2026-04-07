@@ -84,16 +84,22 @@ export function createNRSMcpServer(userId: string): McpServer {
   registerDirectorChatTool(server, userId)
 
   // Register ALL tools from the Director's tool set
-  const supabase = createAdminClient()
-  const dummyCtx = {
-    supabase,
-    userId,
-    brandId: '00000000-0000-0000-0000-000000000000', // placeholder — real brandId comes from tool params
-    conversationId: null,
-    agentRegistryId: null,
+  // Tool factory rebuilds tools with the correct brandId per MCP call
+  const toolFactory = (brandId: string) => {
+    const supabase = createAdminClient()
+    return getToolsForAgent('overall', {
+      supabase,
+      userId,
+      brandId,
+      conversationId: null,
+      agentRegistryId: null,
+    })
   }
-  const allTools = getToolsForAgent('overall', dummyCtx)
-  adaptToolsForMCP(allTools, server, userId)
+
+  // Get tool definitions (shape/description) from a dummy context — the actual
+  // execution uses freshly-built tools with the correct brandId per call
+  const templateTools = toolFactory('00000000-0000-0000-0000-000000000000')
+  adaptToolsForMCP(templateTools, server, userId, toolFactory)
 
   // Register quick_start prompt
   server.registerPrompt('quick_start', {
