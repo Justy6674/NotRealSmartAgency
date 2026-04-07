@@ -24,7 +24,7 @@ export function ForgotPasswordForm() {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${appUrl}/auth/callback?redirect=/agency`,
+      redirectTo: `${appUrl}/auth/callback?type=recovery`,
     })
 
     if (error) {
@@ -45,8 +45,12 @@ export function ForgotPasswordForm() {
           </div>
           <CardTitle>Check Your Email</CardTitle>
           <CardDescription>
-            If an account exists for {email}, you will receive a password reset link.
+            If an account exists for <strong>{email}</strong>, you will receive a password reset link.
+            Click the link in the email to set a new password.
           </CardDescription>
+          <p className="text-xs text-muted-foreground/60 mt-2">
+            The email may come from noreply@mail.supabase.io — check your spam folder if you do not see it.
+          </p>
         </CardHeader>
         <CardFooter>
           <Button render={<Link href="/login" />} variant="outline" className="w-full">

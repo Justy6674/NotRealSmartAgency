@@ -142,7 +142,7 @@ export async function POST(request: Request) {
     const actionText = existingUser ? 'Go to Agency' : 'Accept Invitation'
     const statusText = existingUser
       ? `You already have an account, so you're all set. Click below to get started.`
-      : `Click the button below to create your account and get started.`
+      : `You'll need to create an account first. Click the button below — you'll set your email and password, then be taken straight to the agency. (Already have an account? Just go to <a href="${process.env.NEXT_PUBLIC_SITE_URL || 'https://notrealsmart.com.au'}/login" style="color:#1a1a1a;font-weight:500;">notrealsmart.com.au/login</a>)`
 
     // Step-by-step setup section for all platforms
     const mcpUrl = 'https://www.notrealsmart.com.au/api/mcp'
