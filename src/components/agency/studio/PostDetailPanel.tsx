@@ -14,6 +14,9 @@ import {
   Copy,
   Check,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Images,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -51,7 +54,34 @@ interface PostDetailPanelProps {
 }
 
 export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelProps) {
+  // ── Carousel media state ────────────────────────────────────────────────
+  const [mediaUrls, setMediaUrls] = useState<{ id: string; url: string; name: string }[]>([])
+  const [activeSlide, setActiveSlide] = useState(0)
 
+  // Fetch media images for carousel posts
+  useEffect(() => {
+    const raw = item.raw as { media_item_ids?: string[]; post_type?: string; brand_id?: string } | undefined
+    const mediaIds = raw?.media_item_ids ?? []
+    if (mediaIds.length === 0) {
+      setMediaUrls([])
+      return
+    }
+
+    const brandId = raw?.brand_id
+    if (!brandId) { setMediaUrls([]); return }
+
+    fetch(`/api/media?brandId=${brandId}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((items: { id: string; file_url: string; file_name: string }[]) => {
+        const allItems = Array.isArray(items) ? items : (items as { items?: unknown[] }).items ?? []
+        const ordered = mediaIds
+          .map(id => (allItems as { id: string; file_url: string; file_name: string }[]).find(m => m.id === id))
+          .filter(Boolean) as { id: string; file_url: string; file_name: string }[]
+        setMediaUrls(ordered.map(m => ({ id: m.id, url: m.file_url, name: m.file_name })))
+        setActiveSlide(0)
+      })
+      .catch(() => setMediaUrls([]))
+  }, [item.id, item.raw])
 
   // ── Local edit state ─────────────────────────────────────────────────────
   const [editedCaption, setEditedCaption] = useState(item.caption)
@@ -185,6 +215,71 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
         {item.type === 'post' ? (
           <>
+            {/* Carousel / Media Preview */}
+            {mediaUrls.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <Images className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {mediaUrls.length} image{mediaUrls.length !== 1 ? 's' : ''} attached
+                  </span>
+                </div>
+                {/* Main preview */}
+                <div className="relative aspect-square rounded-lg overflow-hidden bg-[oklch(0.1_0.005_240)]">
+                  {mediaUrls[activeSlide] && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={mediaUrls[activeSlide].url}
+                      alt={mediaUrls[activeSlide].name}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                  {/* Nav arrows */}
+                  {activeSlide > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveSlide(s => s - 1)}
+                      className="absolute left-1.5 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1 hover:bg-black/70"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5 text-white" />
+                    </button>
+                  )}
+                  {activeSlide < mediaUrls.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveSlide(s => s + 1)}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1 hover:bg-black/70"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5 text-white" />
+                    </button>
+                  )}
+                  {/* Slide counter */}
+                  <div className="absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                    {activeSlide + 1}/{mediaUrls.length}
+                  </div>
+                </div>
+                {/* Thumbnails */}
+                {mediaUrls.length > 1 && (
+                  <div className="flex gap-1 overflow-x-auto pb-1">
+                    {mediaUrls.map((m, i) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setActiveSlide(i)}
+                        className={cn(
+                          'h-12 w-12 flex-shrink-0 rounded overflow-hidden border-2 transition-colors',
+                          i === activeSlide ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
+                        )}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={m.url} alt="" className="h-full w-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Caption */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Caption</label>
