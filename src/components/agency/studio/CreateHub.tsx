@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useState } from 'react'
 import { PenLine, CalendarDays, Video, Palette, Target, Repeat, MessageSquare, Images, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -10,6 +9,7 @@ import { useStrategyContext } from '@/hooks/useStrategyContext'
 import { StrategyBrief } from './StrategyBrief'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { CarouselBuilder } from './carousel/CarouselBuilder'
+import { PostComposerRoom } from './post/PostComposerRoom'
 import type { BrandTheme } from './carousel/types'
 
 interface CardDef {
@@ -17,7 +17,8 @@ interface CardDef {
   colour: string
   title: string
   description: string
-  href?: string // If set, card navigates instead of chatting
+  href?: string // Navigate to separate page
+  action?: string // 'postComposer' | 'carousel' — opens inline
   buildMessage?: (brand: string, context: string) => string
 }
 
@@ -42,7 +43,7 @@ const ROOM_CARDS: CardDef[] = [
     colour: 'bg-blue-500/15 text-blue-400',
     title: 'Write a Post',
     description: 'AI writes it, you edit, or both. Live platform previews.',
-    href: '/agency/studio/post',
+    action: 'postComposer',
   },
   {
     icon: Target,
@@ -74,6 +75,7 @@ export function CreateHub() {
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
   const [showCarouselBuilder, setShowCarouselBuilder] = useState(false)
+  const [showPostComposer, setShowPostComposer] = useState(false)
 
   const brandName = data.brand?.name
   const agentContext = strategyContext?.agentContext ?? ''
@@ -99,6 +101,24 @@ export function CreateHub() {
             Select a brand from the sidebar to start creating content.
           </p>
         </div>
+      </div>
+    )
+  }
+
+  // Post Composer mode
+  if (showPostComposer && activeBrandId) {
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center gap-3 px-6 pt-4 pb-2">
+          <button
+            onClick={() => setShowPostComposer(false)}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium bg-muted hover:bg-muted/80 transition-colors"
+          >
+            &larr; Back to Create
+          </button>
+          <h2 className="text-sm font-semibold">Post Creator — {brandName}</h2>
+        </div>
+        <PostComposerRoom />
       </div>
     )
   }
@@ -162,46 +182,26 @@ export function CreateHub() {
 
         {ROOM_CARDS.map(card => {
           const Icon = card.icon
+          const hasAction = !!card.action && hasBrand
           const isNavigable = !!card.href && hasBrand
+          const isChat = !!card.buildMessage
 
-          // Cards with href navigate directly to the room
-          if (isNavigable) {
-            return (
-              <Link
-                key={card.title}
-                href={card.href!}
-                className={cn(cardClasses)}
-              >
-                <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />
-                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', card.colour)}>
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                    {card.title}
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                    {card.description}
-                  </p>
-                </div>
-              </Link>
-            )
+          const handleClick = () => {
+            if (card.action === 'postComposer') setShowPostComposer(true)
+            else if (card.href) window.location.href = card.href
+            else if (card.buildMessage && hasBrand) sendToDirector(card.buildMessage(brandName!, agentContext))
           }
 
-          // Cards without href send a message to the Director
           return (
             <button
               key={card.title}
               type="button"
               disabled={!hasBrand}
-              onClick={() => {
-                if (hasBrand && card.buildMessage) {
-                  sendToDirector(card.buildMessage(brandName!, agentContext))
-                }
-              }}
+              onClick={handleClick}
               className={cn(cardClasses, !hasBrand && disabledClasses)}
             >
-              <MessageSquare className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />
+              {isChat && <MessageSquare className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />}
+              {(hasAction || isNavigable) && <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />}
               <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', card.colour)}>
                 <Icon className="h-5 w-5" />
               </div>
