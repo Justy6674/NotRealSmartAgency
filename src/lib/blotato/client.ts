@@ -59,6 +59,7 @@ async function callBlotatoTool(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
       'blotato-api-key': apiKey,
     },
     body: JSON.stringify({
