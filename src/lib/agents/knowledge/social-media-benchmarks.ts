@@ -32,15 +32,31 @@ const SOCIAL_MEDIA_KNOWLEDGE = `## Social Media Intelligence & Platform Benchmar
 | Save | $3.00 | High intent signal / future reference |
 | Click | $1.50 | Traffic / conversion pathway |
 
-### ENGAGEMENT RATE BENCHMARKS BY PLATFORM
+### ENGAGEMENT RATE BENCHMARKS BY PLATFORM (2026 Updated)
 
-| Platform | Average | Good | Excellent |
-|----------|---------|------|-----------|
-| Instagram | 1.22% | 3–6% | >6% |
-| Facebook | 0.07% | 0.5–1% | >1% |
-| X (Twitter) | 0.05% | 0.1–0.5% | >0.5% |
-| LinkedIn | 2.0% | 3–5% | >5% |
-| TikTok | 5.96% | 8–15% | >15% |
+| Platform | Median | Good | Excellent | Trend |
+|----------|--------|------|-----------|-------|
+| Instagram | 5.4% (down from 7.3%) | 6–10% | >10% | 26% decline YoY — quality matters more |
+| Facebook | 0.05% feed / 0.20% text-only | 0.5–1% | >1% | Text-only posts highest feed engagement |
+| X (Twitter) | 3.56% text | 5–8% | >8% | Text outperforms video and links |
+| LinkedIn | 6.2% overall / 21.77% carousels | 8–12% | >15% | Highest engagement of any platform |
+| TikTok | 4.5% video / 1.92% images | 6–10% | >12% | Video still king, images lagging |
+| Threads | 5.55% video / 4.55% images | 6–8% | >10% | Growing platform, high organic reach |
+| Pinterest | 5.75% video / 3.15% images | 5–8% | >10% | Video outperforms static images |
+
+### COMMENT REPLY ENGAGEMENT MULTIPLIER
+
+Replying to comments on your own posts gives a measurable engagement lift:
+
+| Platform | Lift from Replying |
+|----------|--------------------|
+| Threads | +42% |
+| LinkedIn | +30% |
+| Instagram | +21% |
+| Facebook | +9.5% |
+| X (Twitter) | +8% |
+
+**Rule: ALWAYS reply to comments. This is the single highest-ROI activity after posting.**
 
 ### CTR BENCHMARKS BY PLATFORM
 
@@ -80,18 +96,18 @@ const SOCIAL_MEDIA_KNOWLEDGE = `## Social Media Intelligence & Platform Benchmar
 | 0–100% | Break-even | Review targeting and creative |
 | <0% | Negative | Pause and restructure |
 
-### VIDEO FORMAT SPECIFICATIONS BY PLATFORM
+### VIDEO FORMAT SPECIFICATIONS BY PLATFORM (2026 Updated)
 
 | Platform | Format | Aspect Ratio | Duration | Max File | Notes |
 |----------|--------|-------------|----------|----------|-------|
-| Instagram Reels | MP4 | 9:16 | 15–90s | 250MB | Hook in first 3s, captions mandatory |
-| Instagram Feed | MP4 | 1:1 or 4:5 | 3–60s | 250MB | Thumbnail matters, first 3s autoplay |
-| TikTok | MP4 | 9:16 | 15–60s (sweet spot) | 287MB | Native feel > polished, trending audio |
-| YouTube Shorts | MP4 | 9:16 | 15–60s | 256MB | First frame = thumbnail, loop-friendly |
-| YouTube Long | MP4 | 16:9 | 2–10min (sweet spot) | 256GB | Chapters, retention hooks every 30s |
-| LinkedIn | MP4 | 1:1 or 16:9 | 30–120s | 5GB | Professional tone, captions, thought leadership |
-| Facebook Reels | MP4 | 9:16 | 15–60s | 4GB | Similar to Instagram Reels |
-| Facebook Feed | MP4 | 16:9 or 1:1 | 15–240s | 4GB | Autoplay without sound, captions essential |
+| Instagram Reels | MP4 | 9:16 | 15–90s | 250MB | Hook in 3s, 80% watch muted — captions mandatory |
+| Instagram Feed | MP4 | 4:5 (NOT 1:1) | 3–60s | 250MB | Vertical > square. Grid is now 3:4 vertical. |
+| TikTok | MP4 | 9:16 | 15–60s (sweet spot) | 287MB | 3s hook window, 8.2s avg attention span |
+| YouTube Shorts | MP4 | 9:16 | 15–60s | 256MB | 73% avg retention, 75%+ = viral threshold |
+| YouTube Long | MP4 | 16:9 | 2–10min (sweet spot) | 256GB | 23.7% avg retention, first 60s critical |
+| LinkedIn | MP4 | 1:1 or 4:5 | 30–120s | 5GB | 3-min micro-lessons perform best |
+| Facebook Reels | MP4 | 9:16 | 15–60s | 4GB | 38.4% of all Facebook time. 4-6 Reels/week = 41% follower growth. |
+| Facebook Feed | MP4 | 4:5 or 1:1 | 15–240s | 4GB | Autoplay muted, captions essential |
 
 ### VIDEO ENGAGEMENT BENCHMARKS
 
@@ -144,22 +160,25 @@ const SOCIAL_MEDIA_KNOWLEDGE = `## Social Media Intelligence & Platform Benchmar
 - Use hashtags #fyp + 2-3 niche-specific tags. Don't spam generic tags.
 - Default content to review before publishing — accidental posts destroy trust.
 
-#### Instagram Algorithm
+#### Instagram Algorithm (2026)
 - **Saves and shares are weighted higher than likes.** Optimise for saves (reference content, checklists, tips).
-- Carousels get re-served when users swipe (counts as re-engagement) — 5-10 slides ideal.
-- Reels get preferential distribution over static posts. Instagram pushes video to compete with TikTok.
-- Keep hashtags to 3-5 relevant niche tags. Never use generic tags (#motivation, #inspo).
-- Engagement rate benchmarks: average 1.22%, good 3-6%, excellent >6%.
+- Carousels get re-served when users swipe (counts as re-engagement) — 8-12 slides ideal. Carousels drive 109% more engagement per reach than Reels.
+- Reels get preferential distribution. Reels = 46% of time on Instagram, 30.81% average reach. But carousel engagement per impression is higher.
+- **Hashtags are dead for discovery.** Instagram removed "follow hashtag." Use 3-5 relevant tags max. Write captions as searchable mini-blogs.
+- Instagram grid switched from 1:1 to 3:4 vertical (1015x1350). Design everything vertically.
+- Scrapbook-style aesthetic is dominant — ripped paper, Polaroid, handwritten fonts. Counters AI-polished look.
 - TTS narration with on-screen text performs well for Reels.
 
-#### LinkedIn Algorithm
-- **Dwell time** (how long people read) and **comments** (especially long-form) drive distribution.
-- Polls get disproportionate algorithmic reach. Use for audience research.
-- Document (PDF carousel) posts get high engagement because users swipe through.
+#### LinkedIn Algorithm (2026)
+- **Dwell time** (how long people read) and **long-form comments** drive distribution. Saves and comments outweigh likes.
+- **Carousels are king:** 21.77% engagement (vs 7.35% video, 6.52% images). Upload as multi-page PDF (native carousel removed).
+- PDF specs: 1080x1350 (portrait) or 1080x1080, under 3MB, 8-12 slides max.
+- **Slide 2 drop-off is steepest.** Use pattern interrupt: change background colour, bold stat, controversial statement.
 - Mix content types — never two consecutive posts of the same type.
-- Sound like a founder, not a marketing department. Professional but authentic.
+- Sound like a founder, not a marketing department. Thought leadership generates 2x more engagement than company-centric posts.
 - Only ~30% of posts should reference the brand. The rest is pure value.
-- 3-5 hashtags at end, never generic.
+- **Hashtags no longer work for discovery.** Natural keywords in copy matter more. Minor categorisation signal only.
+- Replying to comments gives +30% engagement lift.
 
 #### Facebook Algorithm
 - **Group engagement is where organic reach still exists.** Brand page organic reach is near zero.
@@ -186,8 +205,11 @@ const SOCIAL_MEDIA_KNOWLEDGE = `## Social Media Intelligence & Platform Benchmar
 
 - **Content capsule model:** Generate once, publish everywhere. A single piece of content (video, thread, post) is packaged as a self-contained capsule. Cross-posting reuses the same media with platform-specific formatting.
 - **Repurposing chain:** Video → Reel + Short + TikTok → Caption → Twitter thread → LinkedIn post → Blog section.
-- **Anti-AI detection:** Strip em-dashes, en-dashes from all text. Avoid words: "game-changer", "revolutionise", "leverage", "delve", "tapestry", "landscape".
+- **Anti-AI detection:** Strip em-dashes, en-dashes from all text. Avoid words: "game-changer", "revolutionise", "leverage", "delve", "tapestry", "landscape". Add grain/texture to AI images — audiences detect synthetic skin, impossible lighting, overly symmetrical compositions. "Proof of Human" achieves 22% higher viewer satisfaction.
 - **Feedback loop:** Tag published content with IDs, fetch analytics after publishing, run sentiment analysis, generate permanent content guidelines, feed those back into future generation. The system improves with every publish cycle.
+- **The "No-Post Penalty":** Accounts posting 10+ times weekly gain ~32 additional followers/week vs silent weeks. The biggest gap is between posting and not posting.
+- **Strong Creative Effect:** 85% of global marketing spend goes to unnoticed assets. Strong creative reduces Cost-Per-Result by 20-40%.
+- **Meme Marketing:** $6.1B industry. Meme campaigns achieve 60% organic engagement vs 5% for standard graphics. 78% of Gen Z more likely to buy from brands with authentic meme engagement. For health brands: keep memes about the business experience, NEVER about clinical outcomes.
 - **Platform defaults:** Video → Instagram + LinkedIn + YouTube. Images → Instagram + LinkedIn. Threads → Twitter. Articles → LinkedIn. Text posts → Twitter + LinkedIn.
 - **Mention strategy:** Only ~10-20% of engagement should mention the brand. The rest must be genuinely helpful with zero agenda. When mentioning, rotate angles: never say "check out" or "you should try".
 

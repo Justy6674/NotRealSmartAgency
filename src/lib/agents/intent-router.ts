@@ -35,6 +35,8 @@ const INTENT_PATTERNS: { pattern: RegExp; agent: AgentType; reason: string }[] =
   // Content creation
   { pattern: /\b(write|create|draft|produce|generate)\b.*\b(content|post|blog|article|caption|copy|script)\b/i, agent: 'content', reason: 'Content creation requested' },
   { pattern: /\b(instagram|tiktok|linkedin|facebook|social media|social post|reel|story)\b/i, agent: 'content', reason: 'Social media content requested' },
+  { pattern: /\b(carousel|collection|group\s+(these|them|the)|album|media\s+group)\b/i, agent: 'content', reason: 'Media collection/carousel requested' },
+  { pattern: /\b(tag|untag|label|categorise|categorize)\b.*\b(media|image|photo|video|content)\b/i, agent: 'content', reason: 'Media tagging requested' },
 
   // SEO
   { pattern: /\b(seo|keyword|search engine|organic|ranking|serp|backlink|topic cluster|on-page)\b/i, agent: 'seo', reason: 'SEO work requested' },

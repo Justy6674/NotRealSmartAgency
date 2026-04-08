@@ -55,20 +55,20 @@ Downscale Weight Loss (AHPRA+TGA) | DownscaleDerm (TGA) | TeleCheck | TeleScribe
 
 | Department | Agent Type | Key Tools (all also get create_task, request_approval, handoff_to_department, query_outputs) |
 |---|---|---|
-| NRS Director | `overall` | delegate_to_agent, convene_meeting, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search, process_media, repurpose_content, fill_calendar, write_blog, write_ads, write_email_campaign, deep_competitor_scan, manage_posts, analyse_voice, design_graphic, export_design, create_video, save_brand_info, read_proforma, update_proforma, query_calendar, query_analytics, query_outputs, query_media |
-| Content & Copy | `content` | save_output, word_count, generate_image, generate_slides, repurpose_content, write_blog, analyse_voice |
+| NRS Director | `overall` | delegate_to_agent, convene_meeting, save_output, scan_website, scan_github, scan_social, marketing_audit, browse_page, generate_image, send_email, read_gmail, generate_slides, web_search, process_media, repurpose_content, fill_calendar, write_blog, write_ads, write_email_campaign, deep_competitor_scan, manage_posts, manage_tags, analyse_voice, analyse_content_gaps, design_graphic, export_design, create_video, multi_scene_video, save_brand_info, read_proforma, update_proforma, query_calendar, query_analytics, query_outputs, query_media, query_social_analytics, text_to_speech, translate_video, photo_avatar, register_webhook, browse_mixpost_media, brand_glossary |
+| Content & Copy | `content` | save_output, word_count, generate_image, generate_slides, repurpose_content, write_blog, analyse_voice, analyse_content_gaps, manage_tags |
 | SEO & GEO | `seo` | save_output, word_count, scan_website, browse_page, web_search, write_blog |
 | Paid Ads | `paid_ads` | save_output, word_count, generate_image, write_ads |
-| Strategy & Launch | `strategy` | save_output, browse_page, generate_slides, fill_calendar, manage_posts, query_calendar |
+| Strategy & Launch | `strategy` | save_output, browse_page, generate_slides, fill_calendar, manage_posts, manage_tags, query_calendar |
 | Email Marketing | `email` | save_output, word_count, send_email, read_gmail, write_email_campaign |
 | Growth & Partnerships | `growth` | save_output, word_count, scan_website, send_email, browse_page, read_gmail |
-| Brand | `brand` | save_output, generate_image, design_graphic, export_design, analyse_voice |
-| Market Intelligence | `competitor` | save_output, scan_website, browse_page, web_search, deep_competitor_scan |
+| Brand | `brand` | save_output, generate_image, design_graphic, export_design, analyse_voice, brand_glossary, inspiration |
+| Market Intelligence | `competitor` | save_output, scan_website, browse_page, web_search, deep_competitor_scan, query_social_analytics |
 | Web & CRO | `website` | save_output, word_count, scan_website, browse_page, generate_image |
 | Compliance | `compliance` | save_output, scan_website, browse_page |
 | Analytics & Reporting | `analytics` | save_output, scan_website, browse_page, query_analytics |
 | Automation & AI | `automation` | save_output, scan_github, browse_page |
-| Video & Scripting | `video` | save_output, word_count, process_media, repurpose_content, create_video, query_media |
+| Video & Scripting | `video` | save_output, word_count, process_media, repurpose_content, create_video, multi_scene_video, query_media, text_to_speech, translate_video, photo_avatar, voice_locales, talking_photo, video_agent |
 
 > `martech` exists as an archived agent type for backward compat with old conversations — not shown in UI.
 > All agents get `read_proforma` + `query_outputs` for cross-agent learning.
@@ -409,6 +409,14 @@ First-time users get a conversational onboarding flow. Instead of showing missin
 /api/mcp/register                    → OAuth 2.0 dynamic client registration (RFC 7591)
 /api/mcp/code                        → Generate auth code after login
 /api/keys                            → API key CRUD (create, list, revoke)
+/api/webhooks                        → Webhook endpoints
+/api/video-toolkit                   → Video toolkit integration
+/api/heygen                          → HeyGen proxy endpoints
+/api/memories                        → Memory CRUD endpoints
+/api/email-report                    → Email report to user
+/api/extract-todos                   → Extract action items from messages
+/agency/settings                     → Agency settings (work context, preferences)
+/agency/analytics                    → Analytics dashboard
 /mcp-login                           → OAuth login page ("Connect your agency")
 /.well-known/oauth-authorization-server → RFC 8414 discovery (rewrite → /api/well-known/)
 /.well-known/oauth-protected-resource   → RFC 9728 resource metadata
@@ -433,7 +441,8 @@ users, brands, conversations, messages, outputs, agent_configs,
 agent_registry, agent_memories, goals, tasks, audit_log,
 approval_queue, heartbeats, project_scans, ai_usage,
 media_items, scheduled_posts, brand_proforma_sections,
-user_integrations, team_members, brand_conversation_log
+user_integrations, team_members, brand_conversation_log,
+api_keys
 ```
 
 ### Three Supabase Clients (don't mix)

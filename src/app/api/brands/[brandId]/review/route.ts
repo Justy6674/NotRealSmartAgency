@@ -125,6 +125,8 @@ export async function POST(
   }
 
   lines.push(`Run a comprehensive marketing audit and produce an actionable marketing playbook for this brand.`)
+  lines.push('')
+  lines.push(`Also run research_industry with depth "deep" to update industry knowledge for this brand's niche.`)
 
   const firstMessage = lines.join('\n')
 

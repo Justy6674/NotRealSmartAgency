@@ -672,6 +672,8 @@ export interface MediaItem {
   tags: string[]
   file_created_at: string | null
   uploaded_by_name: string | null
+  ai_description: string | null
+  source_type: 'upload' | 'generated' | 'ai_image' | 'screenshot' | 'import'
   is_archived: boolean
   created_at: string
   updated_at: string
@@ -716,6 +718,60 @@ export interface ScheduledPost {
   content_pillar?: string | null
   created_at: string
   updated_at: string
+}
+
+// ─── Smart Media Pipeline ───────────────────────────────────────────────────
+
+export interface MediaTag {
+  id: string
+  user_id: string
+  name: string
+  colour: string
+  category: string | null
+  brand_id: string | null
+  created_at: string
+}
+
+export type CollectionType = 'carousel' | 'campaign' | 'album' | 'story_set'
+export type SlideType = 'intro' | 'content' | 'quote' | 'stat' | 'cta' | 'outro'
+
+export interface MediaCollection {
+  id: string
+  user_id: string
+  brand_id: string
+  name: string
+  description: string | null
+  collection_type: CollectionType
+  cover_image_url: string | null
+  metadata: Record<string, unknown>
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface MediaCollectionItem {
+  id: string
+  collection_id: string
+  media_item_id: string
+  position: number
+  slide_title: string | null
+  slide_subtitle: string | null
+  slide_caption: string | null
+  slide_type: SlideType
+  created_at: string
+}
+
+export interface MediaCollectionWithItems extends MediaCollection {
+  items: (MediaCollectionItem & { media_item?: MediaItem })[]
+}
+
+export interface MediaUsage {
+  id: string
+  media_item_id: string
+  used_in_type: 'scheduled_post' | 'carousel' | 'output' | 'export'
+  used_in_id: string | null
+  platform: string | null
+  used_at: string
 }
 
 // ─── Content Style Settings ─────────────────────────────────────────────────

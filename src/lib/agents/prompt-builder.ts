@@ -2,6 +2,7 @@ import type { Brand, AgentConfig } from '@/types/database'
 import { getComplianceRules } from './compliance-rules'
 import { getMarketingKnowledge } from './knowledge/au-health-marketing-2025'
 import { getSocialMediaKnowledge } from './knowledge/social-media-benchmarks'
+import { getDesignIntelligence } from './knowledge/social-media-design-intelligence'
 import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
 import { memorySearchV2 } from '@/lib/memory/store'
@@ -147,6 +148,12 @@ ${proformaSummary}
   const socialKnowledge = getSocialMediaKnowledge(agentConfig.agent_type)
   if (socialKnowledge) {
     sections.push(socialKnowledge)
+  }
+
+  // Design intelligence — 2026 trends, carousel frameworks, typography, colour psychology
+  const designKnowledge = getDesignIntelligence(agentConfig.agent_type)
+  if (designKnowledge) {
+    sections.push(designKnowledge)
   }
 
   // Brand ecosystem — sibling brands owned by the same user

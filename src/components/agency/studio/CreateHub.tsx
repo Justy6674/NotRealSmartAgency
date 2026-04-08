@@ -1,13 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { PenLine, CalendarDays, Video, Palette, Target, Repeat, MessageSquare } from 'lucide-react'
+import { useState } from 'react'
+import { PenLine, CalendarDays, Video, Palette, Target, Repeat, MessageSquare, Images } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 import { StrategyBrief } from './StrategyBrief'
 import { sendToDirector } from '@/lib/chat-dispatch'
+import { CarouselBuilder } from './carousel/CarouselBuilder'
+import type { BrandTheme } from './carousel/types'
 
 interface CardDef {
   icon: typeof Video
@@ -72,10 +75,23 @@ export function CreateHub() {
   const { activeBrandId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
+  const [showCarouselBuilder, setShowCarouselBuilder] = useState(false)
 
   const brandName = data.brand?.name
   const agentContext = strategyContext?.agentContext ?? ''
   const hasBrand = !!brandName
+
+  // Build theme from brand colours
+  const brandColours = (data.brand as { brand_colours?: Record<string, string> } | null)?.brand_colours ?? {}
+  const brandTheme: BrandTheme = {
+    primary: brandColours.primary || '#6366f1',
+    secondary: brandColours.secondary || '#8b5cf6',
+    accent: brandColours.accent || '#06b6d4',
+    background: brandColours.background || '#0a0a0f',
+    text: brandColours.text || '#e4e4e7',
+    logoUrl: (data.brand as { logo_url?: string } | null)?.logo_url ?? null,
+    name: brandName ?? 'Brand',
+  }
 
   if (!activeBrandId) {
     return (
@@ -85,6 +101,28 @@ export function CreateHub() {
             Select a brand from the sidebar to start creating content.
           </p>
         </div>
+      </div>
+    )
+  }
+
+  // Carousel builder mode
+  if (showCarouselBuilder && activeBrandId) {
+    return (
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCarouselBuilder(false)}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium bg-muted hover:bg-muted/80 transition-colors"
+          >
+            &larr; Back to Create
+          </button>
+          <h2 className="text-sm font-semibold">Carousel Builder — {brandName}</h2>
+        </div>
+        <CarouselBuilder
+          brandId={activeBrandId}
+          theme={brandTheme}
+          onExported={() => setShowCarouselBuilder(false)}
+        />
       </div>
     )
   }
@@ -99,6 +137,29 @@ export function CreateHub() {
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Carousel Builder card */}
+        <button
+          type="button"
+          disabled={!hasBrand}
+          onClick={() => setShowCarouselBuilder(true)}
+          className={cn(
+            'group relative rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:bg-primary/5 space-y-3',
+            !hasBrand && 'opacity-50 cursor-not-allowed hover:border-border hover:bg-card',
+          )}
+        >
+          <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', 'bg-indigo-500/15 text-indigo-400')}>
+            <Images className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+              Build a Carousel
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              Branded slide templates. Pick a layout, add text, export as images.
+            </p>
+          </div>
+        </button>
+
         {ROOM_CARDS.map(card => {
           const Icon = card.icon
           return (

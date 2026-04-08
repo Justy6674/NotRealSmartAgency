@@ -175,6 +175,20 @@ export async function POST(request: Request) {
     if (routingContext) {
       systemPrompt = systemPrompt + '\n\n---\n\n' + routingContext
     }
+
+    // Auto-trigger industry research if market_context is RED (no research yet)
+    const marketContext = proformaSections.find(s => s.section_key === 'market_context')
+    if (marketContext?.rag_status === 'red') {
+      systemPrompt += '\n\nIMPORTANT — INDUSTRY RESEARCH NEEDED: This brand has no industry research yet (market_context is RED). Before answering the user\'s question, use the research_industry tool with depth "deep" to learn about this brand\'s industry. Do this ONCE as your first action, then proceed with the conversation normally. This auto-research only needs to happen once — after that, the knowledge persists.'
+    }
+
+    // Brand context safety — confirm which brand is active
+    const brandNiche = (brand as Record<string, unknown>).niche ?? ''
+    systemPrompt += `\n\nBRAND CONTEXT SAFETY:
+- You are currently working on: **${(brand as Record<string, unknown>).name}** (${brandNiche})
+- NEVER reference, publish to, or use context from other brands in this conversation
+- If the user mentions a different brand by name, confirm they want to switch: "You mentioned [other brand]. Want me to switch to that brand, or continue with ${(brand as Record<string, unknown>).name}?"
+- Start every NEW conversation by confirming: "Working on ${(brand as Record<string, unknown>).name}. What can I help with?"`
   }
 
   // Get tools for this agent
