@@ -774,6 +774,32 @@ export interface MediaUsage {
   used_at: string
 }
 
+// ─── Hashtag Groups & Post Templates ────────────────────────────────────────
+
+export interface HashtagGroup {
+  id: string
+  user_id: string
+  brand_id: string
+  name: string
+  tags: string[]
+  category: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PostTemplate {
+  id: string
+  user_id: string
+  brand_id: string
+  name: string
+  caption_template: string
+  default_hashtags: string[]
+  platform: string | null
+  variables: { key: string; label: string; default?: string }[]
+  created_at: string
+  updated_at: string
+}
+
 // ─── Content Style Settings ─────────────────────────────────────────────────
 
 export type ContentVibe = 'funny' | 'inspirational' | 'informative' | 'exciting' | 'educational' | 'provocative'
