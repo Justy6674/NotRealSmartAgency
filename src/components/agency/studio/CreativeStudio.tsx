@@ -8,6 +8,7 @@ import { EnhancedCalendar } from './EnhancedCalendar'
 import { CalendarActions } from './CalendarActions'
 import { CreateHub } from './CreateHub'
 import { MediaLibrary } from './MediaLibrary'
+import { InstagramGridPlanner } from './grid/InstagramGridPlanner'
 
 // ─── Tab definitions ─────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ const TABS = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'media', label: 'Media' },
   { id: 'create', label: 'Create' },
+  { id: 'grid', label: 'Grid Planner' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -62,6 +64,7 @@ export function CreativeStudio() {
         )}
         {activeTab === 'media' && <MediaLibrary />}
         {activeTab === 'create' && <CreateHub />}
+        {activeTab === 'grid' && <InstagramGridPlanner />}
       </div>
     </div>
   )
