@@ -6,17 +6,17 @@ import { useAgencyStore } from '@/stores/agency-store'
 import { StudioDashboard } from './StudioDashboard'
 import { EnhancedCalendar } from './EnhancedCalendar'
 import { CalendarActions } from './CalendarActions'
-import { CreateHub } from './CreateHub'
+import { PostCreator } from './post/PostCreator'
 import { MediaLibrary } from './MediaLibrary'
 import { InstagramGridPlanner } from './grid/InstagramGridPlanner'
 
 // ─── Tab definitions ─────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'all', label: 'All Content' },
+  { id: 'create', label: 'Create' },
+  { id: 'all', label: 'Content' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'media', label: 'Media' },
-  { id: 'create', label: 'Create' },
   { id: 'grid', label: 'Grid Planner' },
 ] as const
 
@@ -25,7 +25,7 @@ type TabId = (typeof TABS)[number]['id']
 // ─── Creative Studio ─────────────────────────────────────────────────────────
 
 export function CreativeStudio() {
-  const [activeTab, setActiveTab] = useState<TabId>('all')
+  const [activeTab, setActiveTab] = useState<TabId>('create')
   const { setChatPanelOpen } = useAgencyStore()
 
   // Auto-open chat panel so Director is always visible in the Studio
@@ -63,7 +63,7 @@ export function CreativeStudio() {
           </div>
         )}
         {activeTab === 'media' && <MediaLibrary />}
-        {activeTab === 'create' && <CreateHub />}
+        {activeTab === 'create' && <PostCreator />}
         {activeTab === 'grid' && <InstagramGridPlanner />}
       </div>
     </div>

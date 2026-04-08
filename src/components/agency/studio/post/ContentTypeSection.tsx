@@ -1,6 +1,6 @@
 'use client'
 
-import { ImageIcon, Images, Film, Youtube, Clock, Target } from 'lucide-react'
+import { ImageIcon, Images, Film, Youtube, Clock, Target, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type ContentType = 'post' | 'carousel' | 'short_video' | 'long_video' | 'story' | 'ad'
@@ -41,12 +41,18 @@ export function ContentTypeSection({ value, onChange }: ContentTypeSectionProps)
               type="button"
               onClick={() => onChange(ct.value)}
               className={cn(
-                'p-4 rounded-lg border-2 transition-all text-left space-y-2',
+                'relative p-4 rounded-lg border-2 transition-all text-left space-y-2',
                 isSelected
                   ? 'border-primary bg-primary/10'
                   : 'border-border bg-card hover:border-primary/50'
               )}
             >
+              {/* Check badge — Scent Sell condition card pattern */}
+              {isSelected && (
+                <span className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                  <Check className="h-3 w-3 text-primary-foreground" />
+                </span>
+              )}
               <Icon className={cn('h-6 w-6', isSelected ? 'text-primary' : ct.colour)} />
               <div>
                 <p className={cn('text-sm font-medium', isSelected ? 'text-primary' : 'text-foreground')}>

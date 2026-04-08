@@ -1,6 +1,6 @@
 'use client'
 
-import { Instagram, Facebook, Linkedin, Twitter, Youtube, Music2, type LucideIcon } from 'lucide-react'
+import { Instagram, Facebook, Linkedin, Twitter, Youtube, Music2, Check, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ContentType } from './ContentTypeSection'
 import type { PostPlatform } from '@/types/database'
@@ -94,11 +94,13 @@ export function PlatformSection({ contentType, selected, onChange }: PlatformSec
     }
   }
 
+  // Build summary line for selected platforms
+  const selectedDefs = PLATFORMS.filter(p => selected.includes(p.value))
+
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-foreground">Where to publish?</h3>
-      <p className="text-xs text-muted-foreground">Select one or more platforms. Greyed-out platforms don&apos;t support this content type.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {/* Pill row */}
+      <div className="flex flex-wrap gap-2">
         {PLATFORMS.map(p => {
           const Icon = p.icon
           const isCompatible = p.compatibleTypes.includes(contentType)
@@ -110,26 +112,32 @@ export function PlatformSection({ contentType, selected, onChange }: PlatformSec
               disabled={!isCompatible}
               onClick={() => togglePlatform(p.value)}
               className={cn(
-                'p-3 rounded-lg border-2 transition-all text-left',
-                !isCompatible && 'opacity-30 cursor-not-allowed border-border',
-                isCompatible && !isSelected && 'border-border bg-card hover:border-primary/50',
+                'inline-flex items-center gap-1.5 rounded-full border-2 px-3.5 py-1.5 text-sm font-medium transition-all',
+                !isCompatible && 'opacity-25 cursor-not-allowed border-border text-muted-foreground',
+                isCompatible && !isSelected && 'border-border text-foreground/80 hover:border-primary/50',
                 isCompatible && isSelected && p.selectedBg,
               )}
             >
-              <div className="flex items-center gap-2 mb-1.5">
-                <Icon className={cn('h-4 w-4', isSelected ? 'text-foreground' : p.colour)} />
-                <span className={cn('text-sm font-medium', isSelected ? 'text-foreground' : 'text-foreground/80')}>
-                  {p.label}
-                </span>
-              </div>
-              <div className="text-[10px] text-muted-foreground space-y-0.5">
-                <p>{p.charLimit.toLocaleString()} chars</p>
-                <p>{p.formats}</p>
-              </div>
+              <Icon className={cn('h-3.5 w-3.5', isSelected ? 'text-foreground' : p.colour)} />
+              {p.label}
+              {isSelected && <Check className="h-3 w-3 text-foreground ml-0.5" />}
             </button>
           )
         })}
       </div>
+
+      {/* Summary line for selected platforms */}
+      {selectedDefs.length > 0 && (
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          {selectedDefs.map((p, i) => (
+            <span key={p.value}>
+              {i > 0 && ' + '}
+              <span className="font-medium text-foreground/70">{p.label}</span>
+              {' '}({p.charLimit.toLocaleString()} chars, {p.formats})
+            </span>
+          ))}
+        </p>
+      )}
     </div>
   )
 }
