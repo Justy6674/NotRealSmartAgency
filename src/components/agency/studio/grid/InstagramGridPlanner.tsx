@@ -147,7 +147,7 @@ export function InstagramGridPlanner() {
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={item.url} alt="" className="h-full w-full object-cover" draggable={false} />
                 ) : (
-                  <div className="h-full w-full bg-[oklch(0.12_0.005_240)] flex flex-col items-center justify-center gap-1">
+                  <div className="h-full w-full bg-muted flex flex-col items-center justify-center gap-1">
                     <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
                     <span className="text-[10px] text-muted-foreground/60 text-center px-1 line-clamp-2">
                       {item.name || 'Pending'}

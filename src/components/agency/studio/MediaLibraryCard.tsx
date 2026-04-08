@@ -102,7 +102,7 @@ export function MediaLibraryCard({
     <div
       className={`relative flex flex-col rounded-lg border bg-card text-card-foreground transition-all ${
         item.is_archived ? 'opacity-60' : ''
-      } ${selected ? 'ring-2 ring-[oklch(0.55_0.1_240)]' : ''}`}
+      } ${selected ? 'ring-2 ring-primary' : ''}`}
     >
       {/* Archive badge */}
       {item.is_archived && (

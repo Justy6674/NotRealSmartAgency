@@ -356,7 +356,7 @@ export function VideoEditPanel({ brand, strategyContext }: VideoEditPanelProps) 
               onClick={() => fileInputRef.current?.click()}
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
-              className="flex flex-1 flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-8 text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30 hover:text-foreground transition-colors"
+              className="flex flex-1 flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border p-8 text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors"
             >
               <Upload className="h-8 w-8" />
               <span className="text-sm">Drop a file or click to browse</span>
@@ -516,7 +516,7 @@ export function VideoEditPanel({ brand, strategyContext }: VideoEditPanelProps) 
                     type="button"
                     disabled={a.disabled || isProcessing}
                     onClick={() => handleAIAssist(a)}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {a.label}

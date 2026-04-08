@@ -95,13 +95,13 @@ export function TransformCard({ platform, content, status, onSchedule, onEdit }:
               value={editContent}
               onChange={e => setEditContent(e.target.value)}
               rows={6}
-              className="w-full rounded-lg border border-border bg-[oklch(0.14_0.01_240)] px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-[oklch(0.55_0.1_240)] resize-none font-[family-name:var(--font-ibm-plex-sans)]"
+              className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none font-[family-name:var(--font-ibm-plex-sans)]"
             />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                className="flex items-center gap-1 rounded-md bg-[oklch(0.75_0.06_240)] px-3 py-1.5 text-[10px] font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors"
+                className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 <Check className="h-3 w-3" />
                 Save
@@ -109,7 +109,7 @@ export function TransformCard({ platform, content, status, onSchedule, onEdit }:
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="flex items-center gap-1 rounded-md bg-[oklch(0.22_0.02_240)] px-3 py-1.5 text-[10px] font-medium text-muted-foreground hover:bg-[oklch(0.28_0.03_240)] transition-colors"
+                className="flex items-center gap-1 rounded-md bg-secondary px-3 py-1.5 text-[10px] font-medium text-muted-foreground hover:bg-secondary/80 transition-colors"
               >
                 <X className="h-3 w-3" />
                 Cancel
@@ -135,7 +135,7 @@ export function TransformCard({ platform, content, status, onSchedule, onEdit }:
             <button
               type="button"
               onClick={() => { setEditContent(content); setEditing(true) }}
-              className="flex items-center gap-1 rounded-md bg-[oklch(0.22_0.02_240)] px-2.5 py-1 text-[10px] font-medium text-muted-foreground hover:bg-[oklch(0.28_0.03_240)] transition-colors"
+              className="flex items-center gap-1 rounded-md bg-secondary px-2.5 py-1 text-[10px] font-medium text-muted-foreground hover:bg-secondary/80 transition-colors"
             >
               <PenLine className="h-3 w-3" />
               Edit
@@ -143,7 +143,7 @@ export function TransformCard({ platform, content, status, onSchedule, onEdit }:
             <button
               type="button"
               onClick={() => onSchedule(platform, content)}
-              className="flex items-center gap-1 rounded-md bg-[oklch(0.75_0.06_240)] px-2.5 py-1 text-[10px] font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors"
+              className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[10px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               <Calendar className="h-3 w-3" />
               Schedule

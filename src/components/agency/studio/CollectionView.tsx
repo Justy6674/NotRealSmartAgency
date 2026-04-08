@@ -124,7 +124,7 @@ export function CollectionView({ collectionId, collection, onBack, onUpdated }: 
             return (
               <div
                 key={item.id}
-                className="flex gap-3 rounded-lg border border-border bg-[oklch(0.14_0.01_240)] p-2 hover:border-[oklch(0.55_0.1_240)]/30 transition-colors"
+                className="flex gap-3 rounded-lg border border-border bg-muted p-2 hover:border-primary/30 transition-colors"
               >
                 {/* Reorder controls */}
                 <div className="flex flex-col items-center justify-center gap-0.5">

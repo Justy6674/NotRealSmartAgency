@@ -168,7 +168,7 @@ export function RepurposeRoom() {
           <button
             type="button"
             onClick={handleGenerateAll}
-            className="flex items-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-5 py-2.5 text-sm font-semibold text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Sparkles className="h-4 w-4" />
             Generate All Variants
@@ -179,7 +179,7 @@ export function RepurposeRoom() {
               type="button"
               onClick={handleAddAllToCalendar}
               disabled={addingAll}
-              className="flex items-center gap-2 rounded-lg bg-[oklch(0.22_0.03_240)] px-5 py-2.5 text-sm font-medium text-foreground hover:bg-[oklch(0.28_0.03_240)] disabled:opacity-40 transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-secondary px-5 py-2.5 text-sm font-medium text-foreground hover:bg-secondary/80 disabled:opacity-40 transition-colors"
             >
               {addingAll ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

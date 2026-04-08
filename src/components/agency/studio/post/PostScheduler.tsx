@@ -69,8 +69,8 @@ export function PostScheduler({ selectedPlatforms, onSave, disabled = false }: P
               disabled={disabled}
               className={`flex flex-col items-center gap-1.5 rounded-lg px-3 py-3 text-center transition-all ${
                 active
-                  ? 'bg-[oklch(0.75_0.06_240)] text-[oklch(0.15_0.02_240)] ring-1 ring-[oklch(0.75_0.06_240)]'
-                  : 'bg-[oklch(0.18_0.01_240)] text-muted-foreground hover:bg-[oklch(0.22_0.02_240)]'
+                  ? 'bg-primary text-primary-foreground ring-1 ring-primary'
+                  : 'bg-secondary text-muted-foreground hover:bg-secondary'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -92,7 +92,7 @@ export function PostScheduler({ selectedPlatforms, onSave, disabled = false }: P
               value={scheduledAt}
               onChange={e => setScheduledAt(e.target.value)}
               disabled={disabled}
-              className="w-full rounded-lg border border-border bg-[oklch(0.14_0.01_240)] px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[oklch(0.55_0.1_240)] font-[family-name:var(--font-ibm-plex-mono)]"
+              className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-[family-name:var(--font-ibm-plex-mono)]"
             />
           </div>
 
@@ -123,7 +123,7 @@ export function PostScheduler({ selectedPlatforms, onSave, disabled = false }: P
         type="button"
         onClick={handleSave}
         disabled={disabled || saving || selectedPlatforms.length === 0}
-        className="w-full flex items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-2.5 text-sm font-semibold text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
       >
         {saving ? (
           <>

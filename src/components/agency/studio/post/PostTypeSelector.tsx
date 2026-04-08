@@ -37,8 +37,8 @@ export function PostTypeSelector({ value, onChange, mediaCount }: PostTypeSelect
               title={type.hint}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                 active
-                  ? 'bg-[oklch(0.75_0.06_240)] text-[oklch(0.15_0.02_240)]'
-                  : 'bg-[oklch(0.18_0.01_240)] text-muted-foreground hover:bg-[oklch(0.24_0.02_240)]'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-muted-foreground hover:bg-secondary'
               } ${invalid ? 'ring-1 ring-[oklch(0.6_0.15_30)]' : ''}`}
             >
               <Icon className="h-3.5 w-3.5" />

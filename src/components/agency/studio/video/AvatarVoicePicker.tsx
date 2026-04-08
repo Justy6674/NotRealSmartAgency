@@ -185,8 +185,8 @@ export function AvatarVoicePicker({
                 onClick={() => handleAvatarSelect(avatar.avatar_id)}
                 className={`flex-none rounded-lg transition-all ${
                   selectedAvatar === avatar.avatar_id
-                    ? 'ring-2 ring-[oklch(0.55_0.1_240)] ring-offset-1 ring-offset-background'
-                    : 'ring-1 ring-border hover:ring-[oklch(0.55_0.1_240)]/30'
+                    ? 'ring-2 ring-primary ring-offset-1 ring-offset-background'
+                    : 'ring-1 ring-border hover:ring-primary/30'
                 }`}
               >
                 {avatar.preview_image_url ? (
@@ -230,7 +230,7 @@ export function AvatarVoicePicker({
             <button
               type="button"
               onClick={handlePlayPreview}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30 hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors"
               title={playingAudio ? 'Stop preview' : 'Play voice preview'}
             >
               {playingAudio ? (

@@ -71,7 +71,7 @@ export function VideoExporter({ brand, videoTitle, outputId }: VideoExporterProp
               className={`rounded-lg border px-3 py-1.5 text-xs transition-all ${
                 selectedFormats.includes(p.id)
                   ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10 text-[oklch(0.75_0.06_240)]'
-                  : 'border-border text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30'
+                  : 'border-border text-muted-foreground hover:border-primary/30'
               }`}
             >
               {p.label}
@@ -91,7 +91,7 @@ export function VideoExporter({ brand, videoTitle, outputId }: VideoExporterProp
             className={`flex-1 rounded-lg border py-2 text-xs font-medium transition-all ${
               action === a
                 ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10 text-[oklch(0.75_0.06_240)]'
-                : 'border-border text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30'
+                : 'border-border text-muted-foreground hover:border-primary/30'
             }`}
           >
             {a === 'save' && 'Save to Library'}
@@ -130,7 +130,7 @@ export function VideoExporter({ brand, videoTitle, outputId }: VideoExporterProp
         type="button"
         onClick={handleExport}
         disabled={selectedFormats.length === 0 || !brand}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-2.5 text-sm font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors disabled:opacity-50"
+        className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
       >
         {action === 'save' && <Download className="h-4 w-4" />}
         {action === 'schedule' && <CalendarPlus className="h-4 w-4" />}

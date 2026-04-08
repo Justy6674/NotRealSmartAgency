@@ -308,17 +308,17 @@ export function EnhancedCalendar() {
       {/* FullCalendar theme overrides */}
       <style jsx global>{`
         .enhanced-calendar .fc {
-          --fc-border-color: oklch(0.3 0.01 240);
-          --fc-button-bg-color: oklch(0.25 0.02 240);
-          --fc-button-border-color: oklch(0.35 0.02 240);
-          --fc-button-hover-bg-color: oklch(0.30 0.03 240);
-          --fc-button-hover-border-color: oklch(0.40 0.03 240);
-          --fc-button-active-bg-color: oklch(0.35 0.04 240);
-          --fc-button-active-border-color: oklch(0.45 0.04 240);
-          --fc-button-text-color: oklch(0.85 0.01 240);
+          --fc-border-color: hsl(var(--border));
+          --fc-button-bg-color: hsl(var(--secondary));
+          --fc-button-border-color: hsl(var(--border));
+          --fc-button-hover-bg-color: hsl(var(--muted));
+          --fc-button-hover-border-color: hsl(var(--border));
+          --fc-button-active-bg-color: hsl(var(--primary));
+          --fc-button-active-border-color: hsl(var(--primary));
+          --fc-button-text-color: hsl(var(--foreground));
           --fc-page-bg-color: transparent;
-          --fc-neutral-bg-color: oklch(0.18 0.01 240);
-          --fc-today-bg-color: oklch(0.22 0.03 240);
+          --fc-neutral-bg-color: hsl(var(--muted));
+          --fc-today-bg-color: hsl(var(--primary) / 0.08);
           --fc-event-border-color: transparent;
           font-family: var(--font-ibm-plex-sans), system-ui, sans-serif;
         }
@@ -326,12 +326,12 @@ export function EnhancedCalendar() {
         .enhanced-calendar .fc .fc-toolbar-title {
           font-size: 1.125rem;
           font-weight: 600;
-          color: oklch(0.90 0.01 240);
+          color: hsl(var(--foreground));
         }
 
         .enhanced-calendar .fc .fc-col-header-cell-cushion,
         .enhanced-calendar .fc .fc-daygrid-day-number {
-          color: oklch(0.70 0.02 240);
+          color: hsl(var(--muted-foreground));
           font-size: 0.8125rem;
         }
 
@@ -355,7 +355,7 @@ export function EnhancedCalendar() {
         }
 
         .enhanced-calendar .fc .fc-daygrid-more-link {
-          color: oklch(0.70 0.10 240);
+          color: hsl(var(--primary));
           font-size: 0.75rem;
         }
       `}</style>

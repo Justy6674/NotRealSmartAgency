@@ -51,7 +51,7 @@ export function CarouselPreview({
 
   if (!items.length) {
     return (
-      <div className="rounded-lg border border-border bg-[oklch(0.14_0.01_240)] p-6 text-center">
+      <div className="rounded-lg border border-border bg-muted p-6 text-center">
         <p className="text-xs text-muted-foreground/50">
           Select images to preview carousel
         </p>
@@ -60,10 +60,10 @@ export function CarouselPreview({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-[oklch(0.14_0.01_240)] overflow-hidden">
+    <div className="rounded-lg border border-border bg-muted overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-        <div className="w-6 h-6 rounded-full bg-[oklch(0.25_0.02_240)]" />
+        <div className="w-6 h-6 rounded-full bg-muted-foreground/20" />
         <span className="text-xs font-medium text-foreground/80">
           {brandName}
         </span>

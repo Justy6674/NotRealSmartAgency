@@ -105,7 +105,7 @@ export function TagManager({ brandId, selectedTags, onSelectedTagsChange, onTags
 
       {/* Create tag form */}
       {showCreate && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-[oklch(0.14_0.01_240)] p-2">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted p-2">
           <input
             type="text"
             value={newName}

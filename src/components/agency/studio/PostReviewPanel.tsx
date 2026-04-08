@@ -186,7 +186,7 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
         <div className="flex items-center gap-2">
           <button
             onClick={handleScheduleAll}
-            className="rounded-lg bg-[oklch(0.75_0.06_240)] px-3 py-1.5 text-xs font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors flex items-center gap-1.5"
+            className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1.5"
           >
             <Calendar className="h-3.5 w-3.5" />
             Schedule All
@@ -267,7 +267,7 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
             <textarea
               defaultValue={post.caption}
               onBlur={e => handleCaptionSave(post.id, e.target.value)}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground resize-none min-h-[80px] focus:outline-none focus:ring-1 focus:ring-[oklch(0.55_0.1_240)]"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground resize-none min-h-[80px] focus:outline-none focus:ring-1 focus:ring-primary"
               rows={3}
             />
 

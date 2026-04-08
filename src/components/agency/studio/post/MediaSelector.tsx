@@ -102,7 +102,7 @@ export function MediaSelector({
             {selectedItems.map((item, i) => (
               <div
                 key={item.id}
-                className="relative group rounded-lg overflow-hidden border border-[oklch(0.3_0.02_240)] bg-[oklch(0.14_0.01_240)]"
+                className="relative group rounded-lg overflow-hidden border border-border bg-muted"
                 style={{ width: 72, height: 72 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -112,7 +112,7 @@ export function MediaSelector({
                   className="w-full h-full object-cover"
                 />
                 {/* Order badge */}
-                <span className="absolute top-1 left-1 flex items-center justify-center w-5 h-5 rounded-full bg-[oklch(0.75_0.06_240)] text-[oklch(0.12_0.02_240)] text-[10px] font-bold">
+                <span className="absolute top-1 left-1 flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
                   {i + 1}
                 </span>
                 {/* Controls overlay */}
@@ -177,10 +177,10 @@ export function MediaSelector({
                   disabled={isDisabled}
                   className={`relative aspect-square rounded-md overflow-hidden border-2 transition-colors ${
                     isSelected
-                      ? 'border-[oklch(0.75_0.06_240)]'
+                      ? 'border-primary'
                       : isDisabled
                         ? 'border-transparent opacity-40 cursor-not-allowed'
-                        : 'border-transparent hover:border-[oklch(0.4_0.03_240)]'
+                        : 'border-transparent hover:border-muted-foreground/30'
                   }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -190,8 +190,8 @@ export function MediaSelector({
                     className="w-full h-full object-cover"
                   />
                   {isSelected && (
-                    <div className="absolute inset-0 bg-[oklch(0.75_0.06_240)]/20 flex items-center justify-center">
-                      <Check className="h-4 w-4 text-[oklch(0.95_0_0)]" />
+                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                      <Check className="h-4 w-4 text-primary-foreground" />
                     </div>
                   )}
                 </button>

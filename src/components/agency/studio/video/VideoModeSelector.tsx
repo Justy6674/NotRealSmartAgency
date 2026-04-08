@@ -46,7 +46,7 @@ export function VideoModeSelector({ mode, onModeChange }: VideoModeSelectorProps
               'flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm transition-all',
               active
                 ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10 text-[oklch(0.75_0.06_240)]'
-                : 'border-border bg-card text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30 hover:text-foreground'
+                : 'border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground'
             )}
           >
             <Icon className="h-4 w-4" />

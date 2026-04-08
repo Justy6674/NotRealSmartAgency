@@ -29,7 +29,7 @@ function InstagramPreview({ content, hashtags, brandName }: { content: string; h
   const over = charCount > info.maxChars
 
   return (
-    <div className="rounded-xl border border-border bg-[oklch(0.13_0.01_240)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-muted overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-border">
         <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[oklch(0.65_0.15_330)] to-[oklch(0.65_0.15_30)] flex items-center justify-center text-[10px] font-bold text-white">
@@ -38,7 +38,7 @@ function InstagramPreview({ content, hashtags, brandName }: { content: string; h
         <span className="text-xs font-semibold text-foreground">{brandName}</span>
       </div>
       {/* Image placeholder */}
-      <div className="aspect-square bg-[oklch(0.18_0.01_240)] flex items-center justify-center">
+      <div className="aspect-square bg-secondary flex items-center justify-center">
         <Instagram className="h-8 w-8 text-muted-foreground/30" />
       </div>
       {/* Caption */}
@@ -67,7 +67,7 @@ function LinkedInPreview({ content, brandName }: { content: string; brandName: s
   const over = charCount > info.maxChars
 
   return (
-    <div className="rounded-xl border border-border bg-[oklch(0.13_0.01_240)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-muted overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
         <div className="h-10 w-10 rounded-full bg-[oklch(0.45_0.1_240)] flex items-center justify-center text-xs font-bold text-white">
           {brandName.charAt(0).toUpperCase()}
@@ -103,7 +103,7 @@ function XPreview({ content, brandName }: { content: string; brandName: string }
   const over = charCount > info.maxChars
 
   return (
-    <div className="rounded-xl border border-border bg-[oklch(0.13_0.01_240)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-muted overflow-hidden">
       <div className="flex gap-2.5 px-4 py-3">
         <div className="h-9 w-9 rounded-full bg-[oklch(0.30_0.02_240)] flex items-center justify-center text-xs font-bold text-foreground shrink-0">
           {brandName.charAt(0).toUpperCase()}
@@ -139,7 +139,7 @@ function FacebookPreview({ content, hashtags, brandName }: { content: string; ha
   const charCount = fullText.length
 
   return (
-    <div className="rounded-xl border border-border bg-[oklch(0.13_0.01_240)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-muted overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
         <div className="h-9 w-9 rounded-full bg-[oklch(0.4_0.12_250)] flex items-center justify-center text-xs font-bold text-white">
           {brandName.charAt(0).toUpperCase()}
@@ -178,7 +178,7 @@ function GenericPreview({ content, platform, brandName }: { content: string; pla
   const over = charCount > info.maxChars
 
   return (
-    <div className="rounded-xl border border-border bg-[oklch(0.13_0.01_240)] overflow-hidden">
+    <div className="rounded-xl border border-border bg-muted overflow-hidden">
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border">
         <Icon className="h-4 w-4 text-muted-foreground" />
         <span className="text-xs font-semibold text-foreground">{info.label}</span>

@@ -325,7 +325,7 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
         className={`flex flex-col items-center gap-3 rounded-xl border-2 border-dashed p-10 transition-colors ${
           isDragOver
             ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/5'
-            : 'border-border text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30'
+            : 'border-border text-muted-foreground hover:border-primary/30'
         }`}
       >
         <Upload className="h-10 w-10" />
@@ -556,7 +556,7 @@ export function VideoImportPanel({ brand }: VideoImportPanelProps) {
         <button
           type="button"
           onClick={handleGenerateAll}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-3 text-sm font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Sparkles className="h-4 w-4" />
           Generate Smart Captions ({readyCount} file{readyCount !== 1 ? 's' : ''} → {selectedPlatforms.size} platform{selectedPlatforms.size !== 1 ? 's' : ''})

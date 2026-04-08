@@ -72,7 +72,7 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-[oklch(0.18_0.01_240)] transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary transition-colors"
       >
         <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Source Content
@@ -89,7 +89,7 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
               onClick={() => setSourceType('outputs')}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                 sourceType === 'outputs'
-                  ? 'bg-[oklch(0.22_0.03_240)] text-foreground shadow-sm'
+                  ? 'bg-secondary text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground/70'
               }`}
             >
@@ -101,7 +101,7 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
               onClick={() => setSourceType('paste')}
               className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                 sourceType === 'paste'
-                  ? 'bg-[oklch(0.22_0.03_240)] text-foreground shadow-sm'
+                  ? 'bg-secondary text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground/70'
               }`}
             >
@@ -120,7 +120,7 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search outputs..."
-                  className="w-full rounded-lg border border-border bg-[oklch(0.14_0.01_240)] pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[oklch(0.55_0.1_240)]"
+                  className="w-full rounded-lg border border-border bg-muted pl-9 pr-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
@@ -143,7 +143,7 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
                         onClick={() => handleOutputSelect(output)}
                         className={`w-full text-left rounded-md px-3 py-2.5 transition-colors ${
                           isSelected
-                            ? 'bg-[oklch(0.75_0.06_240)/0.15] ring-1 ring-[oklch(0.75_0.06_240)]'
+                            ? 'bg-[oklch(0.75_0.06_240)/0.15] ring-1 ring-primary'
                             : 'bg-[oklch(0.16_0.01_240)] hover:bg-[oklch(0.19_0.01_240)]'
                         }`}
                       >
@@ -154,7 +154,7 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
                           {output.content.slice(0, 120)}
                         </p>
                         <div className="flex items-center gap-2 mt-1.5">
-                          <span className="text-[9px] rounded bg-[oklch(0.22_0.02_240)] px-1.5 py-0.5 text-muted-foreground uppercase">
+                          <span className="text-[9px] rounded bg-secondary px-1.5 py-0.5 text-muted-foreground uppercase">
                             {output.output_type}
                           </span>
                           <span className="text-[9px] text-muted-foreground/40">
@@ -181,7 +181,7 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
                   value={pasteUrl}
                   onChange={e => setPasteUrl(e.target.value)}
                   placeholder="https://yourblog.com/article"
-                  className="w-full rounded-lg border border-border bg-[oklch(0.14_0.01_240)] px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[oklch(0.55_0.1_240)]"
+                  className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
               <div>
@@ -193,14 +193,14 @@ export function SourceSelector({ brandId, onSourceSelect, selectedSourceId }: So
                   onChange={e => setPasteContent(e.target.value)}
                   placeholder="Paste your blog post, article, script, or any content to repurpose..."
                   rows={6}
-                  className="w-full rounded-lg border border-border bg-[oklch(0.14_0.01_240)] px-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[oklch(0.55_0.1_240)] resize-none font-[family-name:var(--font-ibm-plex-sans)]"
+                  className="w-full rounded-lg border border-border bg-muted px-3 py-2.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary resize-none font-[family-name:var(--font-ibm-plex-sans)]"
                 />
               </div>
               <button
                 type="button"
                 onClick={handlePasteSubmit}
                 disabled={!pasteContent.trim() && !pasteUrl.trim()}
-                className="flex items-center gap-2 rounded-lg bg-[oklch(0.22_0.03_240)] px-4 py-2 text-xs font-medium text-foreground hover:bg-[oklch(0.28_0.03_240)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2 text-xs font-medium text-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 Use This Content
               </button>

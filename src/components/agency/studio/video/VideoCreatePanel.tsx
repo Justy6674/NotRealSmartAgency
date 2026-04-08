@@ -178,7 +178,7 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
             type="button"
             onClick={handleLetAIChoose}
             disabled={sending || !brand}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30 hover:text-foreground transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors disabled:opacity-50"
           >
             <Wand2 className="h-3.5 w-3.5" />
             Let strategy choose
@@ -237,7 +237,7 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
               className={`rounded-lg border p-2.5 text-left transition-all ${
                 videoType === t.id
                   ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10'
-                  : 'border-border bg-card hover:border-[oklch(0.55_0.1_240)]/30'
+                  : 'border-border bg-card hover:border-primary/30'
               }`}
             >
               <div className="text-sm font-medium text-foreground">{t.icon} {t.label}</div>
@@ -259,7 +259,7 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
               className={`flex-1 rounded-lg border p-2.5 text-center transition-all ${
                 format === f.id
                   ? 'border-[oklch(0.55_0.1_240)]/50 bg-[oklch(0.55_0.1_240)]/10'
-                  : 'border-border bg-card hover:border-[oklch(0.55_0.1_240)]/30'
+                  : 'border-border bg-card hover:border-primary/30'
               }`}
             >
               <div className="text-xs font-medium text-foreground">{f.label}</div>
@@ -278,7 +278,7 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
               `Create a video thumbnail for ${brand.name} about "${topic.trim()}". Use Canva with our brand kit for consistent design. Format: ${format === '9:16' ? '1080x1920' : format === '16:9' ? '1280x720' : '1080x1080'}.`
             )
           }}
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-[oklch(0.55_0.1_240)]/30 hover:text-foreground transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors"
         >
           <Palette className="h-3.5 w-3.5" />
           Generate Thumbnail
@@ -291,7 +291,7 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
           type="button"
           onClick={handleGenerate}
           disabled={sending || !brand}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-4 py-3 text-sm font-medium text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] transition-colors disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
           {sending ? (
             <>
