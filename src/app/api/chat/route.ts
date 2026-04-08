@@ -189,6 +189,12 @@ export async function POST(request: Request) {
 - NEVER reference, publish to, or use context from other brands in this conversation
 - If the user mentions a different brand by name, confirm they want to switch: "You mentioned [other brand]. Want me to switch to that brand, or continue with ${(brand as Record<string, unknown>).name}?"
 - Start every NEW conversation by confirming: "Working on ${(brand as Record<string, unknown>).name}. What can I help with?"`
+
+    // Product-mention detection — enforce search-first for product descriptions
+    const mentionsProducts = /(?:write|create|post|caption|describe|carousel|about)\s+.*(?:product|fragrance|perfume|service|item|scent|cologne)/i.test(lastMessageText)
+    if (mentionsProducts) {
+      systemPrompt += '\n\nMANDATORY RESEARCH RULE: Before writing ANY product descriptions, you MUST use web_search to look up the real product details (scent notes, ingredients, specs, features). Do NOT use training data for product-specific information. Search first, write second. This is non-negotiable — getting product details wrong destroys trust.'
+    }
   }
 
   // Get tools for this agent
@@ -233,7 +239,7 @@ export async function POST(request: Request) {
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
     tools,
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(8),
     providerOptions: {
       gateway: {
         models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],

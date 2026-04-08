@@ -144,6 +144,12 @@ The Director answers in plain language and takes action. For simple single-tool 
       systemPrompt += '\n\n---\n\n' + routingContext
     }
 
+    // Product-mention detection — enforce search-first
+    const mentionsProducts = /(?:write|create|post|caption|describe|carousel|about)\s+.*(?:product|fragrance|perfume|service|item|scent|cologne)/i.test(message)
+    if (mentionsProducts) {
+      systemPrompt += '\n\nMANDATORY RESEARCH RULE: Before writing ANY product descriptions, you MUST use web_search to look up the real product details (scent notes, ingredients, specs, features). Do NOT use training data for product-specific information. Search first, write second. This is non-negotiable — getting product details wrong destroys trust.'
+    }
+
     // Append MCP context
     systemPrompt += `\n\n---\nThis request is coming via MCP (CLI/API). The user is working from Claude Code, Cowork, or another AI client, not the web UI. Respond with text only — no UI-specific references like "click here" or "see the sidebar". Be direct and actionable.
 
@@ -190,7 +196,7 @@ CRITICAL — Image handling via MCP:
         system: systemPrompt,
         messages: [{ role: 'user', content: message }],
         tools,
-        stopWhen: stepCountIs(5),
+        stopWhen: stepCountIs(8),
         providerOptions: {
           gateway: {
             models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],

@@ -220,6 +220,22 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`**Marketing Notes:** ${brand.marketing_notes}`)
   }
 
+  // Products & services — verified knowledge the Director can use directly
+  const products = brand.products_services as Array<{ name: string; description: string; price?: string; target_audience?: string; usps?: string[]; compliance_notes?: string }> | undefined
+  if (products?.length) {
+    lines.push('')
+    lines.push('**Products & Services (VERIFIED — use this data directly, do not guess):**')
+    for (const p of products) {
+      let line = `- **${p.name}**: ${p.description}`
+      if (p.price) line += ` (${p.price})`
+      if (p.usps?.length) line += ` — USPs: ${p.usps.join(', ')}`
+      if (p.compliance_notes) line += ` ⚠️ ${p.compliance_notes}`
+      lines.push(line)
+    }
+    lines.push('')
+    lines.push('If writing about a product NOT listed above, use web_search to look it up first.')
+  }
+
   // Tone of voice
   if (brand.tone_of_voice && Object.keys(brand.tone_of_voice).length > 0) {
     const tone = brand.tone_of_voice

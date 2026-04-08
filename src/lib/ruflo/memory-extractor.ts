@@ -138,6 +138,25 @@ export async function extractAndStoreMemories(params: {
     }
   }
 
+  // 2c. Product corrections and knowledge (from user messages)
+  const productCorrectionPatterns = [
+    /(?:actually|correct(?:ion|ly)|real(?:ly)?)\s+(?:is|are|has|smells?|tastes?|contains?|includes?)\s+(.{10,300})/gi,
+    /(?:the (?:real|actual|correct) (?:notes?|ingredients?|description|specs?|price|features?))\s+(?:is|are)\s+(.{10,300})/gi,
+    /(?:that'?s?\s+(?:not right|wrong|incorrect)).*(?:it'?s?\s+actually|should be|is really)\s+(.{10,300})/gi,
+    /(?:our (?:product|service|offering|fragrance|item))\s+(?:is|does|has|includes?|features?)\s+(.{10,300})/gi,
+  ]
+  for (const pattern of productCorrectionPatterns) {
+    const matches = userMessage.matchAll(pattern)
+    for (const match of matches) {
+      extractions.push({
+        key: `product-${Date.now()}-${memoriesStored}`,
+        value: { type: 'product_knowledge', content: match[0].trim(), source: 'user_correction', timestamp },
+        tags: ['product_knowledge', brandSlug, 'correction'],
+      })
+      memoriesStored++
+    }
+  }
+
   // 3. Always store a conversation summary (fallback)
   extractions.push({
     key: `conv-${conversationId ?? 'new'}-${Date.now()}`,
