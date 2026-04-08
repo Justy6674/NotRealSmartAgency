@@ -332,7 +332,7 @@ Single store `src/stores/agency-store.ts` — `useAgencyStore` persisted to loca
 ### Room-Based Navigation (`lib/room-config.ts`)
 Agency UI is organised into 3 rooms (tabs in header):
 1. **Director's Office** (`/agency/chat`) — primary chat interface, conversations
-2. **Creative Studio** (`/agency/studio`) — intelligent agency dashboard with sub-tabs: All Content (dashboard), Calendar, Media, Create
+2. **Creative Studio** (`/agency/studio`) — professional social media builder with sub-tabs: All Content (dashboard), Calendar, Media, Create, Grid Planner
 3. **Command Centre** (`/agency/tasks`) — operational dashboards with sub-tabs: Tasks, Agents, Approvals, Costs, Analytics, Activity
 
 Config: `src/lib/room-config.ts`. Components: `RoomTabs.tsx` (embedded in `AgencyHeader.tsx`), `RoomSubTabs.tsx`.
@@ -345,6 +345,18 @@ Config: `src/lib/room-config.ts`. Components: `RoomTabs.tsx` (embedded in `Agenc
 **Data flow**: `useStudioData()` hook fetches from `GET /api/studio/overview?brandId=X` + `GET /api/canva/designs?brandId=X` in parallel.
 
 **CreateHub** (`Create` tab): 6 intent cards — each one-click opens chat. Quick Post form is a collapsible power-user section.
+
+### Creative Studio v2 — Component Library
+Phone-frame platform mockups (`preview/`): PhoneFrame, InstagramMockup, FacebookMockup, LinkedInMockup, XMockup, TikTokMockup, YouTubeMockup, MultiPlatformPreview, PlatformMockupPreview.
+Image editor (`editor/`): ImageEditorModal wrapping react-filerobot-image-editor with CropPresets (13 platform aspect ratios).
+DnD (`dnd/`): SortableItem, SortableImageGrid using @dnd-kit.
+Hashtag groups (`hashtags/`): HashtagGroupPicker with saved tag sets per brand. API: `/api/hashtag-groups`.
+Post templates (`templates/`): PostTemplatePicker with {variable} support. API: `/api/post-templates`.
+Instagram grid planner (`grid/`): InstagramGridPlanner showing 3-column feed preview with drag-to-reorder.
+Approval workflow (`approval/`): ApprovalActions (approve/reject with reason), CommentThread.
+Composer layout (`post/`): ComposerLayout (split-pane), ComposerActionBar (sticky bottom), PlatformVersionEditor (per-platform caption overrides).
+Post versions: `src/lib/post-versions.ts` — PostVersions type, PLATFORM_CHAR_LIMITS, createVersionsFromMaster, customisePlatform.
+Template variables: `src/lib/template-variables.ts` — 8 built-in variables ({brand}, {date}, {product}, etc.), resolveTemplate(), extractVariables().
 
 ### Guided Onboarding
 First-time users get a conversational onboarding flow. Instead of showing missing fields, the Director proactively guides the user: "Tell me about your business" → auto-populates brand fields. Built into `ChatInterface.tsx` auto-greet logic.

@@ -257,4 +257,164 @@ export const creatingContentArticles: HelpArticle[] = [
     relatedSlugs: ['video-and-design/design-with-canva', 'creating-content/write-a-social-post', 'video-and-design/create-an-ai-video'],
     lastUpdated: '2026-04-07',
   },
+  {
+    slug: 'build-a-carousel',
+    categorySlug: 'creating-content',
+    title: 'Build a Carousel',
+    subtitle: 'Create multi-slide posts with branded templates',
+    body: [
+      {
+        body: 'The Carousel Builder lets you create branded multi-slide posts for Instagram, LinkedIn, and Facebook. Choose from 6 slide templates, customise text and colours, then export as images ready to publish.',
+      },
+      {
+        heading: 'How to use it',
+        steps: [
+          'Go to Creative Studio and click the Create tab',
+          'Click "Build a Carousel"',
+          'Choose a platform size (Instagram 1:1, Story 9:16, LinkedIn, etc.)',
+          'Add slides using the template buttons (Intro, Content, Quote, Stat, CTA, Image)',
+          'Edit each slide — click to change title, body text, and background',
+          'Reorder slides by dragging them in the sidebar',
+          'Click Export to save all slides as images to your media library',
+        ],
+        tip: 'Your brand colours are automatically applied to every slide. The Director can also build carousels for you — just say "make me a carousel about our top products."',
+      },
+    ],
+    tags: ['carousel', 'slides', 'multi-image', 'instagram', 'linkedin', 'template', 'builder'],
+    relatedSlugs: ['creating-content/write-a-social-post', 'creating-content/edit-images'],
+    lastUpdated: '2026-04-08',
+  },
+  {
+    slug: 'edit-images',
+    categorySlug: 'creating-content',
+    title: 'Edit Images',
+    subtitle: 'Crop, filter, and add text to your images',
+    body: [
+      {
+        body: 'The built-in image editor lets you crop images to the perfect size for each platform, apply filters, add text overlays, and adjust brightness and contrast — all without leaving the app.',
+      },
+      {
+        heading: 'How to open the editor',
+        body: 'You can edit images from several places:',
+        steps: [
+          'In the Media Library — hover over any image and click Edit',
+          'In the Post Composer — click the edit icon on any selected image',
+          'In the Post Detail panel — click Edit on the preview image',
+        ],
+      },
+      {
+        heading: 'Crop presets',
+        body: 'The editor includes platform-specific crop presets so your images are always the right size. Presets include Instagram Post (1:1), Instagram Story (9:16), LinkedIn Wide (1.91:1), YouTube Thumbnail (16:9), TikTok (9:16), and more.',
+      },
+      {
+        heading: 'What you can do',
+        body: 'The editor supports cropping, rotating, filters, brightness and contrast adjustment, text overlay, and annotations. Edited images are saved as new versions — the original is never changed.',
+      },
+    ],
+    tags: ['edit', 'crop', 'filter', 'image', 'resize', 'text overlay', 'annotate', 'aspect ratio'],
+    relatedSlugs: ['creating-content/build-a-carousel', 'creating-content/generate-an-ai-image'],
+    lastUpdated: '2026-04-08',
+  },
+  {
+    slug: 'hashtag-groups',
+    categorySlug: 'creating-content',
+    title: 'Hashtag Groups',
+    subtitle: 'Save and reuse hashtag sets across posts',
+    body: [
+      {
+        body: 'Hashtag groups let you save collections of hashtags for quick insertion. Instead of typing the same hashtags every time, create a group once and insert it with one click.',
+      },
+      {
+        heading: 'Creating a group',
+        steps: [
+          'In the Post Composer, click the "Groups" button next to the hashtag input',
+          'Click "New group"',
+          'Enter a name (e.g. "Core brand tags" or "Summer campaign")',
+          'Type your hashtags separated by commas',
+          'Click Save',
+        ],
+      },
+      {
+        heading: 'Using a group',
+        body: 'Click the Groups button, then click any saved group to insert all its hashtags into your current post. You can also delete groups you no longer need.',
+      },
+    ],
+    tags: ['hashtag', 'group', 'save', 'reuse', 'tags', 'campaign', 'brand'],
+    relatedSlugs: ['creating-content/write-a-social-post', 'creating-content/post-templates'],
+    lastUpdated: '2026-04-08',
+  },
+  {
+    slug: 'post-templates',
+    categorySlug: 'creating-content',
+    title: 'Post Templates',
+    subtitle: 'Reusable caption templates with fill-in variables',
+    body: [
+      {
+        body: 'Post templates let you create reusable caption formats with variables like {product}, {date}, and {brand} that get filled in each time you use the template.',
+      },
+      {
+        heading: 'Using a template',
+        steps: [
+          'In the Post Composer, click the "Templates" button',
+          'Browse available templates and click one to select it',
+          'Fill in any variables (product name, offer details, etc.)',
+          'Preview the final caption and click "Use Template"',
+        ],
+        tip: 'Templates are per-brand, so each of your brands can have its own set of reusable formats.',
+      },
+    ],
+    tags: ['template', 'reusable', 'caption', 'variable', 'format', 'recurring'],
+    relatedSlugs: ['creating-content/hashtag-groups', 'creating-content/write-a-social-post'],
+    lastUpdated: '2026-04-08',
+  },
+  {
+    slug: 'instagram-grid-planner',
+    categorySlug: 'creating-content',
+    title: 'Instagram Grid Planner',
+    subtitle: 'Preview and reorder your Instagram feed aesthetic',
+    body: [
+      {
+        body: 'The Grid Planner shows your upcoming Instagram posts in a 3-column grid — exactly how they will appear on your profile. You can drag posts to reorder them and see the visual aesthetic before anything goes live.',
+      },
+      {
+        heading: 'How to use it',
+        steps: [
+          'Go to Creative Studio and click the "Grid Planner" tab',
+          'Your scheduled and draft Instagram posts appear in a grid',
+          'Drag any post to a new position to change the order',
+          'Published posts are shown but cannot be moved',
+          'Click any post to open its detail panel for editing',
+        ],
+      },
+    ],
+    tags: ['grid', 'planner', 'instagram', 'feed', 'aesthetic', 'reorder', 'visual', 'preview'],
+    relatedSlugs: ['creating-content/build-a-carousel', 'creating-content/write-a-social-post'],
+    lastUpdated: '2026-04-08',
+  },
+  {
+    slug: 'approve-posts',
+    categorySlug: 'creating-content',
+    title: 'Approve or Reject Posts',
+    subtitle: 'Review content before it goes live',
+    body: [
+      {
+        body: 'Every post can be reviewed before publishing. When you or your Director creates a post, it starts as a draft. You can approve it (which schedules it for publishing) or reject it with feedback.',
+      },
+      {
+        heading: 'Approving a post',
+        body: 'Click any post in the Creative Studio feed, then click "Approve & Schedule" in the detail panel. The post moves from draft to scheduled and will be published at the set time.',
+      },
+      {
+        heading: 'Rejecting a post',
+        body: 'Click "Reject" and optionally add a reason. The post returns to draft status so it can be revised. You can also add comments for feedback without rejecting.',
+      },
+      {
+        heading: 'Comments',
+        body: 'The comment thread below each post lets you leave notes and feedback. This is useful for team collaboration — leave a comment and your team member can see it when they review the post.',
+      },
+    ],
+    tags: ['approve', 'reject', 'review', 'draft', 'schedule', 'comment', 'feedback', 'workflow'],
+    relatedSlugs: ['team-and-sharing/roles-and-permissions', 'creating-content/write-a-social-post'],
+    lastUpdated: '2026-04-08',
+  },
 ]
