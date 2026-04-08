@@ -17,9 +17,32 @@ import { VideosCard } from './VideosCard'
 import { CompetitorIntelCard } from './CompetitorIntelCard'
 import { SocialAnalyticsCard } from './SocialAnalyticsCard'
 import { AgentActivityCard } from './AgentActivityCard'
+import { UpcomingPostsCard } from './UpcomingPostsCard'
 import { StudioFeed } from './StudioFeed'
 import { PostReviewPanel } from './PostReviewPanel'
+import { PostDetailPanel } from './PostDetailPanel'
+import type { StudioItem } from './StudioFeedCard'
 import type { ScheduledPost } from '@/types/database'
+
+function postToStudioItem(post: ScheduledPost): StudioItem {
+  const postType = post.post_type ?? 'single'
+  const mediaCount = post.media_item_ids?.length ?? 0
+  const typeLabel = postType === 'carousel' && mediaCount > 1
+    ? `${post.platform} carousel (${mediaCount})`
+    : `${post.platform} ${postType}`
+  return {
+    id: `post-${post.id}`,
+    type: 'post',
+    title: typeLabel,
+    caption: post.caption,
+    platform: post.platform,
+    hashtags: post.hashtags,
+    status: post.status,
+    scheduledAt: post.scheduled_at,
+    createdAt: post.created_at,
+    raw: post,
+  }
+}
 
 export function StudioDashboard() {
   const { activeBrandId } = useAgencyStore()
@@ -27,6 +50,7 @@ export function StudioDashboard() {
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
   const { platforms: connectedPlatforms } = useConnectedPlatforms(activeBrandId)
   const [reviewPosts, setReviewPosts] = useState<ScheduledPost[] | null>(null)
+  const [editingPost, setEditingPost] = useState<StudioItem | null>(null)
 
   if (!activeBrandId) {
     return (
@@ -80,11 +104,17 @@ export function StudioDashboard() {
         <WeekAtGlance posts={data.posts} />
       </div>
 
-      {/* D + E. Drafts + Strategy — 2 columns */}
+      {/* D. Upcoming Posts + Drafts — 2 columns */}
       <div className="grid gap-4 md:grid-cols-2">
+        <UpcomingPostsCard
+          posts={data.posts}
+          onSelectPost={(post) => setEditingPost(postToStudioItem(post))}
+        />
         <DraftsCard posts={data.posts} onReviewDrafts={setReviewPosts} />
-        <StrategySummaryCard brand={data.brand} />
       </div>
+
+      {/* E. Strategy — full width */}
+      <StrategySummaryCard brand={data.brand} />
 
       {/* F. Canva Designs — full width */}
       <CanvaDesignsCard
@@ -109,6 +139,22 @@ export function StudioDashboard() {
         <h3 className="text-sm font-semibold text-foreground px-1">Recent Content</h3>
         <StudioFeed />
       </div>
+
+      {/* Post Edit Panel overlay */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/30">
+          <div className="h-full w-full max-w-md border-l border-border bg-background overflow-y-auto">
+            <PostDetailPanel
+              item={editingPost}
+              onClose={() => setEditingPost(null)}
+              onUpdated={() => {
+                data.refetch?.()
+                setEditingPost(null)
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Post Review Panel overlay */}
       {reviewPosts && data.brand && (

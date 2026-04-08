@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { PenLine, CalendarDays, Video, Palette, Target, Repeat, MessageSquare, Images } from 'lucide-react'
+import { PenLine, CalendarDays, Video, Palette, Target, Repeat, MessageSquare, Images, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
@@ -17,7 +17,8 @@ interface CardDef {
   colour: string
   title: string
   description: string
-  buildMessage: (brand: string, context: string) => string
+  href?: string // If set, card navigates instead of chatting
+  buildMessage?: (brand: string, context: string) => string
 }
 
 const ROOM_CARDS: CardDef[] = [
@@ -25,9 +26,8 @@ const ROOM_CARDS: CardDef[] = [
     icon: Video,
     colour: 'bg-red-500/15 text-red-400',
     title: 'Create a Video',
-    description: 'AI presenter, edit yourself, or bulk import. HeyGen + OpenClaw + Canva.',
-    buildMessage: (brand, ctx) =>
-      `I want to create a video for ${brand}.\n${ctx}\nWhat type of video should we make? Suggest 2-3 options with platform, style, and topic — then I'll pick one and you generate it.`,
+    description: 'AI presenter, edit yourself, or bulk import. YouTube, Shorts, Reels, TikTok.',
+    href: '/agency/studio/video',
   },
   {
     icon: Palette,
@@ -42,8 +42,7 @@ const ROOM_CARDS: CardDef[] = [
     colour: 'bg-blue-500/15 text-blue-400',
     title: 'Write a Post',
     description: 'AI writes it, you edit, or both. Live platform previews.',
-    buildMessage: (brand, ctx) =>
-      `Write a social media post for ${brand}.\n${ctx}\nWhich platform needs content most right now? Write the post, show me a preview, and let me approve before scheduling.`,
+    href: '/agency/studio/post',
   },
   {
     icon: Target,
@@ -58,8 +57,7 @@ const ROOM_CARDS: CardDef[] = [
     colour: 'bg-emerald-500/15 text-emerald-400',
     title: 'Repurpose Content',
     description: 'Turn one piece into posts, clips, blogs, and newsletters.',
-    buildMessage: (brand, ctx) =>
-      `I have content I want to repurpose across platforms for ${brand}.\n${ctx}\nAsk me what content to repurpose, then create versions for each connected platform.`,
+    href: '/agency/studio/repurpose',
   },
   {
     icon: CalendarDays,
@@ -127,6 +125,11 @@ export function CreateHub() {
     )
   }
 
+  const cardClasses = cn(
+    'group relative rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:bg-primary/5 space-y-3',
+  )
+  const disabledClasses = 'opacity-50 cursor-not-allowed hover:border-border hover:bg-card'
+
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-6">
       <StrategyBrief context={strategyContext} />
@@ -142,10 +145,7 @@ export function CreateHub() {
           type="button"
           disabled={!hasBrand}
           onClick={() => setShowCarouselBuilder(true)}
-          className={cn(
-            'group relative rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:bg-primary/5 space-y-3',
-            !hasBrand && 'opacity-50 cursor-not-allowed hover:border-border hover:bg-card',
-          )}
+          className={cn(cardClasses, !hasBrand && disabledClasses)}
         >
           <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', 'bg-indigo-500/15 text-indigo-400')}>
             <Images className="h-5 w-5" />
@@ -162,22 +162,46 @@ export function CreateHub() {
 
         {ROOM_CARDS.map(card => {
           const Icon = card.icon
+          const isNavigable = !!card.href && hasBrand
+
+          // Cards with href navigate directly to the room
+          if (isNavigable) {
+            return (
+              <Link
+                key={card.title}
+                href={card.href!}
+                className={cn(cardClasses)}
+              >
+                <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', card.colour)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                    {card.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                    {card.description}
+                  </p>
+                </div>
+              </Link>
+            )
+          }
+
+          // Cards without href send a message to the Director
           return (
             <button
               key={card.title}
               type="button"
               disabled={!hasBrand}
               onClick={() => {
-                if (hasBrand) {
+                if (hasBrand && card.buildMessage) {
                   sendToDirector(card.buildMessage(brandName!, agentContext))
                 }
               }}
-              className={cn(
-                'group relative rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/30 hover:bg-primary/5 space-y-3',
-                !hasBrand && 'opacity-50 cursor-not-allowed hover:border-border hover:bg-card',
-              )}
+              className={cn(cardClasses, !hasBrand && disabledClasses)}
             >
-              <MessageSquare className="absolute top-3 right-3 h-3.5 w-3.5 text-white/40" />
+              <MessageSquare className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />
               <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', card.colour)}>
                 <Icon className="h-5 w-5" />
               </div>
@@ -192,16 +216,6 @@ export function CreateHub() {
             </button>
           )
         })}
-      </div>
-      <div className="mt-6 text-center">
-        <p className="text-[10px] text-muted-foreground mb-2">Prefer detailed creation tools?</p>
-        <div className="flex flex-wrap justify-center gap-3">
-          <Link href="/agency/studio/video" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Video Room</Link>
-          <Link href="/agency/studio/design" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Design Room</Link>
-          <Link href="/agency/studio/post" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Post Composer</Link>
-          <Link href="/agency/studio/repurpose" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Repurpose</Link>
-          <Link href="/agency/studio/campaign" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Campaign</Link>
-        </div>
       </div>
     </div>
   )
