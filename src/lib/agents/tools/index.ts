@@ -55,6 +55,7 @@ import { createUploadMediaTool } from './upload-media'
 import { createManageCollectionsTool } from './manage-collections'
 import { createManageMediaTagsTool } from './manage-media-tags'
 import { createResearchIndustryTool } from './research-industry'
+import { createBlotatoListAccountsTool, createBlotatoPublishTool, createBlotatoExtractContentTool, createBlotatoSourceStatusTool, createBlotatoListTemplatesTool, createBlotatoCreateVisualTool, createBlotatoVisualStatusTool, createBlotatoPostStatusTool } from './blotato'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -181,6 +182,17 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const manageMediaTags = createManageMediaTagsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const researchIndustry = createResearchIndustryTool(ctx.supabase, ctx.userId, ctx.brandId)
 
+  // Blotato tools (AI content creation, visual generation, content repurposing)
+  // Used alongside Mixpost — Director chooses which is best per task
+  const blotatoListAccountsTool = createBlotatoListAccountsTool(ctx.supabase, ctx.userId)
+  const blotatoPublish = createBlotatoPublishTool(ctx.supabase, ctx.userId)
+  const blotatoExtractContent = createBlotatoExtractContentTool(ctx.supabase, ctx.userId)
+  const blotatoSourceStatus = createBlotatoSourceStatusTool(ctx.supabase, ctx.userId)
+  const blotatoListTemplatesTool = createBlotatoListTemplatesTool(ctx.supabase, ctx.userId)
+  const blotatoCreateVisualTool = createBlotatoCreateVisualTool(ctx.supabase, ctx.userId)
+  const blotatoVisualStatus = createBlotatoVisualStatusTool(ctx.supabase, ctx.userId)
+  const blotatoPostStatus = createBlotatoPostStatusTool(ctx.supabase, ctx.userId)
+
   // Base management tools every agent gets
   const managementTools = {
     create_task: createTask,
@@ -278,9 +290,18 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       manage_collections: manageCollections,
       manage_media_tags: manageMediaTags,
       research_industry: researchIndustry,
+      // Blotato (AI content creation + visual generation + repurposing)
+      blotato_list_accounts: blotatoListAccountsTool,
+      blotato_publish: blotatoPublish,
+      blotato_extract_content: blotatoExtractContent,
+      blotato_source_status: blotatoSourceStatus,
+      blotato_list_templates: blotatoListTemplatesTool,
+      blotato_create_visual: blotatoCreateVisualTool,
+      blotato_visual_status: blotatoVisualStatus,
+      blotato_post_status: blotatoPostStatus,
       ...managementTools,
     },
-    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, generate_video_agent: videoAgent, translate_video: translateVideoTool, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, browse_mixpost_media: browseMixpostMedia, text_to_speech: textToSpeechTool, list_heygen_assets: listHeyGenAssets, list_heygen_videos: listHeyGenVideos, get_video_share_url: getVideoShareUrl, list_voice_locales: listVoiceLocales, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, ...managementTools },
+    content: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, generate_video_agent: videoAgent, translate_video: translateVideoTool, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, browse_mixpost_media: browseMixpostMedia, text_to_speech: textToSpeechTool, list_heygen_assets: listHeyGenAssets, list_heygen_videos: listHeyGenVideos, get_video_share_url: getVideoShareUrl, list_voice_locales: listVoiceLocales, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, blotato_extract_content: blotatoExtractContent, blotato_source_status: blotatoSourceStatus, blotato_list_templates: blotatoListTemplatesTool, blotato_create_visual: blotatoCreateVisualTool, blotato_visual_status: blotatoVisualStatus, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, list_heygen_videos: listHeyGenVideos, get_video_share_url: getVideoShareUrl, ...managementTools },
     strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, query_social_analytics: querySocialAnalytics, manage_tags: manageTags, request_outline_review: requestOutlineReview, import_design_from_url: importDesignFromUrl, get_presenter_notes: getPresenterNotes, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, analyse_content_gaps: analyseContentGaps, publish_to_social: publishToSocial, manage_collections: manageCollections, manage_media_tags: manageMediaTags, research_industry: researchIndustry, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, research_industry: researchIndustry, ...managementTools },
