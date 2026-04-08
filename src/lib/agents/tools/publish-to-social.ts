@@ -291,7 +291,8 @@ export function createPublishToSocialTool(
               scheduled_at: isScheduled
                 ? new Date(`${schedule_date}T${schedule_time}:00+10:00`).toISOString()
                 : new Date().toISOString(),
-              post_type: 'single',
+              post_type: mediaIds.length > 1 ? 'carousel' : 'single',
+              ...(mediaIds.length > 0 ? { media_item_ids: [] } : {}),
               ...(image_url ? { image_url } : {}),
               ...(pr.externalId ? { external_post_id: pr.externalId } : {}),
               ...(!pr.success ? { error: `Failed to publish to ${pr.platform}` } : {}),

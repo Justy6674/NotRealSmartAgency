@@ -30,13 +30,26 @@ const CONTENT_OUTPUT_TYPES = new Set([
   'video',
   'video_script',
   'scheduled_post',
+  'blog_article',
+  'ad_copy',
+  'email_sequence',
+  'strategy_doc',
+  'carousel',
+  'other',
 ])
 
+const HIDDEN_STATUSES = new Set(['cancelled', 'failed'])
+
 function normaliseScheduledPost(post: ScheduledPost): StudioItem {
+  const postType = post.post_type ?? 'single'
+  const mediaCount = post.media_item_ids?.length ?? 0
+  const typeLabel = postType === 'carousel' && mediaCount > 1
+    ? `${post.platform} carousel (${mediaCount})`
+    : `${post.platform} ${postType}`
   return {
     id: `post-${post.id}`,
     type: 'post',
-    title: `${post.platform} post`,
+    title: typeLabel,
     caption: post.caption,
     platform: post.platform,
     hashtags: post.hashtags,
@@ -126,7 +139,9 @@ export function StudioFeed() {
       )
       if (!res.ok) return []
       const data: ScheduledPost[] = await res.json()
-      return data.map(normaliseScheduledPost)
+      return data
+        .filter(p => !HIDDEN_STATUSES.has(p.status))
+        .map(normaliseScheduledPost)
     } catch {
       return []
     }

@@ -282,7 +282,17 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
 
             {/* Caption */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Caption</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground">Caption</label>
+                <span className={cn(
+                  'text-[10px] tabular-nums',
+                  editedCaption.length > 2000 ? 'text-red-400 font-medium' :
+                  editedCaption.length > 1800 ? 'text-amber-400' :
+                  'text-muted-foreground/60'
+                )}>
+                  {editedCaption.length} / {item.platform === 'twitter' ? '280' : '2,200'}
+                </span>
+              </div>
               <textarea
                 value={editedCaption}
                 onChange={(e) => setEditedCaption(e.target.value)}
@@ -386,7 +396,11 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={() => handleStatusChange('cancelled')}
+                    onClick={() => {
+                      if (confirm('Cancel this post? It will not be published.')) {
+                        handleStatusChange('cancelled')
+                      }
+                    }}
                     className="rounded-md bg-zinc-500/15 px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-500/25"
                   >
                     Cancel
