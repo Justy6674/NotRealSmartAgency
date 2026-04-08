@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { memoryStore } from '@/lib/ruflo/client'
 import { getBrandNamespace, getNamespace } from '@/lib/ruflo/namespaces'
+import { fetchMixpostAccounts, fetchMixpostReports } from '@/lib/mixpost/client'
+import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
 
 // ── Platform benchmarks (2026 data from social-media-benchmarks.ts) ─────────
 
@@ -71,11 +73,34 @@ export async function learnFromPublishedPosts(
     return { analysed: 0, insights: [] }
   }
 
-  // 2. Check which posts have already been analysed (skip duplicates)
-  const analysedKeys = posts.map(p => `perf-${p.id}`)
+  // 2. Fetch real engagement metrics from Mixpost
   const namespace = getNamespace(brandSlug, 'analytics')
+  let platformMetrics: Record<string, Record<string, number>> = {}
 
-  // We'll check existence by trying to store — upsert handles deduplication
+  try {
+    const accounts = await fetchMixpostAccounts()
+    if (accounts) {
+      const { data: brands } = await supabase
+        .from('brands')
+        .select('id, name, slug, social_urls')
+        .eq('id', brandId)
+
+      const brandMapping = mapAccountsToBrandsRaw(accounts, brands ?? [])
+      const brandAccounts = brandMapping.get(brandId) ?? []
+
+      for (const account of brandAccounts) {
+        const report = await fetchMixpostReports(account.id, '7_days')
+        if (report?.metrics) {
+          const platform = account.provider === 'facebook_page' ? 'facebook'
+            : account.provider === 'x' ? 'twitter'
+            : account.provider
+          platformMetrics[platform] = report.metrics
+        }
+      }
+    }
+  } catch {
+    // Mixpost analytics optional — continue without if unavailable
+  }
 
   // 3. Analyse each post
   const insights: PerformanceInsight[] = []
@@ -104,16 +129,38 @@ export async function learnFromPublishedPosts(
     if (post.content_pillar) characteristics.push(`pillar: ${post.content_pillar}`)
     if (post.content_type) characteristics.push(`type: ${post.content_type}`)
 
+    // Pull real metrics from Mixpost if available
+    const metrics = platformMetrics[post.platform]
+    const likes = metrics?.likes ?? metrics?.reactions ?? null
+    const comments = metrics?.comments ?? null
+    const reach = metrics?.reach ?? metrics?.impressions ?? null
+    const shares = metrics?.shares ?? metrics?.reposts ?? null
+
+    // Calculate engagement rate if we have reach
+    let engagementRate: number | null = null
+    let rating: PerformanceInsight['rating'] = 'average'
+    if (reach && reach > 0 && (likes || comments)) {
+      engagementRate = ((likes ?? 0) + (comments ?? 0) + (shares ?? 0)) / reach * 100
+      if (engagementRate >= benchmark.excellent) rating = 'excellent'
+      else if (engagementRate >= benchmark.good) rating = 'good'
+      else if (engagementRate >= benchmark.median) rating = 'average'
+      else rating = 'below_average'
+    }
+
+    const metricsStr = likes !== null
+      ? ` Metrics: ${likes} likes, ${comments ?? 0} comments, ${shares ?? 0} shares, ${reach ?? 'unknown'} reach.${engagementRate !== null ? ` Engagement: ${engagementRate.toFixed(1)}% (${rating}).` : ''}`
+      : ' Metrics: not yet available (check next cycle).'
+
     const insight: PerformanceInsight = {
       postId: post.id,
       platform: post.platform,
       postType: post.post_type,
       contentType: post.content_type,
       contentPillar: post.content_pillar,
-      engagementRate: null, // Will be populated when platform APIs are connected
+      engagementRate,
       benchmark: benchmark.median,
-      rating: 'average', // Default until real metrics available
-      insight: `Published ${post.post_type} on ${post.platform} (${characteristics.join(', ')}). Benchmark: ${benchmark.median}% engagement. ${benchmark.good}%+ is good, ${benchmark.excellent}%+ is excellent.`,
+      rating,
+      insight: `Published ${post.post_type} on ${post.platform} (${characteristics.join(', ')}).${metricsStr} Benchmark: ${benchmark.median}% median, ${benchmark.good}%+ good, ${benchmark.excellent}%+ excellent.`,
       captionPreview: post.caption?.slice(0, 150) ?? '',
       publishedAt: post.published_at,
     }
@@ -124,10 +171,14 @@ export async function learnFromPublishedPosts(
     const memoryValue = [
       `Published ${post.post_type} on ${post.platform} at ${new Date(post.published_at).toLocaleDateString('en-AU')}.`,
       characteristics.length > 0 ? `Characteristics: ${characteristics.join(', ')}.` : '',
-      `Platform benchmark: ${benchmark.median}% median engagement, ${benchmark.good}%+ good, ${benchmark.excellent}%+ excellent.`,
+      engagementRate !== null
+        ? `REAL METRICS: ${likes} likes, ${comments ?? 0} comments, ${shares ?? 0} shares, ${reach} reach. Engagement rate: ${engagementRate.toFixed(1)}% (${rating}). Benchmark: ${benchmark.median}%.`
+        : `Platform benchmark: ${benchmark.median}% median engagement, ${benchmark.good}%+ good, ${benchmark.excellent}%+ excellent.`,
       post.content_pillar ? `Content pillar: ${post.content_pillar}.` : '',
       post.content_type ? `Content type: ${post.content_type}.` : '',
       `Caption: "${post.caption?.slice(0, 200)}${(post.caption?.length ?? 0) > 200 ? '...' : ''}"`,
+      rating === 'excellent' ? 'REPLICATE THIS APPROACH — high performer.' : '',
+      rating === 'below_average' ? 'REVIEW THIS APPROACH — underperformed vs benchmark.' : '',
     ].filter(Boolean).join(' ')
 
     await memoryStore(
