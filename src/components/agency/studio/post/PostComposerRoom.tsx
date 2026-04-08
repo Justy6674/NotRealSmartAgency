@@ -19,6 +19,22 @@ import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
 import { createVersionsFromMaster, customisePlatform, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
 import type { PostPlatform, PostType } from '@/types/database'
 
+// ─── Director Assist Button ────────────────────────────────────────────────────
+// Sends a contextual prompt to the REAL Director agent in the chat panel.
+// The Director may delegate to Content, Brand, Compliance, or call a meeting.
+function DirectorAssist({ prompt, label }: { prompt: string; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => sendToDirector(prompt)}
+      className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors"
+    >
+      <Sparkles className="h-3 w-3" />
+      {label ?? 'Ask Director'}
+    </button>
+  )
+}
+
 // ─── Content type → Post type mapping ──────────────────────────────────────────
 const CONTENT_TO_POST_TYPE: Record<ContentType, PostType> = {
   post: 'single',
@@ -170,11 +186,25 @@ export function PostComposerRoom() {
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {/* Section 1: Content Type */}
         <Section>
+          <div className="flex items-center justify-between mb-3">
+            <div />
+            <DirectorAssist
+              prompt={`What type of content should ${brandName} create right now? Consider our strategy, what's performing well, and what we haven't posted recently. Suggest a content type and explain why.`}
+              label="What should I create?"
+            />
+          </div>
           <ContentTypeSection value={contentType} onChange={setContentType} />
         </Section>
 
         {/* Section 2: Platforms */}
         <Section>
+          <div className="flex items-center justify-between mb-1">
+            <div />
+            <DirectorAssist
+              prompt={`Which platforms need content most for ${brandName} right now? Look at our posting frequency, engagement, and strategy. Tell me where to focus.`}
+              label="Where should I post?"
+            />
+          </div>
           <PlatformSection
             contentType={contentType}
             selected={selectedPlatforms}
@@ -184,6 +214,13 @@ export function PostComposerRoom() {
 
         {/* Section 3: Media */}
         <Section>
+          <div className="flex items-center justify-between mb-1">
+            <div />
+            <DirectorAssist
+              prompt={`I'm building a ${contentType.replace('_', ' ')} for ${selectedPlatforms.join(', ') || 'social media'}. Review my media library for ${brandName} and suggest which images or videos would work best. Consider brand guidelines and platform requirements.`}
+              label="Review my media"
+            />
+          </div>
           <MediaSection
             contentType={contentType}
             brandId={activeBrandId}
@@ -195,7 +232,13 @@ export function PostComposerRoom() {
         {/* Section 4: Caption */}
         <Section>
           <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">Caption</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Caption</h3>
+              <DirectorAssist
+                prompt={`Write a ${contentType.replace('_', ' ')} caption for ${brandName} on ${selectedPlatforms.join(', ') || 'social media'}.${aiPrompt ? ` Topic: ${aiPrompt}` : ''} Use our brand voice and content strategy. If you need the Content team or Brand team for this, bring them in.`}
+                label="Write my caption"
+              />
+            </div>
 
             {/* AI Prompt */}
             <div className="flex gap-2">
@@ -270,6 +313,13 @@ export function PostComposerRoom() {
 
         {/* Section 6: Hashtags */}
         <Section>
+          <div className="flex items-center justify-between mb-1">
+            <div />
+            <DirectorAssist
+              prompt={`Suggest the best hashtags for this ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ')} for ${brandName}.${caption ? ` The caption is: "${caption.slice(0, 200)}"` : ''} Get the SEO team involved if needed — I want hashtags that actually drive discovery, not just filler.`}
+              label="Director picks hashtags"
+            />
+          </div>
           <HashtagSection
             brandId={activeBrandId}
             hashtags={hashtags}
@@ -281,6 +331,13 @@ export function PostComposerRoom() {
 
         {/* Section 7: Compliance */}
         <Section>
+          <div className="flex items-center justify-between mb-1">
+            <div />
+            <DirectorAssist
+              prompt={`Review this post for ${brandName} before I publish it. Check for AHPRA/TGA compliance, brand voice, and anything that could get us in trouble. The caption is:\n\n"${caption}"\n\nHashtags: ${hashtags.map(h => `#${h}`).join(' ')}\n\nPlatforms: ${selectedPlatforms.join(', ')}\n\nBring in the Compliance team if needed. This is a healthcare brand — $60K per offence.`}
+              label="Full review"
+            />
+          </div>
           <ComplianceSection
             caption={caption}
             brandName={brandName}
