@@ -3,21 +3,21 @@
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
-import { StudioDashboard } from './StudioDashboard'
+import { PostCreator } from './post/PostCreator'
+import { ReviewRoom } from './ReviewRoom'
 import { EnhancedCalendar } from './EnhancedCalendar'
 import { CalendarActions } from './CalendarActions'
-import { PostCreator } from './post/PostCreator'
 import { MediaLibrary } from './MediaLibrary'
-import { InstagramGridPlanner } from './grid/InstagramGridPlanner'
 
 // ─── Tab definitions ─────────────────────────────────────────────────────────
+// Create → Review → Schedule = content pipeline
+// Media = the pantry (always accessible)
 
 const TABS = [
   { id: 'create', label: 'Create' },
-  { id: 'all', label: 'Content' },
-  { id: 'calendar', label: 'Calendar' },
+  { id: 'review', label: 'Review' },
+  { id: 'schedule', label: 'Schedule' },
   { id: 'media', label: 'Media' },
-  { id: 'grid', label: 'Grid Planner' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -55,16 +55,15 @@ export function CreativeStudio() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'all' && <StudioDashboard />}
-        {activeTab === 'calendar' && (
+        {activeTab === 'create' && <PostCreator />}
+        {activeTab === 'review' && <ReviewRoom />}
+        {activeTab === 'schedule' && (
           <div className="flex-1 overflow-y-auto p-6 space-y-4">
             <CalendarActions />
             <EnhancedCalendar />
           </div>
         )}
         {activeTab === 'media' && <MediaLibrary />}
-        {activeTab === 'create' && <PostCreator />}
-        {activeTab === 'grid' && <InstagramGridPlanner />}
       </div>
     </div>
   )
