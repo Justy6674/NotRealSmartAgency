@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Tag, Images, Plus } from 'lucide-react'
+import { Tag, Images, Plus, Palette } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { MediaUploader } from '@/components/agency/MediaUploader'
@@ -11,6 +11,7 @@ import { TagManager } from './TagManager'
 import { CollectionCard } from './CollectionCard'
 import { CollectionView } from './CollectionView'
 import { MediaDetailPanel } from './MediaDetailPanel'
+import { CanvaImportModal } from './CanvaImportModal'
 import type { MediaItemWithUsage, MediaCollection } from '@/types/database'
 
 type TypeFilter = 'all' | 'image' | 'video' | 'audio'
@@ -38,6 +39,7 @@ export function MediaLibrary() {
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [showCollections, setShowCollections] = useState(true)
   const [detailItem, setDetailItem] = useState<MediaItemWithUsage | null>(null)
+  const [showCanvaImport, setShowCanvaImport] = useState(false)
 
   const fetchMedia = useCallback(async () => {
     if (!activeBrandId) return
@@ -249,6 +251,16 @@ export function MediaLibrary() {
     <div className="space-y-4 overflow-y-auto p-6">
       <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} />
 
+      {/* Import from Canva */}
+      <button
+        type="button"
+        onClick={() => setShowCanvaImport(true)}
+        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+      >
+        <Palette className="h-4 w-4 text-purple-400" />
+        Import from Canva
+      </button>
+
       {/* Tag Manager */}
       <TagManager
         brandId={activeBrandId}
@@ -320,6 +332,33 @@ export function MediaLibrary() {
             <Plus className="h-3 w-3" />
             Campaign
           </button>
+
+          {/* Add to existing collection */}
+          {collections.length > 0 && (
+            <select
+              onChange={async (e) => {
+                const collectionId = e.target.value
+                if (!collectionId) return
+                await fetch(`/api/collections/${collectionId}/items`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ mediaItemIds: Array.from(selectedIds) }),
+                })
+                setSelectedIds(new Set())
+                fetchCollections()
+                e.target.value = ''
+              }}
+              defaultValue=""
+              className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium border-none outline-none cursor-pointer"
+            >
+              <option value="" disabled>+ Add to collection...</option>
+              {collections.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({(c.media_collection_items as unknown[])?.length ?? 0} items)
+                </option>
+              ))}
+            </select>
+          )}
 
           {bulkTagInput ? (
             <div className="flex items-center gap-1">
@@ -403,6 +442,14 @@ export function MediaLibrary() {
             />
           ))}
         </div>
+      )}
+
+      {/* Canva Import Modal */}
+      {showCanvaImport && (
+        <CanvaImportModal
+          onClose={() => setShowCanvaImport(false)}
+          onImported={() => { fetchMedia(); setShowCanvaImport(false) }}
+        />
       )}
 
       {/* Media Detail Panel */}
