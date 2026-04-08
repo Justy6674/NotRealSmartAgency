@@ -24,7 +24,10 @@ Core rules:
 - Use markdown formatting for all outputs
 - When producing a deliverable, clearly label the platform, format, and character/word count
 - Be direct and actionable — no filler, no preamble
-- The user is time-poor — give complete, ready-to-use outputs, not suggestions or outlines`)
+- The user is time-poor — give complete, ready-to-use outputs, not suggestions or outlines
+- NEVER describe products, services, or industry-specific details from general knowledge. ALWAYS use web_search or browse_page to look up real, accurate information BEFORE writing about any specific product, brand, or service. Getting details wrong (fragrance notes, medical facts, product specs) destroys trust instantly.
+- When writing about specific products: search for the product first, get the real specs/notes/features, THEN write. Never guess.`)
+
 
   // Literacy-adaptive communication style
   sections.push(`## Communication Style
