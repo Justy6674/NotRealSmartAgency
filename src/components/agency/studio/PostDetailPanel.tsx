@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PlatformMockupPreview } from './preview'
 
 import type { StudioItem } from './StudioFeedCard'
 
@@ -215,6 +216,21 @@ export function PostDetailPanel({ item, onClose, onUpdated }: PostDetailPanelPro
       <div className="flex-1 space-y-5 overflow-y-auto p-4">
         {item.type === 'post' ? (
           <>
+            {/* Phone-frame platform preview */}
+            {item.platform && (
+              <div className="flex justify-center">
+                <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
+                  <PlatformMockupPreview
+                    platform={item.platform}
+                    caption={editedCaption}
+                    hashtags={editedHashtags}
+                    mediaUrl={mediaUrls[0]?.url}
+                    brandName={(item.raw as { brands?: { name: string } })?.brands?.name ?? 'Brand'}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Carousel / Media Preview */}
             {mediaUrls.length > 0 && (
               <div className="space-y-2">
