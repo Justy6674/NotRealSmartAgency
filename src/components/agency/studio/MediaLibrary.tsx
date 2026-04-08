@@ -10,6 +10,7 @@ import { MediaLibraryCard } from './MediaLibraryCard'
 import { TagManager } from './TagManager'
 import { CollectionCard } from './CollectionCard'
 import { CollectionView } from './CollectionView'
+import { MediaDetailPanel } from './MediaDetailPanel'
 import type { MediaItemWithUsage, MediaCollection } from '@/types/database'
 
 type TypeFilter = 'all' | 'image' | 'video' | 'audio'
@@ -36,6 +37,7 @@ export function MediaLibrary() {
   const [viewMode, setViewMode] = useState<ViewMode>('library')
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [showCollections, setShowCollections] = useState(true)
+  const [detailItem, setDetailItem] = useState<MediaItemWithUsage | null>(null)
 
   const fetchMedia = useCallback(async () => {
     if (!activeBrandId) return
@@ -381,6 +383,7 @@ export function MediaLibrary() {
               key={item.id}
               item={item}
               selected={selectedIds.has(item.id)}
+              onClick={(item) => setDetailItem(item)}
               onSelect={(id) => {
                 setSelectedIds((prev) => {
                   const next = new Set(prev)
@@ -399,6 +402,23 @@ export function MediaLibrary() {
               availableTags={availableTags}
             />
           ))}
+        </div>
+      )}
+
+      {/* Media Detail Panel */}
+      {detailItem && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end bg-black/30">
+          <div className="h-full w-full max-w-md">
+            <MediaDetailPanel
+              item={detailItem}
+              onClose={() => setDetailItem(null)}
+              onTagAdd={(id, tag) => { handleTagAdd(id, tag); setDetailItem(prev => prev ? { ...prev, tags: [...(prev.tags ?? []), tag] } : null) }}
+              onTagRemove={(id, tag) => { handleTagRemove(id, tag); setDetailItem(prev => prev ? { ...prev, tags: (prev.tags ?? []).filter(t => t !== tag) } : null) }}
+              onGenerate={handleGenerate}
+              onRepurpose={handleRepurpose}
+              availableTags={availableTags}
+            />
+          </div>
         </div>
       )}
     </div>

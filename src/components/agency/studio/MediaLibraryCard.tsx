@@ -19,6 +19,7 @@ interface MediaLibraryCardProps {
   item: MediaItemWithUsage
   selected: boolean
   onSelect: (id: string) => void
+  onClick?: (item: MediaItemWithUsage) => void
   onTagAdd: (id: string, tag: string) => void
   onTagRemove: (id: string, tag: string) => void
   onTagClick: (tag: string) => void
@@ -54,6 +55,7 @@ export function MediaLibraryCard({
   item,
   selected,
   onSelect,
+  onClick,
   onTagAdd,
   onTagRemove,
   onTagClick,
@@ -117,8 +119,11 @@ export function MediaLibraryCard({
         {selected && <CheckCircle2 className="h-4 w-4 text-[oklch(0.55_0.1_240)]" />}
       </button>
 
-      {/* Thumbnail */}
-      <div className="relative h-40 w-full overflow-hidden rounded-t-lg bg-muted">
+      {/* Thumbnail — click to open detail */}
+      <div
+        className="relative h-40 w-full overflow-hidden rounded-t-lg bg-muted cursor-pointer"
+        onClick={() => onClick?.(item)}
+      >
         {item.file_type.startsWith('image/') ? (
           <img
             src={item.file_url}
@@ -169,7 +174,7 @@ export function MediaLibraryCard({
       <div className="flex flex-1 flex-col gap-2 p-3">
         {/* Filename + size */}
         <div className="flex items-start justify-between gap-2">
-          <span className="line-clamp-1 text-sm font-medium">{item.file_name}</span>
+          <button onClick={() => onClick?.(item)} className="line-clamp-1 text-sm font-medium text-left hover:text-primary transition-colors">{item.file_name}</button>
           <span className="shrink-0 text-[10px] text-muted-foreground">
             {formatFileSize(item.file_size_bytes)}
           </span>
