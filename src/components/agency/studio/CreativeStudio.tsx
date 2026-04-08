@@ -53,8 +53,8 @@ export function CreativeStudio() {
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Tab content — Create and Review manage own scroll, others use overflow-y-auto */}
+      <div className={cn('flex-1', activeTab === 'create' || activeTab === 'review' ? 'overflow-hidden' : 'overflow-y-auto')}>
         {activeTab === 'create' && <PostCreator />}
         {activeTab === 'review' && <ReviewRoom />}
         {activeTab === 'schedule' && (
