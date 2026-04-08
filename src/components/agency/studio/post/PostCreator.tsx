@@ -133,7 +133,7 @@ export function PostCreator() {
   // ── Media management ──────────────────────────────────────────────────────
   const handleMediaSelect = (ids: string[]) => {
     setSelectedMediaIds(ids)
-    setShowMediaLibrary(false)
+    // Keep library open so user can continue adding (especially for carousels)
   }
 
   const handleMediaRemove = (id: string) => {
