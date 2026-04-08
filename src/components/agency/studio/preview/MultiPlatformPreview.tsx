@@ -13,6 +13,7 @@ interface MultiPlatformPreviewProps {
   masterHashtags: string[]
   versions?: PostVersions
   mediaUrl?: string
+  mediaUrls?: string[]
   brandName: string
   brandAvatarUrl?: string
 }
@@ -32,6 +33,7 @@ export function MultiPlatformPreview({
   masterHashtags,
   versions,
   mediaUrl,
+  mediaUrls,
   brandName,
   brandAvatarUrl,
 }: MultiPlatformPreviewProps) {
@@ -92,6 +94,7 @@ export function MultiPlatformPreview({
                   caption={version.caption}
                   hashtags={version.hashtags}
                   mediaUrl={mediaUrl}
+                  mediaUrls={mediaUrls}
                   brandName={brandName}
                   brandAvatarUrl={brandAvatarUrl}
                 />

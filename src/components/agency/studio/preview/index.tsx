@@ -18,6 +18,7 @@ interface PlatformMockupProps {
   caption: string
   hashtags?: string[]
   mediaUrl?: string
+  mediaUrls?: string[]
   brandName: string
   brandAvatarUrl?: string
 }

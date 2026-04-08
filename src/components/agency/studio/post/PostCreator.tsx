@@ -195,8 +195,9 @@ export function PostCreator() {
   const maxMedia = contentType === 'carousel' ? 10 : 1
   const acceptTypes = ['short_video', 'long_video'].includes(contentType) ? ['video'] : ['image']
 
-  // ── Media URL for preview ─────────────────────────────────────────────────
+  // ── Media URLs for preview ────────────────────────────────────────────────
   const mediaUrl = selectedMedia[0]?.file_url
+  const mediaUrls = selectedMedia.map(m => m.file_url)
 
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER — using ComposerLayout (split pane)
@@ -435,6 +436,7 @@ export function PostCreator() {
         masterHashtags={hashtags}
         versions={versions}
         mediaUrl={mediaUrl}
+        mediaUrls={mediaUrls}
         brandName={brandName}
       />
       {selectedPlatforms.length === 0 && (

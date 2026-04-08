@@ -7,6 +7,7 @@ interface InstagramMockupProps {
   caption: string
   hashtags?: string[]
   mediaUrl?: string
+  mediaUrls?: string[]
   brandName: string
   brandAvatarUrl?: string
   aspect?: 'portrait' | 'square'
@@ -16,10 +17,13 @@ export function InstagramMockup({
   caption,
   hashtags,
   mediaUrl,
+  mediaUrls,
   brandName,
   brandAvatarUrl,
   aspect = 'square',
 }: InstagramMockupProps) {
+  const isCarousel = mediaUrls && mediaUrls.length > 1
+  const displayUrl = mediaUrl ?? mediaUrls?.[0]
   const fullCaption = hashtags?.length
     ? `${caption}\n\n${hashtags.map(h => `#${h.replace(/^#/, '')}`).join(' ')}`
     : caption
@@ -60,19 +64,43 @@ export function InstagramMockup({
 
         {/* Image area */}
         <div
-          className="flex-shrink-0"
+          className="flex-shrink-0 relative"
           style={{
             aspectRatio: '1/1',
-            background: mediaUrl
-              ? `url(${mediaUrl}) center/cover`
+            background: displayUrl
+              ? `url(${displayUrl}) center/cover`
               : 'linear-gradient(135deg, oklch(0.12 0.01 240), oklch(0.08 0.005 280))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          {!mediaUrl && (
+          {!displayUrl && (
             <span style={{ fontSize: 11, color: 'oklch(0.35 0 240)' }}>No image</span>
+          )}
+          {/* Carousel dots */}
+          {isCarousel && (
+            <div style={{
+              position: 'absolute',
+              bottom: 8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              gap: 4,
+            }}>
+              {mediaUrls.map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: i === 0 ? 6 : 5,
+                    height: i === 0 ? 6 : 5,
+                    borderRadius: '50%',
+                    background: i === 0 ? 'oklch(0.6 0.2 250)' : 'oklch(0.5 0 240)',
+                    opacity: i === 0 ? 1 : 0.5,
+                  }}
+                />
+              ))}
+            </div>
           )}
         </div>
 
