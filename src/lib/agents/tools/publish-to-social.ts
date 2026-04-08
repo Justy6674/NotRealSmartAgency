@@ -27,6 +27,10 @@ export function createPublishToSocialTool(
         .string()
         .optional()
         .describe('Public URL of an image to include. Instagram REQUIRES an image.'),
+      image_urls: z
+        .array(z.string())
+        .optional()
+        .describe('Multiple image URLs for carousel posts (2-10 images). Each URL must be publicly accessible. Use this for multi-image carousels instead of image_url.'),
       schedule_date: z
         .string()
         .optional()
@@ -36,7 +40,7 @@ export function createPublishToSocialTool(
         .optional()
         .describe('Schedule time HH:mm (24hr AEST). Omit for immediate publish.'),
     }),
-    execute: async ({ platforms, caption, hashtags, image_url, schedule_date, schedule_time }) => {
+    execute: async ({ platforms, caption, hashtags, image_url, image_urls, schedule_date, schedule_time }) => {
       try {
         const base = process.env.MIXPOST_API_URL
         const token = process.env.MIXPOST_API_TOKEN
@@ -128,10 +132,14 @@ export function createPublishToSocialTool(
           ? `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}`
           : caption
 
-        // Upload media if provided — use Mixpost remote/initiate (URL-based, more reliable)
-        let mediaId: number | null = null
-        if (image_url) {
+        // Upload media if provided — supports single image or carousel (multi-image)
+        const allImageUrls = image_urls?.length ? image_urls : image_url ? [image_url] : []
+        const mediaIds: number[] = []
+
+        for (const url of allImageUrls) {
           try {
+            let uploadedId: number | null = null
+
             // Method 1: Remote URL upload (preferred — no need to download first)
             const remoteRes = await fetch(`${apiBase}/media/remote/initiate`, {
               method: 'POST',
@@ -139,22 +147,22 @@ export function createPublishToSocialTool(
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ url: image_url, alt_text: '' }),
+              body: JSON.stringify({ url, alt_text: '' }),
             })
             if (remoteRes.ok) {
               const remoteData = await remoteRes.json()
               if (remoteData.status === 'completed' && remoteData.media?.id) {
-                mediaId = Number(remoteData.media.id)
+                uploadedId = Number(remoteData.media.id)
               } else if (remoteData.id) {
-                mediaId = Number(remoteData.id)
+                uploadedId = Number(remoteData.id)
               } else if (remoteData.data?.id) {
-                mediaId = Number(remoteData.data.id)
+                uploadedId = Number(remoteData.data.id)
               }
             }
 
             // Method 2: Fallback to binary upload if remote failed
-            if (!mediaId) {
-              const imgRes = await fetch(image_url)
+            if (!uploadedId) {
+              const imgRes = await fetch(url)
               if (imgRes.ok) {
                 const blob = await imgRes.blob()
                 const formData = new FormData()
@@ -166,19 +174,23 @@ export function createPublishToSocialTool(
                 })
                 if (uploadRes.ok) {
                   const data = await uploadRes.json()
-                  mediaId = Number(data.id ?? data.data?.id)
+                  uploadedId = Number(data.id ?? data.data?.id)
                 }
               }
             }
 
-            console.log(`[publish_to_social] Media upload: image_url=${image_url} | mediaId=${mediaId}`)
-
-            if (!mediaId) {
-              console.error('[publish_to_social] Failed to upload media to Mixpost')
+            if (uploadedId) {
+              mediaIds.push(uploadedId)
             }
+            console.log(`[publish_to_social] Media upload: url=${url} | mediaId=${uploadedId}`)
           } catch (err) {
-            console.error('[publish_to_social] Media upload error:', err)
+            console.error(`[publish_to_social] Media upload error for ${url}:`, err)
           }
+        }
+
+        const mediaId = mediaIds[0] ?? null
+        if (allImageUrls.length > 0 && mediaIds.length === 0) {
+          console.error('[publish_to_social] Failed to upload any media to Mixpost')
         }
 
         const isScheduled = !!(schedule_date && schedule_time)
@@ -219,7 +231,7 @@ export function createPublishToSocialTool(
           }
 
           // Instagram REQUIRES an image — block text-only posts
-          if (platform === 'instagram' && !mediaId) {
+          if (platform === 'instagram' && mediaIds.length === 0) {
             results.push(`Instagram: BLOCKED — Instagram requires an image. No image was provided or the image upload to Mixpost failed. Use generate_image or upload_media first, then try again with the image_url.`)
             postResults.push({ platform, externalId: null, success: false })
             continue
@@ -232,7 +244,7 @@ export function createPublishToSocialTool(
               is_original: true,
               content: [{
                 body: fullCaption,
-                media: mediaId ? [mediaId] : [],
+                media: mediaIds.length > 0 ? mediaIds : [],
                 url: null,
                 video_thumbs: [] as never[],
               }],
@@ -257,7 +269,7 @@ export function createPublishToSocialTool(
             const label = platform.charAt(0).toUpperCase() + platform.slice(1)
             results.push(isScheduled
               ? `${label}: Scheduled for ${schedule_date} at ${schedule_time} AEST via ${account.name}`
-              : `${label}: Publishing now via ${account.name}${mediaId ? ' (with image)' : ''} (30-60 seconds to go live)`)
+              : `${label}: Publishing now via ${account.name}${mediaIds.length > 1 ? ` (carousel: ${mediaIds.length} images)` : mediaIds.length === 1 ? ' (with image)' : ''} (30-60 seconds to go live)`)
             postResults.push({ platform, externalId: externalId || null, success: true })
           } else {
             const errText = await postRes.text().catch(() => '')
