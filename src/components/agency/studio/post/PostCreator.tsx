@@ -16,6 +16,7 @@ import { StudioCard } from './StudioCard'
 import { CreatorModeBar, type CreatorMode } from './CreatorModeBar'
 import { CreatorActionBar } from './CreatorActionBar'
 import { MediaSlots } from './MediaSlots'
+import { StrategyContextBar } from './StrategyContextBar'
 
 // Existing components (reused as-is)
 import { ContentTypeSection, type ContentType } from './ContentTypeSection'
@@ -205,6 +206,20 @@ export function PostCreator() {
 
   const editorPane = (
     <div className="space-y-4">
+      {/* ─── Strategy Context (Director's intelligence) ───────────────────── */}
+      {strategyContext && (
+        <StrategyContextBar
+          brandName={brandName}
+          postsThisWeek={strategyContext.postsThisWeek ?? 0}
+          postsTarget={strategyContext.postsTarget ?? 3}
+          suggestedPlatform={strategyContext.suggestedPlatform ?? null}
+          suggestedPillar={strategyContext.suggestedPillar ?? null}
+          suggestedContentType={strategyContext.suggestedContentType ?? null}
+          suggestion={strategyContext.suggestion ?? ''}
+          isHealthBrand={isHealthBrand}
+        />
+      )}
+
       {/* ─── Section 1: Content Type ──────────────────────────────────────── */}
       <StudioCard
         directorAssist={{

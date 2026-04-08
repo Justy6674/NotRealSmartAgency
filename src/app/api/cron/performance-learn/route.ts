@@ -1,0 +1,79 @@
+import { NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { learnFromPublishedPosts } from '@/lib/agents/performance-learner'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+/**
+ * Cron endpoint: Analyse recently published posts and store performance
+ * insights as Director memories. Called every 6 hours via Vercel Cron.
+ *
+ * Flow:
+ * 1. Fetch all brands with published posts in the last 24-72 hours
+ * 2. For each brand, run performance analysis
+ * 3. Store insights to agent_memories (analytics + brand namespace)
+ * 4. Director recalls these next time user creates content
+ */
+export async function GET(request: Request) {
+  // Verify cron secret
+  const authHeader = request.headers.get('authorization')
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
+
+  const supabase = createAdminClient()
+
+  try {
+    // Find all brands that have published posts in the analysis window (24-72h ago)
+    const now = new Date()
+    const from = new Date(now.getTime() - 72 * 60 * 60 * 1000)
+    const to = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+    const { data: recentPosts } = await supabase
+      .from('scheduled_posts')
+      .select('brand_id')
+      .eq('status', 'published')
+      .gte('published_at', from.toISOString())
+      .lte('published_at', to.toISOString())
+
+    if (!recentPosts?.length) {
+      return NextResponse.json({ message: 'No recent published posts to analyse', analysed: 0 })
+    }
+
+    // Get unique brand IDs
+    const brandIds = [...new Set(recentPosts.map(p => p.brand_id))]
+
+    // Fetch brand details
+    const { data: brands } = await supabase
+      .from('brands')
+      .select('id, slug')
+      .in('id', brandIds)
+
+    if (!brands?.length) {
+      return NextResponse.json({ message: 'No brands found', analysed: 0 })
+    }
+
+    // Run analysis per brand
+    let totalAnalysed = 0
+    const results: Record<string, number> = {}
+
+    for (const brand of brands) {
+      const { analysed } = await learnFromPublishedPosts(supabase, brand.id, brand.slug)
+      totalAnalysed += analysed
+      results[brand.slug] = analysed
+    }
+
+    return NextResponse.json({
+      message: `Analysed ${totalAnalysed} posts across ${brands.length} brand${brands.length !== 1 ? 's' : ''}`,
+      analysed: totalAnalysed,
+      brands: results,
+    })
+  } catch (error) {
+    console.error('[cron/performance-learn] Error:', error)
+    return NextResponse.json(
+      { error: 'Performance analysis failed' },
+      { status: 500 }
+    )
+  }
+}
