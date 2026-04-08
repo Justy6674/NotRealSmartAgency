@@ -146,13 +146,7 @@ export function DirectorBriefing({ brand, analytics, posts, accounts }: Director
   }
 
   return (
-    <div
-      className="rounded-xl p-5 space-y-3"
-      style={{
-        background: 'oklch(0.16 0.005 240)',
-        border: '1px solid oklch(0.28 0.01 240)',
-      }}
-    >
+    <div className="rounded-xl border border-border bg-card p-5 space-y-3">
       {/* Director identity */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30">

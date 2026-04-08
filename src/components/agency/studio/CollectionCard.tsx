@@ -29,11 +29,11 @@ export function CollectionCard({ collection, onClick, onArchive, onDelete }: Col
 
   return (
     <div
-      className="group relative cursor-pointer rounded-lg border border-border bg-[oklch(0.14_0.01_240)] overflow-hidden hover:border-[oklch(0.55_0.1_240)]/40 transition-colors"
+      className="group relative cursor-pointer rounded-lg border border-border bg-card overflow-hidden hover:border-primary/40 transition-colors"
       onClick={() => onClick(collection.id)}
     >
       {/* Preview grid */}
-      <div className="aspect-square bg-[oklch(0.1_0.005_240)] grid grid-cols-2 grid-rows-2 gap-px">
+      <div className="aspect-square bg-muted grid grid-cols-2 grid-rows-2 gap-px">
         {previewImages.length > 0 ? (
           previewImages.map((url, i) => (
             /* eslint-disable-next-line @next/next/no-img-element */
@@ -53,7 +53,7 @@ export function CollectionCard({ collection, onClick, onArchive, onDelete }: Col
         {/* Fill empty grid cells */}
         {previewImages.length > 0 && previewImages.length < 4 &&
           Array.from({ length: 4 - previewImages.length }).map((_, i) => (
-            <div key={`empty-${i}`} className="bg-[oklch(0.12_0.005_240)]" />
+            <div key={`empty-${i}`} className="bg-muted/50" />
           ))
         }
       </div>

@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
   if (!brandId) {
     return NextResponse.json({ error: 'brandId required' }, { status: 400 })
   }
-  const showAll = req.nextUrl.searchParams.get('showAll') === 'true'
+  // showAll param removed — we sort brand-matching first instead of filtering
 
   // Get Canva token from user_integrations
   const { data: integration } = await supabase
@@ -171,28 +171,30 @@ export async function GET(req: NextRequest) {
       updated_at: d.updated_at ?? d.created_at ?? null,
     }))
 
-    // Filter designs by brand name if not showing all
-    let filteredDesigns = designs
+    // Sort brand-matching designs first (don't hide non-matches)
     let brandName: string | null = null
-    if (!showAll) {
-      const { data: brand } = await supabase
-        .from('brands')
-        .select('name')
-        .eq('id', brandId)
-        .single()
-      brandName = brand?.name ?? null
-      if (brandName) {
-        const needle = brandName.toLowerCase()
-        filteredDesigns = designs.filter((d: { title: string }) =>
-          d.title.toLowerCase().includes(needle)
-        )
-      }
+    const { data: brand } = await supabase
+      .from('brands')
+      .select('name')
+      .eq('id', brandId)
+      .single()
+    brandName = brand?.name ?? null
+
+    let sortedDesigns = designs
+    if (brandName) {
+      const needle = brandName.toLowerCase()
+      const matching = designs.filter((d: { title: string }) =>
+        d.title.toLowerCase().includes(needle)
+      )
+      const rest = designs.filter((d: { title: string }) =>
+        !d.title.toLowerCase().includes(needle)
+      )
+      sortedDesigns = [...matching, ...rest]
     }
 
     return NextResponse.json({
       configured: true,
-      designs: filteredDesigns,
-      totalDesigns: designs.length,
+      designs: sortedDesigns,
       brandName,
       ...(nextContinuation ? { continuation: nextContinuation } : {}),
     })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
@@ -27,20 +27,6 @@ export function StudioDashboard() {
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
   const { platforms: connectedPlatforms } = useConnectedPlatforms(activeBrandId)
   const [reviewPosts, setReviewPosts] = useState<ScheduledPost[] | null>(null)
-  const [showAllCanva, setShowAllCanva] = useState(false)
-  const [allCanvaDesigns, setAllCanvaDesigns] = useState<typeof data.canva.designs | null>(null)
-
-  const handleShowAllCanva = useCallback(async () => {
-    if (!activeBrandId) return
-    try {
-      const res = await fetch(`/api/canva/designs?brandId=${activeBrandId}&showAll=true`)
-      if (res.ok) {
-        const json = await res.json()
-        setAllCanvaDesigns(json.designs ?? [])
-        setShowAllCanva(true)
-      }
-    } catch { /* ignore */ }
-  }, [activeBrandId])
 
   if (!activeBrandId) {
     return (
@@ -103,10 +89,7 @@ export function StudioDashboard() {
       {/* F. Canva Designs — full width */}
       <CanvaDesignsCard
         configured={data.canva.configured}
-        designs={showAllCanva && allCanvaDesigns ? allCanvaDesigns : data.canva.designs}
-        totalDesigns={data.canva.totalDesigns}
-        brandName={data.canva.brandName}
-        onShowAll={handleShowAllCanva}
+        designs={data.canva.designs}
       />
 
       {/* G. Videos — full width (only if there are videos or it's worth showing) */}
