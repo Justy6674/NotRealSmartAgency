@@ -183,10 +183,12 @@ export async function getBlotatoApiKey(
 ): Promise<string | null> {
   const { data } = await supabase
     .from('user_integrations')
-    .select('api_key')
+    .select('cached_data, is_active')
     .eq('user_id', userId)
     .eq('provider', 'blotato')
     .single()
 
-  return data?.api_key ?? null
+  if (!data?.is_active) return null
+  const cached = data?.cached_data as Record<string, unknown> | null
+  return (cached?.api_key as string) ?? null
 }
