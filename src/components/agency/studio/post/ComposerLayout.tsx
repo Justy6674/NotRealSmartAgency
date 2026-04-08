@@ -25,8 +25,7 @@ export function ComposerLayout({ editor, preview, actionBar }: ComposerLayoutPro
 
         {/* Right — Preview pane (sticky, hidden on mobile) */}
         <div
-          className="hidden lg:block flex-1 overflow-y-auto border-l border-border"
-          style={{ background: 'oklch(0.06 0.005 240)' }}
+          className="hidden lg:block flex-1 overflow-y-auto border-l border-border bg-muted/50"
         >
           <div className="sticky top-0 p-4 lg:p-6">
             {preview}
@@ -36,11 +35,7 @@ export function ComposerLayout({ editor, preview, actionBar }: ComposerLayoutPro
 
       {/* Bottom — Action bar (sticky) */}
       <div
-        className="flex-shrink-0 border-t border-border px-4 py-3 lg:px-6"
-        style={{
-          background: 'oklch(0.1 0.005 240)',
-          backdropFilter: 'blur(12px)',
-        }}
+        className="flex-shrink-0 border-t border-border px-4 py-3 lg:px-6 bg-card/95 backdrop-blur-sm"
       >
         {actionBar}
       </div>

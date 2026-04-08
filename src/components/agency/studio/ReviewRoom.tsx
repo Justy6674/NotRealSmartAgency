@@ -282,7 +282,7 @@ export function ReviewRoom() {
 
       {/* RIGHT: Preview pane (desktop only) */}
       {selectedPost && (
-        <div className="hidden lg:block w-[360px] shrink-0 border-l border-border overflow-y-auto p-4" style={{ background: 'oklch(0.06 0.005 240)' }}>
+        <div className="hidden lg:block w-[360px] shrink-0 border-l border-border overflow-y-auto p-4 bg-muted/50">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Preview</h3>
           <PlatformMockupPreview
             platform={selectedPost.platform}
