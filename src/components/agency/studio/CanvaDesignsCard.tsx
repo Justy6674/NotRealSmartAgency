@@ -7,9 +7,12 @@ import type { CanvaDesign } from '@/hooks/useStudioData'
 interface CanvaDesignsCardProps {
   configured: boolean
   designs: CanvaDesign[]
+  totalDesigns?: number
+  brandName?: string | null
+  onShowAll?: () => void
 }
 
-export function CanvaDesignsCard({ configured, designs }: CanvaDesignsCardProps) {
+export function CanvaDesignsCard({ configured, designs, totalDesigns, brandName, onShowAll }: CanvaDesignsCardProps) {
   const handleNewDesign = () => {
     sendToDirector('Design a graphic for my brand')
   }
@@ -54,9 +57,26 @@ export function CanvaDesignsCard({ configured, designs }: CanvaDesignsCardProps)
         </button>
       </div>
 
+      {/* Filtering note */}
+      {totalDesigns != null && totalDesigns > designs.length && brandName && (
+        <p className="text-[10px] text-muted-foreground">
+          Showing {designs.length} of {totalDesigns} designs matching &ldquo;{brandName}&rdquo;.{' '}
+          {onShowAll && (
+            <button onClick={onShowAll} className="text-primary hover:text-primary/80 transition-colors">
+              Show all
+            </button>
+          )}
+        </p>
+      )}
+
       {designs.length === 0 ? (
         <div className="text-center py-4">
-          <p className="text-xs text-muted-foreground mb-2">No designs found. Create one to get started.</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            {totalDesigns && totalDesigns > 0
+              ? `No designs matching "${brandName ?? 'this brand'}". `
+              : 'No designs found. '}
+            Create one to get started.
+          </p>
           <button
             onClick={handleNewDesign}
             className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"

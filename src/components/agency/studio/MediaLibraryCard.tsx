@@ -262,7 +262,7 @@ export function MediaLibraryCard({
               Published {item.usage_count}&times;
             </span>
           ) : (
-            <span className="text-amber-500">Not used</span>
+            <span className="text-muted-foreground">Not used</span>
           )}
           <span className="text-muted-foreground">|</span>
           <span className="text-muted-foreground">{dateLabel}</span>

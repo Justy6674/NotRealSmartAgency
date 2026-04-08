@@ -12,6 +12,16 @@ const FREQUENCY_LABELS: Record<string, string> = {
   custom: 'Custom',
 }
 
+const PLATFORM_COLOURS: Record<string, string> = {
+  instagram: 'bg-pink-400',
+  facebook: 'bg-blue-400',
+  linkedin: 'bg-sky-400',
+  tiktok: 'bg-cyan-400',
+  youtube: 'bg-red-400',
+  twitter: 'bg-zinc-400',
+  x: 'bg-zinc-400',
+}
+
 const GROWTH_LABELS: Record<string, string> = {
   organic: 'Organic',
   paid: 'Paid',
@@ -100,29 +110,19 @@ export function StrategySummaryCard({ brand }: StrategySummaryCardProps) {
       {hasStrategy && (
         <div className="space-y-1.5">
           <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-            {Object.entries(channels!).map(([platform, pct]) => {
-              const colours: Record<string, string> = {
-                instagram: 'bg-pink-400',
-                facebook: 'bg-blue-400',
-                linkedin: 'bg-sky-400',
-                tiktok: 'bg-cyan-400',
-                youtube: 'bg-red-400',
-                twitter: 'bg-zinc-400',
-                x: 'bg-zinc-400',
-              }
-              return (
-                <div
-                  key={platform}
-                  className={colours[platform.toLowerCase()] ?? 'bg-zinc-500'}
-                  style={{ width: `${pct}%` }}
-                  title={`${platform}: ${pct}%`}
-                />
-              )
-            })}
+            {Object.entries(channels!).map(([platform, pct]) => (
+              <div
+                key={platform}
+                className={PLATFORM_COLOURS[platform.toLowerCase()] ?? 'bg-zinc-500'}
+                style={{ width: `${pct}%` }}
+                title={`${platform}: ${pct}%`}
+              />
+            ))}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5">
             {Object.entries(channels!).map(([platform, pct]) => (
-              <span key={platform} className="text-[10px] text-muted-foreground">
+              <span key={platform} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span className={`h-1.5 w-1.5 rounded-full ${PLATFORM_COLOURS[platform.toLowerCase()] ?? 'bg-zinc-500'}`} />
                 {platform} {pct}%
               </span>
             ))}

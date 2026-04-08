@@ -196,11 +196,11 @@ export function CreateHub() {
       <div className="mt-6 text-center">
         <p className="text-[10px] text-muted-foreground mb-2">Prefer detailed creation tools?</p>
         <div className="flex flex-wrap justify-center gap-3">
-          <Link href="/agency/studio/video" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Video Room</Link>
-          <Link href="/agency/studio/design" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Design Room</Link>
-          <Link href="/agency/studio/post" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Post Composer</Link>
-          <Link href="/agency/studio/repurpose" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Repurpose</Link>
-          <Link href="/agency/studio/campaign" className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors">Campaign</Link>
+          <Link href="/agency/studio/video" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Video Room</Link>
+          <Link href="/agency/studio/design" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Design Room</Link>
+          <Link href="/agency/studio/post" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Post Composer</Link>
+          <Link href="/agency/studio/repurpose" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Repurpose</Link>
+          <Link href="/agency/studio/campaign" className="text-[10px] text-muted-foreground/80 hover:text-foreground transition-colors">Campaign</Link>
         </div>
       </div>
     </div>

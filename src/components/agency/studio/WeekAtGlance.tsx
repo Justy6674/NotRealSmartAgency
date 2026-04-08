@@ -102,7 +102,7 @@ export function WeekAtGlance({ posts }: WeekAtGlanceProps) {
                     <span
                       key={j}
                       className={cn(
-                        'h-2 w-2 rounded-full',
+                        'h-2.5 w-2.5 rounded-full',
                         PLATFORM_DOT_COLOURS[post.platform] ?? 'bg-zinc-500'
                       )}
                       title={`${post.platform}: ${post.caption?.slice(0, 30)}...`}
@@ -126,6 +126,22 @@ export function WeekAtGlance({ posts }: WeekAtGlanceProps) {
           )
         })}
       </div>
+
+      {/* Platform colour legend */}
+      {(() => {
+        const usedPlatforms = [...new Set(posts.map(p => p.platform))]
+        if (usedPlatforms.length === 0) return null
+        return (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+            {usedPlatforms.map(platform => (
+              <span key={platform} className="inline-flex items-center gap-1">
+                <span className={cn('h-2 w-2 rounded-full', PLATFORM_DOT_COLOURS[platform] ?? 'bg-zinc-500')} />
+                <span className="text-[10px] text-muted-foreground capitalize">{platform}</span>
+              </span>
+            ))}
+          </div>
+        )
+      })()}
     </div>
   )
 }

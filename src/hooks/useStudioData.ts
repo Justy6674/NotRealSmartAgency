@@ -45,7 +45,7 @@ export interface StudioData {
   accounts: SocialAccount[]
   lastPublishedByPlatform: Record<string, string>
   analytics: StudioAnalytics
-  canva: { configured: boolean; designs: CanvaDesign[] }
+  canva: { configured: boolean; designs: CanvaDesign[]; totalDesigns?: number; brandName?: string | null }
   loading: boolean
   error: string | null
   refetch: () => void

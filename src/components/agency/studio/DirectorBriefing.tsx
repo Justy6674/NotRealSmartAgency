@@ -149,8 +149,8 @@ export function DirectorBriefing({ brand, analytics, posts, accounts }: Director
     <div
       className="rounded-xl p-5 space-y-3"
       style={{
-        background: 'oklch(0.14 0.005 240)',
-        border: '1px solid oklch(0.25 0.01 240)',
+        background: 'oklch(0.16 0.005 240)',
+        border: '1px solid oklch(0.28 0.01 240)',
       }}
     >
       {/* Director identity */}
@@ -160,7 +160,7 @@ export function DirectorBriefing({ brand, analytics, posts, accounts }: Director
         </div>
         <div>
           <h3 className="text-sm font-semibold text-foreground">Director&apos;s Brief</h3>
-          <p className="text-xs text-muted-foreground">{brand.name}</p>
+          <p className="text-xs text-foreground/70">{brand.name}</p>
         </div>
       </div>
 
@@ -169,7 +169,7 @@ export function DirectorBriefing({ brand, analytics, posts, accounts }: Director
         {items.map((item, i) => (
           <div key={i} className="flex items-start gap-2">
             <span
-              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+              className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
                 item.type === 'alert' ? 'bg-red-400' :
                 item.type === 'suggestion' ? 'bg-amber-400' :
                 'bg-emerald-400'

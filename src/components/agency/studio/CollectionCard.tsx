@@ -45,8 +45,9 @@ export function CollectionCard({ collection, onClick, onArchive, onDelete }: Col
             />
           ))
         ) : (
-          <div className="col-span-2 row-span-2 flex items-center justify-center">
-            <Icon className="h-8 w-8 text-muted-foreground/30" />
+          <div className="col-span-2 row-span-2 flex flex-col items-center justify-center gap-1.5">
+            <Icon className="h-10 w-10 text-muted-foreground/50" />
+            <p className="text-[10px] text-muted-foreground/40">Empty</p>
           </div>
         )}
         {/* Fill empty grid cells */}
@@ -92,10 +93,12 @@ export function CollectionCard({ collection, onClick, onArchive, onDelete }: Col
         )}
       </div>
 
-      {/* Item count badge */}
-      <div className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
-        {items.length}
-      </div>
+      {/* Item count badge — hide when empty */}
+      {items.length > 0 && (
+        <div className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+          {items.length}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Instagram } from 'lucide-react'
+import { Plus, Instagram, ImageIcon } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { SortableImageGrid } from '../dnd/SortableImageGrid'
@@ -22,12 +22,19 @@ export function InstagramGridPlanner() {
   const [posts, setPosts] = useState<GridPost[]>([])
   const [loading, setLoading] = useState(true)
   const [mediaMap, setMediaMap] = useState<Record<string, string>>({}) // mediaId -> file_url
+  const [brandName, setBrandName] = useState<string>('')
 
   // Fetch Instagram posts
   const fetchPosts = useCallback(async () => {
     if (!activeBrandId) return
     setLoading(true)
     try {
+      // Fetch brand name for profile display
+      fetch(`/api/studio/overview?brandId=${activeBrandId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.brand?.name) setBrandName(d.brand.name) })
+        .catch(() => {})
+
       const res = await fetch(`/api/scheduled-posts?brandId=${activeBrandId}`)
       if (!res.ok) return
       const data: ScheduledPost[] = await res.json()
@@ -97,7 +104,9 @@ export function InstagramGridPlanner() {
     <div className="p-6 space-y-4">
       {/* Mock IG profile header */}
       <div className="flex items-center gap-4">
-        <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[oklch(0.55_0.15_300)] to-[oklch(0.55_0.15_30)]" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.55_0.15_300)] to-[oklch(0.55_0.15_30)]">
+          <span className="text-xl font-bold text-white">{brandName?.charAt(0) ?? 'B'}</span>
+        </div>
         <div>
           <div className="flex items-center gap-2">
             <Instagram className="h-4 w-4 text-muted-foreground" />
@@ -105,8 +114,6 @@ export function InstagramGridPlanner() {
           </div>
           <div className="flex gap-4 mt-1">
             <span className="text-xs text-muted-foreground"><strong className="text-foreground">{posts.length}</strong> posts</span>
-            <span className="text-xs text-muted-foreground"><strong className="text-foreground">—</strong> followers</span>
-            <span className="text-xs text-muted-foreground"><strong className="text-foreground">—</strong> following</span>
           </div>
         </div>
       </div>
@@ -116,6 +123,7 @@ export function InstagramGridPlanner() {
       ) : posts.length === 0 ? (
         <div className="text-center py-12 space-y-3">
           <p className="text-sm text-muted-foreground">No Instagram posts yet.</p>
+          <p className="text-xs text-muted-foreground/70">Plan your Instagram grid by creating posts. Drag to reorder how your feed will look.</p>
           <button
             type="button"
             onClick={() => sendToDirector('Create an Instagram post for this brand')}
@@ -139,15 +147,16 @@ export function InstagramGridPlanner() {
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img src={item.url} alt="" className="h-full w-full object-cover" draggable={false} />
                 ) : (
-                  <div className="h-full w-full bg-[oklch(0.12_0.005_240)] flex items-center justify-center">
-                    <span className="text-[9px] text-muted-foreground/40 text-center px-1 line-clamp-3">
-                      {item.name || 'No image'}
+                  <div className="h-full w-full bg-[oklch(0.12_0.005_240)] flex flex-col items-center justify-center gap-1">
+                    <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                    <span className="text-[10px] text-muted-foreground/60 text-center px-1 line-clamp-2">
+                      {item.name || 'Pending'}
                     </span>
                   </div>
                 )}
                 {/* Status overlay */}
                 <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-1">
-                  <span className={`text-[8px] font-medium ${
+                  <span className={`text-[10px] font-medium ${
                     posts[index]?.status === 'published' ? 'text-green-400' :
                     posts[index]?.status === 'scheduled' ? 'text-blue-400' :
                     'text-zinc-400'

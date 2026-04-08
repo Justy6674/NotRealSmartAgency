@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
   if (!brandId) {
     return NextResponse.json({ error: 'brandId required' }, { status: 400 })
   }
+  const showAll = req.nextUrl.searchParams.get('showAll') === 'true'
 
   // Get Canva token from user_integrations
   const { data: integration } = await supabase
@@ -170,9 +171,29 @@ export async function GET(req: NextRequest) {
       updated_at: d.updated_at ?? d.created_at ?? null,
     }))
 
+    // Filter designs by brand name if not showing all
+    let filteredDesigns = designs
+    let brandName: string | null = null
+    if (!showAll) {
+      const { data: brand } = await supabase
+        .from('brands')
+        .select('name')
+        .eq('id', brandId)
+        .single()
+      brandName = brand?.name ?? null
+      if (brandName) {
+        const needle = brandName.toLowerCase()
+        filteredDesigns = designs.filter((d: { title: string }) =>
+          d.title.toLowerCase().includes(needle)
+        )
+      }
+    }
+
     return NextResponse.json({
       configured: true,
-      designs,
+      designs: filteredDesigns,
+      totalDesigns: designs.length,
+      brandName,
       ...(nextContinuation ? { continuation: nextContinuation } : {}),
     })
   } catch (err) {
