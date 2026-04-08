@@ -1,388 +1,370 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Sparkles, PenLine, FileText, Loader2, Send } from 'lucide-react'
-import { PostEditor } from './PostEditor'
-import { PlatformPreview } from './PlatformPreview'
-import { PostScheduler } from './PostScheduler'
-import { PostTypeSelector } from './PostTypeSelector'
-import { MediaSelector } from './MediaSelector'
-import { CarouselPreview } from './CarouselPreview'
+import { useState, useCallback } from 'react'
+import { Sparkles, Send, Loader2, Save, Calendar, Zap } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
-import type { PostPlatform, PostType, ScheduledPost } from '@/types/database'
+import { ContentTypeSection, type ContentType } from './ContentTypeSection'
+import { PlatformSection } from './PlatformSection'
+import { MediaSection } from './MediaSection'
+import { PostEditor } from './PostEditor'
+import { PlatformVersionEditor } from './PlatformVersionEditor'
+import { HashtagSection } from './HashtagSection'
+import { PostTemplatePicker } from '../templates/PostTemplatePicker'
+import { ComplianceSection } from './ComplianceSection'
+import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
+import { createVersionsFromMaster, customisePlatform, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
+import type { PostPlatform, PostType } from '@/types/database'
 
-type ComposerMode = 'ai' | 'write' | 'drafts'
-
-interface DraftPost {
-  id: string
-  caption: string
-  platform: PostPlatform
-  hashtags: string[]
-  scheduled_at: string
-  created_at: string
+// ─── Content type → Post type mapping ──────────────────────────────────────────
+const CONTENT_TO_POST_TYPE: Record<ContentType, PostType> = {
+  post: 'single',
+  carousel: 'carousel',
+  short_video: 'reel',
+  long_video: 'video',
+  story: 'single',
+  ad: 'single',
 }
 
+// ─── Card wrapper (Scent Sell pattern) ─────────────────────────────────────────
+function Section({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('rounded-xl border border-border bg-card p-5', className)}>
+      {children}
+    </div>
+  )
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────────
 export function PostComposerRoom() {
   const { activeBrandId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
 
-  const [mode, setMode] = useState<ComposerMode>('ai')
-  const [content, setContent] = useState('')
-  const [hashtags, setHashtags] = useState('')
+  // Form state
+  const [contentType, setContentType] = useState<ContentType>('post')
   const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>(['instagram'])
-  const [aiPrompt, setAiPrompt] = useState('')
-  const [postType, setPostType] = useState<PostType>('single')
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([])
-  const [drafts, setDrafts] = useState<DraftPost[]>([])
-  const [loadingDrafts, setLoadingDrafts] = useState(false)
+  const [caption, setCaption] = useState('')
+  const [hashtags, setHashtags] = useState<string[]>([])
+  const [versions, setVersions] = useState<PostVersions>({})
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [compliancePassed, setCompliancePassed] = useState<boolean | null>(null)
 
-  // Fetch drafts when in drafts mode
-  useEffect(() => {
-    if (mode !== 'drafts' || !activeBrandId) return
-    setLoadingDrafts(true)
-    fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft`)
-      .then(r => r.ok ? r.json() : [])
-      .then((posts: ScheduledPost[]) => {
-        setDrafts(posts.map(p => ({
-          id: p.id,
-          caption: p.caption,
-          platform: p.platform,
-          hashtags: p.hashtags,
-          scheduled_at: p.scheduled_at,
-          created_at: p.created_at,
-        })))
-      })
-      .catch(() => setDrafts([]))
-      .finally(() => setLoadingDrafts(false))
-  }, [mode, activeBrandId])
+  const brandName = data.brand?.name ?? 'Brand'
+  const postType = CONTENT_TO_POST_TYPE[contentType]
+  const complianceFlags = data.brand?.compliance_flags as unknown as Record<string, boolean> | null
+  const isHealthBrand = !!complianceFlags?.ahpra || !!complianceFlags?.tga
 
-  const handleAiGenerate = useCallback(() => {
-    if (!aiPrompt.trim() && !strategyContext) return
-
-    const platformNames = selectedPlatforms
-      .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-      .join(', ')
-
+  // ── AI Generation ──────────────────────────────────────────────────────────
+  const handleAiGenerate = () => {
+    const platformNames = selectedPlatforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')
     const message = [
-      `Write a social media post for ${platformNames || 'my social channels'}.`,
-      aiPrompt.trim() ? `Topic/instructions: ${aiPrompt.trim()}` : '',
+      `Write a ${contentType.replace('_', ' ')} for ${platformNames || 'social media'} for ${brandName}.`,
+      aiPrompt.trim() ? `Topic: ${aiPrompt.trim()}` : '',
       strategyContext?.agentContext ?? '',
-      `Format: Return the post caption text only. Include suggested hashtags at the end.`,
+      'Return the caption text with suggested hashtags. I will paste it into my post composer.',
     ].filter(Boolean).join('\n\n')
-
     sendToDirector(message)
-  }, [aiPrompt, selectedPlatforms, strategyContext])
+  }
 
-  const handleSave = useCallback(async (
-    publishMode: 'draft' | 'schedule' | 'now',
-    scheduledAt: string | null,
-  ) => {
-    if (!activeBrandId || !content.trim()) return
+  const handleAiAction = (action: string) => {
+    if (!caption.trim()) return
+    sendToDirector(`${action} this caption for ${brandName}:\n\n"${caption}"\n\nReturn only the improved caption text.`)
+  }
 
-    if (publishMode === 'now') {
-      // Send to Director for review and publishing
-      const platformNames = selectedPlatforms
-        .map(p => p.charAt(0).toUpperCase() + p.slice(1))
-        .join(', ')
-
-      const message = [
-        `Review and publish this post to ${platformNames}:`,
-        '',
-        content,
-        hashtags ? `\nHashtags: ${hashtags}` : '',
-        '',
-        `Please check compliance, brand voice, and publish when ready.`,
-      ].join('\n')
-
-      sendToDirector(message)
-      return
+  // ── Caption + Hashtag Updates ──────────────────────────────────────────────
+  const handleCaptionChange = (text: string) => {
+    setCaption(text)
+    if (selectedPlatforms.length > 1) {
+      setVersions(updateMasterCaption(versions, text, hashtags))
     }
+  }
 
-    // Save as draft or scheduled post via API
-    for (const platform of selectedPlatforms) {
-      await fetch('/api/scheduled-posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brandId: activeBrandId,
-          platform,
-          caption: content,
-          hashtags: hashtags.split(/\s+/).filter(h => h.startsWith('#')),
-          status: publishMode === 'draft' ? 'draft' : 'scheduled',
-          scheduled_at: scheduledAt ?? new Date().toISOString(),
-          post_type: postType,
-          media_item_ids: selectedMediaIds,
-          content_type: strategyContext?.suggestedContentType ?? undefined,
-          content_pillar: strategyContext?.suggestedPillar ?? undefined,
-        }),
-      })
+  const handlePlatformsChange = (platforms: PostPlatform[]) => {
+    setSelectedPlatforms(platforms)
+    setVersions(createVersionsFromMaster(platforms, caption, hashtags))
+  }
+
+  const handleVersionsChange = (newVersions: PostVersions) => {
+    setVersions(newVersions)
+  }
+
+  const handleTemplateApply = (templateCaption: string, templateHashtags: string[]) => {
+    setCaption(templateCaption)
+    setHashtags(prev => [...new Set([...prev, ...templateHashtags])])
+  }
+
+  // ── Save / Schedule / Publish ──────────────────────────────────────────────
+  const handleSave = useCallback(async (mode: 'draft' | 'schedule' | 'now', scheduledAt?: string) => {
+    if (!activeBrandId || !caption.trim()) return
+    setSaving(true)
+
+    try {
+      if (mode === 'now') {
+        const platformNames = selectedPlatforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')
+        sendToDirector(`Review and publish this post to ${platformNames}:\n\n${caption}\n\n${hashtags.map(h => `#${h}`).join(' ')}\n\nCheck compliance and brand voice, then publish when ready.`)
+        return
+      }
+
+      for (const platform of selectedPlatforms) {
+        await fetch('/api/scheduled-posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brandId: activeBrandId,
+            platform,
+            caption,
+            hashtags: hashtags.map(h => `#${h}`),
+            status: mode === 'draft' ? 'draft' : 'scheduled',
+            scheduled_at: scheduledAt ?? new Date().toISOString(),
+            post_type: postType,
+            media_item_ids: selectedMediaIds,
+            content_type: strategyContext?.suggestedContentType ?? undefined,
+            content_pillar: strategyContext?.suggestedPillar ?? undefined,
+          }),
+        })
+      }
+      data.refetch()
+      // Reset form after successful save
+      if (mode === 'schedule') {
+        setCaption('')
+        setHashtags([])
+        setSelectedMediaIds([])
+        setAiPrompt('')
+      }
+    } finally {
+      setSaving(false)
     }
+  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data])
 
-    // Refresh studio data
-    data.refetch()
-  }, [activeBrandId, content, hashtags, selectedPlatforms, strategyContext, data, postType, selectedMediaIds])
+  // ── Schedule state ─────────────────────────────────────────────────────────
+  const [scheduleMode, setScheduleMode] = useState<'draft' | 'schedule' | 'now'>('draft')
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    tomorrow.setHours(9, 0, 0, 0)
+    return tomorrow.toISOString().slice(0, 16)
+  })
 
-  const handleLoadDraft = useCallback((draft: DraftPost) => {
-    setContent(draft.caption)
-    setHashtags(draft.hashtags.join(' '))
-    setSelectedPlatforms([draft.platform])
-    setMode('write')
-  }, [])
+  // ── No brand selected ──────────────────────────────────────────────────────
+  if (!activeBrandId) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <p className="text-sm text-muted-foreground">Select a brand from the sidebar to start creating content.</p>
+      </div>
+    )
+  }
 
-  const tabs: { value: ComposerMode; label: string; icon: typeof Sparkles }[] = [
-    { value: 'ai', label: 'AI Writes', icon: Sparkles },
-    { value: 'write', label: 'I Write', icon: PenLine },
-    { value: 'drafts', label: 'From Drafts', icon: FileText },
-  ]
+  // ── Media URL for preview ──────────────────────────────────────────────────
+  // We don't have the URL from media IDs easily, pass undefined for now
+  const mediaUrl: string | undefined = undefined
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Mode tabs */}
-      <div className="flex gap-1 rounded-lg bg-[oklch(0.16_0.01_240)] p-1">
-        {tabs.map(tab => {
-          const Icon = tab.icon
-          const active = mode === tab.value
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setMode(tab.value)}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-all ${
-                active
-                  ? 'bg-[oklch(0.22_0.03_240)] text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground/70'
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
+    <div className="flex flex-1 overflow-hidden">
+      {/* LEFT: Form sections */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {/* Section 1: Content Type */}
+        <Section>
+          <ContentTypeSection value={contentType} onChange={setContentType} />
+        </Section>
 
-      {/* AI Writes mode */}
-      {mode === 'ai' && (
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col lg:flex-row gap-5">
-            {/* Left: prompt + platforms */}
-            <div className="flex-1 space-y-4">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                  What should the post be about?
-                </label>
-                <textarea
-                  value={aiPrompt}
-                  onChange={e => setAiPrompt(e.target.value)}
-                  placeholder={
-                    strategyContext?.suggestion
-                      ? `Suggestion: ${strategyContext.suggestion}`
-                      : 'Describe what you want the post to be about, or leave blank for AI to decide based on your strategy...'
-                  }
-                  rows={4}
-                  className="w-full rounded-lg border border-border bg-[oklch(0.14_0.01_240)] px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-[oklch(0.55_0.1_240)] resize-none font-[family-name:var(--font-ibm-plex-sans)]"
-                />
-              </div>
+        {/* Section 2: Platforms */}
+        <Section>
+          <PlatformSection
+            contentType={contentType}
+            selected={selectedPlatforms}
+            onChange={handlePlatformsChange}
+          />
+        </Section>
 
-              {/* Platform selector (reuse PostEditor's layout) */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-2 block">
-                  Platforms
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {(['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube'] as PostPlatform[]).map(platform => {
-                    const selected = selectedPlatforms.includes(platform)
-                    const labels: Record<string, string> = {
-                      instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn',
-                      twitter: 'X', tiktok: 'TikTok', youtube: 'YouTube',
-                    }
-                    return (
-                      <button
-                        key={platform}
-                        type="button"
-                        onClick={() =>
-                          selected
-                            ? setSelectedPlatforms(selectedPlatforms.filter(p => p !== platform))
-                            : setSelectedPlatforms([...selectedPlatforms, platform])
-                        }
-                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                          selected
-                            ? 'bg-[oklch(0.75_0.06_240)] text-[oklch(0.15_0.02_240)]'
-                            : 'bg-[oklch(0.22_0.02_240)] text-muted-foreground hover:bg-[oklch(0.28_0.03_240)]'
-                        }`}
-                      >
-                        {labels[platform]}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+        {/* Section 3: Media */}
+        <Section>
+          <MediaSection
+            contentType={contentType}
+            brandId={activeBrandId}
+            selectedMediaIds={selectedMediaIds}
+            onChange={setSelectedMediaIds}
+          />
+        </Section>
 
-              {/* Post type selector */}
-              <PostTypeSelector
-                value={postType}
-                onChange={setPostType}
-                mediaCount={selectedMediaIds.length}
+        {/* Section 4: Caption */}
+        <Section>
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-foreground">Caption</h3>
+
+            {/* AI Prompt */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={e => setAiPrompt(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAiGenerate() }}
+                placeholder={strategyContext?.suggestion ?? 'What should this post be about?'}
+                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
               />
-
-              {/* Media selector for non-single post types */}
-              {postType !== 'single' && activeBrandId && (
-                <MediaSelector
-                  brandId={activeBrandId}
-                  selectedIds={selectedMediaIds}
-                  onChange={setSelectedMediaIds}
-                  maxCount={postType === 'carousel' ? 10 : 1}
-                  acceptTypes={postType === 'reel' || postType === 'video' ? ['video'] : ['image']}
-                />
-              )}
-
               <button
                 type="button"
                 onClick={handleAiGenerate}
                 disabled={selectedPlatforms.length === 0}
-                className="flex items-center gap-2 rounded-lg bg-[oklch(0.75_0.06_240)] px-5 py-2.5 text-sm font-semibold text-[oklch(0.15_0.02_240)] hover:bg-[oklch(0.80_0.06_240)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
               >
-                <Send className="h-4 w-4" />
-                Generate Post
+                <Sparkles className="h-4 w-4" />
+                Generate
               </button>
-
-              <p className="text-[11px] text-muted-foreground/60">
-                The Director will write your post in the chat panel, using your brand voice and strategy context. Copy the result back here to schedule it.
-              </p>
             </div>
 
-            {/* Right: preview */}
-            <div className="flex-1 lg:max-w-sm">
-              {postType === 'carousel' && selectedMediaIds.length > 0 && activeBrandId ? (
-                <CarouselPreview
-                  mediaIds={selectedMediaIds}
-                  brandId={activeBrandId}
-                  caption={content}
-                  brandName={data.brand?.name ?? 'Brand'}
-                />
-              ) : (
-                <PlatformPreview
-                  content={content}
-                  hashtags={hashtags}
-                  selectedPlatforms={selectedPlatforms}
-                  brandName={data.brand?.name ?? 'Brand'}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* I Write mode */}
-      {mode === 'write' && (
-        <div className="flex flex-col lg:flex-row gap-5">
-          {/* Left: editor */}
-          <div className="flex-1 space-y-4">
+            {/* Editor */}
             <PostEditor
-              content={content}
-              onContentChange={setContent}
+              content={caption}
+              onContentChange={handleCaptionChange}
               selectedPlatforms={selectedPlatforms}
-              onPlatformsChange={setSelectedPlatforms}
-              hashtags={hashtags}
-              onHashtagsChange={setHashtags}
+              onPlatformsChange={handlePlatformsChange}
+              hashtags={hashtags.map(h => `#${h}`).join(' ')}
+              onHashtagsChange={() => {}}
             />
 
-            {/* Post type selector */}
-            <PostTypeSelector
-              value={postType}
-              onChange={setPostType}
-              mediaCount={selectedMediaIds.length}
-            />
-
-            {/* Media selector for non-single post types */}
-            {postType !== 'single' && activeBrandId && (
-              <MediaSelector
-                brandId={activeBrandId}
-                selectedIds={selectedMediaIds}
-                onChange={setSelectedMediaIds}
-                maxCount={postType === 'carousel' ? 10 : 1}
-                acceptTypes={postType === 'reel' || postType === 'video' ? ['video'] : ['image']}
-              />
-            )}
-          </div>
-
-          {/* Right: preview */}
-          <div className="flex-1 lg:max-w-sm">
-            {postType === 'carousel' && selectedMediaIds.length > 0 && activeBrandId ? (
-              <CarouselPreview
-                mediaIds={selectedMediaIds}
-                brandId={activeBrandId}
-                caption={content}
-                brandName={data.brand?.name ?? 'Brand'}
-              />
-            ) : (
-              <PlatformPreview
-                content={content}
-                hashtags={hashtags}
-                selectedPlatforms={selectedPlatforms}
-                brandName={data.brand?.name ?? 'Brand'}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* From Drafts mode */}
-      {mode === 'drafts' && (
-        <div>
-          {loadingDrafts ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : drafts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FileText className="h-8 w-8 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">No drafts yet</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">
-                Save a post as draft first, or switch to &ldquo;AI Writes&rdquo; to generate one.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {drafts.map(draft => (
+            {/* AI action buttons */}
+            <div className="flex flex-wrap gap-2">
+              {['Make punchier', 'Add a hook', 'Shorten it', 'Make longer', 'More professional'].map(action => (
                 <button
-                  key={draft.id}
+                  key={action}
                   type="button"
-                  onClick={() => handleLoadDraft(draft)}
-                  className="flex items-start gap-3 rounded-lg border border-border bg-[oklch(0.16_0.01_240)] p-4 text-left hover:bg-[oklch(0.19_0.01_240)] transition-colors group"
+                  onClick={() => handleAiAction(action)}
+                  disabled={!caption.trim()}
+                  className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 disabled:opacity-30 transition-colors"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-foreground/80 line-clamp-2 font-[family-name:var(--font-ibm-plex-sans)]">
-                      {draft.caption || 'Empty draft'}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-[10px] rounded-full bg-[oklch(0.22_0.02_240)] px-2 py-0.5 text-muted-foreground">
-                        {draft.platform.charAt(0).toUpperCase() + draft.platform.slice(1)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground/50">
-                        {new Date(draft.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
-                      </span>
-                    </div>
-                  </div>
-                  <PenLine className="h-4 w-4 text-muted-foreground/30 group-hover:text-foreground/50 shrink-0 mt-0.5" />
+                  {action}
                 </button>
               ))}
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Scheduler (visible in AI and Write modes) */}
-      {(mode === 'ai' || mode === 'write') && (
-        <PostScheduler
-          selectedPlatforms={selectedPlatforms}
-          onSave={handleSave}
-          disabled={!content.trim() && mode === 'write'}
+            {/* Template picker */}
+            <div className="flex items-center gap-2">
+              <PostTemplatePicker
+                brandId={activeBrandId}
+                brandName={brandName}
+                onApply={handleTemplateApply}
+              />
+            </div>
+          </div>
+        </Section>
+
+        {/* Section 5: Per-Platform Versions (only if 2+ platforms) */}
+        {selectedPlatforms.length >= 2 && (
+          <Section>
+            <PlatformVersionEditor
+              platforms={selectedPlatforms}
+              masterCaption={caption}
+              masterHashtags={hashtags}
+              versions={versions}
+              onMasterChange={(c, h) => { setCaption(c); setHashtags(h) }}
+              onVersionsChange={handleVersionsChange}
+            />
+          </Section>
+        )}
+
+        {/* Section 6: Hashtags */}
+        <Section>
+          <HashtagSection
+            brandId={activeBrandId}
+            hashtags={hashtags}
+            onChange={setHashtags}
+            selectedPlatforms={selectedPlatforms}
+            caption={caption}
+          />
+        </Section>
+
+        {/* Section 7: Compliance */}
+        <Section>
+          <ComplianceSection
+            caption={caption}
+            brandName={brandName}
+            isHealthBrand={isHealthBrand}
+            onResult={result => setCompliancePassed(result === null ? null : result.isValid)}
+          />
+        </Section>
+
+        {/* Section 8: Schedule — Sticky Action Bar (Scent Sell pattern) */}
+        <div className="sticky bottom-4 rounded-xl border border-border bg-background/95 backdrop-blur-sm p-4 shadow-lg space-y-3">
+          {/* Schedule mode selector */}
+          {scheduleMode === 'schedule' && (
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={e => setScheduledAt(e.target.value)}
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs outline-none focus:border-primary"
+              />
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => { setScheduleMode('draft'); handleSave('draft') }}
+              disabled={saving || !caption.trim()}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-40"
+            >
+              {saving && scheduleMode === 'draft' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setScheduleMode('schedule')
+                if (scheduleMode === 'schedule') handleSave('schedule', scheduledAt)
+              }}
+              disabled={saving || !caption.trim() || selectedPlatforms.length === 0}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-muted px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-40"
+            >
+              {saving && scheduleMode === 'schedule' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
+              {scheduleMode === 'schedule' ? 'Confirm Schedule' : 'Schedule'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setScheduleMode('now'); handleSave('now') }}
+              disabled={saving || !caption.trim() || selectedPlatforms.length === 0 || compliancePassed === false}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-40"
+            >
+              {saving && scheduleMode === 'now' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              Publish Now
+            </button>
+          </div>
+
+          {/* Compliance indicator + help text */}
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] text-muted-foreground">
+              Save Draft keeps it private. Schedule queues it. Publish sends immediately via Mixpost.
+            </p>
+            {compliancePassed === false && (
+              <span className="text-[10px] text-red-400 font-medium">Compliance issues — fix before publishing</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT: Live Preview (hidden on mobile) */}
+      <div className="hidden lg:block w-[360px] shrink-0 border-l border-border overflow-y-auto p-4">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Live Preview</h3>
+        <MultiPlatformPreview
+          platforms={selectedPlatforms}
+          masterCaption={caption}
+          masterHashtags={hashtags}
+          versions={versions}
+          mediaUrl={mediaUrl}
+          brandName={brandName}
         />
-      )}
+        {selectedPlatforms.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-8">Select platforms to see previews.</p>
+        )}
+      </div>
     </div>
   )
 }
