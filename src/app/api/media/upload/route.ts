@@ -1,4 +1,4 @@
-export const maxDuration = 60
+export const maxDuration = 300
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
@@ -23,9 +23,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unsupported file type. Upload images (PNG, JPG, WebP, GIF), videos (MP4, MOV, WebM), or audio (MP3, M4A).' }, { status: 400 })
   }
 
-  // Max 100MB
-  if (file.size > 100 * 1024 * 1024) {
-    return NextResponse.json({ error: 'File too large. Maximum 100MB.' }, { status: 400 })
+  // Max 500MB (videos can be large)
+  if (file.size > 500 * 1024 * 1024) {
+    return NextResponse.json({ error: 'File too large. Maximum 500MB.' }, { status: 400 })
   }
 
   // Duplicate detection — same filename + size for this brand = skip
