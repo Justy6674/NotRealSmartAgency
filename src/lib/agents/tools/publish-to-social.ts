@@ -145,13 +145,17 @@ export function createPublishToSocialTool(
         //   3. image_url — single image from raw URL
         //
         // For each item we build a normalised descriptor with file_url, mime,
-        // file name, and thumbnail_url (for videos).
+        // file name, thumbnail_url, AND (if previously uploaded) a cached
+        // Mixpost media id so we can skip the slow remote-initiate round-trip
+        // on subsequent publishes. Mixpost's video transcode takes ~6 minutes
+        // for a 141MB .mov — once is enough.
         interface MediaDescriptor {
           url: string
           mime: string
           fileName: string
           thumbnailUrl: string | null
           mediaItemId: string | null // our UUID, for scheduled_posts.media_item_ids
+          mixpostMediaId: number | null // cached Mixpost numeric id (skip re-upload)
         }
 
         const allMedia: MediaDescriptor[] = []
@@ -159,7 +163,7 @@ export function createPublishToSocialTool(
         if (media_ids?.length) {
           const { data: items } = await supabase
             .from('media_items')
-            .select('id, file_url, file_name, file_type, thumbnail_url')
+            .select('id, file_url, file_name, file_type, thumbnail_url, mixpost_media_id')
             .in('id', media_ids)
             .eq('brand_id', brandId)
 
@@ -185,6 +189,7 @@ export function createPublishToSocialTool(
                   fileName: item.file_name ?? 'upload.bin',
                   thumbnailUrl: item.thumbnail_url ?? null,
                   mediaItemId: item.id,
+                  mixpostMediaId: (item as Record<string, unknown>).mixpost_media_id as number | null ?? null,
                 })
               }
             }
@@ -200,6 +205,7 @@ export function createPublishToSocialTool(
             fileName: 'upload.jpg',
             thumbnailUrl: null,
             mediaItemId: null,
+            mixpostMediaId: null,
           })
         }
 
@@ -213,13 +219,20 @@ export function createPublishToSocialTool(
 
         /**
          * Poll Mixpost's download-status endpoint until the remote fetch completes.
-         * Returns the media id, or null on failure/timeout.
+         * Returns the media id + uuid, or null on failure/timeout.
+         *
+         * Default 500s — Mixpost's two-pass libx264 transcode of a 141MB MJPEG
+         * .mov takes ~380s. 500s gives headroom for larger files. The outer
+         * Vercel maxDuration on the MCP route is 600s.
          */
-        async function pollRemoteDownload(downloadId: string, maxSeconds = 120): Promise<number | null> {
+        async function pollRemoteDownload(
+          downloadId: string,
+          maxSeconds = 500,
+        ): Promise<{ id: number; uuid: string | null } | null> {
           const started = Date.now()
           const statusUrl = `${apiBase}/media/remote/${downloadId}/status`
           while (Date.now() - started < maxSeconds * 1000) {
-            await new Promise((r) => setTimeout(r, 2000))
+            await new Promise((r) => setTimeout(r, 3000))
             try {
               const r = await fetch(statusUrl, {
                 headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -229,13 +242,14 @@ export function createPublishToSocialTool(
               if (d.status === 'completed') {
                 // Completed payloads can carry the new media in several shapes
                 const id = d.media?.id ?? d.id ?? d.data?.id
-                return id ? Number(id) : null
+                const uuid = d.media?.uuid ?? d.uuid ?? d.data?.uuid ?? null
+                return id ? { id: Number(id), uuid } : null
               }
               if (d.status === 'failed') {
                 uploadErrors.push(`Mixpost remote download failed for ${downloadId}: ${d.error ?? 'unknown'}`)
                 return null
               }
-              // else pending/processing — keep polling
+              // else pending/downloading/processing — keep polling
             } catch {
               /* transient, keep polling */
             }
@@ -247,6 +261,21 @@ export function createPublishToSocialTool(
         for (const item of allMedia) {
           try {
             let uploadedId: number | null = null
+            let uploadedUuid: string | null = null
+
+            // ─── Cache hit: media already transcoded + living in Mixpost ──
+            // Mixpost's video transcode takes ~6 minutes per video. We cache
+            // the returned id on the media_items row so subsequent publishes
+            // skip the whole remote-initiate + poll chain entirely.
+            if (item.mixpostMediaId) {
+              uploadedId = item.mixpostMediaId
+              console.log(`[publish_to_social] Mixpost cache hit for ${item.fileName}: media_id=${uploadedId}`)
+              mixpostMediaIds.push(uploadedId)
+              if (item.mime.startsWith('video/') && item.thumbnailUrl) {
+                videoThumbs.push(item.thumbnailUrl)
+              }
+              continue
+            }
 
             // Method 1: Remote URL upload (preferred — Mixpost pulls from our Supabase URL).
             // Mixpost's /media/remote/initiate is ASYNC — it returns
@@ -267,11 +296,16 @@ export function createPublishToSocialTool(
               const remoteData = await remoteRes.json()
               // Fast path: already completed (small images)
               if (remoteData.status === 'completed') {
-                uploadedId = Number(remoteData.media?.id ?? remoteData.id ?? remoteData.data?.id ?? NaN)
-                if (!Number.isFinite(uploadedId)) uploadedId = null
+                const id = Number(remoteData.media?.id ?? remoteData.id ?? remoteData.data?.id ?? NaN)
+                uploadedId = Number.isFinite(id) ? id : null
+                uploadedUuid = remoteData.media?.uuid ?? remoteData.uuid ?? remoteData.data?.uuid ?? null
               } else if (remoteData.status === 'pending' && remoteData.download_id) {
                 // Slow path: poll until done (videos)
-                uploadedId = await pollRemoteDownload(String(remoteData.download_id))
+                const result = await pollRemoteDownload(String(remoteData.download_id))
+                if (result) {
+                  uploadedId = result.id
+                  uploadedUuid = result.uuid
+                }
               } else if (remoteData.status === 'failed') {
                 uploadErrors.push(`Mixpost remote initiate failed: ${remoteData.error ?? 'unknown'}`)
               }
@@ -307,6 +341,18 @@ export function createPublishToSocialTool(
               mixpostMediaIds.push(uploadedId)
               if (item.mime.startsWith('video/') && item.thumbnailUrl) {
                 videoThumbs.push(item.thumbnailUrl)
+              }
+              // Persist the Mixpost id on the media_items row so the next
+              // publish skips the remote-initiate + poll (~382s saved per video).
+              if (item.mediaItemId) {
+                void supabase
+                  .from('media_items')
+                  .update({
+                    mixpost_media_id: uploadedId,
+                    mixpost_media_uuid: uploadedUuid,
+                    mixpost_cached_at: new Date().toISOString(),
+                  })
+                  .eq('id', item.mediaItemId)
               }
             } else {
               uploadErrors.push(`Failed to upload ${item.fileName} (${item.mime})`)

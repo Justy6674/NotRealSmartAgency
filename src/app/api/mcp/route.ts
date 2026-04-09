@@ -1,4 +1,4 @@
-export const maxDuration = 300 // Director delegation chains can take time
+export const maxDuration = 600 // Director delegation + first-upload Mixpost video transcode (~382s) need >300s
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { resolveApiKey } from '@/lib/auth/api-key'

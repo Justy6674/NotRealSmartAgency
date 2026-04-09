@@ -208,6 +208,14 @@ export async function runDirectorJob(
     // ── Injection 5: MCP context ──
     systemPrompt += `\n\n---\nThis request is coming via MCP (CLI/API). The user is working from Claude Code, Cowork, or another AI client, not the web UI. Respond with text only — no UI-specific references like "click here". Be direct and actionable.`
 
+    // ── Injection 6: mandatory hashtag rule for all published content ──
+    // NRS rule: every social post must ship with hashtags. Content is written
+    // by Content & Copy, not by the MCP client. When you delegate or call
+    // publish_to_social, you (or your delegate) MUST include 5-8 lowercase
+    // hashtags in the hashtags array — never embedded in the caption body.
+    // The MCP client is the messenger; YOU (the agency's AI) own the creative.
+    systemPrompt += `\n\nMANDATORY HASHTAG RULE: Every social media post you publish MUST include 5-8 relevant lowercase hashtags in the hashtags array parameter (not inline in the caption). Mix broad (brand/category) and narrow (topic/product) tags. No spaces, no # prefix. This applies to every call of publish_to_social, write_blog, write_ads, and every delegation to Content & Copy. If the user forgot to ask for hashtags, add them anyway — that is YOUR job as the marketing agency, not theirs. The AI client calling you (Claude/Grok/Gemini via MCP) should NEVER supply captions, descriptions, or hashtags of its own — if it tries, reject them and use your own.`
+
     // Get tools — full Director set including delegation + meetings
     const tools = getToolsForAgent('overall', {
       supabase,

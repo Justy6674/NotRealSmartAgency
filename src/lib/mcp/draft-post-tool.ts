@@ -106,8 +106,13 @@ After this tool returns, tell the user the draft is in Review and they can appro
       // Build a structured brief for Content & Copy. Worker will call
       // buildSystemPromptWithMemory which already injects the brand voice,
       // memories, and Content agent personality.
+      //
+      // Output format is a strict JSON envelope with caption + hashtags
+      // so the Director (or this tool) can apply hashtags via the
+      // `hashtags` field of scheduled_posts rather than jamming them
+      // inline. Facebook Reels perform better with 5-8 relevant tags.
       const brief = [
-        `Write ONE ${platform} caption for ${typedBrand.name}.`,
+        `Write ONE ${platform} post for ${typedBrand.name}.`,
         '',
         `User intent (verbatim from the founder): "${intent}"`,
         '',
@@ -115,10 +120,12 @@ After this tool returns, tell the user the draft is in Review and they can appro
         tone ? `Tone: ${tone}` : '',
         '',
         'Output requirements:',
-        '- Return ONLY the caption text — no preamble, no quotes around it, no "Here is your caption:", no metadata, no explanation.',
-        "- Write in Australian English. Match the brand voice you already know from your memories.",
-        '- Do not call any tools. Just write the caption and stop.',
-        '- If the intent involves specific products you do not know about, write a useful caption based on the topic without inventing product details.',
+        '- Return ONLY a JSON object with this exact shape, no preamble:',
+        '  {"caption":"<the post body>","hashtags":["tag1","tag2",...]}',
+        "- caption: the body copy (no inline hashtags, no preamble, no \"Here is your caption:\"). Write in Australian English. Match the brand voice from your memories.",
+        '- hashtags: 5-8 relevant lowercase hashtags WITHOUT the # prefix. Mix broad (brand/category) and narrow (product/topic specific). No spaces.',
+        '- Do not call any tools. Just return the JSON and stop.',
+        '- If the intent involves specific products you do not know about, write based on the topic without inventing product details.',
       ]
         .filter(Boolean)
         .join('\n')
@@ -152,7 +159,31 @@ After this tool returns, tell the user the draft is in Review and they can appro
         }
       }
 
-      const caption = workerResult.result.trim()
+      // Parse the JSON envelope from Content & Copy. Falls back to treating
+      // the whole output as a caption if the agent forgets the format.
+      let caption = workerResult.result.trim()
+      let parsedHashtags: string[] = []
+      try {
+        // Strip any markdown code fence if present
+        const cleaned = caption
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim()
+        const parsed = JSON.parse(cleaned) as { caption?: string; hashtags?: unknown }
+        if (parsed && typeof parsed.caption === 'string') {
+          caption = parsed.caption.trim()
+        }
+        if (Array.isArray(parsed.hashtags)) {
+          parsedHashtags = parsed.hashtags
+            .filter((h): h is string => typeof h === 'string' && h.length > 0)
+            .map((h) => h.replace(/^#/, '').replace(/\s+/g, '').toLowerCase())
+            .slice(0, 10)
+        }
+      } catch {
+        // Not JSON — Content & Copy ignored the envelope. Use the raw text as
+        // the caption with no hashtags. Worker memory extraction will still
+        // learn this happened and future runs should comply.
+      }
 
       // AHPRA/TGA compliance gate for health brands (mirrors publish_to_social)
       const complianceFlags = typedBrand.compliance_flags ?? {}
@@ -223,7 +254,7 @@ After this tool returns, tell the user the draft is in Review and they can appro
           brand_id,
           platform,
           caption,
-          hashtags: [],
+          hashtags: parsedHashtags,
           status: 'draft',
           scheduled_at: new Date().toISOString(),
           post_type: postType,
@@ -259,6 +290,8 @@ After this tool returns, tell the user the draft is in Review and they can appro
         cost_cents: workerResult.costCents,
         duration_ms: workerResult.durationMs,
         caption_preview: caption.length > 200 ? caption.slice(0, 200) + '…' : caption,
+        hashtags: parsedHashtags,
+        hashtag_count: parsedHashtags.length,
         review_url: reviewUrl,
         next_step:
           'Tell the user their draft is in the Review queue and they can approve, edit, or reject it from the Studio Review tab.',
