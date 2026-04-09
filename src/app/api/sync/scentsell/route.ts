@@ -16,7 +16,7 @@ export const maxDuration = 120
  * Deduplicates via metadata.scentsell_sync_key.
  */
 
-const SCENTSELL_URL = 'https://brwzufxomzhxlitwtfhe.supabase.co'
+const SCENTSELL_URL = 'https://dejjxzdgahtfzakkceby.supabase.co'
 const SCENTSELL_ANON_KEY = process.env.SCENTSELL_ANON_KEY ?? ''
 
 export async function GET(request: Request) {
@@ -61,7 +61,7 @@ export async function GET(request: Request) {
   const { data: listings } = await scentsell
     .from('listings')
     .select('id, fragrance_name, house, size_ml, fill_percentage, condition, current_retail_price, manual_price, status, photos:listing_photos(id, photo_url, slot_id)')
-    .eq('status', 'live')
+    .eq('status', 'active')
     .order('created_at', { ascending: false })
     .limit(200)
 
