@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
@@ -80,6 +80,36 @@ export function PostCreator() {
   const postType = CONTENT_TO_POST_TYPE[contentType]
   const complianceFlags = data.brand?.compliance_flags as unknown as Record<string, boolean> | null
   const isHealthBrand = !!complianceFlags?.ahpra || !!complianceFlags?.tga
+
+  // ── Auto-save / restore draft from localStorage ────────────────────────
+  const draftKey = activeBrandId ? `nrs-draft-${activeBrandId}` : null
+  const isRestored = useRef(false)
+
+  // Restore draft on mount
+  useEffect(() => {
+    if (!draftKey || isRestored.current) return
+    try {
+      const saved = localStorage.getItem(draftKey)
+      if (saved) {
+        const draft = JSON.parse(saved)
+        if (draft.contentType) setContentType(draft.contentType)
+        if (draft.selectedPlatforms?.length) setSelectedPlatforms(draft.selectedPlatforms)
+        if (draft.selectedMediaIds?.length) setSelectedMediaIds(draft.selectedMediaIds)
+        if (draft.caption) setCaption(draft.caption)
+        if (draft.hashtags?.length) setHashtags(draft.hashtags)
+        if (draft.aiPrompt) setAiPrompt(draft.aiPrompt)
+        if (draft.creatorMode) setCreatorMode(draft.creatorMode)
+      }
+    } catch { /* ignore parse errors */ }
+    isRestored.current = true
+  }, [draftKey])
+
+  // Auto-save draft on every change (debounced via effect)
+  useEffect(() => {
+    if (!draftKey || !isRestored.current) return
+    const draft = { contentType, selectedPlatforms, selectedMediaIds, caption, hashtags, aiPrompt, creatorMode }
+    try { localStorage.setItem(draftKey, JSON.stringify(draft)) } catch { /* storage full */ }
+  }, [draftKey, contentType, selectedPlatforms, selectedMediaIds, caption, hashtags, aiPrompt, creatorMode])
 
   // Fetch media items to populate slots
   useEffect(() => {
@@ -172,12 +202,15 @@ export function PostCreator() {
         })
       }
       data.refetch()
-      if (mode === 'schedule') {
-        setCaption('')
-        setHashtags([])
-        setSelectedMediaIds([])
-        setAiPrompt('')
-      }
+      // Clear draft from localStorage after successful save
+      if (draftKey) try { localStorage.removeItem(draftKey) } catch {}
+      // Reset form after schedule/draft save
+      setCaption('')
+      setHashtags([])
+      setSelectedMediaIds([])
+      setAiPrompt('')
+      setContentType('post')
+      setSelectedPlatforms(['instagram'])
     } finally {
       setSaving(false)
     }
