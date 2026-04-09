@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Check, X, ChevronUp, ChevronDown, ImagePlus, Loader2 } from 'lucide-react'
+import { Check, X, ChevronUp, ChevronDown, ImagePlus, Loader2, Play, Film } from 'lucide-react'
 
 interface MediaItem {
   id: string
@@ -9,6 +9,48 @@ interface MediaItem {
   file_name: string
   file_type: string
   file_size: number
+  thumbnail_url?: string | null
+}
+
+function isVideo(item: MediaItem): boolean {
+  return item.file_type?.startsWith('video/') ?? false
+}
+
+/**
+ * Renders a media thumbnail correctly for both images and videos.
+ * Videos without a thumbnail_url fall back to a video icon placeholder,
+ * so we never render a video URL as an <img> src (the grey-box bug).
+ */
+function MediaThumb({ item, className }: { item: MediaItem; className?: string }) {
+  const video = isVideo(item)
+  const src = video ? item.thumbnail_url : item.file_url
+
+  if (video && !src) {
+    // Fallback: no thumbnail stored yet (legacy uploads or extraction failure)
+    return (
+      <div className={`${className ?? ''} flex items-center justify-center bg-muted`}>
+        <Film className="h-6 w-6 text-muted-foreground/50" />
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${className ?? ''} relative`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src!}
+        alt={item.file_name}
+        className="w-full h-full object-cover"
+      />
+      {video && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="rounded-full bg-black/50 p-1.5">
+            <Play className="h-3 w-3 text-white fill-white" />
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface MediaSelectorProps {
@@ -105,12 +147,7 @@ export function MediaSelector({
                 className="relative group rounded-lg overflow-hidden border border-border bg-muted"
                 style={{ width: 72, height: 72 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.file_url}
-                  alt={item.file_name}
-                  className="w-full h-full object-cover"
-                />
+                <MediaThumb item={item} className="w-full h-full" />
                 {/* Order badge */}
                 <span className="absolute top-1 left-1 flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
                   {i + 1}
@@ -156,13 +193,25 @@ export function MediaSelector({
         </label>
         {mediaItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center rounded-lg border border-dashed border-border">
-            <ImagePlus className="h-6 w-6 text-muted-foreground/30 mb-2" />
-            <p className="text-xs text-muted-foreground">
-              No images in your media library yet
-            </p>
-            <p className="text-[10px] text-muted-foreground/50 mt-1">
-              Upload images in the Media tab first
-            </p>
+            {acceptTypes?.length === 1 && acceptTypes[0] === 'video' ? (
+              <>
+                <Film className="h-6 w-6 text-muted-foreground/30 mb-2" />
+                <p className="text-xs text-muted-foreground">No videos in your library yet</p>
+                <p className="text-[10px] text-muted-foreground/50 mt-1">
+                  Upload one in the Media tab, or generate with HeyGen
+                </p>
+              </>
+            ) : (
+              <>
+                <ImagePlus className="h-6 w-6 text-muted-foreground/30 mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  No {acceptTypes?.length === 1 && acceptTypes[0] === 'image' ? 'images' : 'media'} in your library yet
+                </p>
+                <p className="text-[10px] text-muted-foreground/50 mt-1">
+                  Upload in the Media tab first
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-5 gap-1.5 max-h-48 overflow-y-auto rounded-lg">
@@ -183,12 +232,7 @@ export function MediaSelector({
                         : 'border-transparent hover:border-muted-foreground/30'
                   }`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.file_url}
-                    alt={item.file_name}
-                    className="w-full h-full object-cover"
-                  />
+                  <MediaThumb item={item} className="w-full h-full" />
                   {isSelected && (
                     <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
                       <Check className="h-4 w-4 text-primary-foreground" />

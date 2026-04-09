@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye } from 'lucide-react'
+import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -412,14 +412,33 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
             <Palette className="h-3.5 w-3.5" />
             Canva
           </button>
-          <button
-            type="button"
-            onClick={() => sendToDirector(`Generate an image for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}. Make it eye-catching and on-brand.`)}
-            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-border px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50 transition-all"
-          >
-            <Wand2 className="h-3.5 w-3.5" />
-            AI Generate
-          </button>
+          {/* Image generation — hidden for video-only content types */}
+          {contentType !== 'short_video' && contentType !== 'long_video' && (
+            <button
+              type="button"
+              onClick={() => sendToDirector(`Generate an image for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}. Make it eye-catching and on-brand.`)}
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-border px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50 transition-all"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              AI Generate
+            </button>
+          )}
+          {/* HeyGen video generation — shown for any content type that accepts video */}
+          {['short_video', 'long_video', 'story', 'ad'].includes(contentType) && (
+            <button
+              type="button"
+              onClick={() => {
+                const aspectHint = contentType === 'short_video' ? '9:16 for Reels/TikTok/Shorts' : contentType === 'long_video' ? '16:9 long-form' : '9:16'
+                sendToDirector(
+                  `Generate a ${contentType.replace('_', ' ')} for ${brandName} using HeyGen. Format: ${aspectHint}. Delegate to Video & Scripting — they write the script and call create_video. When the webhook fires, the video will land in my media library automatically (don't ask me to download anything).`,
+                )
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-all"
+            >
+              <Film className="h-3.5 w-3.5" />
+              Generate Video (HeyGen)
+            </button>
+          )}
         </div>
 
         {/* Expandable media library grid */}

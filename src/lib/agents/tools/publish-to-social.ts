@@ -13,7 +13,7 @@ export function createPublishToSocialTool(
 ) {
   return tool({
     description:
-      'Publish a post to social media (Instagram, Facebook, LinkedIn, TikTok, YouTube, X). Can publish immediately or schedule for later. Use when the user says "post this", "publish to Instagram", "schedule this for tomorrow", or drops an image and asks you to post it.',
+      'Publish a post to social media (Instagram, Facebook, LinkedIn, TikTok, YouTube, X). Supports images AND videos. Can publish immediately or schedule for later. For videos, pass media_ids (UUIDs of rows in the media library) — do NOT pass raw video URLs. For quick image-only posts you can still use image_url/image_urls. Use when the user says "post this", "publish to Instagram", "upload to YouTube", or drops media and asks you to post it.',
     inputSchema: z.object({
       platforms: z
         .array(z.enum(['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter']))
@@ -23,14 +23,20 @@ export function createPublishToSocialTool(
         .array(z.string())
         .optional()
         .describe('Hashtags to append (without # prefix)'),
+      media_ids: z
+        .array(z.string().uuid())
+        .optional()
+        .describe(
+          "UUIDs of media_items rows to attach. Use this for videos (from HeyGen, uploads, or query_media) — the tool looks up file_url, mime type, and thumbnail. For Instagram Reels, YouTube Shorts, TikTok, always use media_ids. For carousels of uploaded images, use media_ids instead of image_urls.",
+        ),
       image_url: z
         .string()
         .optional()
-        .describe('Public URL of an image to include. Instagram REQUIRES an image.'),
+        .describe('Public URL of an image to include. Prefer media_ids where possible. Instagram photo posts require an image.'),
       image_urls: z
         .array(z.string())
         .optional()
-        .describe('Multiple image URLs for carousel posts (2-10 images). Each URL must be publicly accessible. Use this for multi-image carousels instead of image_url.'),
+        .describe('Multiple image URLs for carousel posts (2-10 images). Each URL must be publicly accessible. Prefer media_ids.'),
       schedule_date: z
         .string()
         .optional()
@@ -40,7 +46,7 @@ export function createPublishToSocialTool(
         .optional()
         .describe('Schedule time HH:mm (24hr AEST). Omit for immediate publish.'),
     }),
-    execute: async ({ platforms, caption, hashtags, image_url, image_urls, schedule_date, schedule_time }) => {
+    execute: async ({ platforms, caption, hashtags, media_ids, image_url, image_urls, schedule_date, schedule_time }) => {
       try {
         const base = process.env.MIXPOST_API_URL
         const token = process.env.MIXPOST_API_TOKEN
@@ -132,22 +138,79 @@ export function createPublishToSocialTool(
           ? `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}`
           : caption
 
-        // Upload media if provided — supports single image or carousel (multi-image)
-        const allImageUrls = image_urls?.length ? image_urls : image_url ? [image_url] : []
-        const mediaIds: number[] = []
+        // ─── Resolve media items ──────────────────────────────────────────────
+        // Three input sources, in priority order:
+        //   1. media_ids — look up from our media_items table (supports video + image, carousels)
+        //   2. image_urls — multi-image carousel from raw URLs
+        //   3. image_url — single image from raw URL
+        //
+        // For each item we build a normalised descriptor with file_url, mime,
+        // file name, and thumbnail_url (for videos).
+        interface MediaDescriptor {
+          url: string
+          mime: string
+          fileName: string
+          thumbnailUrl: string | null
+          mediaItemId: string | null // our UUID, for scheduled_posts.media_item_ids
+        }
 
-        for (const url of allImageUrls) {
+        const allMedia: MediaDescriptor[] = []
+
+        if (media_ids?.length) {
+          const { data: items } = await supabase
+            .from('media_items')
+            .select('id, file_url, file_name, file_type, thumbnail_url')
+            .in('id', media_ids)
+            .eq('brand_id', brandId)
+
+          if (items) {
+            // Preserve caller order
+            for (const id of media_ids) {
+              const item = items.find((m) => m.id === id)
+              if (item) {
+                allMedia.push({
+                  url: item.file_url,
+                  mime: item.file_type ?? 'application/octet-stream',
+                  fileName: item.file_name ?? 'upload.bin',
+                  thumbnailUrl: item.thumbnail_url ?? null,
+                  mediaItemId: item.id,
+                })
+              }
+            }
+          }
+        }
+
+        // Legacy path: raw image URLs (backward compat)
+        const legacyUrls = image_urls?.length ? image_urls : image_url ? [image_url] : []
+        for (const url of legacyUrls) {
+          allMedia.push({
+            url,
+            mime: 'image/jpeg',
+            fileName: 'upload.jpg',
+            thumbnailUrl: null,
+            mediaItemId: null,
+          })
+        }
+
+        const hasVideo = allMedia.some((m) => m.mime.startsWith('video/'))
+
+        // Upload each item to Mixpost
+        const mixpostMediaIds: number[] = []
+        const videoThumbs: string[] = []
+
+        for (const item of allMedia) {
           try {
             let uploadedId: number | null = null
 
-            // Method 1: Remote URL upload (preferred — no need to download first)
+            // Method 1: Remote URL upload (preferred — Mixpost pulls from our Supabase URL)
+            // Works for both images and videos.
             const remoteRes = await fetch(`${apiBase}/media/remote/initiate`, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ url, alt_text: '' }),
+              body: JSON.stringify({ url: item.url, alt_text: '' }),
             })
             if (remoteRes.ok) {
               const remoteData = await remoteRes.json()
@@ -160,13 +223,13 @@ export function createPublishToSocialTool(
               }
             }
 
-            // Method 2: Fallback to binary upload if remote failed
+            // Method 2: Fallback to binary upload
             if (!uploadedId) {
-              const imgRes = await fetch(url)
-              if (imgRes.ok) {
-                const blob = await imgRes.blob()
+              const fileRes = await fetch(item.url)
+              if (fileRes.ok) {
+                const blob = await fileRes.blob()
                 const formData = new FormData()
-                formData.append('file', blob, 'upload.jpg')
+                formData.append('file', blob, item.fileName)
                 const uploadRes = await fetch(`${apiBase}/media`, {
                   method: 'POST',
                   headers: { Authorization: `Bearer ${token}` },
@@ -180,16 +243,22 @@ export function createPublishToSocialTool(
             }
 
             if (uploadedId) {
-              mediaIds.push(uploadedId)
+              mixpostMediaIds.push(uploadedId)
+              if (item.mime.startsWith('video/') && item.thumbnailUrl) {
+                videoThumbs.push(item.thumbnailUrl)
+              }
             }
-            console.log(`[publish_to_social] Media upload: url=${url} | mediaId=${uploadedId}`)
+            console.log(
+              `[publish_to_social] Media upload: mime=${item.mime} | mediaId=${uploadedId}`,
+            )
           } catch (err) {
-            console.error(`[publish_to_social] Media upload error for ${url}:`, err)
+            console.error(`[publish_to_social] Media upload error for ${item.url}:`, err)
           }
         }
 
-        const mediaId = mediaIds[0] ?? null
-        if (allImageUrls.length > 0 && mediaIds.length === 0) {
+        // Backwards-compatible alias used further down
+        const mediaIds = mixpostMediaIds
+        if (allMedia.length > 0 && mediaIds.length === 0) {
           console.error('[publish_to_social] Failed to upload any media to Mixpost')
         }
 
@@ -230,9 +299,9 @@ export function createPublishToSocialTool(
             continue
           }
 
-          // Instagram REQUIRES an image — block text-only posts
-          if (platform === 'instagram' && mediaIds.length === 0) {
-            results.push(`Instagram: BLOCKED — Instagram requires an image. No image was provided or the image upload to Mixpost failed. Use generate_image or upload_media first, then try again with the image_url.`)
+          // Instagram / TikTok / YouTube require media — text-only posts blocked
+          if ((platform === 'instagram' || platform === 'tiktok' || platform === 'youtube') && mediaIds.length === 0) {
+            results.push(`${platform}: BLOCKED — ${platform} requires media (${hasVideo ? 'video' : 'image/video'}). Upload to the media library first, then pass media_ids.`)
             postResults.push({ platform, externalId: null, success: false })
             continue
           }
@@ -246,7 +315,9 @@ export function createPublishToSocialTool(
                 body: fullCaption,
                 media: mediaIds.length > 0 ? mediaIds : [],
                 url: null,
-                video_thumbs: [] as never[],
+                // Mixpost uses video_thumbs to set poster images for video posts.
+                // Empty for image-only posts; populated from media_items.thumbnail_url for videos.
+                video_thumbs: videoThumbs,
               }],
             }],
             ...(isScheduled
@@ -267,9 +338,16 @@ export function createPublishToSocialTool(
             const postData = await postRes.json().catch(() => ({}))
             const externalId = String(postData.data?.uuid ?? postData.uuid ?? postData.data?.id ?? postData.id ?? '')
             const label = platform.charAt(0).toUpperCase() + platform.slice(1)
+            const mediaDesc = hasVideo
+              ? ' (with video)'
+              : mediaIds.length > 1
+                ? ` (carousel: ${mediaIds.length} images)`
+                : mediaIds.length === 1
+                  ? ' (with image)'
+                  : ''
             results.push(isScheduled
-              ? `${label}: Scheduled for ${schedule_date} at ${schedule_time} AEST via ${account.name}`
-              : `${label}: Publishing now via ${account.name}${mediaIds.length > 1 ? ` (carousel: ${mediaIds.length} images)` : mediaIds.length === 1 ? ' (with image)' : ''} (30-60 seconds to go live)`)
+              ? `${label}: Scheduled for ${schedule_date} at ${schedule_time} AEST via ${account.name}${mediaDesc}`
+              : `${label}: Publishing now via ${account.name}${mediaDesc} (30-60 seconds to go live)`)
             postResults.push({ platform, externalId: externalId || null, success: true })
           } else {
             const errText = await postRes.text().catch(() => '')
@@ -278,9 +356,22 @@ export function createPublishToSocialTool(
           }
         }
 
-        // Track in scheduled_posts table (include image_url + external_post_id)
+        // Determine the correct post_type per PostType enum ('single' | 'carousel' | 'reel' | 'video')
+        // Video posts on short-form platforms → 'reel'; elsewhere → 'video'; otherwise image logic.
+        const ourMediaItemIds = allMedia.map((m) => m.mediaItemId).filter((id): id is string => !!id)
+
+        // Track in scheduled_posts table — one row per platform result
         for (const pr of postResults) {
           try {
+            let postType: 'single' | 'carousel' | 'reel' | 'video'
+            if (hasVideo) {
+              postType = (pr.platform === 'instagram' || pr.platform === 'facebook' || pr.platform === 'tiktok')
+                ? 'reel'
+                : 'video'
+            } else {
+              postType = mediaIds.length > 1 ? 'carousel' : 'single'
+            }
+
             await supabase.from('scheduled_posts').insert({
               user_id: userId,
               brand_id: brandId,
@@ -291,14 +382,15 @@ export function createPublishToSocialTool(
               scheduled_at: isScheduled
                 ? new Date(`${schedule_date}T${schedule_time}:00+10:00`).toISOString()
                 : new Date().toISOString(),
-              post_type: mediaIds.length > 1 ? 'carousel' : 'single',
-              ...(mediaIds.length > 0 ? { media_item_ids: [] } : {}),
+              post_type: postType,
+              ...(ourMediaItemIds.length > 0 ? { media_item_ids: ourMediaItemIds } : {}),
               ...(image_url ? { image_url } : {}),
               ...(pr.externalId ? { external_post_id: pr.externalId } : {}),
               ...(!pr.success ? { error: `Failed to publish to ${pr.platform}` } : {}),
               metadata: {
                 source: 'publish_to_social',
                 created_by: 'Director',
+                ...(hasVideo ? { has_video: true } : {}),
               },
             })
           } catch {

@@ -61,6 +61,13 @@ After this tool returns, tell the user the draft is in Review and they can appro
           .string()
           .optional()
           .describe('Optional tone hint, e.g. "expert friend", "playful", "authoritative", "warm"'),
+        media_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe(
+            "Optional UUID of a media_items row to attach (image or video). For Reels/Shorts/TikTok you MUST call query_media first and pass a video media_id. The user can't review a video draft without the media attached.",
+          ),
       },
     },
     async ({
@@ -68,11 +75,13 @@ After this tool returns, tell the user the draft is in Review and they can appro
       intent,
       platform,
       tone,
+      media_id,
     }: {
       brand_id: string
       intent: string
       platform: Platform
       tone?: string
+      media_id?: string
     }) => {
       const supabase = createAdminClient()
 
@@ -180,6 +189,25 @@ After this tool returns, tell the user the draft is in Review and they can appro
         }
       }
 
+      // Resolve optional media attachment
+      let mediaItemRow: { id: string; file_url: string; file_type: string; thumbnail_url: string | null } | null = null
+      if (media_id) {
+        const { data: mediaRow } = await supabase
+          .from('media_items')
+          .select('id, file_url, file_type, thumbnail_url')
+          .eq('id', media_id)
+          .eq('brand_id', brand_id)
+          .single()
+        if (mediaRow) {
+          mediaItemRow = mediaRow
+        }
+      }
+
+      const isVideoMedia = mediaItemRow?.file_type?.startsWith('video/') ?? false
+      const postType: 'single' | 'reel' | 'video' = isVideoMedia
+        ? (platform === 'instagram' || platform === 'facebook' || platform === 'tiktok' ? 'reel' : 'video')
+        : 'single'
+
       // Insert the draft into scheduled_posts with mcp_external source
       const metadata: DraftSourceMeta = {
         source: 'mcp_external',
@@ -198,7 +226,9 @@ After this tool returns, tell the user the draft is in Review and they can appro
           hashtags: [],
           status: 'draft',
           scheduled_at: new Date().toISOString(),
-          post_type: 'single',
+          post_type: postType,
+          ...(mediaItemRow ? { media_item_ids: [mediaItemRow.id] } : {}),
+          ...(mediaItemRow && !isVideoMedia ? { image_url: mediaItemRow.file_url } : {}),
           metadata: metadata as unknown as Record<string, unknown>,
         })
         .select('id')
@@ -224,6 +254,8 @@ After this tool returns, tell the user the draft is in Review and they can appro
         platform,
         source: 'mcp_external',
         department: 'Content & Copy',
+        post_type: postType,
+        ...(mediaItemRow ? { media_attached: { id: mediaItemRow.id, type: mediaItemRow.file_type } } : {}),
         cost_cents: workerResult.costCents,
         duration_ms: workerResult.durationMs,
         caption_preview: caption.length > 200 ? caption.slice(0, 200) + '…' : caption,

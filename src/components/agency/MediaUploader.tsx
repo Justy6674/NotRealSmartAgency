@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react'
 import { Upload, Loader2, Check, X } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 import { generateDeterministicTags } from '@/lib/media/auto-tagger'
+import { extractFramesFromVideo } from '@/lib/video/extract-frames-browser'
 
 interface UploadProgress {
   fileName: string
@@ -119,7 +120,21 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const storagePath = `${user.id}/${brandId}/${timestamp}_${safeName}`
 
-      // Upload with XHR for real-time progress tracking
+      // Extract video thumbnail BEFORE upload (client-side via canvas).
+      // Graceful degradation: if extraction fails (old codec, broken file),
+      // upload proceeds without a thumbnail and MediaSelector shows a fallback.
+      const isVideo = file.type.startsWith('video/')
+      let thumbnailBlob: Blob | null = null
+      if (isVideo) {
+        try {
+          const frames = await extractFramesFromVideo(file, 1)
+          thumbnailBlob = frames[0] ?? null
+        } catch (err) {
+          console.warn('[MediaUploader] Video thumbnail extraction failed:', err)
+        }
+      }
+
+      // Upload main file with XHR for real-time progress tracking
       await uploadWithProgress(
         supabaseUrl,
         anonKey,
@@ -132,6 +147,23 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
 
       // Get public URL
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+
+      // Upload thumbnail if we have one (non-blocking — main file already saved)
+      let thumbnailUrl: string | null = null
+      if (thumbnailBlob) {
+        const thumbPath = `${user.id}/${brandId}/${timestamp}_${safeName}_thumb.jpg`
+        try {
+          const { error: thumbError } = await supabase.storage
+            .from('media')
+            .upload(thumbPath, thumbnailBlob, { contentType: 'image/jpeg', upsert: false })
+          if (!thumbError) {
+            const { data: thumbUrl } = supabase.storage.from('media').getPublicUrl(thumbPath)
+            thumbnailUrl = thumbUrl.publicUrl
+          }
+        } catch (err) {
+          console.warn('[MediaUploader] Thumbnail upload failed:', err)
+        }
+      }
 
       // Fetch brand context for deterministic tags
       const { data: brand } = await supabase
@@ -150,6 +182,7 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
           user_id: user.id,
           brand_id: brandId,
           file_url: urlData.publicUrl,
+          thumbnail_url: thumbnailUrl,
           file_name: file.name,
           file_type: file.type,
           file_size_bytes: file.size,
