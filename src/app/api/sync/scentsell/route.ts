@@ -60,23 +60,22 @@ export async function GET(request: Request) {
 
   const { data: listings } = await scentsell
     .from('listings')
-    .select('id, fragrance_name, house, size_ml, fill_percentage, condition, current_retail_price, manual_price, status, photos:listing_photos(id, photo_url, slot_id)')
+    .select('id, brand, fragrance_name, size_ml, fill_percentage, condition, price_aud, status, photos:listing_photos(photo_url, display_order)')
     .eq('status', 'active')
     .order('created_at', { ascending: false })
     .limit(200)
 
   if (listings?.length) {
     for (const listing of listings) {
-      const photos = (listing as { photos?: { photo_url: string; slot_id: string }[] }).photos ?? []
-      const frontPhoto = photos.find(p => p.slot_id === 'front-flat') ?? photos[0]
+      const photos = (listing as unknown as { photos?: { photo_url: string; display_order?: number }[] }).photos ?? []
+      const frontPhoto = photos.sort((a: { display_order?: number }, b: { display_order?: number }) => (a.display_order ?? 0) - (b.display_order ?? 0))[0]
       if (!frontPhoto?.photo_url) continue
 
       const syncKey = `listing-${listing.id}`
       if (existingSyncKeys.has(syncKey)) { results.skipped++; continue }
 
-      const price = (listing as { manual_price?: number; current_retail_price?: number }).manual_price
-        ?? (listing as { current_retail_price?: number }).current_retail_price ?? 0
-      const name = `${(listing as { house?: string }).house} ${(listing as { fragrance_name?: string }).fragrance_name}`
+      const price = (listing as { price_aud?: number }).price_aud ?? 0
+      const name = `${(listing as { brand?: string }).brand} ${(listing as { fragrance_name?: string }).fragrance_name}`
 
       await nrs.from('media_items').insert({
         user_id: brand.user_id,
@@ -87,7 +86,7 @@ export async function GET(request: Request) {
         file_size_bytes: 0,
         tags: [
           'marketplace', 'fragrance', 'for-sale',
-          ((listing as { house?: string }).house ?? '').toLowerCase(),
+          ((listing as { brand?: string }).brand ?? '').toLowerCase(),
           ((listing as { fragrance_name?: string }).fragrance_name ?? '').toLowerCase(),
           `${(listing as { size_ml?: number }).size_ml ?? 0}ml`,
           ((listing as { condition?: string }).condition ?? '').toLowerCase(),
@@ -95,7 +94,7 @@ export async function GET(request: Request) {
         ai_description: `${name} — ${(listing as { size_ml?: number }).size_ml}ml, ${(listing as { fill_percentage?: number }).fill_percentage}% full, ${(listing as { condition?: string }).condition}. $${price.toFixed(2)} AUD. From Scent Sell marketplace.`,
         metadata: { scentsell_sync_key: syncKey, source: 'scentsell-marketplace', listing_id: listing.id, price },
         is_archived: false,
-        source_type: 'sync',
+        source_type: 'import',
       })
 
       results.marketplace++
@@ -138,7 +137,7 @@ export async function GET(request: Request) {
         ai_description: `${name} — ${(item as { item_type?: string }).item_type}${(item as { base_price_aud?: number }).base_price_aud ? `. From $${(item as { base_price_aud: number }).base_price_aud.toFixed(2)} AUD` : ''}. From Scent Sell sample shop.`,
         metadata: { scentsell_sync_key: syncKey, source: 'scentsell-shop', item_id: item.id },
         is_archived: false,
-        source_type: 'sync',
+        source_type: 'import',
       })
 
       results.sampleShop++
