@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import {
   BookmarkPlus, Mail, Forward, GitCompareArrows, RefreshCw,
-  ListChecks, Copy, Brain, Maximize2, FileDown, Check, Loader2, X
+  ListChecks, Copy, Brain, Maximize2, FileDown, Check, Loader2, X, CircleHelp
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -187,6 +187,7 @@ export function MessageActions({ content, onRegenerate }: MessageActionsProps) {
     { key: 'memory', icon: Brain, label: 'Remember', onClick: handleMemory },
     { key: 'fullscreen', icon: Maximize2, label: 'Full View', onClick: handleFullScreen },
     { key: 'export', icon: FileDown, label: 'PDF', onClick: handleExport },
+    { key: 'help', icon: CircleHelp, label: 'Help', onClick: () => window.open('https://help.notrealsmart.com.au', '_blank') },
   ]
 
   return (
