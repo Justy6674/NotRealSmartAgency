@@ -10,21 +10,25 @@ export interface TranscriptionResult {
   duration?: number
 }
 
-async function transcribeWithDeepgram(audioBuffer: ArrayBuffer, contentType: string): Promise<TranscriptionResult> {
+/**
+ * Deepgram URL mode — send the file URL, Deepgram fetches it directly.
+ * No download into serverless memory. Works for any file size.
+ */
+async function transcribeWithDeepgramUrl(fileUrl: string): Promise<TranscriptionResult> {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY not configured')
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30_000)
+  const timeout = setTimeout(() => controller.abort(), 180_000) // 3 min — Deepgram fetches + processes
 
   try {
     const res = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&language=en-AU&smart_format=true&punctuate=true', {
       method: 'POST',
       headers: {
         Authorization: `Token ${apiKey}`,
-        'Content-Type': contentType,
+        'Content-Type': 'application/json',
       },
-      body: audioBuffer,
+      body: JSON.stringify({ url: fileUrl }),
       signal: controller.signal,
     })
 
@@ -77,35 +81,46 @@ async function transcribeWithWhisper(audioBuffer: ArrayBuffer, fileName: string)
   }
 }
 
+const WHISPER_MAX_SIZE = 25 * 1024 * 1024 // 25MB — Whisper's file size limit
+
 /**
  * Transcribe an audio/video file with 2-layer fallback.
- * Downloads the file from the URL, then tries Deepgram → Whisper.
+ * Layer 1: Deepgram URL mode — sends the URL, Deepgram fetches the file (no memory usage).
+ * Layer 2: OpenAI Whisper — only for files under 25MB (downloads file to send).
  */
 export async function transcribeFile(
   fileUrl: string,
-  fileName: string = 'audio.mp4'
+  fileName: string = 'audio.mp4',
+  fileSizeBytes?: number
 ): Promise<TranscriptionResult> {
-  // Download the file
-  const fileRes = await fetch(fileUrl)
-  if (!fileRes.ok) throw new Error(`Failed to download file: ${fileRes.status}`)
-
-  const audioBuffer = await fileRes.arrayBuffer()
-  const contentType = fileRes.headers.get('content-type') ?? 'audio/mp4'
-
   const errors: string[] = []
 
-  // Layer 1: Deepgram
+  // Layer 1: Deepgram URL mode (no download, works for any file size)
   try {
-    return await transcribeWithDeepgram(audioBuffer, contentType)
+    return await transcribeWithDeepgramUrl(fileUrl)
   } catch (err) {
     errors.push(`Deepgram: ${err instanceof Error ? err.message : 'unknown'}`)
   }
 
-  // Layer 2: OpenAI Whisper
-  try {
-    return await transcribeWithWhisper(audioBuffer, fileName)
-  } catch (err) {
-    errors.push(`Whisper: ${err instanceof Error ? err.message : 'unknown'}`)
+  // Layer 2: OpenAI Whisper (requires download, only for files under 25MB)
+  const tooLargeForWhisper = fileSizeBytes != null && fileSizeBytes > WHISPER_MAX_SIZE
+  if (tooLargeForWhisper) {
+    errors.push(`Whisper: skipped — file too large (${Math.round((fileSizeBytes ?? 0) / 1024 / 1024)}MB > 25MB limit)`)
+  } else {
+    try {
+      const fileRes = await fetch(fileUrl)
+      if (!fileRes.ok) throw new Error(`Failed to download file: ${fileRes.status}`)
+      const audioBuffer = await fileRes.arrayBuffer()
+
+      // Double-check actual size
+      if (audioBuffer.byteLength > WHISPER_MAX_SIZE) {
+        throw new Error(`File too large for Whisper (${Math.round(audioBuffer.byteLength / 1024 / 1024)}MB)`)
+      }
+
+      return await transcribeWithWhisper(audioBuffer, fileName)
+    } catch (err) {
+      errors.push(`Whisper: ${err instanceof Error ? err.message : 'unknown'}`)
+    }
   }
 
   throw new Error(`All transcription layers failed: ${errors.join('; ')}`)

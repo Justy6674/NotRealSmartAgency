@@ -3,10 +3,11 @@
 import { useState, useRef, useCallback } from 'react'
 import { Upload, Loader2, Check, X } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
+import { generateDeterministicTags } from '@/lib/media/auto-tagger'
 
 interface UploadProgress {
   fileName: string
-  status: 'uploading' | 'transcribing' | 'done' | 'error'
+  status: 'uploading' | 'processing' | 'done' | 'error'
   mediaItemId?: string
   error?: string
 }
@@ -62,7 +63,16 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
       // Get public URL
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
 
-      // Create database record
+      // Fetch brand context for deterministic tags
+      const { data: brand } = await supabase
+        .from('brands')
+        .select('name, niche, content_pillars, compliance_flags')
+        .eq('id', brandId)
+        .single()
+
+      const deterministicTags = generateDeterministicTags(brand, file.type, file.name)
+
+      // Create database record with instant deterministic tags
       const isImage = file.type.startsWith('image/')
       const { data: mediaItem, error: dbError } = await supabase
         .from('media_items')
@@ -76,38 +86,26 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
           transcription_status: isImage ? 'transcribed' : 'pending',
           file_created_at: new Date(file.lastModified).toISOString(),
           uploaded_by_name: user.user_metadata?.full_name ?? user.email ?? 'Unknown',
+          tags: deterministicTags,
         })
         .select()
         .single()
 
       if (dbError) throw new Error(dbError.message)
 
-      if (isImage) {
-        // Images don't need transcription — mark done immediately
-        setProgress(prev =>
-          prev.map(p => p.fileName === file.name ? { ...p, status: 'done', mediaItemId: mediaItem.id } : p)
-        )
-      } else {
-        setProgress(prev =>
-          prev.map(p => p.fileName === file.name ? { ...p, status: 'transcribing', mediaItemId: mediaItem.id } : p)
-        )
+      // Upload complete — mark as done immediately
+      setProgress(prev =>
+        prev.map(p => p.fileName === file.name ? { ...p, status: 'done', mediaItemId: mediaItem.id } : p)
+      )
 
-        // Auto-transcribe via API (small JSON payload, no file)
-        const transcribeRes = await fetch('/api/media/transcribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mediaItemId: mediaItem.id }),
-        })
+      // Fire-and-forget: background processing (AI description, transcription, smart tags)
+      // This runs async — the UI doesn't wait for it
+      fetch('/api/media/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaItemId: mediaItem.id }),
+      }).catch(() => {}) // Silent failure — processing is non-blocking
 
-        if (!transcribeRes.ok) {
-          const err = await transcribeRes.json()
-          throw new Error(err.error ?? 'Transcription failed')
-        }
-
-        setProgress(prev =>
-          prev.map(p => p.fileName === file.name ? { ...p, status: 'done' } : p)
-        )
-      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed'
       setProgress(prev =>
@@ -160,13 +158,13 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
           {progress.map((p, i) => (
             <div key={i} className="flex items-center gap-2 text-sm p-2 rounded bg-muted/50">
               {p.status === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
-              {p.status === 'transcribing' && <Loader2 className="h-4 w-4 animate-spin text-amber-500" />}
+              {p.status === 'processing' && <Loader2 className="h-4 w-4 animate-spin text-amber-500" />}
               {p.status === 'done' && <Check className="h-4 w-4 text-green-500" />}
               {p.status === 'error' && <X className="h-4 w-4 text-red-500" />}
               <span className="flex-1 truncate">{p.fileName}</span>
               <span className="text-xs text-muted-foreground">
                 {p.status === 'uploading' && 'Uploading...'}
-                {p.status === 'transcribing' && 'Transcribing...'}
+                {p.status === 'processing' && 'Processing...'}
                 {p.status === 'done' && 'Ready'}
                 {p.status === 'error' && p.error}
               </span>

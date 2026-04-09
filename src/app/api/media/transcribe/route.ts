@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     .eq('id', mediaItemId)
 
   try {
-    const result = await transcribeFile(mediaItem.file_url, mediaItem.file_name)
+    const result = await transcribeFile(mediaItem.file_url, mediaItem.file_name, mediaItem.file_size_bytes)
 
     // Update media item with transcription
     const { data: updated, error: updateError } = await supabase
