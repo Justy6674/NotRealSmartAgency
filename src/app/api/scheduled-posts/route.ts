@@ -14,6 +14,7 @@ export async function GET(request: Request) {
   const brandId = searchParams.get('brandId')
   const from = searchParams.get('from')
   const to = searchParams.get('to')
+  const status = searchParams.get('status')
 
   if (!brandId) {
     return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
 
   if (from) query = query.gte('scheduled_at', from)
   if (to) query = query.lte('scheduled_at', to)
+  if (status) query = query.eq('status', status)
 
   const { data, error } = await query
 
@@ -41,11 +43,13 @@ const PatchSchema = z.object({
   id: z.string().uuid(),
   scheduled_at: z.string().optional(),
   caption: z.string().optional(),
+  hashtags: z.array(z.string()).optional(),
   status: z.enum(['draft', 'scheduled', 'publishing', 'published', 'failed', 'cancelled']).optional(),
   post_type: z.enum(['single', 'carousel', 'reel', 'video']).optional(),
   media_item_ids: z.array(z.string().uuid()).optional(),
   content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
   content_pillar: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
 })
 
 export async function PATCH(request: Request) {
@@ -63,17 +67,32 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
   }
 
-  const { id, ...updates } = parsed.data
+  const { id, metadata: incomingMetadata, ...updates } = parsed.data
 
   // Only include fields that were provided
   const fieldsToUpdate: Record<string, unknown> = {}
   if (updates.scheduled_at !== undefined) fieldsToUpdate.scheduled_at = updates.scheduled_at
   if (updates.caption !== undefined) fieldsToUpdate.caption = updates.caption
+  if (updates.hashtags !== undefined) fieldsToUpdate.hashtags = updates.hashtags
   if (updates.status !== undefined) fieldsToUpdate.status = updates.status
   if (updates.post_type !== undefined) fieldsToUpdate.post_type = updates.post_type
   if (updates.media_item_ids !== undefined) fieldsToUpdate.media_item_ids = updates.media_item_ids
   if (updates.content_type !== undefined) fieldsToUpdate.content_type = updates.content_type
   if (updates.content_pillar !== undefined) fieldsToUpdate.content_pillar = updates.content_pillar
+
+  // Deep merge metadata (fetch current, spread, update)
+  if (incomingMetadata !== undefined) {
+    const { data: current } = await supabase
+      .from('scheduled_posts')
+      .select('metadata')
+      .eq('id', id)
+      .single()
+
+    fieldsToUpdate.metadata = {
+      ...((current?.metadata as Record<string, unknown>) ?? {}),
+      ...incomingMetadata,
+    }
+  }
 
   if (Object.keys(fieldsToUpdate).length === 0) {
     return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
@@ -105,6 +124,7 @@ const CreateSchema = z.object({
   post_type: z.enum(['single', 'carousel', 'reel', 'video']).optional().default('single'),
   content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
   content_pillar: z.string().optional(),
+  metadata: z.record(z.unknown()).optional().default({}),
 })
 
 export async function POST(request: Request) {
@@ -122,7 +142,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
   }
 
-  const { brandId, platform, caption, hashtags, scheduled_at, status, media_item_id, media_item_ids, post_type, content_type, content_pillar } = parsed.data
+  const { brandId, platform, caption, hashtags, scheduled_at, status, media_item_id, media_item_ids, post_type, content_type, content_pillar, metadata } = parsed.data
 
   // Verify brand belongs to the user
   const { data: brand, error: brandError } = await supabase
@@ -146,6 +166,11 @@ export async function POST(request: Request) {
     status,
     post_type,
     media_item_ids,
+    metadata: {
+      ...metadata,
+      // Ensure source is stamped if not provided
+      source: (metadata as Record<string, unknown>)?.source ?? 'unknown',
+    },
   }
   if (media_item_id) insertData.media_item_id = media_item_id
   if (content_type) insertData.content_type = content_type

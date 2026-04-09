@@ -176,6 +176,26 @@ export async function POST(request: Request) {
       systemPrompt = systemPrompt + '\n\n---\n\n' + routingContext
     }
 
+    // Inject pending draft context so Director knows what's in the review queue
+    try {
+      const { data: draftPosts } = await supabase
+        .from('scheduled_posts')
+        .select('platform, metadata')
+        .eq('brand_id', brandId)
+        .eq('status', 'draft')
+        .limit(50)
+
+      if (draftPosts && draftPosts.length > 0) {
+        const sourceCounts: Record<string, number> = {}
+        for (const d of draftPosts) {
+          const src = ((d.metadata as Record<string, unknown>)?.source as string) ?? 'unknown'
+          sourceCounts[src] = (sourceCounts[src] ?? 0) + 1
+        }
+        const sourceBreakdown = Object.entries(sourceCounts).map(([s, c]) => `${c} from ${s.replace(/_/g, ' ')}`).join(', ')
+        systemPrompt += `\n\nCONTENT REVIEW QUEUE: ${draftPosts.length} draft${draftPosts.length !== 1 ? 's' : ''} pending review for this brand (${sourceBreakdown}). If the user asks about content, posts, drafts, or scheduling, reference this. You can suggest they check the Review tab.`
+      }
+    } catch { /* non-fatal */ }
+
     // Auto-trigger industry research if market_context is RED (no research yet)
     const marketContext = proformaSections.find(s => s.section_key === 'market_context')
     if (marketContext?.rag_status === 'red') {

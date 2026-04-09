@@ -296,6 +296,10 @@ export function createPublishToSocialTool(
               ...(image_url ? { image_url } : {}),
               ...(pr.externalId ? { external_post_id: pr.externalId } : {}),
               ...(!pr.success ? { error: `Failed to publish to ${pr.platform}` } : {}),
+              metadata: {
+                source: 'publish_to_social',
+                created_by: 'Director',
+              },
             })
           } catch {
             // Non-blocking

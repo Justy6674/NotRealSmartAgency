@@ -26,12 +26,22 @@ type TabId = (typeof TABS)[number]['id']
 
 export function CreativeStudio() {
   const [activeTab, setActiveTab] = useState<TabId>('create')
-  const { setChatPanelOpen } = useAgencyStore()
+  const { setChatPanelOpen, activeBrandId } = useAgencyStore()
+  const [draftCount, setDraftCount] = useState(0)
 
   // Auto-open chat panel so Director is always visible in the Studio
   useEffect(() => {
     setChatPanelOpen(true)
   }, [setChatPanelOpen])
+
+  // Fetch draft count for tab badge
+  useEffect(() => {
+    if (!activeBrandId) return
+    fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setDraftCount(Array.isArray(data) ? data.length : 0))
+      .catch(() => setDraftCount(0))
+  }, [activeBrandId, activeTab])
 
   return (
     <div className="flex h-full flex-col">
@@ -49,6 +59,11 @@ export function CreativeStudio() {
             )}
           >
             {tab.label}
+            {tab.id === 'review' && draftCount > 0 && (
+              <span className="ml-1.5 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400">
+                {draftCount}
+              </span>
+            )}
           </button>
         ))}
       </div>

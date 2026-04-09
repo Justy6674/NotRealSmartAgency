@@ -211,6 +211,11 @@ ${!mediaItem.transcription && !mediaItem.ai_description ? `\nNote: No transcript
           status: 'draft',
           post_type: postType,
           content_type: contentType ?? null,
+          metadata: {
+            source: 'ai_generate',
+            created_by: 'AI Generate',
+            media_item_id: mediaItemId,
+          },
         })
         .select()
         .single()

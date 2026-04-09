@@ -700,6 +700,46 @@ export interface VisualAnalysis {
 
 export type PostType = 'single' | 'carousel' | 'reel' | 'video'
 
+// ─── Draft Source Tracking ────────────────────────────────────────────────────
+
+export type DraftSource =
+  | 'ai_generate'       // Media Library Generate button
+  | 'fill_calendar'     // Director fill-calendar tool
+  | 'director_chat'     // Director/agent conversation
+  | 'post_creator'      // Manual PostCreator UI
+  | 'publish_to_social' // Agent publish tool (tracking record)
+  | 'canva_import'      // Canva import flow
+  | 'mcp_external'      // MCP/Claude Code/Cowork external clients
+  | 'team_member'       // Team member submission
+  | 'unknown'           // Legacy posts with no source
+
+export interface ComplianceResult {
+  checked_at: string
+  is_valid: boolean
+  flags: string[]
+  warnings: string[]
+  brand_voice_issues: string[]
+}
+
+export interface EditHistoryEntry {
+  edited_by: string
+  edited_at: string
+  field: string
+  old_value?: string
+  new_value?: string
+}
+
+export interface DraftSourceMeta {
+  source: DraftSource
+  created_by?: string
+  conversation_id?: string | null
+  media_item_id?: string | null
+  compliance_result?: ComplianceResult | null
+  edit_history?: EditHistoryEntry[]
+  rejection_reason?: string
+  comments?: Array<{ author: string; text: string; timestamp: string }>
+}
+
 export interface ScheduledPost {
   id: string
   user_id: string

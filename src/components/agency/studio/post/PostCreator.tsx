@@ -198,6 +198,10 @@ export function PostCreator() {
             media_item_ids: selectedMediaIds,
             content_type: strategyContext?.suggestedContentType ?? undefined,
             content_pillar: strategyContext?.suggestedPillar ?? undefined,
+            metadata: {
+              source: 'post_creator',
+              created_by: 'You',
+            },
           }),
         })
       }

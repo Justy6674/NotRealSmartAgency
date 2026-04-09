@@ -340,8 +340,9 @@ ${isRegulated ? '- AHPRA/TGA brand: NO testimonials, NO guaranteed results, NO b
         scheduled_at: post.scheduled_at,
         status: 'draft' as const,
         metadata: {
+          source: 'fill_calendar',
+          created_by: 'Director',
           content_type: post.content_type,
-          generated_by: 'fill_calendar',
           conversation_id: conversationId,
         },
       }))
