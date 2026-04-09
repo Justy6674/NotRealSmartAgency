@@ -12,8 +12,23 @@ import {
   Plus,
   X,
   Music,
+  Loader2,
+  ChevronDown,
 } from 'lucide-react'
 import type { MediaItemWithUsage } from '@/types/database'
+
+const CONTENT_TYPES = [
+  { value: '', label: 'Auto-detect' },
+  { value: 'product showcase', label: 'Product showcase' },
+  { value: 'behind the scenes', label: 'Behind the scenes' },
+  { value: 'tutorial / how-to', label: 'Tutorial / how-to' },
+  { value: 'testimonial', label: 'Testimonial' },
+  { value: 'promotional / sale', label: 'Promotional / sale' },
+  { value: 'educational', label: 'Educational' },
+  { value: 'event / announcement', label: 'Event / announcement' },
+  { value: 'short-form reel', label: 'Short-form Reel / TikTok' },
+  { value: 'long-form video', label: 'Long-form video' },
+]
 
 interface MediaLibraryCardProps {
   item: MediaItemWithUsage
@@ -26,7 +41,8 @@ interface MediaLibraryCardProps {
   onArchive: (id: string) => void
   onUnarchive: (id: string) => void
   onDelete: (id: string) => void
-  onGenerate: (id: string) => void
+  onGenerate: (id: string, contentType?: string) => void
+  generating?: boolean
   onRepurpose: (id: string) => void
   availableTags: string[]
 }
@@ -63,11 +79,14 @@ export function MediaLibraryCard({
   onUnarchive,
   onDelete,
   onGenerate,
+  generating,
   onRepurpose,
   availableTags,
 }: MediaLibraryCardProps) {
   const [showTagInput, setShowTagInput] = useState(false)
   const [tagValue, setTagValue] = useState('')
+  const [showGenerateMenu, setShowGenerateMenu] = useState(false)
+  const generateMenuRef = useRef<HTMLDivElement>(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
 
@@ -282,14 +301,40 @@ export function MediaLibraryCard({
 
         {/* Actions */}
         <div className="mt-auto flex items-center gap-1 pt-1">
-          <button
-            onClick={() => onGenerate(item.id)}
-            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted/80 transition-colors"
-            title="Generate content"
-          >
-            <Sparkles className="h-3 w-3" />
-            Generate
-          </button>
+          <div className="relative" ref={generateMenuRef}>
+            <div className="inline-flex">
+              <button
+                onClick={() => generating ? null : onGenerate(item.id)}
+                disabled={generating}
+                className="inline-flex items-center gap-1 rounded-l-md bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+                title="Generate captions (auto-detect type)"
+              >
+                {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                {generating ? 'Generating...' : 'Generate'}
+              </button>
+              <button
+                onClick={() => setShowGenerateMenu(!showGenerateMenu)}
+                disabled={generating}
+                className="inline-flex items-center rounded-r-md border-l border-background/20 bg-muted px-1 py-1 text-[10px] text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+                title="Choose content type"
+              >
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </div>
+            {showGenerateMenu && (
+              <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-lg border border-border bg-card py-1 shadow-lg">
+                {CONTENT_TYPES.map((ct) => (
+                  <button
+                    key={ct.value}
+                    onClick={() => { setShowGenerateMenu(false); onGenerate(item.id, ct.value || undefined) }}
+                    className="block w-full px-3 py-1.5 text-left text-[11px] text-foreground hover:bg-muted transition-colors"
+                  >
+                    {ct.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => onRepurpose(item.id)}
             className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted/80 transition-colors"

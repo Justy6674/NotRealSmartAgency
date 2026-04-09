@@ -155,16 +155,30 @@ export function MediaLibrary() {
     fetchMedia()
   }
 
-  const handleGenerate = async (id: string) => {
-    const res = await fetch(`/api/media/${id}/generate`, { method: 'POST' })
-    if (res.ok) {
-      const data = await res.json()
-      alert(
-        `Generated ${data.scheduledPosts?.length ?? 0} platform variants! Check the Outputs library.`
-      )
-    } else {
-      const err = await res.json()
-      alert(`Error: ${err.error}`)
+  const [generatingId, setGeneratingId] = useState<string | null>(null)
+
+  const handleGenerate = async (id: string, contentType?: string) => {
+    setGeneratingId(id)
+    try {
+      const params = new URLSearchParams()
+      if (contentType) params.set('content_type', contentType)
+      const res = await fetch(`/api/media/${id}/generate?${params}`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        alert(`Generated ${data.scheduledPosts?.length ?? 0} platform captions! Go to the Review tab to edit and schedule them.`)
+      } else {
+        const contentTypeHeader = res.headers.get('content-type') ?? ''
+        if (contentTypeHeader.includes('application/json')) {
+          const err = await res.json()
+          alert(`Error: ${err.error}`)
+        } else {
+          alert(`Error: Server returned ${res.status}. Try again in a moment.`)
+        }
+      }
+    } catch {
+      alert('Network error. Please try again.')
+    } finally {
+      setGeneratingId(null)
     }
   }
 
@@ -308,32 +322,6 @@ export function MediaLibrary() {
         onSelectedTagsChange={setSelectedTags}
         onTagsUpdated={fetchTags}
       />
-
-      {/* Quick tag filters from actual media tags */}
-      {availableTags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {availableTags.slice(0, 20).map(tag => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => {
-                if (selectedTags.includes(tag)) {
-                  setSelectedTags(selectedTags.filter(t => t !== tag))
-                } else {
-                  setSelectedTags([...selectedTags, tag])
-                }
-              }}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                selectedTags.includes(tag)
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Collections section */}
       {collections.length > 0 && (
@@ -503,6 +491,7 @@ export function MediaLibrary() {
               onUnarchive={handleUnarchive}
               onDelete={handleDelete}
               onGenerate={handleGenerate}
+              generating={generatingId === item.id}
               onRepurpose={handleRepurpose}
               availableTags={availableTags}
             />
