@@ -6,33 +6,55 @@
  *
  * This runs entirely client-side — no ffmpeg required.
  * Frames are scaled down to max 720px for efficient upload and analysis.
+ *
+ * Never rejects on failure — resolves with [] instead. Thumbnails are a
+ * nice-to-have; they must never block the media upload pipeline. Some
+ * screen recordings (CleanShot, QuickTime exports) have moov atoms that
+ * hang Chrome's <video> element on `loadedmetadata` forever, so we also
+ * enforce an overall timeout.
  */
 export async function extractFramesFromVideo(
   file: File,
   count = 4
 ): Promise<Blob[]> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const video = document.createElement('video')
     video.preload = 'metadata'
     video.muted = true
     video.playsInline = true
 
     const url = URL.createObjectURL(file)
+
+    let settled = false
+    const done = (result: Blob[]) => {
+      if (settled) return
+      settled = true
+      clearTimeout(overallTimeout)
+      URL.revokeObjectURL(url)
+      resolve(result)
+    }
+
+    // Overall timeout — if metadata never loads (some screen recordings
+    // never fire loadedmetadata OR error), give up and continue without
+    // a thumbnail. 10s is plenty for any healthy file.
+    const overallTimeout = setTimeout(() => {
+      console.warn('[extractFramesFromVideo] Overall timeout — video metadata never loaded')
+      done([])
+    }, 10_000)
+
     video.src = url
 
     video.onloadedmetadata = async () => {
       const duration = video.duration
       if (!duration || duration < 1) {
-        URL.revokeObjectURL(url)
-        resolve([])
+        done([])
         return
       }
 
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       if (!ctx) {
-        URL.revokeObjectURL(url)
-        resolve([])
+        done([])
         return
       }
 
@@ -49,6 +71,7 @@ export async function extractFramesFromVideo(
       )
 
       for (const time of times) {
+        if (settled) return // outer timeout fired while we were seeking
         try {
           const blob = await seekAndCapture(video, time, canvas, ctx)
           if (blob) frames.push(blob)
@@ -57,13 +80,16 @@ export async function extractFramesFromVideo(
         }
       }
 
-      URL.revokeObjectURL(url)
-      resolve(frames)
+      done(frames)
     }
 
     video.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('Failed to load video for frame extraction'))
+      console.warn('[extractFramesFromVideo] video.onerror fired — continuing without thumbnail')
+      done([])
+    }
+
+    video.onabort = () => {
+      done([])
     }
   })
 }
