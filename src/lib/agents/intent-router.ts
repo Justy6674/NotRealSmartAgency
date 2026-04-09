@@ -74,6 +74,10 @@ const INTENT_PATTERNS: { pattern: RegExp; agent: AgentType; reason: string }[] =
 
   // Pricing
   { pattern: /\b(pric|pricing|subscription|billing|cost|revenue model|freemium|tier)\b/i, agent: 'strategy', reason: 'Pricing analysis requested' },
+
+  // Help & Support
+  { pattern: /\b(how do I|how to|help me|what does|where is|can I|tutorial|guide|documentation)\b/i, agent: 'help', reason: 'Help/support question detected' },
+  { pattern: /\b(troubleshoot|not working|broken|error|bug|problem|issue|stuck)\b/i, agent: 'help', reason: 'Technical support requested' },
 ]
 
 // ─── Compound patterns: common multi-department briefs ────────────────────────

@@ -236,6 +236,7 @@ export type AgentType =
   | 'analytics'   // Analytics & Reporting
   | 'automation'  // Automation & AI
   | 'video'       // Video & Scripting
+  | 'help'        // Help & Support
   // Archived (kept for backward compat with existing conversations)
   | 'martech'
 
@@ -244,7 +245,7 @@ export const ACTIVE_AGENT_TYPES: AgentType[] = [
   'overall',
   'content', 'seo', 'paid_ads', 'strategy', 'email', 'growth',
   'brand', 'competitor', 'website', 'compliance',
-  'analytics', 'automation', 'video',
+  'analytics', 'automation', 'video', 'help',
 ]
 
 export type OutputType =
@@ -433,6 +434,7 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   analytics: 'Track Results',
   automation: 'Automate My Work',
   video: 'Make Videos',
+  help: 'Get Help',
   // Archived
   martech: 'Connect My Tools',
 }
@@ -453,6 +455,7 @@ export const AGENT_SUBTITLES: Record<AgentType, string> = {
   analytics: 'Analytics & performance reporting',
   automation: 'Workflow automation & AI tools',
   video: 'Video scripting & production',
+  help: 'Help centre & technical support',
   martech: 'Marketing technology integrations',
 }
 

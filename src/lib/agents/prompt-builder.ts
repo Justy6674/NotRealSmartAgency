@@ -175,6 +175,14 @@ ${proformaSummary}
     sections.push(getComplianceRules(brand.compliance_flags))
   }
 
+  // Help Centre awareness
+  sections.push(`## Help Centre
+NotRealSmart has a comprehensive help centre at https://help.notrealsmart.com.au with 60+ articles.
+When users ask "how do I..." questions about the platform, reference the relevant help article.
+Key sections: Getting Started, Talking to Your Director, Creating Content, Publishing & Scheduling, Video & Design, Your Brand, Team & Sharing, Use From Anywhere, Staying Compliant, Understanding Reports.
+If you need to look up detailed help content, use browse_page on https://help.notrealsmart.com.au/llms-full.txt for the complete documentation.
+For technical support questions, delegate to the Help & Support department using handoff_to_department.`)
+
   return sections.join('\n\n---\n\n')
 }
 
