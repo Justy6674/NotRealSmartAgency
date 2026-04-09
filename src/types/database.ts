@@ -738,6 +738,31 @@ export interface DraftSourceMeta {
   edit_history?: EditHistoryEntry[]
   rejection_reason?: string
   comments?: Array<{ author: string; text: string; timestamp: string }>
+  /** For mcp_external drafts: the user's plain-English intent that the agent worked from */
+  intent?: string
+  /** For mcp_external drafts: which agent department actually wrote the copy */
+  department?: string
+}
+
+// ─── MCP Async Jobs ──────────────────────────────────────────────────────────
+
+export type MCPJobType = 'director_chat'
+export type MCPJobStatus = 'queued' | 'running' | 'done' | 'error'
+
+export interface MCPJob {
+  id: string
+  user_id: string
+  brand_id: string | null
+  job_type: MCPJobType
+  status: MCPJobStatus
+  input: Record<string, unknown>
+  result: Record<string, unknown> | null
+  error: string | null
+  cost_cents: number
+  duration_ms: number | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
 }
 
 export interface ScheduledPost {

@@ -1,0 +1,249 @@
+/**
+ * draft_post — synchronous MCP tool that creates a draft social post.
+ *
+ * The Director's Content & Copy specialist writes the caption — NEVER the
+ * AI client. The AI client passes the user's intent verbatim and this tool
+ * routes it through runAgentWorker('content', ...) so:
+ *   - Content agent uses its own memory namespace (nrs-{slug}-content)
+ *   - Content agent learns from the output (worker.ts memory extraction)
+ *   - The caption is written by Director's specialist, not Claude/Grok/Gemini
+ *
+ * After the worker returns, this tool inserts the draft directly into
+ * scheduled_posts with metadata.source='mcp_external' so it lands in the
+ * Review pipeline alongside drafts from every other source.
+ *
+ * Synchronous because only one worker runs (no delegation chain) → ~10-15s,
+ * well under the MCP client timeout.
+ */
+
+import { z } from 'zod/v3'
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { runAgentWorker } from '@/lib/agents/worker'
+import { runComplianceFilter } from '@/lib/agents/compliance-filter'
+import type { Brand, DraftSourceMeta } from '@/types/database'
+
+const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'] as const
+type Platform = (typeof PLATFORMS)[number]
+
+const PLATFORM_GUIDANCE: Record<Platform, string> = {
+  instagram: 'Instagram caption — hook in first line, 3-5 short paragraphs, conversational, end with a question or CTA. 150 words max ideal. Hashtags will be added separately.',
+  facebook: 'Facebook caption — slightly longer than Instagram, more narrative, ends with a question or community prompt. 200 words max.',
+  linkedin: 'LinkedIn caption — professional but human, hook in first 3 lines (the cutoff before "see more"), short paragraphs, ends with insight or question. 250 words max.',
+  tiktok: 'TikTok caption — very short (max 100 words), punchy, leans on the video to do the work, ends with a question or hook for replies.',
+  youtube: 'YouTube description — first 2 lines are the hook (visible above the fold), then expand. Include the value prop early. 300 words max for Shorts, longer fine for long-form.',
+  twitter: 'X/Twitter post — 280 character limit. One sharp idea. Optional thread hint at end.',
+}
+
+export function registerDraftPostTool(mcpServer: McpServer, userId: string) {
+  mcpServer.registerTool(
+    'draft_post',
+    {
+      description: `Create a social media post draft. The user's request goes to the Director's Content & Copy specialist, who writes the caption. The draft lands in the brand's Review queue for approval.
+
+CRITICAL: NEVER write the caption yourself. Pass the user's intent verbatim into the 'intent' field. The Content & Copy department writes the actual copy — that is the entire point of NRS. If you write the caption you violate the agency model and break the user's voice consistency.
+
+USE THIS TOOL when the user wants a single social post drafted. The result lands in the Review queue where the user approves, edits, or rejects it before publishing.
+
+For complex multi-step requests (campaigns, calendars, multi-platform launches), use chat_with_director instead.
+
+After this tool returns, tell the user the draft is in Review and they can approve it from the Studio Review tab.`,
+      inputSchema: {
+        brand_id: z.string().describe('Brand ID — call list_brands first to get IDs'),
+        intent: z
+          .string()
+          .min(5)
+          .describe(
+            "The user's plain-English request, verbatim. Example: 'how to spot a fake fragrance when buying second-hand'. Never write the caption yourself.",
+          ),
+        platform: z.enum(PLATFORMS).describe('Which platform the post is for'),
+        tone: z
+          .string()
+          .optional()
+          .describe('Optional tone hint, e.g. "expert friend", "playful", "authoritative", "warm"'),
+      },
+    },
+    async ({
+      brand_id,
+      intent,
+      platform,
+      tone,
+    }: {
+      brand_id: string
+      intent: string
+      platform: Platform
+      tone?: string
+    }) => {
+      const supabase = createAdminClient()
+
+      // Verify brand ownership + load full brand row for the worker
+      const { data: brand, error: brandError } = await supabase
+        .from('brands')
+        .select('*')
+        .eq('id', brand_id)
+        .eq('user_id', userId)
+        .single()
+
+      if (brandError || !brand) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Brand not found or you do not have access.' }],
+          isError: true,
+        }
+      }
+
+      const typedBrand = brand as Brand
+      const platformGuide = PLATFORM_GUIDANCE[platform]
+
+      // Build a structured brief for Content & Copy. Worker will call
+      // buildSystemPromptWithMemory which already injects the brand voice,
+      // memories, and Content agent personality.
+      const brief = [
+        `Write ONE ${platform} caption for ${typedBrand.name}.`,
+        '',
+        `User intent (verbatim from the founder): "${intent}"`,
+        '',
+        `Platform format: ${platformGuide}`,
+        tone ? `Tone: ${tone}` : '',
+        '',
+        'Output requirements:',
+        '- Return ONLY the caption text — no preamble, no quotes around it, no "Here is your caption:", no metadata, no explanation.',
+        "- Write in Australian English. Match the brand voice you already know from your memories.",
+        '- Do not call any tools. Just write the caption and stop.',
+        '- If the intent involves specific products you do not know about, write a useful caption based on the topic without inventing product details.',
+      ]
+        .filter(Boolean)
+        .join('\n')
+
+      // Run Content & Copy worker — single step, no tool calls expected
+      const workerResult = await runAgentWorker(
+        'content',
+        brief,
+        {
+          supabase,
+          userId,
+          brandId: brand_id,
+          brand: typedBrand,
+          conversationId: null,
+        },
+        {
+          maxSteps: 1, // text only, no tool round-trips
+          timeoutMs: 60000, // hard cap so we never blow MCP client timeout
+        },
+      )
+
+      if (workerResult.error || !workerResult.result.trim()) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Content & Copy failed to write the draft: ${workerResult.error ?? 'empty response'}`,
+            },
+          ],
+          isError: true,
+        }
+      }
+
+      const caption = workerResult.result.trim()
+
+      // AHPRA/TGA compliance gate for health brands (mirrors publish_to_social)
+      const complianceFlags = typedBrand.compliance_flags ?? {}
+      if (complianceFlags.ahpra || complianceFlags.tga) {
+        try {
+          const check = await runComplianceFilter(caption, complianceFlags, undefined)
+          if (!check.isValid) {
+            const issues = [
+              ...check.flags.map((f: string) => `BLOCKED: ${f}`),
+              ...check.brandVoiceIssues.map((v: string) => `BRAND VOICE: ${v}`),
+            ].join('\n')
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `COMPLIANCE CHECK FAILED — draft NOT saved.\n\n${issues}\n\nThe Content & Copy agent's draft did not pass the AHPRA/TGA compliance gate. Refine the intent and try again.`,
+                },
+              ],
+              isError: true,
+            }
+          }
+        } catch (err) {
+          if (complianceFlags.ahpra) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: `COMPLIANCE CHECK ERROR — draft NOT saved. ${err instanceof Error ? err.message : String(err)}`,
+                },
+              ],
+              isError: true,
+            }
+          }
+        }
+      }
+
+      // Insert the draft into scheduled_posts with mcp_external source
+      const metadata: DraftSourceMeta = {
+        source: 'mcp_external',
+        created_by: 'Content & Copy (via MCP)',
+        intent,
+        department: 'content',
+      }
+
+      const { data: draft, error: insertError } = await supabase
+        .from('scheduled_posts')
+        .insert({
+          user_id: userId,
+          brand_id,
+          platform,
+          caption,
+          hashtags: [],
+          status: 'draft',
+          scheduled_at: new Date().toISOString(),
+          post_type: 'single',
+          metadata: metadata as unknown as Record<string, unknown>,
+        })
+        .select('id')
+        .single()
+
+      if (insertError || !draft) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `Caption was written but failed to save as draft: ${insertError?.message ?? 'unknown error'}\n\nCaption (so it isn't lost):\n${caption}`,
+            },
+          ],
+          isError: true,
+        }
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.notrealsmart.com.au'
+      const reviewUrl = `${baseUrl}/agency/studio?tab=review`
+
+      const response = {
+        draft_id: draft.id,
+        platform,
+        source: 'mcp_external',
+        department: 'Content & Copy',
+        cost_cents: workerResult.costCents,
+        duration_ms: workerResult.durationMs,
+        caption_preview: caption.length > 200 ? caption.slice(0, 200) + '…' : caption,
+        review_url: reviewUrl,
+        next_step:
+          'Tell the user their draft is in the Review queue and they can approve, edit, or reject it from the Studio Review tab.',
+      }
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(response, null, 2),
+          },
+          {
+            type: 'text' as const,
+            text: `\n\nFull caption written by Content & Copy:\n\n${caption}`,
+          },
+        ],
+      }
+    },
+  )
+}

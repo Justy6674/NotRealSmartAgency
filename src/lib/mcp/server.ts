@@ -3,6 +3,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getToolsForAgent } from '@/lib/agents/tools'
 import { adaptToolsForMCP } from './tool-adapter'
 import { registerDirectorChatTool } from './director-chat'
+import { registerGetDirectorResponseTool } from './director-job-tool'
+import { registerDraftPostTool } from './draft-post-tool'
 
 /**
  * Register ALL tools upfront. Tool list must never change after launch —
@@ -80,8 +82,12 @@ export function createNRSMcpServer(userId: string): McpServer {
     }
   })
 
-  // Register chat_with_director — the flagship tool
+  // Register chat_with_director — async pattern, returns job_id immediately
   registerDirectorChatTool(server, userId)
+  // Register get_director_response — poll for the async job result
+  registerGetDirectorResponseTool(server, userId)
+  // Register draft_post — Content & Copy writes a single draft, lands in Review
+  registerDraftPostTool(server, userId)
 
   // Register ALL tools from the Director's tool set
   // Tool factory rebuilds tools with the correct brandId per MCP call
@@ -113,21 +119,27 @@ export function createNRSMcpServer(userId: string): McpServer {
           type: 'text' as const,
           text: `Welcome to NotRealSmart Agency — your AI marketing team.
 
+CRITICAL RULE: You are the messenger, not the marketer. The Director (and its 13 specialist departments) writes all marketing content. NEVER write captions, blog copy, ad copy, or any marketing content yourself — pass the user's request verbatim to the Director or to draft_post.
+
 Here's what you can do:
 
-1. **Talk to the Director**: Use the chat_with_director tool with any marketing request. The Director manages 13 departments and will delegate automatically.
+1. **Single social post draft** (most common): Use draft_post with the user's intent. The Content & Copy department writes the caption. It lands in the Review queue. Returns in ~10-15s.
 
-2. **Publish to social**: Use publish_to_social to post directly to your connected platforms (Facebook, Instagram, LinkedIn, YouTube, TikTok).
+2. **Complex marketing requests**: Use chat_with_director — this is async. You'll get a job_id back; then call get_director_response(job_id) every 10 seconds until it's done. Use this for campaigns, audits, multi-step work, or anything that needs delegation.
 
-3. **Create content**: write_blog, write_ads, write_email_campaign — all generate platform-optimised content.
+3. **Publish directly**: Use publish_to_social to post immediately to connected platforms. Only use this if the user explicitly says "publish now" — otherwise prefer draft_post so they can review first.
 
-4. **Check your calendar**: query_calendar shows upcoming scheduled posts.
+4. **Long-form content**: write_blog, write_ads, write_email_campaign generate content. Same rule: pass intent verbatim, never pre-write.
 
-5. **See past work**: query_outputs searches everything your agents have created.
+5. **Check status**: query_calendar (upcoming posts), query_outputs (past work), query_media (uploaded assets).
 
-Start by calling list_brands to see your brands and get their IDs, then use chat_with_director with a brand_id and your request.
+ALWAYS start by calling list_brands to get brand IDs.
 
-Example: "Write a blog post about AI in healthcare for [brand] and publish it to LinkedIn"`,
+Example flow:
+User says "make me an Instagram post about spotting fake fragrances"
+You call: draft_post({ brand_id: "...", intent: "spotting fake fragrances when buying second-hand", platform: "instagram" })
+Result: { draft_id, caption_preview, review_url }
+You tell user: "Done — Content & Copy wrote you a draft. It's in your Review queue at [review_url]."`,
         },
       }],
     }

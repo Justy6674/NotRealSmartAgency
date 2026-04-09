@@ -24,6 +24,9 @@ import { buildSystemPromptWithMemory } from './prompt-builder'
 import { getToolsForAgent } from './tools'
 import { logAudit } from './audit'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget, updateAgentStatus } from './registry'
+import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
+import { extractFacts } from '@/lib/memory/fact-extractor'
+import { memoryStoreV2 } from '@/lib/memory/store'
 
 /** Maximum workers running simultaneously to prevent AI Gateway rate limit exhaustion.
  *  AI Gateway enforces per-user concurrency limits; 4 is conservative for most providers. */
@@ -288,6 +291,34 @@ Rules:
       },
       costCents,
     })
+
+    // 15. Memory extraction — THIS agent learns from its own work.
+    //     Architectural: every delegated worker now writes to its own memory
+    //     namespace (nrs-{brandSlug}-{dept}) via both v1 (regex) and v2 (Haiku)
+    //     extractors. Fire-and-forget so latency stays the same.
+    //     Without this, agents repeat the same generic output forever.
+    if (result.text && result.text.length > 20) {
+      // v1: regex extraction (fast, catches common patterns)
+      extractAndStoreMemories({
+        brandSlug: ctx.brand.slug,
+        agentType: dept as AgentType,
+        userMessage: task,
+        assistantResponse: result.text,
+        conversationId: ctx.conversationId,
+      }).catch((err) => console.error(`[worker:${dept}] Memory v1 extraction failed:`, err))
+
+      // v2: LLM extraction (Haiku — deeper, structured facts) → semantic store
+      extractFacts(task, result.text, ctx.brand.name)
+        .then(async (facts) => {
+          if (facts.length === 0) return
+          const ns = `nrs-${ctx.brand.slug}-${dept}`
+          for (const fact of facts) {
+            await memoryStoreV2(fact, ns, ctx.userId, ctx.conversationId ?? undefined)
+              .catch((err) => console.error(`[worker:${dept}] Memory v2 store failed:`, err))
+          }
+        })
+        .catch((err) => console.error(`[worker:${dept}] Memory v2 extraction failed:`, err))
+    }
 
     return {
       department: dept,
