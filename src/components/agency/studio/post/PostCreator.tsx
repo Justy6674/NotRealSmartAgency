@@ -94,9 +94,9 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
   const draftKey = activeBrandId ? `nrs-draft-${activeBrandId}` : null
   const isRestored = useRef(false)
 
-  // Restore draft on mount
+  // Restore draft on mount (skip if we're loading a server draft via draftId)
   useEffect(() => {
-    if (!draftKey || isRestored.current) return
+    if (!draftKey || isRestored.current || draftId) return
     try {
       const saved = localStorage.getItem(draftKey)
       if (saved) {
@@ -129,12 +129,12 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
     setEditMode(true)
     setEditDraftId(draftId)
 
-    // Fetch draft and populate all fields
-    fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft`)
+    // Fetch all posts for brand (not just drafts — draft might have been generated with different status)
+    fetch(`/api/scheduled-posts?brandId=${activeBrandId}`)
       .then(r => r.ok ? r.json() : [])
       .then((posts: Array<Record<string, unknown>>) => {
         const draft = posts.find((p: Record<string, unknown>) => p.id === draftId)
-        if (!draft) return
+        if (!draft) { setEditMode(false); return }
         if (draft.caption) setCaption(draft.caption as string)
         if (draft.platform) setSelectedPlatforms([draft.platform as PostPlatform])
         if (draft.hashtags) setHashtags((draft.hashtags as string[]).map(h => (h as string).replace(/^#/, '')))
