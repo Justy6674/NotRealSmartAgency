@@ -24,7 +24,7 @@ export function createQueryMediaTool(
 ) {
   return tool({
     description:
-      'Check the media library for uploaded videos and audio files. Shows transcription status and previews. Use this when the user asks about their media, videos, or uploaded content.',
+      'Check the media library for uploaded videos, images, and audio files. Returns each item with its UUID (labelled "ID:"), filename, file type, transcription status, and public URL. When you need to attach media to a post, grab the UUID from this output and pass it to publish_to_social via media_ids (array) or draft_post via media_id (single). NEVER guess or hallucinate a media UUID — always call this tool first to get real IDs.',
     inputSchema: z.object({
       status: z
         .enum(['pending', 'transcribing', 'transcribed', 'failed'])
@@ -68,13 +68,17 @@ export function createQueryMediaTool(
         const statusLabel = STATUS_LABELS[itemStatus] ?? itemStatus
         const statusIcon = itemStatus === 'transcribed' || itemStatus === 'captions_generated' ? ' ✓' : ''
         const fileUrl = item.file_url as string | null
+        const fileType = (item.file_type as string | null) ?? 'unknown'
         const tags = (item.metadata as Record<string, unknown>)?.tags as string[] | undefined
 
-        let line = `${idx + 1}. **${name}**`
+        let line = `${idx + 1}. **${name}** (${fileType})`
         if (duration) line += ` — ${duration}`
         line += `, ${statusLabel}${statusIcon}`
         if (tags?.length) line += ` [${tags.join(', ')}]`
         lines.push(line)
+        // CRITICAL: always include the UUID so callers can attach this media to posts.
+        // Without this line, the Director hallucinates IDs when asked to publish media.
+        lines.push(`   ID: \`${item.id}\``)
         if (fileUrl) lines.push(`   URL: ${fileUrl}`)
 
         // Show transcription preview for transcribed items

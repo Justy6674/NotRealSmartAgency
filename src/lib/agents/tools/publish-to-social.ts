@@ -163,6 +163,17 @@ export function createPublishToSocialTool(
             .in('id', media_ids)
             .eq('brand_id', brandId)
 
+          const foundIds = new Set((items ?? []).map((i) => i.id))
+          const missingIds = media_ids.filter((id) => !foundIds.has(id))
+
+          // FAIL LOUDLY — if any media_id can't be found, refuse to publish.
+          // Silent fallback to text-only posts was a real bug: Director hallucinated
+          // a media_id, lookup returned nothing, and a text-only post went live
+          // instead of the expected video. Never again.
+          if (missingIds.length > 0) {
+            return `BLOCKED — cannot publish. The following media_ids were not found in ${brandName}'s media library: ${missingIds.join(', ')}\n\nCall query_media first to get the real UUIDs (look for the "ID:" field in the output), then retry with those exact IDs. Do NOT guess or reuse any other UUID (like brand_id).`
+          }
+
           if (items) {
             // Preserve caller order
             for (const id of media_ids) {
