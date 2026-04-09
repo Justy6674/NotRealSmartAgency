@@ -269,6 +269,32 @@ export function MediaLibrary() {
         onTagsUpdated={fetchTags}
       />
 
+      {/* Quick tag filters from actual media tags */}
+      {availableTags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {availableTags.slice(0, 20).map(tag => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => {
+                if (selectedTags.includes(tag)) {
+                  setSelectedTags(selectedTags.filter(t => t !== tag))
+                } else {
+                  setSelectedTags([...selectedTags, tag])
+                }
+              }}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                selectedTags.includes(tag)
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Collections section */}
       {collections.length > 0 && (
         <div className="space-y-2">
