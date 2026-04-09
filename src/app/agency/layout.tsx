@@ -51,10 +51,11 @@ export default async function AgencyLayout({
             <Link
               href="https://help.notrealsmart.com.au"
               target="_blank"
-              className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Help Centre"
             >
               <CircleHelp className="h-4 w-4" />
+              Help
             </Link>
             <Link
               href="/agency/settings"

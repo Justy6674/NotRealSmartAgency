@@ -456,6 +456,7 @@ export function ChatInput({
 
         <p className="mt-2 text-center text-[10px] text-muted-foreground/50">
           Shift + Enter for new line. AI outputs should be reviewed before publishing.
+          {' '}<a href="https://help.notrealsmart.com.au" target="_blank" rel="noopener noreferrer" className="text-primary/60 hover:text-primary underline">Help Centre</a>
         </p>
       </div>
     </div>
