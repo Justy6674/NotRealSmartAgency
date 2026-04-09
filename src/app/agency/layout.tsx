@@ -49,7 +49,7 @@ export default async function AgencyLayout({
           <div className="shrink-0 flex items-center gap-1 px-2">
             <ThemeToggle />
             <Link
-              href="/help"
+              href="https://help.notrealsmart.com.au"
               target="_blank"
               className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Help Centre"
