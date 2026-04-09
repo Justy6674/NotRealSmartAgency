@@ -30,10 +30,11 @@ function formatSize(bytes: number): string {
 
 /**
  * Upload a file to Supabase Storage using XHR for progress tracking.
- * Supabase Storage accepts multipart form uploads at the REST API directly.
+ * Must include both Authorization (user token) and apikey (anon key) headers.
  */
 function uploadWithProgress(
   supabaseUrl: string,
+  anonKey: string,
   bucket: string,
   path: string,
   file: File,
@@ -42,7 +43,8 @@ function uploadWithProgress(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    const url = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+    const url = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`
 
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable) {
@@ -69,9 +71,8 @@ function uploadWithProgress(
 
     xhr.open('POST', url)
     xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('apikey', anonKey)
     xhr.setRequestHeader('x-upsert', 'false')
-
-    // Send as binary with content-type header (same as Supabase JS client)
     xhr.setRequestHeader('Content-Type', file.type)
     xhr.send(file)
   })
@@ -93,6 +94,7 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
   }
 
   const processFile = async (file: File): Promise<void> => {
+    const sizeLabel = formatSize(file.size)
     setProgress(prev => [...prev, { fileName: file.name, status: 'uploading', percent: 0 }])
 
     try {
@@ -104,10 +106,10 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         throw new Error('File too large. Maximum 500MB.')
       }
 
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      )
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+      const supabase = createBrowserClient(supabaseUrl, anonKey)
 
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('Not authenticated')
@@ -119,7 +121,8 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
 
       // Upload with XHR for real-time progress tracking
       await uploadWithProgress(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        supabaseUrl,
+        anonKey,
         'media',
         storagePath,
         file,
@@ -240,9 +243,10 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
                   </button>
                 )}
                 <span className="flex-1 truncate">{p.fileName}</span>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {p.status === 'uploading' && p.percent > 0 && `${p.percent}%`}
-                  {p.status === 'uploading' && p.percent === 0 && 'Starting...'}
+                <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                  {p.status === 'uploading' && p.percent > 0 && p.percent < 100 && `${p.percent}%`}
+                  {p.status === 'uploading' && p.percent === 0 && 'Uploading...'}
+                  {p.status === 'uploading' && p.percent === 100 && 'Saving...'}
                   {p.status === 'processing' && 'Processing...'}
                   {p.status === 'done' && 'Ready'}
                   {p.status === 'error' && p.error}
