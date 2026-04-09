@@ -17,7 +17,7 @@ interface MediaUploaderProps {
 }
 
 const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'video/webm', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic']
-const MAX_SIZE = 100 * 1024 * 1024 // 100MB
+const MAX_SIZE = 500 * 1024 * 1024 // 500MB (videos can be large)
 
 export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps) {
   const [uploading, setUploading] = useState(false)
@@ -34,7 +34,7 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         throw new Error('Unsupported file type. Upload MP4, MOV, MP3, M4A, or WebM.')
       }
       if (file.size > MAX_SIZE) {
-        throw new Error('File too large. Maximum 100MB.')
+        throw new Error('File too large. Maximum 500MB.')
       }
 
       // Upload directly to Supabase Storage from the browser (bypasses Vercel 4.5MB limit)
