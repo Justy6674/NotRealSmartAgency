@@ -43,6 +43,16 @@ interface MediaUploaderProps {
 const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'video/webm', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic']
 const MAX_SIZE = 500 * 1024 * 1024 // 500MB (videos can be large)
 
+// Build identifier — lets us confirm which JS bundle the browser is running
+// so stale-cache issues are obvious in the console. Replaced at build time
+// by Next.js with the Vercel git SHA.
+const BUILD_SHA = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local'
+
+function log(step: string, data?: Record<string, unknown>) {
+  // eslint-disable-next-line no-console
+  console.log(`[NRS-UPLOAD ${BUILD_SHA}] ${step}`, data ?? '')
+}
+
 /**
  * Upload a file to Supabase Storage using XHR for progress tracking.
  * Must include both Authorization (user token) and apikey (anon key) headers.
@@ -61,14 +71,33 @@ function uploadWithProgress(
     const encodedPath = path.split('/').map(encodeURIComponent).join('/')
     const url = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`
 
+    log('xhr:preparing', { url, fileSize: file.size, fileType: file.type, tokenLen: token.length, anonKeyLen: anonKey.length })
+
+    let lastLoggedPercent = -1
     xhr.upload.addEventListener('progress', (e) => {
       if (e.lengthComputable) {
         const percent = Math.round((e.loaded / e.total) * 100)
         onProgress(percent)
+        // Only log every 10% to avoid flooding
+        if (percent - lastLoggedPercent >= 10 || percent === 100) {
+          log('xhr:progress', { percent, loaded: e.loaded, total: e.total })
+          lastLoggedPercent = percent
+        }
+      } else {
+        log('xhr:progress (not computable)', { loaded: e.loaded })
       }
     })
 
+    xhr.upload.addEventListener('loadstart', () => log('xhr:upload loadstart'))
+    xhr.upload.addEventListener('loadend', () => log('xhr:upload loadend'))
+    xhr.upload.addEventListener('error', (e) => log('xhr:upload error event', { event: String(e) }))
+
+    xhr.addEventListener('readystatechange', () => {
+      log('xhr:readystate', { readyState: xhr.readyState, status: xhr.status })
+    })
+
     xhr.addEventListener('load', () => {
+      log('xhr:load', { status: xhr.status, responseText: xhr.responseText?.slice(0, 200) })
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve()
       } else {
@@ -81,15 +110,28 @@ function uploadWithProgress(
       }
     })
 
-    xhr.addEventListener('error', () => reject(new Error('Upload failed — network error')))
-    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')))
+    xhr.addEventListener('error', (e) => {
+      log('xhr:error event fired', { event: String(e), status: xhr.status })
+      reject(new Error('Upload failed — network error'))
+    })
+    xhr.addEventListener('abort', () => {
+      log('xhr:abort event fired')
+      reject(new Error('Upload cancelled'))
+    })
+    xhr.addEventListener('timeout', () => {
+      log('xhr:timeout event fired')
+      reject(new Error('Upload timed out'))
+    })
 
+    log('xhr:opening POST', { url })
     xhr.open('POST', url)
     xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.setRequestHeader('apikey', anonKey)
     xhr.setRequestHeader('x-upsert', 'false')
     xhr.setRequestHeader('Content-Type', file.type)
+    log('xhr:sending', { byteLength: file.size })
     xhr.send(file)
+    log('xhr:send returned — waiting for events')
   })
 }
 
@@ -155,34 +197,45 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
   }
 
   const processFile = async (file: File): Promise<void> => {
+    log('processFile:entry', { fileName: file.name, fileSize: file.size, fileType: file.type, brandId })
     setProgress(prev => [...prev, { fileName: file.name, status: 'uploading', percent: 0 }])
 
     try {
       // Validate
+      log('processFile:validating')
       if (!ALLOWED_TYPES.some(t => file.type.startsWith(t.split('/')[0]))) {
         throw new Error('Unsupported file type. Upload MP4, MOV, MP3, M4A, or WebM.')
       }
       if (file.size > MAX_SIZE) {
         throw new Error('File too large. Maximum 500MB.')
       }
+      log('processFile:validated')
 
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
       const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      log('processFile:env loaded', { supabaseUrl, anonKeyPrefix: anonKey.slice(0, 8) })
 
       const supabase = createBrowserClient(supabaseUrl, anonKey)
+      log('processFile:client created')
 
+      log('processFile:calling getSession')
+      const sessionStart = Date.now()
       const { data: { session } } = await supabase.auth.getSession()
+      log('processFile:getSession returned', { durationMs: Date.now() - sessionStart, hasSession: !!session })
       if (!session) throw new Error('Not authenticated')
 
       const user = session.user
       const timestamp = Date.now()
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const storagePath = `${user.id}/${brandId}/${timestamp}_${safeName}`
+      log('processFile:path built', { storagePath, userId: user.id, tokenExpiresAt: session.expires_at })
 
       // Upload main file FIRST. The file going to Supabase Storage is the ONLY
       // thing that must succeed for the upload to be considered a success. All
       // downstream processing (thumbnails, transcription, AI tagging) happens
       // server-side in /api/media/process and is non-fatal.
+      log('processFile:starting uploadWithProgress')
+      const uploadStart = Date.now()
       await uploadWithProgress(
         supabaseUrl,
         anonKey,
@@ -192,6 +245,7 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         session.access_token,
         (percent) => updateProgress(file.name, { percent })
       )
+      log('processFile:uploadWithProgress complete', { durationMs: Date.now() - uploadStart })
 
       // Get public URL
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
@@ -228,7 +282,11 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         .select()
         .single()
 
-      if (dbError) throw new Error(`Could not save to library: ${dbError.message}`)
+      if (dbError) {
+        log('processFile:DB insert failed', { error: dbError.message })
+        throw new Error(`Could not save to library: ${dbError.message}`)
+      }
+      log('processFile:DB insert ok', { mediaItemId: mediaItem.id })
 
       // Upload complete — move to processing state. The file is safe at this
       // point; nothing from here can lose it.
