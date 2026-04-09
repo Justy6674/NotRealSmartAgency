@@ -7,7 +7,7 @@ import { generateDeterministicTags } from '@/lib/media/auto-tagger'
 
 interface UploadProgress {
   fileName: string
-  status: 'uploading' | 'processing' | 'done' | 'error'
+  status: 'uploading' | 'analysing' | 'done' | 'error'
   percent: number
   mediaItemId?: string
   error?: string
@@ -163,15 +163,22 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
 
       if (dbError) throw new Error(dbError.message)
 
-      // Upload complete — mark as done immediately
-      updateProgress(file.name, { status: 'done', percent: 100, mediaItemId: mediaItem.id })
+      // Upload complete — show AI analysing status
+      updateProgress(file.name, { status: 'analysing', percent: 100, mediaItemId: mediaItem.id })
 
-      // Fire-and-forget: background processing (AI description, transcription, smart tags)
+      // Background processing: AI description, transcription, smart tags
       fetch('/api/media/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mediaItemId: mediaItem.id }),
-      }).catch(() => {})
+      })
+        .then(() => {
+          updateProgress(file.name, { status: 'done' })
+          onUploadComplete() // Refresh media library to show updated tags
+        })
+        .catch(() => {
+          updateProgress(file.name, { status: 'done' }) // Still mark done — upload succeeded
+        })
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed'
@@ -229,9 +236,12 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
                   style={{ width: `${p.percent}%` }}
                 />
               )}
+              {p.status === 'analysing' && (
+                <div className="absolute inset-y-0 left-0 w-full bg-purple-500/5 animate-pulse" />
+              )}
               <div className="relative flex items-center gap-2 text-sm p-2">
                 {p.status === 'uploading' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />}
-                {p.status === 'processing' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-500" />}
+                {p.status === 'analysing' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-purple-500" />}
                 {p.status === 'done' && <Check className="h-4 w-4 shrink-0 text-green-500" />}
                 {p.status === 'error' && (
                   <button
@@ -244,10 +254,10 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
                 )}
                 <span className="flex-1 truncate">{p.fileName}</span>
                 <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
-                  {p.status === 'uploading' && p.percent > 0 && p.percent < 100 && `${p.percent}%`}
+                  {p.status === 'uploading' && p.percent > 0 && p.percent < 100 && `Uploading ${p.percent}%`}
                   {p.status === 'uploading' && p.percent === 0 && 'Uploading...'}
                   {p.status === 'uploading' && p.percent === 100 && 'Saving...'}
-                  {p.status === 'processing' && 'Processing...'}
+                  {p.status === 'analysing' && 'AI analysing...'}
                   {p.status === 'done' && 'Ready'}
                   {p.status === 'error' && p.error}
                 </span>

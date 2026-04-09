@@ -79,8 +79,15 @@ export async function POST(
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 })
   }
 
-  if (!mediaItem.transcription) {
-    return NextResponse.json({ error: 'Media must be transcribed first' }, { status: 400 })
+  // Allow generation from transcription, AI description, or just brand context + filename
+  const hasTranscript = !!mediaItem.transcription
+  const hasAIDescription = !!mediaItem.ai_description
+  const hasTags = !!(mediaItem.tags as string[] | null)?.length
+  if (!hasTranscript && !hasAIDescription && !hasTags) {
+    return NextResponse.json(
+      { error: 'Media is still being analysed by AI. Please wait a moment and try again.' },
+      { status: 400 }
+    )
   }
 
   const brand = mediaItem.brands as Brand
@@ -164,9 +171,12 @@ Rules:
 - Be engaging, authentic, and brand-aligned
 - Reference what's VISIBLE in the video when visual analysis is available
 - For AHPRA/TGA brands: NEVER make therapeutic claims or use testimonials`,
-      prompt: `Generate social media captions for all 6 platforms from this video transcription:
+      prompt: `Generate social media captions for all 6 platforms from this media:
 
-${mediaItem.transcription}${visualContext}
+${mediaItem.transcription ? `Transcription:\n${mediaItem.transcription}` : ''}
+${mediaItem.ai_description ? `AI Description: ${mediaItem.ai_description}` : ''}
+${(mediaItem.tags as string[] | null)?.length ? `Tags: ${(mediaItem.tags as string[]).join(', ')}` : ''}
+${visualContext}
 
 File: ${mediaItem.file_name}`,
       schema: PlatformContentSchema,
