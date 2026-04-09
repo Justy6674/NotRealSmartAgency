@@ -299,7 +299,7 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
     } finally {
       setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data])
+  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {
