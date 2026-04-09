@@ -28,6 +28,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'File too large. Maximum 100MB.' }, { status: 400 })
   }
 
+  // Duplicate detection — same filename + size for this brand = skip
+  const { data: duplicate } = await supabase
+    .from('media_items')
+    .select('id, file_url')
+    .eq('brand_id', brandId)
+    .eq('file_name', file.name)
+    .eq('file_size_bytes', file.size)
+    .maybeSingle()
+
+  if (duplicate) {
+    return NextResponse.json({
+      ...duplicate,
+      skipped: true,
+      message: `Duplicate detected: "${file.name}" (${(file.size / 1024).toFixed(0)}KB) already exists in your library.`,
+    })
+  }
+
   const timestamp = Date.now()
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `${user.id}/${brandId}/${timestamp}_${safeName}`
