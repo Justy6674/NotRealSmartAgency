@@ -48,9 +48,35 @@ const MAX_SIZE = 500 * 1024 * 1024 // 500MB (videos can be large)
 // by Next.js with the Vercel git SHA.
 const BUILD_SHA = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local'
 
-function log(step: string, data?: Record<string, unknown>) {
+/**
+ * Log a breadcrumb — both to the browser console AND to the server so the
+ * admin can inspect exactly which step a hung upload is parked on without
+ * the user ever touching DevTools. Server logs are persisted to audit_log
+ * via /api/debug/upload-log.
+ *
+ * traceId is a short random ID shared by all logs within a single upload
+ * attempt, so multiple concurrent uploads don't interleave.
+ *
+ * keepalive:true ensures the log POST fires even if the page is closing,
+ * and fire-and-forget means logging can never block the upload pipeline.
+ */
+function log(traceId: string, step: string, data?: Record<string, unknown>) {
   // eslint-disable-next-line no-console
   console.log(`[NRS-UPLOAD ${BUILD_SHA}] ${step}`, data ?? '')
+  try {
+    fetch('/api/debug/upload-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        trace_id: traceId,
+        step,
+        data: data ?? {},
+        build_sha: BUILD_SHA,
+        ts: Date.now(),
+      }),
+      keepalive: true,
+    }).catch(() => { /* never block the upload on a log */ })
+  } catch { /* ignore */ }
 }
 
 /**
@@ -58,6 +84,7 @@ function log(step: string, data?: Record<string, unknown>) {
  * Must include both Authorization (user token) and apikey (anon key) headers.
  */
 function uploadWithProgress(
+  traceId: string,
   supabaseUrl: string,
   anonKey: string,
   bucket: string,
@@ -71,7 +98,7 @@ function uploadWithProgress(
     const encodedPath = path.split('/').map(encodeURIComponent).join('/')
     const url = `${supabaseUrl}/storage/v1/object/${bucket}/${encodedPath}`
 
-    log('xhr:preparing', { url, fileSize: file.size, fileType: file.type, tokenLen: token.length, anonKeyLen: anonKey.length })
+    log(traceId, 'xhr:preparing', { url, fileSize: file.size, fileType: file.type, tokenLen: token.length, anonKeyLen: anonKey.length })
 
     let lastLoggedPercent = -1
     xhr.upload.addEventListener('progress', (e) => {
@@ -80,24 +107,24 @@ function uploadWithProgress(
         onProgress(percent)
         // Only log every 10% to avoid flooding
         if (percent - lastLoggedPercent >= 10 || percent === 100) {
-          log('xhr:progress', { percent, loaded: e.loaded, total: e.total })
+          log(traceId, 'xhr:progress', { percent, loaded: e.loaded, total: e.total })
           lastLoggedPercent = percent
         }
       } else {
-        log('xhr:progress (not computable)', { loaded: e.loaded })
+        log(traceId, 'xhr:progress (not computable)', { loaded: e.loaded })
       }
     })
 
-    xhr.upload.addEventListener('loadstart', () => log('xhr:upload loadstart'))
-    xhr.upload.addEventListener('loadend', () => log('xhr:upload loadend'))
-    xhr.upload.addEventListener('error', (e) => log('xhr:upload error event', { event: String(e) }))
+    xhr.upload.addEventListener('loadstart', () => log(traceId, 'xhr:upload loadstart'))
+    xhr.upload.addEventListener('loadend', () => log(traceId, 'xhr:upload loadend'))
+    xhr.upload.addEventListener('error', (e) => log(traceId, 'xhr:upload error event', { event: String(e) }))
 
     xhr.addEventListener('readystatechange', () => {
-      log('xhr:readystate', { readyState: xhr.readyState, status: xhr.status })
+      log(traceId, 'xhr:readystate', { readyState: xhr.readyState, status: xhr.status })
     })
 
     xhr.addEventListener('load', () => {
-      log('xhr:load', { status: xhr.status, responseText: xhr.responseText?.slice(0, 200) })
+      log(traceId, 'xhr:load', { status: xhr.status, responseText: xhr.responseText?.slice(0, 200) })
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve()
       } else {
@@ -111,27 +138,27 @@ function uploadWithProgress(
     })
 
     xhr.addEventListener('error', (e) => {
-      log('xhr:error event fired', { event: String(e), status: xhr.status })
+      log(traceId, 'xhr:error event fired', { event: String(e), status: xhr.status })
       reject(new Error('Upload failed — network error'))
     })
     xhr.addEventListener('abort', () => {
-      log('xhr:abort event fired')
+      log(traceId, 'xhr:abort event fired')
       reject(new Error('Upload cancelled'))
     })
     xhr.addEventListener('timeout', () => {
-      log('xhr:timeout event fired')
+      log(traceId, 'xhr:timeout event fired')
       reject(new Error('Upload timed out'))
     })
 
-    log('xhr:opening POST', { url })
+    log(traceId, 'xhr:opening POST', { url })
     xhr.open('POST', url)
     xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.setRequestHeader('apikey', anonKey)
     xhr.setRequestHeader('x-upsert', 'false')
     xhr.setRequestHeader('Content-Type', file.type)
-    log('xhr:sending', { byteLength: file.size })
+    log(traceId, 'xhr:sending', { byteLength: file.size })
     xhr.send(file)
-    log('xhr:send returned — waiting for events')
+    log(traceId, 'xhr:send returned — waiting for events')
   })
 }
 
@@ -197,46 +224,50 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
   }
 
   const processFile = async (file: File): Promise<void> => {
-    log('processFile:entry', { fileName: file.name, fileSize: file.size, fileType: file.type, brandId })
+    // Short random trace ID shared by every log line from this upload attempt.
+    // Lets the admin correlate breadcrumbs when multiple files are uploading.
+    const traceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    log(traceId, 'processFile:entry', { fileName: file.name, fileSize: file.size, fileType: file.type, brandId, url: typeof window !== 'undefined' ? window.location.href : undefined })
     setProgress(prev => [...prev, { fileName: file.name, status: 'uploading', percent: 0 }])
 
     try {
       // Validate
-      log('processFile:validating')
+      log(traceId, 'processFile:validating')
       if (!ALLOWED_TYPES.some(t => file.type.startsWith(t.split('/')[0]))) {
         throw new Error('Unsupported file type. Upload MP4, MOV, MP3, M4A, or WebM.')
       }
       if (file.size > MAX_SIZE) {
         throw new Error('File too large. Maximum 500MB.')
       }
-      log('processFile:validated')
+      log(traceId, 'processFile:validated')
 
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
       const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      log('processFile:env loaded', { supabaseUrl, anonKeyPrefix: anonKey.slice(0, 8) })
+      log(traceId, 'processFile:env loaded', { supabaseUrl, anonKeyPrefix: anonKey.slice(0, 8) })
 
       const supabase = createBrowserClient(supabaseUrl, anonKey)
-      log('processFile:client created')
+      log(traceId, 'processFile:client created')
 
-      log('processFile:calling getSession')
+      log(traceId, 'processFile:calling getSession')
       const sessionStart = Date.now()
       const { data: { session } } = await supabase.auth.getSession()
-      log('processFile:getSession returned', { durationMs: Date.now() - sessionStart, hasSession: !!session })
+      log(traceId, 'processFile:getSession returned', { durationMs: Date.now() - sessionStart, hasSession: !!session })
       if (!session) throw new Error('Not authenticated')
 
       const user = session.user
       const timestamp = Date.now()
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const storagePath = `${user.id}/${brandId}/${timestamp}_${safeName}`
-      log('processFile:path built', { storagePath, userId: user.id, tokenExpiresAt: session.expires_at })
+      log(traceId, 'processFile:path built', { storagePath, userId: user.id, tokenExpiresAt: session.expires_at })
 
       // Upload main file FIRST. The file going to Supabase Storage is the ONLY
       // thing that must succeed for the upload to be considered a success. All
       // downstream processing (thumbnails, transcription, AI tagging) happens
       // server-side in /api/media/process and is non-fatal.
-      log('processFile:starting uploadWithProgress')
+      log(traceId, 'processFile:starting uploadWithProgress')
       const uploadStart = Date.now()
       await uploadWithProgress(
+        traceId,
         supabaseUrl,
         anonKey,
         'media',
@@ -245,7 +276,7 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         session.access_token,
         (percent) => updateProgress(file.name, { percent })
       )
-      log('processFile:uploadWithProgress complete', { durationMs: Date.now() - uploadStart })
+      log(traceId, 'processFile:uploadWithProgress complete', { durationMs: Date.now() - uploadStart })
 
       // Get public URL
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
@@ -283,10 +314,10 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         .single()
 
       if (dbError) {
-        log('processFile:DB insert failed', { error: dbError.message })
+        log(traceId, 'processFile:DB insert failed', { error: dbError.message })
         throw new Error(`Could not save to library: ${dbError.message}`)
       }
-      log('processFile:DB insert ok', { mediaItemId: mediaItem.id })
+      log(traceId, 'processFile:DB insert ok', { mediaItemId: mediaItem.id })
 
       // Upload complete — move to processing state. The file is safe at this
       // point; nothing from here can lose it.
@@ -337,6 +368,7 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed'
+      log(traceId, 'processFile:terminal error', { error: message, stack: err instanceof Error ? err.stack?.slice(0, 400) : undefined })
       updateProgress(file.name, { status: 'error', error: message })
     }
   }
