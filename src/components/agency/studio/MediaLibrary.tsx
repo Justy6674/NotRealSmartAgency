@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Tag, Images, Plus, Palette } from 'lucide-react'
+import { Tag, Images, Plus, Palette, Sparkles, Loader2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { MediaUploader } from '@/components/agency/MediaUploader'
@@ -40,6 +40,30 @@ export function MediaLibrary() {
   const [showCollections, setShowCollections] = useState(true)
   const [detailItem, setDetailItem] = useState<MediaItemWithUsage | null>(null)
   const [showCanvaImport, setShowCanvaImport] = useState(false)
+  const [retagging, setRetagging] = useState(false)
+  const [retagResult, setRetagResult] = useState<string | null>(null)
+
+  const handleSmartRetag = async () => {
+    if (!activeBrandId || retagging) return
+    setRetagging(true)
+    setRetagResult(null)
+    try {
+      const res = await fetch(`/api/media/retag?brandId=${activeBrandId}`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setRetagResult(data.message)
+        fetchMedia()
+        fetchTags()
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed' }))
+        setRetagResult(`Error: ${err.error}`)
+      }
+    } catch {
+      setRetagResult('Network error')
+    } finally {
+      setRetagging(false)
+    }
+  }
 
   const fetchMedia = useCallback(async () => {
     if (!activeBrandId) return
@@ -251,15 +275,31 @@ export function MediaLibrary() {
     <div className="space-y-4 overflow-y-auto p-6">
       <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} />
 
-      {/* Import from Canva */}
-      <button
-        type="button"
-        onClick={() => setShowCanvaImport(true)}
-        className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
-      >
-        <Palette className="h-4 w-4 text-purple-400" />
-        Import from Canva
-      </button>
+      {/* Actions row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setShowCanvaImport(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+        >
+          <Palette className="h-4 w-4 text-purple-400" />
+          Import from Canva
+        </button>
+
+        <button
+          type="button"
+          onClick={handleSmartRetag}
+          disabled={retagging}
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+        >
+          {retagging ? <Loader2 className="h-4 w-4 animate-spin text-amber-400" /> : <Sparkles className="h-4 w-4 text-amber-400" />}
+          {retagging ? 'Smart tagging...' : 'Smart Retag All'}
+        </button>
+
+        {retagResult && (
+          <span className="text-xs text-muted-foreground">{retagResult}</span>
+        )}
+      </div>
 
       {/* Tag Manager */}
       <TagManager
