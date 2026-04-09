@@ -69,7 +69,11 @@ export function createQueryMediaTool(
         const statusIcon = itemStatus === 'transcribed' || itemStatus === 'captions_generated' ? ' ✓' : ''
         const fileUrl = item.file_url as string | null
         const fileType = (item.file_type as string | null) ?? 'unknown'
-        const tags = (item.metadata as Record<string, unknown>)?.tags as string[] | undefined
+        const metadata = (item.metadata as Record<string, unknown>) ?? {}
+        const tags = metadata.tags as string[] | undefined
+        const visualAnalysis = metadata.visual_analysis as
+          | { summary?: string; scenes?: string[]; products?: string[]; mood?: string }
+          | undefined
 
         let line = `${idx + 1}. **${name}** (${fileType})`
         if (duration) line += ` — ${duration}`
@@ -80,6 +84,18 @@ export function createQueryMediaTool(
         // Without this line, the Director hallucinates IDs when asked to publish media.
         lines.push(`   ID: \`${item.id}\``)
         if (fileUrl) lines.push(`   URL: ${fileUrl}`)
+
+        // Visual analysis summary (if previously run via /api/media/[id]/analyze)
+        // so creation sessions don't need to re-call Claude multimodal vision.
+        if (visualAnalysis?.summary) {
+          lines.push(`   Scene: ${visualAnalysis.summary}`)
+          if (visualAnalysis.products?.length) {
+            lines.push(`   Products visible: ${visualAnalysis.products.join(', ')}`)
+          }
+          if (visualAnalysis.mood) {
+            lines.push(`   Mood: ${visualAnalysis.mood}`)
+          }
+        }
 
         // Show transcription preview for transcribed items
         const transcription = item.transcription as string | null
