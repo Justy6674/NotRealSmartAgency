@@ -215,12 +215,6 @@ export async function POST(request: Request) {
     if (mentionsProducts) {
       systemPrompt += '\n\nMANDATORY RESEARCH RULE: Before writing ANY product descriptions, you MUST use web_search to look up the real product details (scent notes, ingredients, specs, features). Do NOT use training data for product-specific information. Search first, write second. This is non-negotiable — getting product details wrong destroys trust.'
     }
-
-    // Creation session rule — media-aware iteration via propose_post_from_media
-    systemPrompt += `\n\nCREATION SESSIONS: If the user provides media_ids (UUIDs from query_media) and asks for a post idea — "what should I post about this?", "give me an idea for these images", "propose a hook" — use the propose_post_from_media tool. It reads media_items.metadata.visual_analysis (already computed) and delegates to Content & Copy for hook + caption + hashtags + post_type. NEVER write captions yourself. Iterate by calling propose_post_from_media again with the previous JSON as previous_proposal + the user's feedback as user_feedback. When the user approves ("draft it", "perfect", "looks good"), THEN call publish_to_social or draft_post (via handoff) with the finalised copy + media_ids. Do not skip propose_post_from_media and do not finalise without user approval.`
-
-    // Mandatory hashtag rule — every post must ship with hashtags (written by Content & Copy)
-    systemPrompt += `\n\nMANDATORY HASHTAG RULE: Every social media post you publish MUST include 5-8 relevant lowercase hashtags in the hashtags array parameter (not inline in the caption). Mix broad and narrow tags. If the user didn't ask for hashtags, add them anyway — that's your job as the marketing agency.`
   }
 
   // Get tools for this agent

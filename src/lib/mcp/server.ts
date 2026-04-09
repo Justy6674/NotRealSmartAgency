@@ -5,7 +5,6 @@ import { adaptToolsForMCP } from './tool-adapter'
 import { registerDirectorChatTool } from './director-chat'
 import { registerGetDirectorResponseTool } from './director-job-tool'
 import { registerDraftPostTool } from './draft-post-tool'
-import { registerProposePostTool } from './propose-post-tool'
 
 /**
  * Register ALL tools upfront. Tool list must never change after launch —
@@ -89,8 +88,6 @@ export function createNRSMcpServer(userId: string): McpServer {
   registerGetDirectorResponseTool(server, userId)
   // Register draft_post — Content & Copy writes a single draft, lands in Review
   registerDraftPostTool(server, userId)
-  // Register propose_post_from_media — creation session iteration tool
-  registerProposePostTool(server, userId)
 
   // Register ALL tools from the Director's tool set
   // Tool factory rebuilds tools with the correct brandId per MCP call

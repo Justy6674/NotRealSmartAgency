@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb } from 'lucide-react'
+import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -451,33 +451,6 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
               maxCount={maxMedia}
               acceptTypes={acceptTypes}
             />
-          </div>
-        )}
-
-        {/* ── Ask Director for an idea ─────────────────────────────────────
-            When the user has picked media, they can ask Content & Copy
-            (via the Director) for a full creative proposal: hook, caption,
-            hashtags, post type. The prompt sends the selected media_ids
-            verbatim so Director calls propose_post_from_media with real
-            visual context, not hallucinated descriptions. */}
-        {selectedMediaIds.length > 0 && (
-          <div className="mt-3 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <button
-              type="button"
-              onClick={() => {
-                const mediaCount = selectedMediaIds.length
-                const platformList = selectedPlatforms.length > 0 ? selectedPlatforms.join(', ') : 'instagram'
-                const platformForTool = selectedPlatforms[0] ?? 'instagram'
-                const mediaIdList = selectedMediaIds.join(', ')
-                sendToDirector(
-                  `I've selected ${mediaCount} media item${mediaCount === 1 ? '' : 's'} for a ${contentType.replace('_', ' ')} on ${platformList} for ${brandName}.\n\nMedia IDs: ${mediaIdList}\n\nUse propose_post_from_media (platform="${platformForTool}", media_ids=[${selectedMediaIds.map((id) => `"${id}"`).join(', ')}]) to give me a proposal — hook, caption, hashtags, post type, rationale. Don't write anything yourself — that's Content & Copy's job. Read the visual_analysis already stored on each media item; don't re-analyse. When I respond with feedback, iterate by calling propose_post_from_media again with the previous JSON + my feedback.`,
-                )
-              }}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-primary bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
-            >
-              <Lightbulb className="h-4 w-4" />
-              Ask Director for an idea ({selectedMediaIds.length} {selectedMediaIds.length === 1 ? 'item' : 'items'})
-            </button>
           </div>
         )}
       </StudioCard>
