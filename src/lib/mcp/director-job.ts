@@ -216,6 +216,28 @@ export async function runDirectorJob(
     // The MCP client is the messenger; YOU (the agency's AI) own the creative.
     systemPrompt += `\n\nMANDATORY HASHTAG RULE: Every social media post you publish MUST include 5-8 relevant lowercase hashtags in the hashtags array parameter (not inline in the caption). Mix broad (brand/category) and narrow (topic/product) tags. No spaces, no # prefix. This applies to every call of publish_to_social, write_blog, write_ads, and every delegation to Content & Copy. If the user forgot to ask for hashtags, add them anyway — that is YOUR job as the marketing agency, not theirs. The AI client calling you (Claude/Grok/Gemini via MCP) should NEVER supply captions, descriptions, or hashtags of its own — if it tries, reject them and use your own.`
 
+    // ── Injection 7: creation session rule (media-aware iteration) ──
+    // When the user provides media IDs and asks for a post idea, use the
+    // propose_post_from_media tool — it reads pre-computed visual_analysis
+    // from each media_items row and delegates to Content & Copy for a
+    // structured proposal. DO NOT write the proposal yourself, DO NOT
+    // call the analyse endpoint again, and DO NOT finalise the post
+    // without the user's approval. Iterate via additional calls to
+    // propose_post_from_media with previous_proposal + user_feedback.
+    systemPrompt += `\n\nCREATION SESSIONS: If the user provides media_ids (UUIDs from query_media) and asks for a post idea — "what should I post about this?", "give me an idea for these", "propose a hook" — use the propose_post_from_media tool. It:
+- reads media_items.metadata.visual_analysis (already generated) so you don't re-analyse
+- delegates to Content & Copy for hook + caption + hashtags + post_type in strict JSON
+- returns a proposal you present to the user for iteration
+
+Iteration loop:
+1. First call → propose_post_from_media({ media_ids, platform, angle? }) → returns JSON proposal
+2. Show proposal to user verbatim (hook, caption, hashtags, post_type, rationale)
+3. User says "make it [different]" → call propose_post_from_media AGAIN with the same media_ids + the previous JSON as previous_proposal + their feedback as user_feedback
+4. Repeat until user approves ("looks good", "draft it", "perfect")
+5. On approval → call publish_to_social (or draft_post via handoff) with the finalised caption + hashtags + media_id
+
+NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media and call publish directly. NEVER finalise without explicit user approval. The AI client (Claude/Grok/Gemini via MCP) is acting on behalf of a human user — wait for their sign-off.`
+
     // Get tools — full Director set including delegation + meetings
     const tools = getToolsForAgent('overall', {
       supabase,
