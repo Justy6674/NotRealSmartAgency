@@ -205,16 +205,56 @@ export function createPublishToSocialTool(
 
         const hasVideo = allMedia.some((m) => m.mime.startsWith('video/'))
 
-        // Upload each item to Mixpost
+        // Upload each item to Mixpost. Collects failures so we can return
+        // a precise BLOCKED message instead of silently publishing text-only.
         const mixpostMediaIds: number[] = []
         const videoThumbs: string[] = []
+        const uploadErrors: string[] = []
+
+        /**
+         * Poll Mixpost's download-status endpoint until the remote fetch completes.
+         * Returns the media id, or null on failure/timeout.
+         */
+        async function pollRemoteDownload(downloadId: string, maxSeconds = 120): Promise<number | null> {
+          const started = Date.now()
+          const statusUrl = `${apiBase}/media/remote/${downloadId}/status`
+          while (Date.now() - started < maxSeconds * 1000) {
+            await new Promise((r) => setTimeout(r, 2000))
+            try {
+              const r = await fetch(statusUrl, {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+              })
+              if (!r.ok) continue
+              const d = await r.json()
+              if (d.status === 'completed') {
+                // Completed payloads can carry the new media in several shapes
+                const id = d.media?.id ?? d.id ?? d.data?.id
+                return id ? Number(id) : null
+              }
+              if (d.status === 'failed') {
+                uploadErrors.push(`Mixpost remote download failed for ${downloadId}: ${d.error ?? 'unknown'}`)
+                return null
+              }
+              // else pending/processing — keep polling
+            } catch {
+              /* transient, keep polling */
+            }
+          }
+          uploadErrors.push(`Mixpost remote download timed out for ${downloadId} after ${maxSeconds}s`)
+          return null
+        }
 
         for (const item of allMedia) {
           try {
             let uploadedId: number | null = null
 
-            // Method 1: Remote URL upload (preferred — Mixpost pulls from our Supabase URL)
-            // Works for both images and videos.
+            // Method 1: Remote URL upload (preferred — Mixpost pulls from our Supabase URL).
+            // Mixpost's /media/remote/initiate is ASYNC — it returns
+            // { download_id, status: 'pending' } for larger files. We MUST poll
+            // /media/remote/{download_id}/status until completed or failed. The
+            // previous implementation only handled synchronous responses and
+            // silently proceeded to publish text-only when Mixpost was still
+            // downloading — real bug that produced text-only Facebook posts.
             const remoteRes = await fetch(`${apiBase}/media/remote/initiate`, {
               method: 'POST',
               headers: {
@@ -225,17 +265,24 @@ export function createPublishToSocialTool(
             })
             if (remoteRes.ok) {
               const remoteData = await remoteRes.json()
-              if (remoteData.status === 'completed' && remoteData.media?.id) {
-                uploadedId = Number(remoteData.media.id)
-              } else if (remoteData.id) {
-                uploadedId = Number(remoteData.id)
-              } else if (remoteData.data?.id) {
-                uploadedId = Number(remoteData.data.id)
+              // Fast path: already completed (small images)
+              if (remoteData.status === 'completed') {
+                uploadedId = Number(remoteData.media?.id ?? remoteData.id ?? remoteData.data?.id ?? NaN)
+                if (!Number.isFinite(uploadedId)) uploadedId = null
+              } else if (remoteData.status === 'pending' && remoteData.download_id) {
+                // Slow path: poll until done (videos)
+                uploadedId = await pollRemoteDownload(String(remoteData.download_id))
+              } else if (remoteData.status === 'failed') {
+                uploadErrors.push(`Mixpost remote initiate failed: ${remoteData.error ?? 'unknown'}`)
               }
+            } else {
+              const errText = await remoteRes.text().catch(() => '')
+              uploadErrors.push(`Mixpost remote initiate HTTP ${remoteRes.status}: ${errText.slice(0, 200)}`)
             }
 
-            // Method 2: Fallback to binary upload
-            if (!uploadedId) {
+            // Method 2: Fallback to binary upload (for images only — videos
+            // would exhaust Vercel memory on a 148MB file). Images are small.
+            if (!uploadedId && !item.mime.startsWith('video/')) {
               const fileRes = await fetch(item.url)
               if (fileRes.ok) {
                 const blob = await fileRes.blob()
@@ -249,6 +296,9 @@ export function createPublishToSocialTool(
                 if (uploadRes.ok) {
                   const data = await uploadRes.json()
                   uploadedId = Number(data.id ?? data.data?.id)
+                } else {
+                  const errText = await uploadRes.text().catch(() => '')
+                  uploadErrors.push(`Mixpost binary upload HTTP ${uploadRes.status}: ${errText.slice(0, 200)}`)
                 }
               }
             }
@@ -258,19 +308,28 @@ export function createPublishToSocialTool(
               if (item.mime.startsWith('video/') && item.thumbnailUrl) {
                 videoThumbs.push(item.thumbnailUrl)
               }
+            } else {
+              uploadErrors.push(`Failed to upload ${item.fileName} (${item.mime})`)
             }
             console.log(
               `[publish_to_social] Media upload: mime=${item.mime} | mediaId=${uploadedId}`,
             )
           } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            uploadErrors.push(`Exception uploading ${item.fileName}: ${msg}`)
             console.error(`[publish_to_social] Media upload error for ${item.url}:`, err)
           }
         }
 
         // Backwards-compatible alias used further down
         const mediaIds = mixpostMediaIds
-        if (allMedia.length > 0 && mediaIds.length === 0) {
-          console.error('[publish_to_social] Failed to upload any media to Mixpost')
+
+        // FAIL LOUDLY if any media item was requested but Mixpost couldn't ingest it.
+        // Previous behaviour: silently publish text-only. Result: two wrong posts hit
+        // Facebook before we caught it. Never again.
+        if (allMedia.length > 0 && mediaIds.length < allMedia.length) {
+          const errorSummary = uploadErrors.length > 0 ? uploadErrors.join('\n  - ') : 'unknown reason'
+          return `BLOCKED — cannot publish. ${mediaIds.length}/${allMedia.length} media items uploaded to Mixpost successfully.\n\nUpload failures:\n  - ${errorSummary}\n\nCommon causes for video failures: file size exceeds Mixpost's MIXPOST_MAX_FILE_UPLOAD_SIZE, unsupported codec, or Supabase URL unreachable. Fix the underlying issue and retry — do NOT retry with the same file expecting a different result.`
         }
 
         const isScheduled = !!(schedule_date && schedule_time)
