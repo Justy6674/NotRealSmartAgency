@@ -8,6 +8,7 @@ import { generateDeterministicTags } from '@/lib/media/auto-tagger'
 interface UploadProgress {
   fileName: string
   status: 'uploading' | 'processing' | 'done' | 'error'
+  percent: number
   mediaItemId?: string
   error?: string
 }
@@ -20,14 +21,79 @@ interface MediaUploaderProps {
 const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'audio/mpeg', 'audio/mp4', 'audio/m4a', 'video/webm', 'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic']
 const MAX_SIZE = 500 * 1024 * 1024 // 500MB (videos can be large)
 
+/** Format bytes to human-readable size */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/**
+ * Upload a file to Supabase Storage using XHR for progress tracking.
+ * Supabase Storage accepts multipart form uploads at the REST API directly.
+ */
+function uploadWithProgress(
+  supabaseUrl: string,
+  bucket: string,
+  path: string,
+  file: File,
+  token: string,
+  onProgress: (percent: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const url = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100)
+        onProgress(percent)
+      }
+    })
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        let msg = `Upload failed (${xhr.status})`
+        try {
+          const body = JSON.parse(xhr.responseText)
+          msg = body.error ?? body.message ?? msg
+        } catch { /* use default msg */ }
+        reject(new Error(msg))
+      }
+    })
+
+    xhr.addEventListener('error', () => reject(new Error('Upload failed — network error')))
+    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')))
+
+    xhr.open('POST', url)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('x-upsert', 'false')
+
+    // Send as binary with content-type header (same as Supabase JS client)
+    xhr.setRequestHeader('Content-Type', file.type)
+    xhr.send(file)
+  })
+}
+
 export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<UploadProgress[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const dismissItem = (fileName: string) => {
+    setProgress(prev => prev.filter(p => p.fileName !== fileName))
+  }
+
+  const updateProgress = (fileName: string, updates: Partial<UploadProgress>) => {
+    setProgress(prev =>
+      prev.map(p => p.fileName === fileName ? { ...p, ...updates } : p)
+    )
+  }
+
   const processFile = async (file: File): Promise<void> => {
-    const entry: UploadProgress = { fileName: file.name, status: 'uploading' }
-    setProgress(prev => [...prev, entry])
+    setProgress(prev => [...prev, { fileName: file.name, status: 'uploading', percent: 0 }])
 
     try {
       // Validate
@@ -38,27 +104,28 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
         throw new Error('File too large. Maximum 500MB.')
       }
 
-      // Upload directly to Supabase Storage from the browser (bypasses Vercel 4.5MB limit)
       const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       )
 
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
 
+      const user = session.user
       const timestamp = Date.now()
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const storagePath = `${user.id}/${brandId}/${timestamp}_${safeName}`
 
-      const { error: uploadError } = await supabase.storage
-        .from('media')
-        .upload(storagePath, file, {
-          contentType: file.type,
-          upsert: false,
-        })
-
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+      // Upload with XHR for real-time progress tracking
+      await uploadWithProgress(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        'media',
+        storagePath,
+        file,
+        session.access_token,
+        (percent) => updateProgress(file.name, { percent })
+      )
 
       // Get public URL
       const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
@@ -94,23 +161,18 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
       if (dbError) throw new Error(dbError.message)
 
       // Upload complete — mark as done immediately
-      setProgress(prev =>
-        prev.map(p => p.fileName === file.name ? { ...p, status: 'done', mediaItemId: mediaItem.id } : p)
-      )
+      updateProgress(file.name, { status: 'done', percent: 100, mediaItemId: mediaItem.id })
 
       // Fire-and-forget: background processing (AI description, transcription, smart tags)
-      // This runs async — the UI doesn't wait for it
       fetch('/api/media/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mediaItemId: mediaItem.id }),
-      }).catch(() => {}) // Silent failure — processing is non-blocking
+      }).catch(() => {})
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed'
-      setProgress(prev =>
-        prev.map(p => p.fileName === file.name ? { ...p, status: 'error', error: message } : p)
-      )
+      updateProgress(file.name, { status: 'error', error: message })
     }
   }
 
@@ -156,18 +218,46 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
       {progress.length > 0 && (
         <div className="space-y-2">
           {progress.map((p, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm p-2 rounded bg-muted/50">
-              {p.status === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
-              {p.status === 'processing' && <Loader2 className="h-4 w-4 animate-spin text-amber-500" />}
-              {p.status === 'done' && <Check className="h-4 w-4 text-green-500" />}
-              {p.status === 'error' && <X className="h-4 w-4 text-red-500" />}
-              <span className="flex-1 truncate">{p.fileName}</span>
-              <span className="text-xs text-muted-foreground">
-                {p.status === 'uploading' && 'Uploading...'}
-                {p.status === 'processing' && 'Processing...'}
-                {p.status === 'done' && 'Ready'}
-                {p.status === 'error' && p.error}
-              </span>
+            <div key={i} className="relative overflow-hidden rounded bg-muted/50">
+              {/* Progress bar background */}
+              {p.status === 'uploading' && p.percent > 0 && p.percent < 100 && (
+                <div
+                  className="absolute inset-y-0 left-0 bg-blue-500/10 transition-all duration-300 ease-out"
+                  style={{ width: `${p.percent}%` }}
+                />
+              )}
+              <div className="relative flex items-center gap-2 text-sm p-2">
+                {p.status === 'uploading' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />}
+                {p.status === 'processing' && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-amber-500" />}
+                {p.status === 'done' && <Check className="h-4 w-4 shrink-0 text-green-500" />}
+                {p.status === 'error' && (
+                  <button
+                    onClick={() => dismissItem(p.fileName)}
+                    className="shrink-0 rounded-full p-0.5 hover:bg-red-500/20 transition-colors"
+                    title="Dismiss"
+                  >
+                    <X className="h-4 w-4 text-red-500" />
+                  </button>
+                )}
+                <span className="flex-1 truncate">{p.fileName}</span>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {p.status === 'uploading' && p.percent > 0 && `${p.percent}%`}
+                  {p.status === 'uploading' && p.percent === 0 && 'Starting...'}
+                  {p.status === 'processing' && 'Processing...'}
+                  {p.status === 'done' && 'Ready'}
+                  {p.status === 'error' && p.error}
+                </span>
+                {/* Dismiss button for done items too */}
+                {(p.status === 'done') && (
+                  <button
+                    onClick={() => dismissItem(p.fileName)}
+                    className="shrink-0 rounded-full p-0.5 hover:bg-muted transition-colors opacity-50 hover:opacity-100"
+                    title="Dismiss"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
