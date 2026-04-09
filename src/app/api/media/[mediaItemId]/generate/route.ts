@@ -156,9 +156,10 @@ export async function POST(
 
     const { object: content } = await generateObject({
       model: gateway('anthropic/claude-sonnet-4'),
-      system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions from video transcriptions and visual analysis.
+      system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions.
 
 ${brandContext}
+${brand?.description ? `About: ${brand.description}\n` : ''}
 ${vibeGuidance ? `\nTone: ${vibeGuidance}` : ''}
 ${contentTypeText ? `\nContent type: Frame this as ${contentTypeText} content.` : ''}
 ${hashtagGuidance ? `\nHashtag strategy: ${hashtagGuidance}` : ''}
@@ -170,15 +171,14 @@ Rules:
 - Include relevant hashtags where appropriate
 - Be engaging, authentic, and brand-aligned
 - Reference what's VISIBLE in the video when visual analysis is available
-- For AHPRA/TGA brands: NEVER make therapeutic claims or use testimonials`,
-      prompt: `Generate social media captions for all 6 platforms from this media:
+- For AHPRA/TGA brands: NEVER make therapeutic claims or use testimonials
+- If limited context is available, use the brand description, niche, and filename to write relevant content. Be creative but stay on-brand.
+- ALWAYS produce all 6 platform outputs. Never skip one.`,
+      prompt: `Generate social media captions for all 6 platforms for this ${(mediaItem.file_type as string).startsWith('image/') ? 'image' : 'video'} from ${brand?.name ?? 'a brand'}.
 
-${mediaItem.transcription ? `Transcription:\n${mediaItem.transcription}` : ''}
-${mediaItem.ai_description ? `AI Description: ${mediaItem.ai_description}` : ''}
-${(mediaItem.tags as string[] | null)?.length ? `Tags: ${(mediaItem.tags as string[]).join(', ')}` : ''}
-${visualContext}
-
-File: ${mediaItem.file_name}`,
+${mediaItem.transcription ? `Transcription:\n${mediaItem.transcription}\n` : ''}${mediaItem.ai_description ? `Description: ${mediaItem.ai_description}\n` : ''}${(mediaItem.tags as string[] | null)?.length ? `Tags: ${(mediaItem.tags as string[]).join(', ')}\n` : ''}${visualContext ? visualContext + '\n' : ''}
+File: ${mediaItem.file_name}
+${!mediaItem.transcription && !mediaItem.ai_description ? `\nNote: No transcription or AI description available yet. Use the brand context, tags, and filename to create engaging captions that match the brand\'s niche (${brand?.niche ?? 'general'}).` : ''}`,
       schema: PlatformContentSchema,
     })
 
