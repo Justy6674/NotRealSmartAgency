@@ -20,6 +20,7 @@ interface CreatorActionBarProps {
   compliancePassed: boolean | null
   saving: boolean
   onSave: (mode: 'draft' | 'schedule' | 'now', scheduledAt?: string) => void
+  editMode?: boolean
 }
 
 /**
@@ -33,6 +34,7 @@ export function CreatorActionBar({
   compliancePassed,
   saving,
   onSave,
+  editMode,
 }: CreatorActionBarProps) {
   const disabled = saving || captionEmpty
 
@@ -67,7 +69,7 @@ export function CreatorActionBar({
             className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colours disabled:opacity-40"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Draft
+            {editMode ? 'Update Draft' : 'Save Draft'}
             <ArrowRight className="h-3.5 w-3.5 ml-1 opacity-60" />
           </button>
         </div>

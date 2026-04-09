@@ -26,13 +26,27 @@ type TabId = (typeof TABS)[number]['id']
 
 export function CreativeStudio() {
   const [activeTab, setActiveTab] = useState<TabId>('create')
-  const { setChatPanelOpen, activeBrandId } = useAgencyStore()
+  const {
+    setChatPanelOpen,
+    activeBrandId,
+    pendingDraftId,
+    pendingMediaId,
+    setPendingDraftId,
+    setPendingMediaId,
+  } = useAgencyStore()
   const [draftCount, setDraftCount] = useState(0)
 
   // Auto-open chat panel so Director is always visible in the Studio
   useEffect(() => {
     setChatPanelOpen(true)
   }, [setChatPanelOpen])
+
+  // Auto-switch to Create tab when a draft or media is pending
+  useEffect(() => {
+    if (pendingDraftId || pendingMediaId) {
+      setActiveTab('create')
+    }
+  }, [pendingDraftId, pendingMediaId])
 
   // Fetch draft count for tab badge
   useEffect(() => {
@@ -42,6 +56,13 @@ export function CreativeStudio() {
       .then(data => setDraftCount(Array.isArray(data) ? data.length : 0))
       .catch(() => setDraftCount(0))
   }, [activeBrandId, activeTab])
+
+  // When Creator is done editing, clear pending and go to Review
+  const handleCreatorDone = () => {
+    setPendingDraftId(null)
+    setPendingMediaId(null)
+    setActiveTab('review')
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -70,7 +91,13 @@ export function CreativeStudio() {
 
       {/* Tab content — Create and Review manage own scroll, others use overflow-y-auto */}
       <div className={cn('flex-1', activeTab === 'create' || activeTab === 'review' ? 'overflow-hidden' : 'overflow-y-auto')}>
-        {activeTab === 'create' && <PostCreator />}
+        {activeTab === 'create' && (
+          <PostCreator
+            draftId={pendingDraftId ?? undefined}
+            mediaId={pendingMediaId ?? undefined}
+            onDone={handleCreatorDone}
+          />
+        )}
         {activeTab === 'review' && <ReviewRoom />}
         {activeTab === 'schedule' && (
           <div className="flex-1 overflow-y-auto p-6 space-y-4">

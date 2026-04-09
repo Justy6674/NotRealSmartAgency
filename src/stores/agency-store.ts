@@ -13,6 +13,8 @@ interface AgencyState {
   chatPanelOpen: boolean
   chatPanelMinimised: boolean
   pendingReviewMessage: string | null
+  pendingDraftId: string | null
+  pendingMediaId: string | null
   setBrand: (brandId: string) => void
   setAgent: (agentType: AgentType) => void
   setConversation: (conversationId: string | null) => void
@@ -24,6 +26,8 @@ interface AgencyState {
   setChatPanelOpen: (open: boolean) => void
   setChatPanelMinimised: (minimised: boolean) => void
   setPendingReviewMessage: (message: string | null) => void
+  setPendingDraftId: (id: string | null) => void
+  setPendingMediaId: (id: string | null) => void
 }
 
 export const useAgencyStore = create<AgencyState>()(
@@ -37,6 +41,8 @@ export const useAgencyStore = create<AgencyState>()(
       chatPanelOpen: false,
       chatPanelMinimised: false,
       pendingReviewMessage: null,
+      pendingDraftId: null,
+      pendingMediaId: null,
       setBrand: (brandId) =>
         set({ activeBrandId: brandId, activeAgentType: 'overall', activeConversationId: null }),
       setAgent: (agentType) =>
@@ -59,6 +65,10 @@ export const useAgencyStore = create<AgencyState>()(
         set({ chatPanelMinimised: minimised }),
       setPendingReviewMessage: (message) =>
         set({ pendingReviewMessage: message }),
+      setPendingDraftId: (id) =>
+        set({ pendingDraftId: id }),
+      setPendingMediaId: (id) =>
+        set({ pendingMediaId: id }),
     }),
     {
       name: 'nrs-agency',

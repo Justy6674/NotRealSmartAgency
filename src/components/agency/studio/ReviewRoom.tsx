@@ -30,7 +30,7 @@ function getComplianceStatus(result: ComplianceResult | null | undefined): 'pass
 // ── Review Room ───────────────────────────────────────────────────────────────
 
 export function ReviewRoom() {
-  const { activeBrandId } = useAgencyStore()
+  const { activeBrandId, setPendingDraftId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
 
   const [drafts, setDrafts] = useState<ScheduledPost[]>([])
@@ -306,6 +306,7 @@ export function ReviewRoom() {
               onClick={setDetailPostId}
               onApprove={handleApprove}
               onReject={(id) => handleReject(id)}
+              onAlter={(id) => setPendingDraftId(id)}
               onAskDirector={handleAskDirector}
             />
           ))}

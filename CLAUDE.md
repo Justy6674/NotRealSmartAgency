@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## MANDATORY: Read Before ANY Creative Studio Work
+
+Before touching ANY Creative Studio code (Creator, Review, Schedule, Media, or related components), you MUST read:
+- `~/Obsidian/Reference/nrs-creative-studio-definitive-architecture.md` — the complete architecture spec
+- `~/NotRealSmartAgency/2026-04-08-post-creator-redesign.md` — the 10-card Creator spec
+- `~/Obsidian/Reference/nrs-creative-studio-redesign-research.md` — competitor patterns
+
+**Key architecture:** Creator is THE centre. Three entry points (Media→Creator, fresh Creator, Review→Creator). Director is the expert marketer who delegates to 13 agents. Any AI (Cowork, Claude Desktop) plugs into the Director via MCP. Build to spec, never patch.
+
 ## Rule Zero — Tomorrow's Tech for Marketing
 
 > **Use today's tech to get things done. Build for tomorrow's tech to get better. Leave yesterday's tech behind.**

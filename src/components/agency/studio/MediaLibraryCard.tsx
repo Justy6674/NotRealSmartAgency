@@ -44,6 +44,7 @@ interface MediaLibraryCardProps {
   onGenerate: (id: string, contentType?: string) => void
   generating?: boolean
   onRepurpose: (id: string) => void
+  onCreatePost?: (id: string) => void
   availableTags: string[]
 }
 
@@ -81,6 +82,7 @@ export function MediaLibraryCard({
   onGenerate,
   generating,
   onRepurpose,
+  onCreatePost,
   availableTags,
 }: MediaLibraryCardProps) {
   const [showTagInput, setShowTagInput] = useState(false)
@@ -335,6 +337,16 @@ export function MediaLibraryCard({
               </div>
             )}
           </div>
+          {onCreatePost && (
+            <button
+              onClick={() => onCreatePost(item.id)}
+              className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted/80 transition-colors"
+              title="Start your post with this media"
+            >
+              <Plus className="h-3 w-3" />
+              Post
+            </button>
+          )}
           <button
             onClick={() => onRepurpose(item.id)}
             className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted/80 transition-colors"

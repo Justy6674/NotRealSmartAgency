@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Tag, Images, Plus, Palette, Sparkles, Loader2 } from 'lucide-react'
+import { Tag, Images, Plus, Palette, Sparkles, Loader2, PenLine } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { MediaUploader } from '@/components/agency/MediaUploader'
@@ -19,7 +19,7 @@ type SortOption = 'newest' | 'oldest' | 'name' | 'most_used'
 type ViewMode = 'library' | 'collection'
 
 export function MediaLibrary() {
-  const { activeBrandId } = useAgencyStore()
+  const { activeBrandId, setPendingMediaId } = useAgencyStore()
 
   const [items, setItems] = useState<MediaItemWithUsage[]>([])
   const [loading, setLoading] = useState(true)
@@ -493,6 +493,7 @@ export function MediaLibrary() {
               onGenerate={handleGenerate}
               generating={generatingId === item.id}
               onRepurpose={handleRepurpose}
+              onCreatePost={(id) => setPendingMediaId(id)}
               availableTags={availableTags}
             />
           ))}

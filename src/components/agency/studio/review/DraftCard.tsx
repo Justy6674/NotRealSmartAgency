@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, X, MessageSquare, Sparkles } from 'lucide-react'
+import { Check, X, MessageSquare, Sparkles, Pencil } from 'lucide-react'
 import { ComplianceBadge } from './ComplianceBadge'
 import { SOURCE_LABELS, PLATFORM_CONFIG } from './ReviewFilters'
 import type { ScheduledPost, DraftSource, ComplianceResult, PostPlatform } from '@/types/database'
@@ -15,6 +15,7 @@ interface DraftCardProps {
   onClick: (id: string) => void
   onApprove: (id: string) => void
   onReject: (id: string) => void
+  onAlter: (id: string) => void
   onAskDirector: (id: string) => void
 }
 
@@ -39,6 +40,7 @@ export function DraftCard({
   onClick,
   onApprove,
   onReject,
+  onAlter,
   onAskDirector,
 }: DraftCardProps) {
   const meta = (post.metadata ?? {}) as Record<string, unknown>
@@ -133,6 +135,15 @@ export function DraftCard({
         />
 
         <div className="flex-1" />
+
+        <button
+          onClick={(e) => { e.stopPropagation(); onAlter(post.id) }}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Edit in Creator"
+        >
+          <Pencil className="h-3 w-3" />
+          Alter
+        </button>
 
         <button
           onClick={(e) => { e.stopPropagation(); onAskDirector(post.id) }}

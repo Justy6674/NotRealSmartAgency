@@ -56,8 +56,17 @@ interface MediaItem {
  * Each section wrapped in StudioCard with DirectorAssist pills.
  * Scent Sell visual quality throughout.
  */
-export function PostCreator() {
-  const { activeBrandId } = useAgencyStore()
+interface PostCreatorProps {
+  /** Load existing draft for editing */
+  draftId?: string
+  /** Pre-load media item into slots */
+  mediaId?: string
+  /** Called after save in edit mode — navigates back to Review */
+  onDone?: () => void
+}
+
+export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {}) {
+  const { activeBrandId, setPendingDraftId, setPendingMediaId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
 
@@ -110,6 +119,52 @@ export function PostCreator() {
     const draft = { contentType, selectedPlatforms, selectedMediaIds, caption, hashtags, aiPrompt, creatorMode }
     try { localStorage.setItem(draftKey, JSON.stringify(draft)) } catch { /* storage full */ }
   }, [draftKey, contentType, selectedPlatforms, selectedMediaIds, caption, hashtags, aiPrompt, creatorMode])
+
+  // ── Load existing draft for editing ──────────────────────────────────────
+  const [editMode, setEditMode] = useState(false)
+  const [editDraftId, setEditDraftId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!draftId || !activeBrandId) return
+    setEditMode(true)
+    setEditDraftId(draftId)
+
+    // Fetch draft and populate all fields
+    fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft`)
+      .then(r => r.ok ? r.json() : [])
+      .then((posts: Array<Record<string, unknown>>) => {
+        const draft = posts.find((p: Record<string, unknown>) => p.id === draftId)
+        if (!draft) return
+        if (draft.caption) setCaption(draft.caption as string)
+        if (draft.platform) setSelectedPlatforms([draft.platform as PostPlatform])
+        if (draft.hashtags) setHashtags((draft.hashtags as string[]).map(h => (h as string).replace(/^#/, '')))
+        if (draft.media_item_ids) setSelectedMediaIds(draft.media_item_ids as string[])
+        if (draft.content_type) {
+          const typeMap: Record<string, ContentType> = {
+            entertainment: 'post', education: 'post', inspiration: 'post', promotional: 'ad',
+          }
+          setContentType(typeMap[draft.content_type as string] ?? 'post')
+        }
+        if (draft.post_type) {
+          const ptMap: Record<string, ContentType> = {
+            single: 'post', carousel: 'carousel', reel: 'short_video', video: 'long_video',
+          }
+          setContentType(ptMap[draft.post_type as string] ?? 'post')
+        }
+        // Clear pending state
+        setPendingDraftId(null)
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId])
+
+  // ── Pre-load media from Media Library entry ──────────────────────────────
+  useEffect(() => {
+    if (!mediaId) return
+    setSelectedMediaIds([mediaId])
+    setPendingMediaId(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaId])
 
   // Fetch media items to populate slots
   useEffect(() => {
@@ -183,6 +238,32 @@ export function PostCreator() {
         return
       }
 
+      if (editMode && editDraftId) {
+        // Edit mode: PATCH existing draft
+        await fetch('/api/scheduled-posts', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editDraftId,
+            caption,
+            hashtags: hashtags.map(h => `#${h}`),
+            status: mode === 'draft' ? 'draft' : 'scheduled',
+            scheduled_at: scheduledAt ?? new Date().toISOString(),
+            post_type: postType,
+            media_item_ids: selectedMediaIds,
+            content_type: strategyContext?.suggestedContentType ?? undefined,
+            content_pillar: strategyContext?.suggestedPillar ?? undefined,
+          }),
+        })
+        // Return to Review tab
+        setEditMode(false)
+        setEditDraftId(null)
+        data.refetch()
+        onDone?.()
+        return
+      }
+
+      // New post mode: POST per platform
       for (const platform of selectedPlatforms) {
         await fetch('/api/scheduled-posts', {
           method: 'POST',
@@ -504,6 +585,7 @@ export function PostCreator() {
       compliancePassed={compliancePassed}
       saving={saving}
       onSave={handleSave}
+      editMode={editMode}
     />
   )
 
