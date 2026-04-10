@@ -143,6 +143,37 @@ export async function PATCH(request: Request) {
     const updates: Record<string, unknown> = {}
     if (body.tags !== undefined) updates.tags = body.tags
     if (body.is_archived !== undefined) updates.is_archived = body.is_archived
+    if (typeof body.file_name === 'string' && body.file_name.trim()) {
+      updates.file_name = body.file_name.trim()
+    }
+
+    // Alt text + arbitrary metadata patches are merged into the existing
+    // metadata JSONB column so we don't need a schema migration. The
+    // process_media tool reads metadata.alt_text when publishing.
+    const needsMetadataMerge =
+      typeof body.alt_text === 'string' || (body.metadata && typeof body.metadata === 'object')
+    if (needsMetadataMerge) {
+      const { data: existing } = await supabase
+        .from('media_items')
+        .select('metadata')
+        .eq('id', body.id)
+        .eq('user_id', user.id)
+        .single()
+
+      const currentMeta = (existing?.metadata ?? {}) as Record<string, unknown>
+      const merged: Record<string, unknown> = {
+        ...currentMeta,
+        ...(body.metadata && typeof body.metadata === 'object' ? body.metadata : {}),
+      }
+      if (typeof body.alt_text === 'string') {
+        merged.alt_text = body.alt_text.trim()
+      }
+      updates.metadata = merged
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 })
+    }
 
     const { data, error } = await supabase
       .from('media_items')
