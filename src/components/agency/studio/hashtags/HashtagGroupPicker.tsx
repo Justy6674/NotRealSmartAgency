@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Hash, Plus, X, ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { Hash, Plus, X, ChevronDown, Settings } from 'lucide-react'
 
 interface HashtagGroup {
   id: string
@@ -64,6 +65,19 @@ export function HashtagGroupPicker({ brandId, onInsert }: HashtagGroupPickerProp
 
       {open && (
         <div className="absolute top-full left-0 z-40 mt-1 w-64 rounded-lg border border-border bg-card shadow-xl">
+          <div className="flex items-center justify-between border-b border-border px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground">
+              Hashtag groups
+            </span>
+            <Link
+              href="/agency/studio/hashtags"
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Settings className="h-2.5 w-2.5" />
+              Manage groups
+            </Link>
+          </div>
           <div className="p-2 space-y-1">
             {groups.length === 0 && !showCreate && (
               <p className="px-2 py-3 text-center text-[10px] text-muted-foreground">
