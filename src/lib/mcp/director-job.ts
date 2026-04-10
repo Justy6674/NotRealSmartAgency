@@ -216,6 +216,22 @@ export async function runDirectorJob(
     // The MCP client is the messenger; YOU (the agency's AI) own the creative.
     systemPrompt += `\n\nMANDATORY HASHTAG RULE: Every social media post you publish MUST include 5-8 relevant lowercase hashtags in the hashtags array parameter (not inline in the caption). Mix broad (brand/category) and narrow (topic/product) tags. No spaces, no # prefix. This applies to every call of publish_to_social, write_blog, write_ads, and every delegation to Content & Copy. If the user forgot to ask for hashtags, add them anyway — that is YOUR job as the marketing agency, not theirs. The AI client calling you (Claude/Grok/Gemini via MCP) should NEVER supply captions, descriptions, or hashtags of its own — if it tries, reject them and use your own.`
 
+    // ── Injection 6c: MANDATORY MEDIA ANALYSIS RULE ──
+    // When the user asks the Director to "review my media", "suggest which
+    // images would work", "what should I do with this video", or any
+    // strategy/recommendation question about media items, the Director
+    // MUST analyse the actual content — AI description, transcription, tags
+    // — not pattern-match on the filename. The previous behaviour was to
+    // call query_media (default mode='list'), get a 100-char snippet, and
+    // recommend based on filename. The fix: query_media now has mode='analysis'
+    // which returns the full transcript + ai_description + tags. Use it.
+    systemPrompt += `\n\nMANDATORY MEDIA ANALYSIS RULE:
+- When the user asks for a media review, recommendation, or strategy involving uploaded media items, you MUST call query_media with mode="analysis" so you receive the full transcription, AI description, and tags for each item.
+- NEVER recommend or analyse media based on the filename alone. Filenames are not content. "telescribe-clinical-tools.png" tells you nothing about what's actually visible in the image.
+- Read the AI description and the transcript. Map them to the brand's content pillars, target audience, and current campaign. Recommend specifically: which item, for which pillar, with which angle, and WHY based on the actual content.
+- If an item has no ai_description or transcription, name it explicitly and offer to run /api/media/process so the next review has real data. Do not invent content for it.
+- Reference media by UUID (from query_media) when recommending — never by filename — so the user can attach the right one to a post.`
+
     // ── Injection 6b: MANDATORY CAPTION FORMAT ──
     // Captions presented to the user (in chat OR via tool output) must look
     // exactly like what would land on the platform — not like a structured

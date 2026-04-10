@@ -423,7 +423,17 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
         title="Media"
         required={['carousel', 'short_video', 'long_video', 'ad'].includes(contentType)}
         directorAssist={{
-          prompt: `I'm building a ${contentType.replace('_', ' ')} for ${selectedPlatforms.join(', ') || 'social media'}. Review my media library for ${brandName} and suggest which images or videos would work best.`,
+          prompt: `I'm building a ${contentType.replace('_', ' ')} for ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}.
+
+Call query_media with mode="analysis" and limit=20 to load my full media library with transcriptions and AI descriptions. Then do a STRATEGIC content review:
+
+1. For each item, look at what's ACTUALLY in it — the AI description, the transcript text, the tags. Don't guess from the filename.
+2. Map each item to our content pillars and target audience. Which items align with which pillar?
+3. Recommend the best combination for this ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'}, with reasoning based on the actual content (not the filename).
+4. Suggest the story angle and hook each item supports.
+5. Reference items by their UUIDs so I can pick them.
+
+If any items have no AI description or transcription yet, name them and offer to run /api/media/process so we can do a proper review next time. Never recommend an item based on its filename alone.`,
           label: 'Review my media',
         }}
       >

@@ -237,6 +237,15 @@ export async function POST(request: Request) {
     // Mandatory hashtag rule — every post must ship with hashtags (written by Content & Copy)
     systemPrompt += `\n\nMANDATORY HASHTAG RULE: Every social media post you publish MUST include 5-8 relevant lowercase hashtags in the hashtags array parameter (not inline in the caption). Mix broad and narrow tags. If the user didn't ask for hashtags, add them anyway — that's your job as the marketing agency.`
 
+    // Mandatory media analysis rule — never recommend media by filename alone.
+    // Mirror of the same rule in src/lib/mcp/director-job.ts.
+    systemPrompt += `\n\nMANDATORY MEDIA ANALYSIS RULE:
+- When the user asks for a media review, recommendation, or strategy involving uploaded media items, you MUST call query_media with mode="analysis" so you receive the full transcription, AI description, and tags for each item.
+- NEVER recommend or analyse media based on the filename alone. Filenames are not content.
+- Read the AI description and the transcript. Map them to the brand's content pillars, target audience, and current campaign. Recommend specifically: which item, for which pillar, with which angle, and WHY based on the actual content.
+- If an item has no ai_description or transcription, name it explicitly and offer to run /api/media/process so the next review has real data. Do not invent content for it.
+- Reference media by UUID (from query_media) when recommending — never by filename — so the user can attach the right one to a post.`
+
     // Mandatory caption format — no markdown clutter, no checkmark bullets, no metadata.
     // Mirror of the same rule in src/lib/mcp/director-job.ts so the web Director and the
     // MCP Director produce identical output. Justin's complaint 2026-04-10:
