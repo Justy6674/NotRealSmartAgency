@@ -184,9 +184,61 @@ export function ChatPanel() {
   // Don't render on the full chat pages — AFTER all hooks
   if (isFullChatPage) return null
 
+  // Shared chat body — reused by both expanded sidebar and floating window
+  const chatBody = (
+    <>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3">
+        {messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <AgentAvatar agentType={activeAgentType} size="lg" />
+            <p className="text-sm font-medium text-foreground">
+              {AGENT_LABELS[activeAgentType]}
+            </p>
+            {!activeBrandId ? (
+              <p className="text-xs text-amber-400">
+                Select a brand from the sidebar to start chatting.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Ask me anything about your brand.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-border/50">
+            {messages.map((message) => (
+              <ChatMessage key={message.id} message={message} />
+            ))}
+            {isLoading && messages[messages.length - 1]?.role === 'user' && (
+              <div className="flex gap-3 py-4">
+                <AgentAvatar agentType={activeAgentType} size="sm" />
+                <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-2.5">
+                  <p className="text-sm text-muted-foreground">Thinking...</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {error && (
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+          <p className="flex-1 text-xs text-red-400">Something went wrong. Please try again.</p>
+          <button onClick={() => clearError()} className="shrink-0 text-xs text-muted-foreground hover:text-foreground">Dismiss</button>
+        </div>
+      )}
+      <ChatInput
+        onSend={handleSend}
+        isLoading={isLoading}
+        placeholder="Ask your agent..."
+        agentType={activeAgentType}
+        showChips={messages.length === 0}
+      />
+    </>
+  )
+
   return (
     <>
-      {/* Toggle pill — visible when panel is closed (mobile only, or desktop when closed) */}
+      {/* ── Mobile: floating pill when closed ── */}
       {!chatPanelOpen && (
         <button
           onClick={() => setChatPanelOpen(true)}
@@ -197,179 +249,85 @@ export function ChatPanel() {
         </button>
       )}
 
-      {/* Panel — inline on desktop (part of layout flow), fixed overlay on mobile */}
-      <div
-        className={cn(
-          'flex flex-col border-l bg-background transition-all duration-200 ease-in-out',
-          // Desktop: inline flow, shrink to width
-          'hidden md:flex',
-          chatPanelOpen
-            ? chatPanelMinimised ? 'w-[380px] h-auto' : 'w-[380px] h-full'
-            : 'w-0 overflow-hidden border-l-0',
-        )}
-      >
-        {/* Header — always visible, acts as expand trigger when minimised */}
-        <div
-          className={cn(
-            'flex shrink-0 items-center gap-2 border-b px-3 py-2.5',
-            chatPanelMinimised && 'cursor-pointer hover:bg-muted/50'
-          )}
-          onClick={chatPanelMinimised ? () => setChatPanelMinimised(false) : undefined}
-        >
-          <AgentAvatar agentType={activeAgentType} size="sm" />
-          <span className="flex-1 text-sm font-medium text-foreground">
-            {AGENT_LABELS[activeAgentType]}
-          </span>
-
-          {/* Minimise / Expand button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setChatPanelMinimised(!chatPanelMinimised)
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title={chatPanelMinimised ? 'Expand' : 'Minimise'}
-          >
-            {chatPanelMinimised ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
+      {/* ── Desktop: EXPANDED sidebar mode (380px, part of layout flow) ── */}
+      {chatPanelOpen && !chatPanelMinimised && (
+        <div className="hidden md:flex flex-col border-l bg-background w-[380px] h-full transition-all duration-200">
+          <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
+            <AgentAvatar agentType={activeAgentType} size="sm" />
+            <span className="flex-1 text-sm font-medium text-foreground">{AGENT_LABELS[activeAgentType]}</span>
+            <button
+              onClick={() => setChatPanelMinimised(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Minimise to floating window"
+            >
               <Minus className="h-4 w-4" />
-            )}
-          </button>
-
-          {/* Close button — fully hides the panel */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setChatPanelOpen(false)
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Close chat panel"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            </button>
+            <button
+              onClick={() => setChatPanelOpen(false)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {chatBody}
         </div>
+      )}
 
-        {/* Body — hidden when minimised */}
-        {!chatPanelMinimised && (
-          <>
-            {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3">
-              {messages.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                  <AgentAvatar agentType={activeAgentType} size="lg" />
-                  <p className="text-sm font-medium text-foreground">
-                    {AGENT_LABELS[activeAgentType]}
-                  </p>
-                  {!activeBrandId ? (
-                    <p className="text-xs text-amber-400">
-                      Select a brand from the sidebar to start chatting.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Ask me anything about your brand.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="divide-y divide-border/50">
-                  {messages.map((message) => (
-                    <ChatMessage key={message.id} message={message} />
-                  ))}
-                  {isLoading && messages[messages.length - 1]?.role === 'user' && (
-                    <div className="flex gap-3 py-4">
-                      <AgentAvatar agentType={activeAgentType} size="sm" />
-                      <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-2.5">
-                        <p className="text-sm text-muted-foreground">Thinking...</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+      {/* ── Desktop: MINIMISED floating window (bottom-right, no layout space) ── */}
+      {chatPanelOpen && chatPanelMinimised && (
+        <div className="hidden md:flex fixed bottom-4 right-4 z-50 w-[380px] h-[500px] flex-col rounded-xl border border-border bg-background shadow-2xl">
+          <div
+            className="flex shrink-0 items-center gap-2 rounded-t-xl border-b px-3 py-2.5 cursor-grab active:cursor-grabbing bg-card"
+          >
+            <AgentAvatar agentType={activeAgentType} size="sm" />
+            <span className="flex-1 text-sm font-medium text-foreground">{AGENT_LABELS[activeAgentType]}</span>
+            <button
+              onClick={() => setChatPanelMinimised(false)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Expand to sidebar"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setChatPanelOpen(false)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              title="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {chatBody}
+        </div>
+      )}
 
-            {/* Error */}
-            {error && (
-              <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-                <p className="flex-1 text-xs text-red-400">
-                  Something went wrong. Please try again.
-                </p>
-                <button
-                  onClick={() => clearError()}
-                  className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
-
-            {/* Input */}
-            <ChatInput
-              onSend={handleSend}
-              isLoading={isLoading}
-              placeholder="Ask your agent..."
-              agentType={activeAgentType}
-              showChips={messages.length === 0}
-            />
-          </>
-        )}
-      </div>
-
-      {/* Desktop toggle — thin vertical bar when panel is closed */}
+      {/* ── Desktop: thin toggle bar when fully closed ── */}
       {!chatPanelOpen && (
         <button
           onClick={() => setChatPanelOpen(true)}
           className="hidden md:flex h-full w-10 shrink-0 items-center justify-center border-l bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          title="Open chat"
+          title="Open Director chat"
         >
           <MessageCircle className="h-4 w-4" />
         </button>
       )}
 
-      {/* Mobile: fixed overlay panel */}
+      {/* ── Mobile: full-screen overlay ── */}
       {chatPanelOpen && (
         <>
-          <div
-            className="fixed inset-0 z-30 bg-black/50 md:hidden"
-            onClick={() => setChatPanelOpen(false)}
-          />
-          <div
-            className={cn(
-              'fixed right-0 top-0 z-40 flex w-full flex-col border-l bg-background shadow-xl md:hidden',
-              chatPanelMinimised ? 'h-auto' : 'h-screen',
-            )}
-          >
-            <div
-              className={cn('flex shrink-0 items-center gap-2 border-b px-3 py-2.5', chatPanelMinimised && 'cursor-pointer')}
-              onClick={chatPanelMinimised ? () => setChatPanelMinimised(false) : undefined}
-            >
+          <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setChatPanelOpen(false)} />
+          <div className="fixed right-0 top-0 z-40 flex w-full h-screen flex-col border-l bg-background shadow-xl md:hidden">
+            <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5">
               <AgentAvatar agentType={activeAgentType} size="sm" />
               <span className="flex-1 text-sm font-medium text-foreground">{AGENT_LABELS[activeAgentType]}</span>
               <button
-                onClick={(e) => { e.stopPropagation(); setChatPanelOpen(false) }}
+                onClick={() => setChatPanelOpen(false)}
                 className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                <Minus className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </button>
             </div>
-            {!chatPanelMinimised && (
-              <>
-                <div ref={scrollRef} className="flex-1 overflow-y-auto px-3">
-                  {messages.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                      <AgentAvatar agentType={activeAgentType} size="lg" />
-                      <p className="text-sm font-medium text-foreground">{AGENT_LABELS[activeAgentType]}</p>
-                      <p className="text-xs text-muted-foreground">Ask me anything about your brand.</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-border/50">
-                      {messages.map((message) => (<ChatMessage key={message.id} message={message} />))}
-                    </div>
-                  )}
-                </div>
-                <ChatInput onSend={handleSend} isLoading={isLoading} placeholder="Ask your agent..." agentType={activeAgentType} showChips={messages.length === 0} />
-              </>
-            )}
+            {chatBody}
           </div>
         </>
       )}
