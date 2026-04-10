@@ -4,28 +4,30 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Check, X, ChevronUp, ChevronDown, ImagePlus, Loader2, Play, Film, Search, CheckCircle2, Sparkles } from 'lucide-react'
 
 /**
- * Rich media item shape matching MediaItemWithUsage from /api/media.
- *
- * Kept deliberately permissive — the API returns more fields than we strictly
- * need, so unknown extras are fine.
+ * Local subset of MediaItemWithUsage from src/types/database.ts.
+ * Kept permissive — only the fields this component actually renders. Marked
+ * `Pick<>` from the canonical type so any column rename or removal will fail
+ * the typecheck here, not silently produce wrong UI.
  */
-interface MediaItem {
-  id: string
-  file_url: string
-  file_name: string
-  file_type: string
-  file_size_bytes: number | null
-  thumbnail_url?: string | null
-  duration_seconds?: number | null
-  tags?: string[] | null
-  created_at?: string
-  file_created_at?: string | null
-  transcription_status?: string
-  ai_description?: string | null
-  // Enriched by /api/media with usage from scheduled_posts
-  usage_count?: number
-  last_published_at?: string | null
-}
+import type { MediaItemWithUsage } from '@/types/database'
+
+type MediaItem = Pick<
+  MediaItemWithUsage,
+  | 'id'
+  | 'file_url'
+  | 'file_name'
+  | 'file_type'
+  | 'file_size_bytes'
+  | 'thumbnail_url'
+  | 'duration_seconds'
+  | 'tags'
+  | 'created_at'
+  | 'ai_description'
+  | 'usage_count'
+  | 'last_published_at'
+>
+
+export type { MediaItem as MediaSelectorItem }
 
 function isVideo(item: MediaItem): boolean {
   return item.file_type?.startsWith('video/') ?? false
@@ -117,6 +119,19 @@ interface MediaSelectorProps {
   onChange: (ids: string[]) => void
   maxCount?: number
   acceptTypes?: string[] // e.g. ['image'] or ['video']
+  /**
+   * Optional — parent supplies the full media list.
+   *
+   * When a parent (e.g. PostCreator) needs to know the full data for every
+   * selected item — not just the IDs — it can fetch once and pass the list
+   * down here. This makes the Creator + MediaSelector share one source of
+   * truth and eliminates a race where the parent's local cache missed items
+   * that the MediaSelector had already loaded.
+   *
+   * If `items` is not provided, MediaSelector falls back to its own
+   * internal fetch so existing callers (e.g. MediaSection) keep working.
+   */
+  items?: MediaItem[]
 }
 
 export function MediaSelector({
@@ -125,30 +140,44 @@ export function MediaSelector({
   onChange,
   maxCount = 10,
   acceptTypes,
+  items: externalItems,
 }: MediaSelectorProps) {
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
+  const [internalItems, setInternalItems] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('newest')
 
+  // If the parent is supplying items, use those. Otherwise fetch internally.
+  const parentOwnsItems = externalItems !== undefined
+
   useEffect(() => {
+    if (parentOwnsItems) return
     if (!brandId) return
     setLoading(true)
     // Use the enriched /api/media endpoint — returns usage_count + last_published_at
     fetch(`/api/media?brandId=${brandId}&sort=newest`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((data) => {
-        let items: MediaItem[] = Array.isArray(data) ? data : (data.items ?? [])
+        let fetched: MediaItem[] = Array.isArray(data) ? data : (data.items ?? [])
         if (acceptTypes?.length) {
-          items = items.filter((m) =>
+          fetched = fetched.filter((m) =>
             acceptTypes.some((t) => m.file_type.startsWith(t)),
           )
         }
-        setMediaItems(items)
+        setInternalItems(fetched)
       })
-      .catch(() => setMediaItems([]))
+      .catch(() => setInternalItems([]))
       .finally(() => setLoading(false))
-  }, [brandId, acceptTypes])
+  }, [brandId, acceptTypes, parentOwnsItems])
+
+  // Resolve the working list — parent-provided or self-fetched. Apply
+  // acceptTypes filter in either case so the consumer can pass raw items
+  // without pre-filtering.
+  const mediaItems = useMemo(() => {
+    const base = parentOwnsItems ? (externalItems ?? []) : internalItems
+    if (!acceptTypes?.length) return base
+    return base.filter((m) => acceptTypes.some((t) => m.file_type.startsWith(t)))
+  }, [parentOwnsItems, externalItems, internalItems, acceptTypes])
 
   const toggleSelect = useCallback(
     (id: string) => {

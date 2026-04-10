@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb } from 'lucide-react'
+import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb, Image as ImageGenIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -42,13 +42,13 @@ const CONTENT_TO_POST_TYPE: Record<ContentType, PostType> = {
   ad: 'single',
 }
 
-// ── Media item shape (from API) ───────────────────────────────────────────────
-interface MediaItem {
-  id: string
-  file_url: string
-  file_type: string
-  original_filename: string
-}
+// ── Media item shape (from /api/media) ────────────────────────────────────────
+// Imported from MediaSelector so the picker, the slot card, and the Creator
+// all share ONE shape. Defined as a Pick<> of MediaItemWithUsage so any DB
+// column rename fails the typecheck instead of silently producing wrong UI.
+// (Class of bug: the imaginary `status` column on media_items that cost us a
+// session on 2026-04-10.)
+import type { MediaSelectorItem as MediaItem } from './MediaSelector'
 
 /**
  * PostCreator — the main single-screen post creation experience.
@@ -70,9 +70,11 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
 
-  // Form state
+  // Form state — no default platform seed. User picks explicitly. Previously
+  // seeded to ['instagram'] which meant users unknowingly had Instagram stuck
+  // in a multi-select even when they'd only clicked Facebook.
   const [contentType, setContentType] = useState<ContentType>('post')
-  const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>(['instagram'])
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>([])
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([])
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [caption, setCaption] = useState('')
@@ -166,14 +168,29 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaId])
 
-  // Fetch media items to populate slots
-  useEffect(() => {
+  // Fetch media items to populate slots + drive the embedded MediaSelector.
+  // The Creator owns the fetch — MediaSelector receives items via prop. This
+  // way the MediaSlots card and the picker are guaranteed to see the same
+  // data, eliminating the race where a freshly-picked item wasn't found in
+  // the parent's local cache.
+  const fetchMedia = useCallback(() => {
     if (!activeBrandId) return
-    fetch(`/api/media?brandId=${activeBrandId}`)
-      .then(r => r.ok ? r.json() : { items: [] })
-      .then(d => setMediaItems(d.items ?? d ?? []))
+    fetch(`/api/media?brandId=${activeBrandId}&sort=newest`)
+      .then(r => r.ok ? r.json() : [])
+      .then(d => {
+        const items: MediaItem[] = Array.isArray(d) ? d : (d.items ?? [])
+        setMediaItems(items)
+      })
       .catch(() => setMediaItems([]))
   }, [activeBrandId])
+
+  useEffect(() => { fetchMedia() }, [fetchMedia])
+
+  // Refetch whenever the user opens the library — catches files uploaded
+  // in another tab between the initial fetch and the user clicking Library.
+  useEffect(() => {
+    if (showMediaLibrary) fetchMedia()
+  }, [showMediaLibrary, fetchMedia])
 
   // Build selected media with full data for slots
   const selectedMedia = selectedMediaIds
@@ -295,7 +312,7 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
       setSelectedMediaIds([])
       setAiPrompt('')
       setContentType('post')
-      setSelectedPlatforms(['instagram'])
+      setSelectedPlatforms([])
     } finally {
       setSaving(false)
     }
@@ -439,9 +456,28 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
               Generate Video (HeyGen)
             </button>
           )}
+          {/* Blotato visual generation — alternative AI image source.
+              Blotato has 8 MCP tools (see src/lib/agents/tools/blotato.ts);
+              this pill triggers create_visual via the Director, which picks
+              the right Blotato endpoint based on the user's request. Shown
+              for content types that accept images. */}
+          {!['short_video', 'long_video'].includes(contentType) && (
+            <button
+              type="button"
+              onClick={() => sendToDirector(
+                `Generate a visual for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName} using Blotato. Use the Brand or Content team to pick the right Blotato template, then call blotato_create_visual. When it's ready, save it to my media library so I can pick it from the slot above.`,
+              )}
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-violet-400/40 bg-violet-400/5 px-3 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-400/10 transition-all"
+            >
+              <ImageGenIcon className="h-3.5 w-3.5" />
+              Generate Visual (Blotato)
+            </button>
+          )}
         </div>
 
-        {/* Expandable media library grid */}
+        {/* Expandable media library grid — uses the Creator's own fetched
+            mediaItems as the source of truth so the slot card and the picker
+            never go out of sync. */}
         {showMediaLibrary && (
           <div className="mt-3 rounded-lg border border-border bg-background p-3">
             <MediaSelector
@@ -450,6 +486,7 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
               onChange={handleMediaSelect}
               maxCount={maxMedia}
               acceptTypes={acceptTypes}
+              items={mediaItems}
             />
           </div>
         )}

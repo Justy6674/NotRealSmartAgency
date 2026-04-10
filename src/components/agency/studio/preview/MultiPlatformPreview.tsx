@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PlatformMockupPreview } from '.'
 import { cn } from '@/lib/utils'
 import type { PostPlatform } from '@/types/database'
@@ -38,8 +38,56 @@ export function MultiPlatformPreview({
   brandAvatarUrl,
 }: MultiPlatformPreviewProps) {
   const [activePlatform, setActivePlatform] = useState<PostPlatform | 'all'>(
-    platforms.length === 1 ? platforms[0] : 'all'
+    platforms.length === 1 ? platforms[0] : platforms[0] ?? 'all',
   )
+
+  // Keep `activePlatform` in sync with the platforms prop so the preview
+  // follows the publish target selection.
+  //
+  // Rules:
+  //   - If the current active platform is no longer in the list, reset it.
+  //     → Go to the first remaining platform (single-platform view), or 'all'
+  //       if there are ≥2 platforms still selected.
+  //   - If platforms grew from N to N+1, jump to the newly-added platform so
+  //     the user sees the thing they just clicked. This is the behaviour users
+  //     of Meta Composer / Later / Buffer expect.
+  //   - If platforms went from multi to empty, fall back to 'all' so the
+  //     "Select platforms" empty state renders cleanly.
+  //   - Don't override an explicit user click on the All/<platform> tabs —
+  //     we only touch activePlatform when the `platforms` prop actually
+  //     changes.
+  const prevPlatformsRef = useRef<PostPlatform[]>(platforms)
+  useEffect(() => {
+    const prev = prevPlatformsRef.current
+    const curr = platforms
+    prevPlatformsRef.current = curr
+
+    // Platform list unchanged — respect user's tab click
+    if (prev.length === curr.length && prev.every((p, i) => p === curr[i])) return
+
+    // Empty list — reset to 'all'
+    if (curr.length === 0) {
+      setActivePlatform('all')
+      return
+    }
+
+    // Find newly-added platform (not in prev list)
+    const added = curr.find((p) => !prev.includes(p))
+    if (added) {
+      setActivePlatform(added)
+      return
+    }
+
+    // A platform was removed. If the current active was the one removed,
+    // fall back to the first remaining (single) or 'all' (multi).
+    const activeStillValid = activePlatform === 'all' || curr.includes(activePlatform as PostPlatform)
+    if (!activeStillValid) {
+      setActivePlatform(curr.length === 1 ? curr[0] : 'all')
+    }
+  // activePlatform is intentionally excluded from deps — we only react to prop changes,
+  // not to our own state updates.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platforms])
 
   const visiblePlatforms = activePlatform === 'all' ? platforms : [activePlatform as PostPlatform]
 
