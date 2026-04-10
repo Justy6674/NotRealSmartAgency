@@ -1,45 +1,35 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
+import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import type { EventInput, EventDropArg, EventClickArg } from '@fullcalendar/core'
+import type { EventInput, EventDropArg, EventClickArg, EventContentArg } from '@fullcalendar/core'
 import { X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
+import { useScheduledPosts } from '@/hooks/useScheduledPosts'
+import { CalendarPostPill } from './calendar/CalendarPostPill'
+import {
+  PLATFORM_BRAND_COLOURS,
+  POST_STATUS_COLOURS,
+  PLATFORM_LABELS,
+  type PlatformKey,
+  type PostStatusKey,
+} from '@/lib/mixpost/ui-tokens'
 import type { ScheduledPost } from '@/types/database'
 
-// ─── Platform colours (oklch hue ~240 palette + brand colours) ──────────────
+// ─── Platform + status lookups ──────────────────────────────────────────────
 
-const PLATFORM_COLOURS: Record<string, { bg: string; border: string; text: string }> = {
-  instagram:  { bg: 'oklch(0.75 0.15 350)', border: 'oklch(0.65 0.18 350)', text: '#fff' },
-  facebook:   { bg: 'oklch(0.60 0.15 260)', border: 'oklch(0.50 0.18 260)', text: '#fff' },
-  linkedin:   { bg: 'oklch(0.70 0.12 230)', border: 'oklch(0.58 0.15 230)', text: '#fff' },
-  tiktok:     { bg: 'oklch(0.75 0.12 195)', border: 'oklch(0.63 0.15 195)', text: '#fff' },
-  youtube:    { bg: 'oklch(0.60 0.20 25)',   border: 'oklch(0.50 0.22 25)',  text: '#fff' },
-  twitter:    { bg: 'oklch(0.65 0.02 240)',  border: 'oklch(0.55 0.03 240)', text: '#fff' },
+function getPlatformColour(platform: string): string {
+  return PLATFORM_BRAND_COLOURS[platform as PlatformKey] ?? '#6366f1'
 }
 
-function getPlatformColour(platform: string) {
-  return PLATFORM_COLOURS[platform.toLowerCase()] ?? {
-    bg: 'oklch(0.55 0.02 240)',
-    border: 'oklch(0.45 0.03 240)',
-    text: '#fff',
-  }
-}
-
-// ─── Status badge ────────────────────────────────────────────────────────────
-
-const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-amber-500/20 text-amber-300',
-  scheduled: 'bg-blue-500/20 text-blue-300',
-  publishing: 'bg-purple-500/20 text-purple-300',
-  published: 'bg-emerald-500/20 text-emerald-300',
-  failed: 'bg-red-500/20 text-red-300',
-  cancelled: 'bg-zinc-500/20 text-zinc-400',
+function getStatusStyle(status: ScheduledPost['status']) {
+  return POST_STATUS_COLOURS[status as PostStatusKey] ?? POST_STATUS_COLOURS.draft
 }
 
 // ─── Post detail modal ───────────────────────────────────────────────────────
@@ -51,7 +41,9 @@ function PostDetail({
   post: ScheduledPost
   onClose: () => void
 }) {
-  const colour = getPlatformColour(post.platform)
+  const platformColour = getPlatformColour(post.platform)
+  const statusStyle = getStatusStyle(post.status)
+  const platformLabel = PLATFORM_LABELS[post.platform as PlatformKey] ?? post.platform
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -64,15 +56,18 @@ function PostDetail({
           <X className="h-4 w-4" />
         </button>
 
-        {/* Platform badge */}
-        <div className="mb-4 flex items-center gap-2">
+        {/* Platform + status badges */}
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
           <span
-            className="rounded-full px-3 py-1 text-xs font-semibold capitalize"
-            style={{ backgroundColor: colour.bg, color: colour.text }}
+            className="rounded-full px-3 py-1 text-xs font-semibold"
+            style={{ backgroundColor: platformColour, color: '#fff' }}
           >
-            {post.platform}
+            {platformLabel}
           </span>
-          <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium capitalize', STATUS_STYLES[post.status] ?? '')}>
+          <span
+            className="rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
+            style={{ backgroundColor: statusStyle.bg, color: statusStyle.fg }}
+          >
             {post.status}
           </span>
           {post.content_type && (
@@ -148,94 +143,64 @@ export function EnhancedCalendar() {
   const { activeBrandId } = useAgencyStore()
   const studioData = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(studioData.brand, studioData.posts, studioData.accounts)
-  const [posts, setPosts] = useState<ScheduledPost[]>([])
-  const [loading, setLoading] = useState(true)
+
+  // Phase 1 — Mixpost UI port: posts now come from the shared
+  // useScheduledPosts hook so every surface (Calendar, Posts Index,
+  // Review, Dashboard) shares the same fetch + optimistic mutate path.
+  const { posts, loading, reschedulePost } = useScheduledPosts({ brandId: activeBrandId })
   const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
 
-  // Fetch posts for the active brand
-  const fetchPosts = useCallback(async () => {
-    if (!activeBrandId) return
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/scheduled-posts?brandId=${activeBrandId}`)
-      if (res.ok) {
-        const data: ScheduledPost[] = await res.json()
-        setPosts(data)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [activeBrandId])
-
-  useEffect(() => {
-    fetchPosts()
-  }, [fetchPosts])
-
-  // Convert posts to FullCalendar events
+  // Convert posts to FullCalendar events. Background/border colours are
+  // stripped here because we render each event as a React CalendarPostPill
+  // via the eventContent prop — FullCalendar's default box becomes a
+  // pass-through container.
   const events: EventInput[] = useMemo(() => {
-    return posts.map((post) => {
-      const colour = getPlatformColour(post.platform)
-      return {
-        id: post.id,
-        title: `${post.platform}: ${post.caption.slice(0, 50)}${post.caption.length > 50 ? '...' : ''}`,
-        start: post.scheduled_at,
-        allDay: false,
-        backgroundColor: colour.bg,
-        borderColor: colour.border,
-        textColor: colour.text,
-        extendedProps: { post },
-      }
-    })
+    return posts.map((post) => ({
+      id: post.id,
+      title: post.caption.slice(0, 50), // fallback for printing/accessibility
+      start: post.scheduled_at,
+      allDay: false,
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+      textColor: 'inherit',
+      extendedProps: { post },
+    }))
   }, [posts])
 
-  // Handle drag-and-drop reschedule
-  const handleEventDrop = useCallback(async (info: EventDropArg) => {
-    const post = info.event.extendedProps.post as ScheduledPost
-    const newDate = info.event.start
-
-    if (!newDate) {
-      info.revert()
-      return
-    }
-
-    const newScheduledAt = newDate.toISOString()
-
-    // Optimistic update
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === post.id ? { ...p, scheduled_at: newScheduledAt } : p
-      )
-    )
-
-    try {
-      const res = await fetch('/api/scheduled-posts', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: post.id, scheduled_at: newScheduledAt }),
-      })
-
-      if (!res.ok) {
+  // Drag-and-drop reschedule — delegates to the hook's optimistic path.
+  // On failure, FullCalendar reverts and the hook rolls back its own state.
+  const handleEventDrop = useCallback(
+    async (info: EventDropArg) => {
+      const post = info.event.extendedProps.post as ScheduledPost
+      const newDate = info.event.start
+      if (!newDate) {
         info.revert()
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === post.id ? { ...p, scheduled_at: post.scheduled_at } : p
-          )
-        )
+        return
       }
-    } catch {
-      info.revert()
-      setPosts((prev) =>
-        prev.map((p) =>
-          p.id === post.id ? { ...p, scheduled_at: post.scheduled_at } : p
-        )
-      )
-    }
-  }, [])
+      try {
+        await reschedulePost(post.id, newDate.toISOString())
+      } catch {
+        info.revert()
+      }
+    },
+    [reschedulePost],
+  )
 
-  // Handle click to show detail
+  // Click on an event → open the detail modal
   const handleEventClick = useCallback((info: EventClickArg) => {
     const post = info.event.extendedProps.post as ScheduledPost
     setSelectedPost(post)
+  }, [])
+
+  // Custom event renderer — replaces FullCalendar's default event box with
+  // our CalendarPostPill React component. FullCalendar mounts the returned
+  // node inside its own event wrapper, giving us full control over the
+  // visual while keeping drag-drop / keyboard accessibility intact.
+  const renderEventContent = useCallback((arg: EventContentArg) => {
+    const post = arg.event.extendedProps.post as ScheduledPost | undefined
+    if (!post) return null
+    const isCompact = arg.view.type !== 'dayGridMonth' ? false : true
+    return <CalendarPostPill post={post} onClick={() => setSelectedPost(post)} compact={isCompact} />
   }, [])
 
   if (!activeBrandId) {
@@ -273,21 +238,34 @@ export function EnhancedCalendar() {
       ) : (
         <div className="enhanced-calendar rounded-xl border border-border bg-card p-4">
           <FullCalendar
-            plugins={[dayGridPlugin, interactionPlugin]}
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
             events={events}
             editable={true}
             droppable={true}
             eventDrop={handleEventDrop}
             eventClick={handleEventClick}
+            eventContent={renderEventContent}
             headerToolbar={{
               left: 'prev,next today',
               center: 'title',
-              right: 'dayGridMonth,dayGridWeek',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay',
             }}
             height="auto"
             dayMaxEvents={4}
             eventDisplay="block"
+            // Week/day view settings — matches Mixpost's CalendarWeek.vue
+            // 30-minute slots with now indicator, 24-hour scroll lock
+            slotDuration="00:30:00"
+            slotLabelInterval="01:00"
+            slotLabelFormat={{
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+            }}
+            nowIndicator={true}
+            scrollTime="08:00:00"
+            allDaySlot={false}
             eventTimeFormat={{
               hour: '2-digit',
               minute: '2-digit',
