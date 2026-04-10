@@ -35,22 +35,20 @@ interface UseSocialAccountsResult {
 }
 
 function normaliseMixpostAccount(raw: MixpostAccount): SocialAccount {
-  // Mixpost's MixpostAccount shape uses `provider` rather than `platform`
-  // and exposes `name` + `image` + `data.username`. We coerce everything
-  // to the NRS-native shape so the UI doesn't need to know which
-  // backend it's talking to.
-  const raw2 = raw as MixpostAccount & {
-    data?: { username?: string }
-    provider_id?: string
-  }
+  // Mixpost's MixpostAccount shape has: id, name, username, provider,
+  // media_url. Coerce to the NRS-native SocialAccount shape so the UI
+  // doesn't need to know which backend it's talking to. Provider names
+  // like 'facebook_page' / 'linkedin_page' collapse to canonical
+  // platform keys so the ui-tokens lookup works.
+  const platform = (raw.provider ?? 'unknown').replace(/_(page|group)$/, '')
   return {
     id: String(raw.id),
     name: raw.name ?? 'Unknown',
-    platform: raw.provider ?? 'unknown',
-    username: raw2.data?.username,
-    image: raw.image ?? undefined,
+    platform,
+    username: raw.username ?? undefined,
+    image: raw.media_url ?? undefined,
     status: 'active',
-    external_id: raw2.provider_id ?? String(raw.id),
+    external_id: String(raw.id),
   }
 }
 
