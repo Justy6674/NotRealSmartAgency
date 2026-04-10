@@ -1,10 +1,33 @@
+/**
+ * Director tool: process_media
+ *
+ * Turns an uploaded media item into draft social posts. This tool sits ON TOP
+ * of the canonical media processing pipeline — it does NOT transcribe, tag,
+ * or thumbnail the file itself; that's the pipeline's job. This tool's single
+ * responsibility is caption generation + scheduled_posts drafting.
+ *
+ * Flow:
+ *   1. Call runMediaProcessingPipeline (ensures thumbnail + transcription + AI
+ *      tagging are persisted to media_items correctly)
+ *   2. Read the now-guaranteed transcription from the updated row
+ *   3. Generate platform-specific captions via AI gateway
+ *   4. Create scheduled_posts drafts (if requested)
+ *
+ * History note: an earlier version of this tool wrote `status: 'transcribed'`
+ * and `status: 'captions_generated'` to media_items, but `status` is not a
+ * column on that table — PostgREST rejected the entire update, silently
+ * dropping the transcription write as well. Fixed by delegating all row
+ * updates to the shared pipeline and storing caption-generation state in
+ * metadata.processing.captions instead.
+ */
+
 import { tool } from 'ai'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { transcribeFile } from '@/lib/transcription/transcribe'
 import type { Brand } from '@/types/database'
+import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
 
 const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube'] as const
 type Platform = (typeof PLATFORMS)[number]
@@ -108,11 +131,12 @@ function getCaptionPreview(content: z.infer<typeof PlatformContentSchema>, platf
   return `**${labels[platform]}:** ${preview}`
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function createProcessMediaTool(
   supabase: SupabaseClient,
   userId: string,
   brandId: string,
-  conversationId: string | null
+  _conversationId: string | null,
 ) {
   return tool({
     description:
@@ -127,83 +151,85 @@ export function createProcessMediaTool(
         .boolean()
         .optional()
         .describe('If true, save posts as drafts scheduled 24h from now. Default true.'),
-      style_settings: z.object({
-        vibe: z.enum(['funny', 'inspirational', 'informative', 'exciting', 'educational', 'provocative']).optional(),
-        content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
-        hashtag_style: z.enum(['trending_niche', 'niche_only', 'branded_only', 'mix_all']).optional(),
-      }).optional().describe('Optional content style settings for caption generation'),
+      style_settings: z
+        .object({
+          vibe: z
+            .enum(['funny', 'inspirational', 'informative', 'exciting', 'educational', 'provocative'])
+            .optional(),
+          content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
+          hashtag_style: z.enum(['trending_niche', 'niche_only', 'branded_only', 'mix_all']).optional(),
+        })
+        .optional()
+        .describe('Optional content style settings for caption generation'),
     }),
     execute: async ({ media_item_id, platforms, schedule, style_settings }) => {
       const targetPlatforms: Platform[] = (platforms as Platform[] | undefined) ?? [...PLATFORMS]
       const shouldSchedule = schedule !== false
 
-      // 1. Fetch the media item
-      const { data: mediaItem, error: mediaError } = await supabase
+      // Verify the media item belongs to the current user before running anything.
+      const { data: ownership, error: ownershipError } = await supabase
         .from('media_items')
-        .select('*')
+        .select('id')
         .eq('id', media_item_id)
         .eq('user_id', userId)
         .single()
 
-      if (mediaError || !mediaItem) {
+      if (ownershipError || !ownership) {
         return {
           success: false,
           error: 'Media item not found. Make sure the ID is correct and the item belongs to you.',
         }
       }
 
-      // 2. Fetch the brand for context
-      const { data: brand } = await supabase
-        .from('brands')
-        .select('*')
-        .eq('id', brandId)
-        .single()
+      // ── Stage A: run the canonical processing pipeline ────────────────────
+      // This guarantees thumbnail, transcription, and AI tagging are persisted
+      // to media_items correctly. If the media has already been processed, the
+      // pipeline re-uses the existing state instead of re-transcribing.
+      const pipelineResult = await runMediaProcessingPipeline({ supabase, mediaItemId: media_item_id })
 
+      if (!pipelineResult.success) {
+        return {
+          success: false,
+          error: `Media processing failed: ${pipelineResult.error ?? 'unknown'}`,
+          report: pipelineResult.report,
+        }
+      }
+
+      if (!pipelineResult.transcription) {
+        // Pipeline ran but transcription didn't land (too large, or Deepgram failure).
+        return {
+          success: false,
+          error:
+            pipelineResult.report.transcription.status === 'failed'
+              ? `Transcription failed: ${pipelineResult.report.transcription.error}`
+              : `Cannot generate captions: media has no transcription yet (${pipelineResult.report.transcription.error ?? 'not attempted'}).`,
+          report: pipelineResult.report,
+        }
+      }
+
+      const transcription = pipelineResult.transcription
+
+      // ── Stage B: fetch brand context + updated media item for captioning ──
+      const { data: brand } = await supabase.from('brands').select('*').eq('id', brandId).single()
       if (!brand) {
         return { success: false, error: 'Brand not found.' }
       }
 
-      // 3. Transcribe if not already done
-      let transcription = mediaItem.transcription as string | null
-      if (!transcription) {
-        const storageUrl = mediaItem.storage_path
-          ? supabase.storage.from('media').getPublicUrl(mediaItem.storage_path).data.publicUrl
-          : (mediaItem.file_url as string | null)
+      const { data: mediaItem } = await supabase
+        .from('media_items')
+        .select('file_name')
+        .eq('id', media_item_id)
+        .single()
 
-        if (!storageUrl) {
-          return { success: false, error: 'No file URL found for this media item. Cannot transcribe.' }
-        }
-
-        try {
-          const result = await transcribeFile(storageUrl, mediaItem.file_name ?? 'media.mp4')
-          transcription = result.text
-
-          // Update the media item with the transcription
-          await supabase
-            .from('media_items')
-            .update({
-              transcription: result.text,
-              transcription_model: result.model,
-              duration_seconds: result.duration ?? null,
-              status: 'transcribed',
-            })
-            .eq('id', media_item_id)
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Transcription failed'
-          return { success: false, error: `Transcription failed: ${message}` }
-        }
-      }
-
-      // 4. Generate platform-specific captions
+      // ── Stage C: generate platform-specific captions ──────────────────────
       const brandContext = buildBrandContext(brand as Brand)
 
-      // Build style guidance from optional style_settings
-      const vibeGuidance = style_settings?.vibe && VIBE_GUIDANCE[style_settings.vibe]
-        ? VIBE_GUIDANCE[style_settings.vibe]
-        : undefined
-      const hashtagGuidance = style_settings?.hashtag_style && HASHTAG_GUIDANCE[style_settings.hashtag_style]
-        ? HASHTAG_GUIDANCE[style_settings.hashtag_style]
-        : undefined
+      const vibeGuidance =
+        style_settings?.vibe && VIBE_GUIDANCE[style_settings.vibe] ? VIBE_GUIDANCE[style_settings.vibe] : undefined
+      const hashtagGuidance =
+        style_settings?.hashtag_style && HASHTAG_GUIDANCE[style_settings.hashtag_style]
+          ? HASHTAG_GUIDANCE[style_settings.hashtag_style]
+          : undefined
       const contentTypeText = style_settings?.content_type ?? undefined
 
       let content: z.infer<typeof PlatformContentSchema>
@@ -226,7 +252,7 @@ Rules:
 
 ${transcription}
 
-File: ${mediaItem.file_name ?? 'video'}`,
+File: ${mediaItem?.file_name ?? 'video'}`,
           schema: PlatformContentSchema,
         })
         content = object
@@ -239,7 +265,7 @@ File: ${mediaItem.file_name ?? 'video'}`,
         }
       }
 
-      // 5. Create scheduled_posts for each target platform
+      // ── Stage D: create scheduled_posts drafts ────────────────────────────
       const createdPosts: Array<{ platform: string; id: string }> = []
       const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
@@ -269,19 +295,39 @@ File: ${mediaItem.file_name ?? 'video'}`,
         }
       }
 
-      // 6. Update media item status
+      // ── Stage E: persist caption-gen state in metadata.processing.captions ─
+      // Merge-don't-clobber so we don't lose the pipeline's report.
+      const { data: currentItem } = await supabase
+        .from('media_items')
+        .select('metadata')
+        .eq('id', media_item_id)
+        .single()
+
+      const existingMetadata = (currentItem?.metadata as Record<string, unknown>) ?? {}
       await supabase
         .from('media_items')
-        .update({ status: 'captions_generated' })
+        .update({
+          metadata: {
+            ...existingMetadata,
+            processing: {
+              ...((existingMetadata.processing as Record<string, unknown>) ?? {}),
+              captions: {
+                status: 'ok',
+                platforms: targetPlatforms,
+                posts_created: createdPosts.length,
+                scheduled: shouldSchedule,
+                completed_at: new Date().toISOString(),
+              },
+            },
+          },
+        })
         .eq('id', media_item_id)
 
-      // 7. Build the response summary
+      // ── Stage F: build response summary ───────────────────────────────────
       const transcriptionSnippet =
         transcription.length > 200 ? transcription.slice(0, 200) + '...' : transcription
 
-      const captionPreviews = targetPlatforms
-        .map((p) => getCaptionPreview(content, p))
-        .join('\n\n')
+      const captionPreviews = targetPlatforms.map((p) => getCaptionPreview(content, p)).join('\n\n')
 
       return {
         success: true,
@@ -291,6 +337,7 @@ File: ${mediaItem.file_name ?? 'video'}`,
         posts_created: createdPosts.length,
         scheduled: shouldSchedule,
         caption_previews: captionPreviews,
+        processing_report: pipelineResult.report,
         message: shouldSchedule
           ? `Transcribed your video and wrote captions for ${targetPlatforms.length} platforms. ${createdPosts.length} draft posts created, scheduled for 24 hours from now. Say "publish all" to push them live, or tell me what to change.`
           : `Transcribed your video and wrote captions for ${targetPlatforms.length} platforms. Tell me what to change, or say "schedule these" to create draft posts.`,

@@ -94,15 +94,25 @@ export function adaptToolForMCP(
 
 /**
  * Register a batch of AI SDK tools as MCP tools.
+ *
  * The toolFactory rebuilds tools with the correct brandId per call.
+ *
+ * `hiddenFromMcp` is an allowlist of Director tool names that must NOT be
+ * exposed as direct MCP tools — plug-in AIs (Claude Desktop, Cowork, Claude
+ * Code, external clients) should call `chat_with_director` for these
+ * instead so the NRS Director owns orchestration. Hidden tools remain
+ * available inside the Director's internal tool loop, they're just not
+ * callable from the MCP surface.
  */
 export function adaptToolsForMCP(
   tools: Record<string, unknown>,
   mcpServer: McpServer,
   userId: string,
   toolFactory: (brandId: string) => Record<string, unknown>,
+  hiddenFromMcp?: ReadonlySet<string>,
 ) {
   for (const [name, tool] of Object.entries(tools)) {
+    if (hiddenFromMcp?.has(name)) continue
     if (tool && typeof tool === 'object' && 'execute' in tool) {
       adaptToolForMCP(name, tool, mcpServer, userId, toolFactory)
     }

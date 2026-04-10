@@ -7,6 +7,54 @@ import { registerGetDirectorResponseTool } from './director-job-tool'
 import { registerDraftPostTool } from './draft-post-tool'
 
 /**
+ * Tools that must NOT be exposed as direct MCP tools to plug-in AIs.
+ *
+ * NRS Director owns all orchestration, multi-step reasoning, and marketing
+ * content writing. External AI clients (Claude Desktop, Cowork, Claude Code)
+ * should call `chat_with_director` for anything on this list — the Director
+ * then decides which department to delegate to and calls these tools via its
+ * internal AI SDK tool loop. That way:
+ *
+ *   1. All content is Director-written (enforces brand voice + compliance)
+ *   2. Multi-step flows stay consistent (Director remembers the full context)
+ *   3. Plug-in AIs can't silently skip the Review/approval steps
+ *   4. Learning + memory happens in one place (the Director's chat history)
+ *
+ * Read/query tools and bounded single-shot actions remain exposed — those
+ * don't need orchestration and are safe for direct external AI access.
+ */
+const HIDDEN_FROM_MCP: ReadonlySet<string> = new Set([
+  // Media orchestration (transcription + captions + drafting — multi-step)
+  'process_media',
+
+  // Content writing (Director must author, per the "Director is the only face" rule)
+  'write_blog',
+  'write_ads',
+  'write_email_campaign',
+  'repurpose_content',
+
+  // Multi-step analysis / planning (needs Director reasoning)
+  'marketing_audit',
+  'deep_competitor_scan',
+  'fill_calendar',
+  'analyse_voice',
+  'analyse_content_gaps',
+
+  // Media generation (expensive, multi-step, delegated work)
+  'create_video',
+  'multi_scene_video',
+  'generate_video_agent',
+  'translate_video',
+  'photo_avatar',
+  'text_to_speech',
+  'generate_slides',
+
+  // Director-internal orchestration primitives (never called from outside)
+  'delegate_to_agent',
+  'convene_meeting',
+])
+
+/**
  * Register ALL tools upfront. Tool list must never change after launch —
  * MCP clients cache the list and won't re-fetch without a reconnect.
  * Tools that aren't ready yet should return "coming soon" rather than
@@ -103,9 +151,11 @@ export function createNRSMcpServer(userId: string): McpServer {
   }
 
   // Get tool definitions (shape/description) from a dummy context — the actual
-  // execution uses freshly-built tools with the correct brandId per call
+  // execution uses freshly-built tools with the correct brandId per call.
+  // HIDDEN_FROM_MCP (see top of file) filters out orchestration + content-writing
+  // tools so plug-in AIs must go through chat_with_director for those.
   const templateTools = toolFactory('00000000-0000-0000-0000-000000000000')
-  adaptToolsForMCP(templateTools, server, userId, toolFactory)
+  adaptToolsForMCP(templateTools, server, userId, toolFactory, HIDDEN_FROM_MCP)
 
   // Register quick_start prompt
   server.registerPrompt('quick_start', {
@@ -119,27 +169,58 @@ export function createNRSMcpServer(userId: string): McpServer {
           type: 'text' as const,
           text: `Welcome to NotRealSmart Agency — your AI marketing team.
 
-CRITICAL RULE: You are the messenger, not the marketer. The Director (and its 13 specialist departments) writes all marketing content. NEVER write captions, blog copy, ad copy, or any marketing content yourself — pass the user's request verbatim to the Director or to draft_post.
+CRITICAL RULE: You are the messenger, not the marketer. The NRS Director (and its 13 specialist departments) writes, plans, and orchestrates everything. NEVER write captions, blog copy, ad copy, video scripts, email campaigns, or any marketing content yourself. NEVER try to orchestrate multi-step work (transcription + caption + drafting) yourself. Pass the user's request verbatim to the Director via chat_with_director.
 
-Here's what you can do:
+Tool policy:
 
-1. **Single social post draft** (most common): Use draft_post with the user's intent. The Content & Copy department writes the caption. It lands in the Review queue. Returns in ~10-15s.
+1. **ANY multi-step or content-writing request → chat_with_director**
+   This includes: "turn this video into posts", "run an audit", "plan a campaign", "write a blog", "analyse my voice", "translate this video", "create a video", "process my media", "build me a week of content".
+   chat_with_director is ASYNC — you'll get a job_id back. Then call
+   get_director_response(job_id) every 10 seconds until it's done.
 
-2. **Complex marketing requests**: Use chat_with_director — this is async. You'll get a job_id back; then call get_director_response(job_id) every 10 seconds until it's done. Use this for campaigns, audits, multi-step work, or anything that needs delegation.
+2. **Single quick draft** → draft_post
+   Use for one-off social posts. Content & Copy writes the caption.
+   Lands in the Review queue. Returns in ~10-15s. Pass intent verbatim.
 
-3. **Publish directly**: Use publish_to_social to post immediately to connected platforms. Only use this if the user explicitly says "publish now" — otherwise prefer draft_post so they can review first.
+3. **Publish a Director-written post** → publish_to_social
+   Only when the user explicitly says "publish now" AND the content has
+   already been written by the Director or Content & Copy. Never write
+   your own caption into publish_to_social — that bypasses brand voice
+   and compliance checks.
 
-4. **Long-form content**: write_blog, write_ads, write_email_campaign generate content. Same rule: pass intent verbatim, never pre-write.
+4. **Check status** — these are safe direct calls:
+   - query_media (uploaded assets)
+   - query_calendar (upcoming + published posts)
+   - query_outputs (past agency work)
+   - query_analytics (performance numbers)
+   - query_social_analytics (platform-level metrics)
 
-5. **Check status**: query_calendar (upcoming posts), query_outputs (past work), query_media (uploaded assets).
+5. **Simple utilities** — also safe direct calls:
+   - scan_website, browse_page, generate_image, save_output
+
+Tools that used to be callable directly but are now Director-only (call
+chat_with_director for these): process_media, write_blog, write_ads,
+write_email_campaign, marketing_audit, deep_competitor_scan, fill_calendar,
+create_video, multi_scene_video, analyse_voice, analyse_content_gaps,
+translate_video, photo_avatar, text_to_speech, generate_slides,
+repurpose_content.
 
 ALWAYS start by calling list_brands to get brand IDs.
 
-Example flow:
-User says "make me an Instagram post about spotting fake fragrances"
-You call: draft_post({ brand_id: "...", intent: "spotting fake fragrances when buying second-hand", platform: "instagram" })
-Result: { draft_id, caption_preview, review_url }
-You tell user: "Done — Content & Copy wrote you a draft. It's in your Review queue at [review_url]."`,
+Example — user says "turn this uploaded video into posts":
+  WRONG:  call process_media directly
+  RIGHT:  chat_with_director({ brand_id, message: "Turn media_item_id
+          4c342177-... into a week of social posts across Instagram,
+          LinkedIn, and TikTok." })
+          → returns { job_id }
+          → poll get_director_response(job_id) until done
+          The Director delegates to Video & Scripting and Content & Copy,
+          and returns the drafts in the Review queue.
+
+Example — user says "make me an Instagram post about spotting fake fragrances":
+  draft_post({ brand_id, intent: "spotting fake fragrances when buying second-hand", platform: "instagram" })
+  Result: { draft_id, caption_preview, review_url }
+  Tell user: "Done — Content & Copy wrote you a draft. It's in your Review queue at [review_url]."`,
         },
       }],
     }
