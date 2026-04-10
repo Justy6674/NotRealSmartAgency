@@ -31,7 +31,7 @@ import {
 } from './client'
 import { ensureBrandTagInMixpost, ensureHashtagGroupTagInMixpost } from './sync-tags'
 
-const POLL_MAX_SECONDS = 500 // 8m20s — covers Mixpost's worst-case ffmpeg transcode
+const POLL_MAX_SECONDS = 1800 // 30 min — covers worst-case 2 GB video transcode with 2-pass ffmpeg on the VPS
 
 interface DraftSyncResult {
   ok: boolean
