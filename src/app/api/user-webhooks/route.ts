@@ -120,6 +120,7 @@ export async function POST(request: Request) {
   return NextResponse.json(data, { status: 201 })
 }
 
-// Re-export the canonical event list so the editor UI can fetch it as
-// metadata in the future without importing from a server module.
-export const ALLOWED_EVENTS = WEBHOOK_EVENTS
+// NOTE: Next.js route files cannot export arbitrary constants — only the
+// allowed HTTP method handlers + metadata (runtime, dynamic, etc). The
+// canonical event list lives in src/lib/webhooks/events.ts and the editor
+// UI imports it directly from there.
