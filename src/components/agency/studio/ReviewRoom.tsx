@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Loader2, Check, RefreshCw, ExternalLink, Film, Image as ImageIcon, X as XIcon, MessageSquare } from 'lucide-react'
+import { Loader2, Check, RefreshCw, ExternalLink, Film, Image as ImageIcon, MessageSquare } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
@@ -58,13 +58,10 @@ export function ReviewRoom() {
   // render real video/image content for the active draft. Loaded once per
   // brand from /api/media — same source the rest of Studio uses.
   const [mediaCache, setMediaCache] = useState<Map<string, ReviewMediaItem>>(new Map())
-  // Modal flag — when true, show the actual Mixpost UI for the active draft
-  // as a full-screen iframe. Mixpost's nginx now sends a frame-ancestors
-  // CSP that allows embedding from notrealsmart.com.au (configured 2026-04-10).
-  const [mixpostModalOpen, setMixpostModalOpen] = useState(false)
   // Detail pane tab — Phase 4b adds an Activity tab alongside the default
-  // Details view. 'details' shows the editor + phone mockup + Mixpost
-  // preview button; 'activity' shows the PostActivityThread.
+  // Details view. 'details' shows the editor + phone mockup + "Open in
+  // Mixpost admin" escape-hatch link; 'activity' shows the
+  // PostActivityThread. (The iframe modal was retired in Phase 9.)
   const [detailTab, setDetailTab] = useState<'details' | 'activity'>('details')
   // Activity counts per draft id — powers the MessageSquare badge in
   // DraftCard. Fetched in a single bulk call whenever the draft list
@@ -410,13 +407,14 @@ export function ReviewRoom() {
                 setDetailTab('activity')
               }}
               onPreviewMixpost={(id) => {
-                // One-click entry into the Mixpost iframe — set the active
-                // draft (so detailPost resolves) AND open the modal in a
-                // single tick. The detail pane still renders under the
-                // modal so Approve/Reject in the modal header can reuse
-                // its handlers.
+                // Phase 9 Mixpost UI port — the iframe modal has been
+                // retired. Clicking "Preview" now opens the native
+                // Details pane for the draft (same as clicking the
+                // card body). Users who need the Mixpost admin view
+                // use the "Open in Mixpost admin" escape-hatch link
+                // inside the detail pane footer.
                 setDetailPostId(id)
-                setMixpostModalOpen(true)
+                setDetailTab('details')
               }}
             />
           ))}
@@ -606,25 +604,23 @@ export function ReviewRoom() {
                 Disabled state shows the sync is still running. Secondary
                 "open in new tab" link is available inside the modal as a
                 fallback. */}
+            {/* Phase 9 Mixpost UI port — the iframe modal has been
+                retired. What's left here is a small escape-hatch link
+                that opens Mixpost's admin edit screen in a NEW TAB,
+                for debugging or manual edits only. Day-to-day review
+                happens inside the native Details + Activity tabs. */}
             <div className="flex items-center gap-2">
-              {mixpostEditUrl ? (
-                <button
-                  type="button"
-                  onClick={() => setMixpostModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/50 bg-violet-400/10 px-3 py-1.5 text-[11px] font-medium text-violet-500 hover:bg-violet-400/15 transition-colors"
-                  title="Open this draft in the actual Mixpost UI inside NRS"
+              {mixpostEditUrl && (
+                <a
+                  href={mixpostEditUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  title="Open this draft in the Mixpost admin (new tab) — debug/escape hatch only"
                 >
                   <ExternalLink className="h-3 w-3" />
-                  Preview in Mixpost
-                </button>
-              ) : (
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-[11px] font-medium text-muted-foreground/60"
-                  title="Mixpost sync still running — usually takes 5-10s for images, up to ~6 minutes for videos (one-time per video, then cached)"
-                >
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Syncing to Mixpost…
-                </span>
+                  Open in Mixpost admin
+                </a>
               )}
             </div>
 
@@ -655,83 +651,17 @@ export function ReviewRoom() {
         </div>
       )}
 
-      {/* ── Mixpost iframe modal ─────────────────────────────────────────
-          Full-screen overlay that embeds the actual Mixpost edit screen
-          for the active draft. Made possible by the nginx config change
-          on 2026-04-10 that strips X-Frame-Options and adds a
-          frame-ancestors CSP scoped to NRS hosts.
+      {/* Phase 9 Mixpost UI port — the full-screen Mixpost iframe modal
+          has been RETIRED. NRS now owns every pixel of the Review flow
+          via the native Details + Activity tabs above. Mixpost remains
+          in place as the publishing backend (Phase 10 will replace
+          that too with direct platform APIs).
 
-          The iframe shares Mixpost's session cookie with Justin's
-          existing Mixpost browser session because notrealsmart.com.au
-          and mixpost.notrealsmart.com.au are same-site (registrable
-          domain match), so SameSite=Lax cookies still flow.
-
-          Header has Approve / Reject buttons so the user can act on the
-          draft without leaving the modal, plus an "open in new tab"
-          fallback in case the iframe ever fails to load. */}
-      {mixpostModalOpen && detailPost && mixpostEditUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="relative w-[95vw] h-[92vh] flex flex-col rounded-xl border border-border bg-card overflow-hidden shadow-2xl">
-            {/* Modal header */}
-            <div className="flex items-center gap-3 border-b border-border bg-muted/30 px-4 py-2.5">
-              <span className="text-xs font-semibold text-foreground">Mixpost preview</span>
-              <span className="text-[10px] text-muted-foreground truncate flex-1">
-                {detailPost.platform} · {detailPost.caption?.slice(0, 80) ?? ''}
-              </span>
-              <a
-                href={mixpostEditUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                title="Open in a new browser tab instead"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Open in new tab
-              </a>
-              <button
-                type="button"
-                onClick={() => {
-                  handleApprove(detailPost.id)
-                  setMixpostModalOpen(false)
-                }}
-                className="rounded-md bg-[oklch(0.72_0.15_145)] px-3 py-1 text-[11px] font-medium text-white hover:bg-[oklch(0.65_0.15_145)] transition-colors"
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleReject(detailPost.id)
-                  setMixpostModalOpen(false)
-                }}
-                className="rounded-md border border-[oklch(0.65_0.2_25/0.3)] px-3 py-1 text-[11px] font-medium text-[oklch(0.65_0.2_25)] hover:bg-[oklch(0.65_0.2_25/0.1)] transition-colors"
-              >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={() => setMixpostModalOpen(false)}
-                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                title="Close"
-              >
-                <XIcon className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Iframe — fills remaining space */}
-            <iframe
-              src={mixpostEditUrl}
-              title="Mixpost — actual post editor"
-              className="flex-1 w-full bg-white"
-              // Permissive sandbox so Mixpost's Vue frontend can run scripts,
-              // forms, popups, and access cookies (it's same-site).
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allow="clipboard-write; clipboard-read; fullscreen"
-            />
-          </div>
-        </div>
-      )}
+          Users still click "Preview in Mixpost" on a DraftCard but it
+          now opens Mixpost's edit page in a new browser tab (via the
+          buildMixpostEditUrl helper) rather than an in-page iframe.
+          This is an escape-hatch for debugging only — the day-to-day
+          workflow stays entirely inside NRS. */}
     </div>
   )
 }
