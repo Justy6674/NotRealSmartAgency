@@ -40,6 +40,14 @@ Every feature, every screen, every interaction must follow this rule:
 
 This is the founding design principle. Every PR, every feature, every refactor must be evaluated against it.
 
+## Session Start Checklist (every new Claude session)
+
+1. If the task touches Creator / Review / Schedule / Media → read the three specs in the MANDATORY block above **before** any code.
+2. Confirm you are in `~/NotRealSmartAgency` (not `~/notrealsmart`).
+3. Confirm Supabase CLI is linked to `uyhtrwlotoriblicqqrl` per the global SUPABASE CLI GATE.
+4. Skim the Memory Index (`~/.claude/projects/-Users-jb-downscale-NotRealSmartAgency/memory/MEMORY.md`) — the `feedback_*` and `#CRITICAL` entries override defaults.
+5. Plan mode first if the task touches files; answer directly if it's a question.
+
 ## Commands
 
 ```bash
@@ -48,6 +56,18 @@ npm run build        # Production build (Webpack — NOT Turbopack for Vercel co
 npm run start        # Start production server
 npm run lint         # ESLint (flat config v9)
 ```
+
+**Testing:** No test runner configured. Verification is manual: `npm run dev`, hit the feature in the browser, check the Supabase row, check the network tab. Before claiming a feature complete, also run `npm run build` and `npm run lint` — both must pass clean.
+
+**Environment variables** (all in `.env.local`, never commit):
+- **Supabase**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- **AI**: `ANTHROPIC_API_KEY` (AI Gateway auto-injected on Vercel, no config needed locally either)
+- **Publishing**: `MIXPOST_API_URL`, `MIXPOST_API_TOKEN`, `AYRSHARE_API_KEY` (fallback)
+- **Media/Video**: `HEYGEN_API_KEY`, `CANVA_API_KEY`, `DEEPGRAM_API_KEY`, `OPENAI_API_KEY` (Whisper fallback)
+- **Payments/Email**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`
+- **MCP/OAuth**: `MCP_OAUTH_SECRET`, `NEXT_PUBLIC_APP_URL`
+
+Hybrid pattern: most third-party keys are checked in `user_integrations` first (power users), then fall back to the env var (so out-of-box users get everything).
 
 ## What This App Is
 
@@ -266,7 +286,7 @@ TikTok (watch time, completion rate, hook requirements), Instagram (saves/shares
 `design_graphic` and `export_design` tools use Canva MCP (connected via `mcp__claude_ai_Canva__*`). Creative Studio's Create tab also provides direct Canva access. Brand agent and Director can generate designs, search templates, export to formats.
 
 ### MCP Server — CLI & AI Client Access (LIVE)
-NRS is an MCP server. Users connect from Claude Desktop, Claude Mobile, Claude Code, Cowork (VS Code), or any MCP-compatible AI client.
+NRS is an MCP server. Users connect from Claude Desktop (includes Cowork), Claude Mobile, terminal Claude Code, or any MCP-compatible AI client.
 
 **Endpoint:** `https://www.notrealsmart.com.au/api/mcp` (Streamable HTTP, stateless)
 
@@ -276,23 +296,80 @@ NRS is an MCP server. Users connect from Claude Desktop, Claude Mobile, Claude C
 
 **Access token = nrs_sk_ API key.** Both auth methods produce the same key type. The MCP server's `resolveApiKey()` validates both. Zero duplication.
 
-**12 MVP tools:** `chat_with_director` (flagship — full Director with delegation), `publish_to_social`, `write_blog`, `write_ads`, `write_email_campaign`, `manage_posts`, `query_calendar`, `query_outputs`, `save_output`, `generate_image`, `scan_website`, `query_analytics`.
+#### MCP ALLOWLIST — plug-in AIs don't orchestrate, the Director does (NON-NEGOTIABLE)
+**Plug-in AIs are MESSENGERS.** Claude Desktop, Cowork, Claude Code, any external MCP client — they hand user intent to `chat_with_director` and wait. They do NOT call multi-step orchestration tools directly, do NOT write marketing copy, do NOT bypass the Review queue.
+
+Enforced structurally in `src/lib/mcp/server.ts` via `HIDDEN_FROM_MCP: ReadonlySet<string>` passed to `adaptToolsForMCP(..., hiddenFromMcp)`. Hidden tools are **never registered** on the MCP surface — they exist only inside the Director's internal AI SDK tool loop.
+
+**Currently hidden from MCP (MUST call chat_with_director instead):**
+- Media orchestration: `process_media`
+- Content writing: `write_blog`, `write_ads`, `write_email_campaign`, `repurpose_content`
+- Multi-step analysis/planning: `marketing_audit`, `deep_competitor_scan`, `fill_calendar`, `analyse_voice`, `analyse_content_gaps`
+- Media generation: `create_video`, `multi_scene_video`, `generate_video_agent`, `translate_video`, `photo_avatar`, `text_to_speech`, `generate_slides`
+- Director-internal primitives: `delegate_to_agent`, `convene_meeting`
+
+**Still exposed on MCP (safe for direct plug-in access):**
+- Conversational entry points: `list_brands`, `chat_with_director`, `get_director_response`, `draft_post`
+- Read-only queries: `query_media`, `query_calendar`, `query_outputs`, `query_analytics`, `query_social_analytics`
+- Bounded single-shot actions: `publish_to_social` (gated by MANDATORY APPROVAL rule), `manage_posts`, `manage_tags`, `save_output`, `generate_image`, `scan_website`, `browse_page`
+
+**Adding a new tool — decide exposure:**
+1. Query-only or bounded single-shot? → leave it alone, auto-exposed via `adaptToolsForMCP`.
+2. Multi-step, writes marketing copy, needs Director reasoning? → add to `HIDDEN_FROM_MCP` in `src/lib/mcp/server.ts` AND update the `quick_start` MCP prompt with a before/after example.
 
 **Resources:** `brands://list` — all user's brands.
 
 **Key files:**
 - `src/app/api/mcp/route.ts` — MCP HTTP handler
-- `src/lib/mcp/server.ts` — McpServer factory (tool registration)
-- `src/lib/mcp/director-chat.ts` — chat_with_director tool (generateText, not streamText)
-- `src/lib/mcp/tool-adapter.ts` — wraps AI SDK tools as MCP tools
+- `src/lib/mcp/server.ts` — McpServer factory + `HIDDEN_FROM_MCP` allowlist + `quick_start` prompt
+- `src/lib/mcp/tool-adapter.ts` — `adaptToolsForMCP(..., hiddenFromMcp)` filter
+- `src/lib/mcp/director-chat.ts` — chat_with_director (sync entry, kicks async job)
+- `src/lib/mcp/director-job.ts` — the async Director run
+- `src/lib/mcp/director-job-tool.ts` — get_director_response (poll)
+- `src/lib/mcp/draft-post-tool.ts` — draft_post (sync Content & Copy shortcut)
 - `src/lib/auth/api-key.ts` — key generation + validation
 - `src/app/api/mcp/authorize/route.ts` — OAuth authorize
 - `src/app/api/mcp/token/route.ts` — OAuth token exchange
 - `src/app/mcp-login/page.tsx` — branded OAuth login page
 
-**Adding more tools:** Add tool name to `MVP_TOOLS` set in `src/lib/mcp/server.ts`. No other changes.
+**Team invite emails** include step-by-step setup for web, Claude Desktop/Mobile (OAuth), and Claude Code (API key + "tell Claude to connect").
 
-**Team invite emails** include step-by-step setup for web, Claude Desktop/Mobile (OAuth), and Claude Code/Cowork (API key + "tell Claude to connect").
+Full reference: `~/Obsidian/Reference/nrs-mcp-architecture.md`.
+
+### Media Processing Pipeline — single source of truth
+**File:** `src/lib/media/process-pipeline.ts` — `runMediaProcessingPipeline({supabase, mediaItemId, runStages?})`.
+
+ONE canonical function owns all media_items row mutations that touch thumbnails, transcription, AI tagging, or the per-stage processing report. Both the HTTP route `/api/media/process` (browser uploads) AND the Director's `process_media` tool delegate to it. No other pipeline exists.
+
+**Stages:**
+1. **Thumbnail** (videos only) — `extractFirstFrameFromUrl()` runs `ffmpeg -ss 1 -i <https-url> -frames:v 1`. Fast-seek before input streams only the bytes needed for frame 1. Memory-safe for 500 MB files on Vercel serverless. Hard 30s kill timeout. Thumb uploaded to `{path}_thumb.jpg` in the media bucket.
+2. **Transcription** (video/audio < 100MB) — `transcribeFile()` → Deepgram nova-2 URL mode → Whisper fallback. Persists to `transcription`, `transcription_model`, `transcription_status`, `duration_seconds`.
+3. **AI** — Claude vision (images) or transcript analysis (video/audio). Persists to `ai_description` + extends `tags`.
+
+**Per-stage report** at `metadata.processing` with `{status, error?, duration_ms?}` per stage. Merges prior reports (doesn't clobber). Failures never cascade.
+
+**Schema gotcha — #CRITICAL:** `media_items` has `transcription_status` but **NO `status` column**. Any update that includes `status: ...` is rejected entirely by PostgREST (PGRST204) and silently drops the rest of the update with it. This exact bug cost a full session — the Director's `process_media` tool was transcribing successfully but losing the result to a `status: 'transcribed'` write. Check `src/types/database.ts:MediaItem` before adding any update.
+
+**Related files:**
+- `src/lib/video/ffmpeg-thumbnail.ts` — `extractFirstFrame(buffer)` + `extractFirstFrameFromUrl(url)`
+- `src/lib/transcription/transcribe.ts` — 2-layer Deepgram/Whisper
+- `src/lib/media/auto-tagger.ts` — deterministic + AI tags
+- `scripts/run-pipeline.ts` — invoke against any row (`npx tsx scripts/run-pipeline.ts <uuid>`)
+- `scripts/verify-media-state.mjs` — dump full row state
+- `scripts/backfill-media-processing.mjs` — system-ffmpeg backfill for legacy rows
+
+Full reference: `~/Obsidian/Reference/nrs-media-processing-pipeline.md`.
+
+### Upload diagnostics without DevTools — #CRITICAL
+**Never ask the user to open Chrome DevTools, Network tab, or console.** That violates the non-tech-user First Principle at the top of this file. Justin is not a developer; he uses the Claude app (which contains Cowork) and the terminal Claude Code CLI — nothing else.
+
+When a client-side flow (upload, chat, preview) hangs and needs diagnosis, instrument the CLIENT to POST breadcrumbs to a server endpoint and query them from the terminal with the admin client. Build-time pattern in place for media uploads:
+
+- Client: `src/components/agency/MediaUploader.tsx` calls `log(traceId, step, data)` which both `console.log`s AND fires `fetch('/api/debug/upload-log', { keepalive: true })` for each breadcrumb. Each log includes the `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` so stale-cache bundles are obvious.
+- Server: `src/app/api/debug/upload-log/route.ts` persists to `audit_log` with `action='upload_debug'`, `entity_type='media_upload_trace'`, `entity_id=<trace_id>`.
+- Terminal: `node scripts/read-upload-trace.mjs` — prints all breadcrumbs grouped by trace_id with millisecond timings.
+
+When a new class of client-side bug appears, extend this pattern rather than asking the user to paste logs. See feedback memory `feedback_no_devtools_for_user.md` for the full rationale.
 
 ### Planned Major Builds
 1. **mem0 memory system** — replace Ruflo with semantic search, LLM extraction, graph memory
