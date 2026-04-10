@@ -13,6 +13,9 @@ import {
   BarChart3,
   Hash,
   Plus,
+  PenSquare,
+  CheckCircle,
+  Home,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -38,7 +41,23 @@ interface SidebarItem {
   exactMatch?: boolean
 }
 
+const DASHBOARD_ITEMS: SidebarItem[] = [
+  {
+    label: 'Dashboard',
+    href: '/agency/studio',
+    icon: <Home className="h-4 w-4" />,
+    matchPrefixes: ['/agency/studio'],
+    exactMatch: true,
+  },
+]
+
 const CONTENT_ITEMS: SidebarItem[] = [
+  {
+    label: 'Create Post',
+    href: '/agency/studio/create',
+    icon: <PenSquare className="h-4 w-4" />,
+    matchPrefixes: ['/agency/studio/create'],
+  },
   {
     label: 'Posts',
     href: '/agency/studio/posts',
@@ -47,18 +66,21 @@ const CONTENT_ITEMS: SidebarItem[] = [
   },
   {
     label: 'Calendar',
-    href: '/agency/studio',
+    href: '/agency/studio/calendar',
     icon: <CalendarDays className="h-4 w-4" />,
-    matchPrefixes: ['/agency/studio'],
-    exactMatch: true,
+    matchPrefixes: ['/agency/studio/calendar'],
   },
   {
     label: 'Media Library',
-    href: '/agency/studio',
+    href: '/agency/studio/media',
     icon: <ImageIcon className="h-4 w-4" />,
-    matchPrefixes: [],
-    // Media is currently a tab inside the main Studio page, not a sub-route.
-    // This links back to Studio where the Media tab lives.
+    matchPrefixes: ['/agency/studio/media'],
+  },
+  {
+    label: 'Review',
+    href: '/agency/studio/review',
+    icon: <CheckCircle className="h-4 w-4" />,
+    matchPrefixes: ['/agency/studio/review'],
   },
   {
     label: 'Templates',
@@ -156,19 +178,23 @@ export function StudioSidebar() {
 
   return (
     <div className="hidden md:flex w-[200px] shrink-0 flex-col border-r border-border bg-card h-full overflow-y-auto py-4">
-      {/* Create Post button — matches Mixpost's dark "CREATE POST" at the top */}
+      {/* CREATE POST button — matches Mixpost's dark "CREATE POST" at the top */}
       <div className="px-3 mb-4">
         <Link
-          href="/agency/studio"
+          href="/agency/studio/create"
           className="flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors w-full"
         >
           <Plus className="h-3.5 w-3.5" />
-          Create Post
+          CREATE POST
         </Link>
       </div>
 
       {/* Navigation groups */}
       <div className="flex flex-col gap-4 flex-1 px-1">
+        <MenuGroup title="" items={DASHBOARD_ITEMS} pathname={pathname} />
+
+        <div className="mx-3 border-t border-border" />
+
         <MenuGroup title="Content" items={CONTENT_ITEMS} pathname={pathname} />
 
         <div className="mx-3 border-t border-border" />
