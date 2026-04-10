@@ -93,10 +93,29 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
   const isHealthBrand = !!complianceFlags?.ahpra || !!complianceFlags?.tga
 
   // ── Auto-save / restore draft from localStorage ────────────────────────
-  const draftKey = activeBrandId ? `nrs-draft-${activeBrandId}` : null
+  // Storage key bumped to v2 on 2026-04-10 to invalidate any drafts saved
+  // by the old code that included selectedPlatforms in the persisted shape.
+  // Old key (`nrs-draft-${brandId}`) was carrying ['instagram'] from the
+  // pre-fix default seed across sessions, re-introducing the multi-select
+  // bug after every page load. Bumping the key strands those old entries.
+  //
+  // Persisted fields are deliberately limited to "in-progress writing":
+  // contentType, caption, hashtags, aiPrompt, creatorMode. Per-post
+  // decisions (selectedPlatforms, selectedMediaIds) are NOT persisted —
+  // they reset every session because the user picks them fresh per post.
+  const draftKey = activeBrandId ? `nrs-draft-v2-${activeBrandId}` : null
   const isRestored = useRef(false)
 
-  // Restore draft on mount (skip if we're loading a server draft via draftId)
+  // One-time cleanup: remove the legacy key for this brand if it exists
+  // so localStorage doesn't accumulate dead drafts.
+  useEffect(() => {
+    if (!activeBrandId) return
+    try { localStorage.removeItem(`nrs-draft-${activeBrandId}`) } catch { /* ignore */ }
+  }, [activeBrandId])
+
+  // Restore draft on mount (skip if we're loading a server draft via draftId).
+  // selectedPlatforms and selectedMediaIds are NOT restored — see comment
+  // above the draftKey for rationale.
   useEffect(() => {
     if (!draftKey || isRestored.current || draftId) return
     try {
@@ -104,8 +123,6 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
       if (saved) {
         const draft = JSON.parse(saved)
         if (draft.contentType) setContentType(draft.contentType)
-        if (draft.selectedPlatforms?.length) setSelectedPlatforms(draft.selectedPlatforms)
-        if (draft.selectedMediaIds?.length) setSelectedMediaIds(draft.selectedMediaIds)
         if (draft.caption) setCaption(draft.caption)
         if (draft.hashtags?.length) setHashtags(draft.hashtags)
         if (draft.aiPrompt) setAiPrompt(draft.aiPrompt)
@@ -113,14 +130,15 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
       }
     } catch { /* ignore parse errors */ }
     isRestored.current = true
-  }, [draftKey])
+  }, [draftKey, draftId])
 
-  // Auto-save draft on every change (debounced via effect)
+  // Auto-save draft on every change. Persist only writing-in-progress fields,
+  // not platform/media selections (those are per-post and reset).
   useEffect(() => {
     if (!draftKey || !isRestored.current) return
-    const draft = { contentType, selectedPlatforms, selectedMediaIds, caption, hashtags, aiPrompt, creatorMode }
+    const draft = { contentType, caption, hashtags, aiPrompt, creatorMode }
     try { localStorage.setItem(draftKey, JSON.stringify(draft)) } catch { /* storage full */ }
-  }, [draftKey, contentType, selectedPlatforms, selectedMediaIds, caption, hashtags, aiPrompt, creatorMode])
+  }, [draftKey, contentType, caption, hashtags, aiPrompt, creatorMode])
 
   // ── Load existing draft for editing ──────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
