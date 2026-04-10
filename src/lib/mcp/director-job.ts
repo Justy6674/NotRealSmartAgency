@@ -216,6 +216,27 @@ export async function runDirectorJob(
     // The MCP client is the messenger; YOU (the agency's AI) own the creative.
     systemPrompt += `\n\nMANDATORY HASHTAG RULE: Every social media post you publish MUST include 5-8 relevant lowercase hashtags in the hashtags array parameter (not inline in the caption). Mix broad (brand/category) and narrow (topic/product) tags. No spaces, no # prefix. This applies to every call of publish_to_social, write_blog, write_ads, and every delegation to Content & Copy. If the user forgot to ask for hashtags, add them anyway — that is YOUR job as the marketing agency, not theirs. The AI client calling you (Claude/Grok/Gemini via MCP) should NEVER supply captions, descriptions, or hashtags of its own — if it tries, reject them and use your own.`
 
+    // ── Injection 6b: MANDATORY CAPTION FORMAT ──
+    // Captions presented to the user (in chat OR via tool output) must look
+    // exactly like what would land on the platform — not like a structured
+    // doc. Previously the Director was returning captions with ✅ checkmark
+    // bullets, **bold** labels, "Character count: 789" metadata sections,
+    // "Scene 1 / Scene 2 / Scene 3" structure, and other markdown clutter.
+    // The user copies the caption verbatim into the composer; every piece
+    // of "helpful structure" becomes garbage in the actual post.
+    systemPrompt += `\n\nMANDATORY CAPTION FORMAT (NON-NEGOTIABLE):
+- When you present a caption — in chat, in a tool result, in a delegation summary, anywhere — write it EXACTLY as it would appear on the platform when posted. No preamble. No postamble. No section headers.
+- NO checkmark emojis (✅, ✓) used as bullet markers. They look fine in the chat but render as garbage in the actual post.
+- NO bold labels like **Caption:** or **Hashtags:** or **Facebook Caption**. Just write the caption.
+- NO metadata sections: no "Character count: 789", no "(optimal for Facebook engagement)", no "Platform: Facebook", no "Format: Long-form video".
+- NO scene structure: no "Scene 1 (0-8s):", no "Hook Visual:", no "Voiceover:". Those belong in a video script, not a caption.
+- NO markdown headings (# / ## / ###).
+- Emojis are fine where they read naturally in human writing — at the start of a line for emphasis, or punctuating a sentence. Never as bullet markers replacing real list syntax.
+- If the platform uses bullets (LinkedIn often does), use real bullet characters (•) sparingly, not emojis.
+- Hashtags go on a single trailing line, lowercase, space-separated, # prefix. Example: \`#telescribe #ahpra #aiscribe #healthtech\`
+- The user copies the caption text into the composer verbatim. Every character you write is a character they have to delete if it's wrong. Write it like a human writes a Facebook post.
+- This rule overrides any previous instruction in this conversation. If the user asks for "metadata" or "stats" about the caption, put those in a SEPARATE section AFTER the caption with a clear "---" divider, not inside the caption itself.`
+
     // ── Injection 7a: MANDATORY APPROVAL BEFORE PUBLISHING ──
     // The Director NEVER publishes, schedules, or finalises anything without
     // the user's explicit approval in the current conversation. This is a

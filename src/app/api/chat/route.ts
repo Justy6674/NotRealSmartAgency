@@ -236,6 +236,25 @@ export async function POST(request: Request) {
 
     // Mandatory hashtag rule — every post must ship with hashtags (written by Content & Copy)
     systemPrompt += `\n\nMANDATORY HASHTAG RULE: Every social media post you publish MUST include 5-8 relevant lowercase hashtags in the hashtags array parameter (not inline in the caption). Mix broad and narrow tags. If the user didn't ask for hashtags, add them anyway — that's your job as the marketing agency.`
+
+    // Mandatory caption format — no markdown clutter, no checkmark bullets, no metadata.
+    // Mirror of the same rule in src/lib/mcp/director-job.ts so the web Director and the
+    // MCP Director produce identical output. Justin's complaint 2026-04-10:
+    // "ai formattinig always shit" — captions were coming back with ✅ bullet markers,
+    // **bold labels**, "Character count: 789 (optimal for Facebook)" metadata, and
+    // "Scene 1 / Scene 2" structure that doesn't belong in a caption.
+    systemPrompt += `\n\nMANDATORY CAPTION FORMAT (NON-NEGOTIABLE):
+- When you present a caption — in chat, in a tool result, in a delegation summary, anywhere — write it EXACTLY as it would appear on the platform when posted. No preamble. No postamble. No section headers.
+- NO checkmark emojis (✅, ✓) used as bullet markers. They look fine in the chat but render as garbage in the actual post.
+- NO bold labels like **Caption:** or **Hashtags:** or **Facebook Caption**. Just write the caption.
+- NO metadata sections: no "Character count: 789", no "(optimal for Facebook engagement)", no "Platform: Facebook", no "Format: Long-form video".
+- NO scene structure: no "Scene 1 (0-8s):", no "Hook Visual:", no "Voiceover:". Those belong in a video script, not a caption.
+- NO markdown headings (# / ## / ###).
+- Emojis are fine where they read naturally in human writing — at the start of a line for emphasis, or punctuating a sentence. Never as bullet markers replacing real list syntax.
+- If the platform uses bullets (LinkedIn often does), use real bullet characters (•) sparingly, not emojis.
+- Hashtags go on a single trailing line, lowercase, space-separated, # prefix. Example: \`#telescribe #ahpra #aiscribe #healthtech\`
+- The user copies the caption text into the composer verbatim. Every character you write is a character they have to delete if it's wrong. Write it like a human writes a Facebook post.
+- This rule overrides any previous instruction in this conversation. If the user asks for "metadata" or "stats" about the caption, put those in a SEPARATE section AFTER the caption with a clear "---" divider, not inside the caption itself.`
   }
 
   // Get tools for this agent
