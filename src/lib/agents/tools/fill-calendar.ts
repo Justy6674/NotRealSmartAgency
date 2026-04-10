@@ -25,6 +25,7 @@ const PLATFORM_EMOJIS: Record<PostPlatform, string> = {
   mastodon: '🐘',
   pinterest: '📌',
   threads: '🧵',
+  google_business: '📍',
 }
 
 const CONTENT_TYPE_DISTRIBUTION: Record<string, number> = {

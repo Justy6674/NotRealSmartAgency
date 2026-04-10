@@ -65,9 +65,11 @@ interface PostCreatorProps {
   mediaId?: string
   /** Called after save in edit mode — navigates back to Review */
   onDone?: () => void
+  /** Pre-fill schedule date/time from calendar click (format: YYYY-MM-DDTHH:mm) */
+  initialScheduleDate?: string
 }
 
-export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {}) {
+export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: PostCreatorProps = {}) {
   const { activeBrandId, setPendingDraftId, setPendingMediaId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
@@ -298,7 +300,7 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
             caption,
             hashtags: hashtags.map(h => `#${h}`),
             status: mode === 'draft' ? 'draft' : 'scheduled',
-            scheduled_at: scheduledAt ?? new Date().toISOString(),
+            scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
             post_type: postType,
             media_item_ids: selectedMediaIds,
             content_type: strategyContext?.suggestedContentType ?? undefined,
@@ -324,7 +326,7 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
             caption,
             hashtags: hashtags.map(h => `#${h}`),
             status: mode === 'draft' ? 'draft' : 'scheduled',
-            scheduled_at: scheduledAt ?? new Date().toISOString(),
+            scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
             post_type: postType,
             media_item_ids: selectedMediaIds,
             content_type: strategyContext?.suggestedContentType ?? undefined,
@@ -353,7 +355,7 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
     } finally {
       setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions])
+  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {

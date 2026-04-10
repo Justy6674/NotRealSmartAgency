@@ -93,4 +93,5 @@ export const PLATFORM_CHAR_LIMITS: Record<string, number> = {
   mastodon: 500,
   pinterest: 500,
   threads: 500,
+  google_business: 1500,
 }

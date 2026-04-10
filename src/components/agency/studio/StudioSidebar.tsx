@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Image as ImageIcon,
   FileText,
+  Globe,
   Share2,
   Clock,
   Webhook,
@@ -87,6 +88,12 @@ const CONTENT_ITEMS: SidebarItem[] = [
     href: '/agency/studio/templates',
     icon: <FileText className="h-4 w-4" />,
     matchPrefixes: ['/agency/studio/templates'],
+  },
+  {
+    label: 'Pages',
+    href: '/agency/studio/pages',
+    icon: <Globe className="h-4 w-4" />,
+    matchPrefixes: ['/agency/studio/pages'],
   },
 ]
 

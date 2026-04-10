@@ -7,6 +7,7 @@ import type { PostPlatform } from '@/types/database'
 import type { PostVersions } from '@/lib/post-versions'
 import { customisePlatform, resetPlatformToMaster, PLATFORM_CHAR_LIMITS } from '@/lib/post-versions'
 import { PlatformOptions } from './PlatformOptions'
+import { UrlShortener } from './UrlShortener'
 
 interface PlatformVersionEditorProps {
   platforms: PostPlatform[]
@@ -20,6 +21,9 @@ interface PlatformVersionEditorProps {
   /** Called when platform-specific metadata changes */
   onPlatformOptionsChange?: (platformOptions: Record<string, Record<string, unknown>>) => void
 }
+
+const LINK_PLATFORMS = new Set(['facebook', 'linkedin', 'twitter'])
+const URL_PATTERN = /https?:\/\/[^\s]+/
 
 const PLATFORM_LABELS: Record<string, string> = {
   instagram: 'Instagram',
@@ -160,6 +164,19 @@ export function PlatformVersionEditor({
               })
             }
           />
+        )}
+
+        {/* URL Shortener — shown for link-friendly platforms when caption contains a URL */}
+        {LINK_PLATFORMS.has(activeTab === 'master' ? '' : activeTab) && URL_PATTERN.test(currentCaption) && (
+          <div className="mt-2">
+            <UrlShortener
+              onShorten={(shortUrl) => {
+                // Replace the first URL in the caption with the shortened version
+                const updated = currentCaption.replace(URL_PATTERN, shortUrl)
+                handleCaptionChange(updated)
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

@@ -655,7 +655,7 @@ export interface ApprovalQueueEntry {
 }
 
 export type MediaStatus = 'pending' | 'transcribing' | 'transcribed' | 'failed'
-export type PostPlatform = 'instagram' | 'facebook' | 'linkedin' | 'twitter' | 'tiktok' | 'youtube' | 'bluesky' | 'mastodon' | 'pinterest' | 'threads'
+export type PostPlatform = 'instagram' | 'facebook' | 'linkedin' | 'twitter' | 'tiktok' | 'youtube' | 'bluesky' | 'mastodon' | 'pinterest' | 'threads' | 'google_business'
 export type ScheduledPostStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled'
 
 export interface MediaItem {

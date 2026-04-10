@@ -29,6 +29,7 @@ const PLATFORM_LABELS: Record<string, string> = {
   mastodon: 'Mastodon',
   pinterest: 'Pinterest',
   threads: 'Threads',
+  google_business: 'Google Business',
 }
 
 export function MultiPlatformPreview({

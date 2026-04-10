@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { EventInput, EventDropArg, EventClickArg, EventContentArg } from '@fullcalendar/core'
+import type { DateClickArg } from '@fullcalendar/interaction'
 import { X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -141,6 +143,7 @@ function PostDetail({
 // ─── Enhanced Calendar ───────────────────────────────────────────────────────
 
 export function EnhancedCalendar() {
+  const router = useRouter()
   const { activeBrandId } = useAgencyStore()
   const studioData = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(studioData.brand, studioData.posts, studioData.accounts)
@@ -192,6 +195,14 @@ export function EnhancedCalendar() {
     const post = info.event.extendedProps.post as ScheduledPost
     setSelectedPost(post)
   }, [])
+
+  // Click on an empty time slot → navigate to Creator with pre-filled date/time
+  const handleDateClick = useCallback((info: DateClickArg) => {
+    const d = info.date
+    const dateStr = d.toISOString().slice(0, 10) // YYYY-MM-DD
+    const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    router.push(`/agency/studio/create?date=${dateStr}&time=${timeStr}`)
+  }, [router])
 
   // Custom event renderer — replaces FullCalendar's default event box with
   // our CalendarPostPill React component. FullCalendar mounts the returned
@@ -264,6 +275,7 @@ export function EnhancedCalendar() {
             droppable={true}
             eventDrop={handleEventDrop}
             eventClick={handleEventClick}
+            dateClick={handleDateClick}
             eventContent={renderEventContent}
             headerToolbar={{
               left: 'prev,next today',
@@ -354,6 +366,64 @@ export function EnhancedCalendar() {
         .enhanced-calendar .fc .fc-daygrid-more-link {
           color: hsl(var(--primary));
           font-size: 0.75rem;
+        }
+
+        /* Week/day view — cleaner slot grid */
+        .enhanced-calendar .fc .fc-timegrid-slot {
+          border-color: hsl(var(--border) / 0.5);
+          height: 2.5rem;
+        }
+
+        .enhanced-calendar .fc .fc-timegrid-slot-label {
+          font-size: 0.7rem;
+          color: hsl(var(--muted-foreground));
+          vertical-align: top;
+          padding-top: 4px;
+        }
+
+        .enhanced-calendar .fc .fc-timegrid-col {
+          border-color: hsl(var(--border) / 0.3);
+        }
+
+        .enhanced-calendar .fc .fc-timegrid-now-indicator-line {
+          border-color: oklch(0.55 0.15 250);
+          border-width: 2px;
+        }
+
+        .enhanced-calendar .fc .fc-timegrid-now-indicator-arrow {
+          border-color: oklch(0.55 0.15 250);
+        }
+
+        .enhanced-calendar .fc .fc-col-header-cell {
+          padding: 8px 4px;
+          border-bottom: 2px solid hsl(var(--border));
+          background: hsl(var(--muted) / 0.3);
+        }
+
+        .enhanced-calendar .fc .fc-col-header-cell.fc-day-today {
+          background: hsl(var(--primary) / 0.08);
+        }
+
+        .enhanced-calendar .fc .fc-col-header-cell-cushion {
+          font-weight: 600;
+          letter-spacing: 0.01em;
+        }
+
+        /* Clickable empty slots cursor */
+        .enhanced-calendar .fc .fc-timegrid-slot-lane {
+          cursor: pointer;
+        }
+
+        .enhanced-calendar .fc .fc-timegrid-slot-lane:hover {
+          background: hsl(var(--primary) / 0.04);
+        }
+
+        .enhanced-calendar .fc .fc-daygrid-day:not(.fc-day-disabled) {
+          cursor: pointer;
+        }
+
+        .enhanced-calendar .fc .fc-daygrid-day:not(.fc-day-disabled):hover {
+          background: hsl(var(--primary) / 0.04);
         }
       `}</style>
     </div>

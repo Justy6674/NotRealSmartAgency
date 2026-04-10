@@ -9,6 +9,7 @@ export { BlueskyMockup } from './BlueskyMockup'
 export { MastodonMockup } from './MastodonMockup'
 export { PinterestMockup } from './PinterestMockup'
 export { ThreadsMockup } from './ThreadsMockup'
+export { GoogleBusinessMockup } from './GoogleBusinessMockup'
 
 import { InstagramMockup } from './InstagramMockup'
 import { FacebookMockup } from './FacebookMockup'
@@ -20,6 +21,7 @@ import { BlueskyMockup } from './BlueskyMockup'
 import { MastodonMockup } from './MastodonMockup'
 import { PinterestMockup } from './PinterestMockup'
 import { ThreadsMockup } from './ThreadsMockup'
+import { GoogleBusinessMockup } from './GoogleBusinessMockup'
 
 interface PlatformMockupProps {
   platform: string
@@ -56,6 +58,8 @@ export function PlatformMockupPreview({ platform, ...props }: PlatformMockupProp
       return <PinterestMockup {...props} />
     case 'threads':
       return <ThreadsMockup {...props} />
+    case 'google_business':
+      return <GoogleBusinessMockup {...props} />
     default:
       return <InstagramMockup {...props} />
   }

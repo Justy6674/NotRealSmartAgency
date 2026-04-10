@@ -39,6 +39,7 @@ const PLATFORM_CONFIG: Record<PostPlatform, { label: string; colour: string }> =
   mastodon: { label: 'MD', colour: 'oklch(0.55 0.18 280)' },
   pinterest: { label: 'PT', colour: 'oklch(0.55 0.2 25)' },
   threads: { label: 'TH', colour: 'oklch(0.5 0 0)' },
+  google_business: { label: 'GB', colour: 'oklch(0.55 0.15 250)' },
 }
 
 export function ReviewFilters({ filters, onChange, availableSources, draftCount }: ReviewFiltersProps) {

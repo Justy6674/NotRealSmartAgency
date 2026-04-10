@@ -16,6 +16,7 @@ const PLATFORM_COLOURS: Record<PostPlatform, string> = {
   mastodon: 'bg-purple-400',
   pinterest: 'bg-red-500',
   threads: 'bg-zinc-300',
+  google_business: 'bg-blue-400',
 }
 
 interface CreatorActionBarProps {

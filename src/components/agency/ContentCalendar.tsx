@@ -38,6 +38,7 @@ const PLATFORM_CONFIG: Record<PostPlatform, { label: string; icon: typeof Instag
   mastodon: { label: 'Mastodon', icon: Hash, chipClass: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
   pinterest: { label: 'Pinterest', icon: Pin, chipClass: 'bg-red-600/15 text-red-400 border-red-600/30' },
   threads: { label: 'Threads', icon: AtSign, chipClass: 'bg-zinc-400/15 text-zinc-300 border-zinc-400/30' },
+  google_business: { label: 'Google Business', icon: Hash, chipClass: 'bg-green-500/15 text-green-400 border-green-500/30' },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
