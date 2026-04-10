@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { PostPlatform, ScheduledPostStatus } from '@/types/database'
+import type { PostPlatform } from '@/types/database'
 import type { PostsListFilters, PostsSortKey, PostsSortDir } from '@/hooks/usePostsList'
 
 /**
@@ -29,15 +29,6 @@ const PLATFORM_OPTIONS: { value: PostPlatform; label: string }[] = [
   { value: 'twitter', label: 'X' },
   { value: 'tiktok', label: 'TikTok' },
   { value: 'youtube', label: 'YouTube' },
-]
-
-const STATUS_OPTIONS: { value: ScheduledPostStatus; label: string }[] = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'publishing', label: 'Publishing' },
-  { value: 'published', label: 'Published' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'cancelled', label: 'Cancelled' },
 ]
 
 const SORT_OPTIONS: { value: PostsSortKey; label: string }[] = [
@@ -79,14 +70,6 @@ export function PostsFilters({ filters, onChange, total }: PostsFiltersProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.search])
 
-  const toggleStatus = (status: ScheduledPostStatus) => {
-    const current = filters.statuses ?? []
-    const next = current.includes(status)
-      ? current.filter((s) => s !== status)
-      : [...current, status]
-    onChange({ ...filters, statuses: next })
-  }
-
   const togglePlatform = (platform: PostPlatform) => {
     const current = filters.platforms ?? []
     const next = current.includes(platform)
@@ -103,7 +86,6 @@ export function PostsFilters({ filters, onChange, total }: PostsFiltersProps) {
 
   const hasActiveFilters =
     !!filters.search ||
-    (filters.statuses?.length ?? 0) > 0 ||
     (filters.platforms?.length ?? 0) > 0 ||
     !!filters.from ||
     !!filters.to
@@ -113,10 +95,6 @@ export function PostsFilters({ filters, onChange, total }: PostsFiltersProps) {
     onChange({ sortKey: filters.sortKey, sortDir: filters.sortDir })
   }
 
-  const statusLabel =
-    filters.statuses && filters.statuses.length > 0
-      ? `${filters.statuses.length} status${filters.statuses.length === 1 ? '' : 'es'}`
-      : 'Status'
   const platformLabel =
     filters.platforms && filters.platforms.length > 0
       ? `${filters.platforms.length} platform${filters.platforms.length === 1 ? '' : 's'}`
@@ -138,35 +116,6 @@ export function PostsFilters({ filters, onChange, total }: PostsFiltersProps) {
             className="pl-8"
           />
         </div>
-
-        {/* Status multi-select */}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={(props) => (
-              <Button {...props} variant="outline" size="sm">
-                {statusLabel}
-                <ChevronDown className="ml-1" />
-              </Button>
-            )}
-          />
-          <DropdownMenuContent align="start" className="w-44">
-            <DropdownMenuLabel>Filter status</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {STATUS_OPTIONS.map((opt) => (
-              <DropdownMenuCheckboxItem
-                key={opt.value}
-                checked={(filters.statuses ?? []).includes(opt.value)}
-                closeOnClick={false}
-                onClick={(e) => {
-                  e.preventDefault()
-                  toggleStatus(opt.value)
-                }}
-              >
-                {opt.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         {/* Platform multi-select */}
         <DropdownMenu>

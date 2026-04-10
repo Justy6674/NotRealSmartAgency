@@ -28,11 +28,18 @@ interface UsePostsListArgs extends PostsListFilters {
   pageSize?: number
 }
 
+/** Count of posts per status, computed from the full (unfiltered) dataset. */
+export type StatusCounts = Record<ScheduledPostStatus, number>
+
 interface UsePostsListResult {
   /** The current visible page after filter + sort + pagination. */
   posts: ScheduledPost[]
   /** Total matching post count after filtering, before pagination. */
   total: number
+  /** Total post count before any filters (the "All" count). */
+  allCount: number
+  /** Per-status counts computed from the full unfiltered dataset. */
+  statusCounts: StatusCounts
   loading: boolean
   error: string | null
   page: number
@@ -142,6 +149,18 @@ export function usePostsList(args: UsePostsListArgs): UsePostsListResult {
     return sorted
   }, [allPosts, filters])
 
+  const statusCounts = useMemo<StatusCounts>(() => {
+    const counts: StatusCounts = {
+      draft: 0, scheduled: 0, publishing: 0,
+      published: 0, failed: 0, cancelled: 0,
+    }
+    for (const p of allPosts) {
+      if (p.status in counts) counts[p.status]++
+    }
+    return counts
+  }, [allPosts])
+
+  const allCount = allPosts.length
   const total = filtered.length
   const pageSize = initialPageSize
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -168,6 +187,8 @@ export function usePostsList(args: UsePostsListArgs): UsePostsListResult {
   return {
     posts: visible,
     total,
+    allCount,
+    statusCounts,
     loading,
     error,
     page,

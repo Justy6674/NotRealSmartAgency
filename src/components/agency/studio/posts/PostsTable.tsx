@@ -30,19 +30,20 @@ interface PostsTableProps {
   loading: boolean
 }
 
-const PLATFORM_LABEL_SHORT: Record<string, string> = {
-  instagram: 'IG',
-  facebook: 'FB',
-  linkedin: 'LI',
+/** Single-letter abbreviation for the platform avatar circle. */
+const PLATFORM_INITIAL: Record<string, string> = {
+  instagram: 'I',
+  facebook: 'F',
+  linkedin: 'L',
   twitter: 'X',
-  tiktok: 'TT',
-  youtube: 'YT',
+  tiktok: 'T',
+  youtube: 'Y',
 }
 
 function formatDateTime(iso: string | null): string {
-  if (!iso) return '—'
+  if (!iso) return '\u2014'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return '\u2014'
   return d.toLocaleString('en-AU', {
     day: '2-digit',
     month: 'short',
@@ -56,7 +57,7 @@ function captionSnippet(caption: string | null, max = 80): string {
   if (!caption) return '(no caption)'
   const trimmed = caption.trim().replace(/\s+/g, ' ')
   if (trimmed.length <= max) return trimmed
-  return `${trimmed.slice(0, max)}…`
+  return `${trimmed.slice(0, max)}\u2026`
 }
 
 interface MediaCacheEntry {
@@ -64,12 +65,6 @@ interface MediaCacheEntry {
   type: string | null
 }
 
-/**
- * In-component cache for the first media_item thumbnail per post. We don't
- * have a join helper for scheduled_posts.media_item_ids[0], so each row
- * fetches /api/media/<id> on mount and stashes the URL by media id. The
- * fetch is fire-and-forget — failures degrade gracefully to a placeholder.
- */
 const mediaCache = new Map<string, MediaCacheEntry>()
 
 function useMediaThumb(mediaId: string | null) {
@@ -110,6 +105,37 @@ function useMediaThumb(mediaId: string | null) {
   return entry
 }
 
+/* ── Status Dot ─────────────────────────────────────────────────────── */
+
+function StatusDot({ status }: { status: string }) {
+  const colours = POST_STATUS_COLOURS[status as PostStatusKey] ?? POST_STATUS_COLOURS.draft
+  return (
+    <span
+      className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+      style={{ backgroundColor: colours.fg }}
+      title={status}
+    />
+  )
+}
+
+/* ── Platform Avatar ────────────────────────────────────────────────── */
+
+function PlatformAvatar({ platform }: { platform: string }) {
+  const colour = PLATFORM_BRAND_COLOURS[platform as PlatformKey] ?? '#888888'
+  const initial = PLATFORM_INITIAL[platform] ?? platform.charAt(0).toUpperCase()
+  return (
+    <span
+      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
+      style={{ backgroundColor: colour }}
+      title={platform}
+    >
+      {initial}
+    </span>
+  )
+}
+
+/* ── Post Row ───────────────────────────────────────────────────────── */
+
 function PostRow(props: {
   post: ScheduledPost
   selected: boolean
@@ -123,14 +149,10 @@ function PostRow(props: {
   const firstMediaId = post.media_item_ids?.[0] ?? post.media_item_id ?? null
   const thumb = useMediaThumb(firstMediaId)
 
-  const platformColour =
-    PLATFORM_BRAND_COLOURS[post.platform as PlatformKey] ?? '#888888'
-  const statusColours =
-    POST_STATUS_COLOURS[post.status as PostStatusKey] ?? POST_STATUS_COLOURS.draft
-
   return (
-    <tr className="border-b border-border/60 hover:bg-muted/30 transition-colors">
-      <td className="px-3 py-2 align-middle">
+    <tr className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+      {/* Checkbox */}
+      <td className="px-2 py-1.5 align-middle">
         <input
           type="checkbox"
           checked={selected}
@@ -139,8 +161,13 @@ function PostRow(props: {
           className="h-3.5 w-3.5 rounded border-border accent-foreground"
         />
       </td>
-      <td className="px-2 py-2 align-middle">
-        <div className="h-10 w-10 overflow-hidden rounded-md border border-border bg-muted flex items-center justify-center">
+      {/* Status dot */}
+      <td className="px-1.5 py-1.5 align-middle">
+        <StatusDot status={post.status} />
+      </td>
+      {/* Thumbnail */}
+      <td className="px-1.5 py-1.5 align-middle">
+        <div className="h-8 w-8 overflow-hidden rounded border border-border bg-muted flex items-center justify-center">
           {thumb?.url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -150,49 +177,35 @@ function PostRow(props: {
               loading="lazy"
             />
           ) : (
-            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
           )}
         </div>
       </td>
-      <td className="px-2 py-2 align-middle min-w-0">
-        <p className="text-sm text-foreground line-clamp-2 max-w-md">
+      {/* Caption */}
+      <td className="px-1.5 py-1.5 align-middle min-w-0">
+        <p className="text-sm text-foreground line-clamp-1 max-w-md leading-tight">
           {captionSnippet(post.caption)}
         </p>
         {post.hashtags?.length > 0 && (
-          <p className="mt-0.5 text-[11px] text-muted-foreground line-clamp-1">
+          <p className="mt-0.5 text-[10px] text-muted-foreground line-clamp-1 leading-tight">
             {post.hashtags.slice(0, 4).map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' ')}
           </p>
         )}
       </td>
-      <td className="px-2 py-2 align-middle">
-        <span
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-          style={{
-            backgroundColor: `color-mix(in oklch, ${platformColour} 15%, transparent)`,
-            color: platformColour,
-          }}
-        >
-          {PLATFORM_LABEL_SHORT[post.platform] ?? post.platform}
-        </span>
+      {/* Platform avatar */}
+      <td className="px-1.5 py-1.5 align-middle">
+        <PlatformAvatar platform={post.platform} />
       </td>
-      <td className="px-2 py-2 align-middle">
-        <span
-          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize"
-          style={{
-            backgroundColor: statusColours.bg,
-            color: statusColours.fg,
-          }}
-        >
-          {post.status}
-        </span>
-      </td>
-      <td className="px-2 py-2 align-middle text-xs text-muted-foreground whitespace-nowrap">
+      {/* Scheduled */}
+      <td className="px-1.5 py-1.5 align-middle text-xs text-muted-foreground whitespace-nowrap">
         {formatDateTime(post.scheduled_at)}
       </td>
-      <td className="px-2 py-2 align-middle text-xs text-muted-foreground whitespace-nowrap">
+      {/* Published */}
+      <td className="px-1.5 py-1.5 align-middle text-xs text-muted-foreground whitespace-nowrap">
         {formatDateTime(post.published_at)}
       </td>
-      <td className="px-2 py-2 align-middle text-right">
+      {/* Actions */}
+      <td className="px-1.5 py-1.5 align-middle text-right">
         <DropdownMenu>
           <DropdownMenuTrigger
             render={(triggerProps) => (
@@ -231,6 +244,8 @@ function PostRow(props: {
   )
 }
 
+/* ── Posts Table ─────────────────────────────────────────────────────── */
+
 export function PostsTable(props: PostsTableProps) {
   const {
     posts,
@@ -252,8 +267,8 @@ export function PostsTable(props: PostsTableProps) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-muted/40 text-xs uppercase text-muted-foreground tracking-wide">
-              <th className="px-3 py-2 text-left w-8">
+            <tr className="border-b border-border bg-muted/40 text-[11px] uppercase text-muted-foreground tracking-wide">
+              <th className="px-2 py-1.5 text-left w-8">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -265,25 +280,25 @@ export function PostsTable(props: PostsTableProps) {
                   className="h-3.5 w-3.5 rounded border-border accent-foreground"
                 />
               </th>
-              <th className="px-2 py-2 text-left w-12">Media</th>
-              <th className="px-2 py-2 text-left">Caption</th>
-              <th className="px-2 py-2 text-left">Platform</th>
-              <th className="px-2 py-2 text-left">Status</th>
-              <th className="px-2 py-2 text-left">Scheduled</th>
-              <th className="px-2 py-2 text-left">Published</th>
-              <th className="px-2 py-2 text-right w-12"></th>
+              <th className="px-1.5 py-1.5 text-left w-6" title="Status"></th>
+              <th className="px-1.5 py-1.5 text-left w-10">Media</th>
+              <th className="px-1.5 py-1.5 text-left">Caption</th>
+              <th className="px-1.5 py-1.5 text-left w-10">Acct</th>
+              <th className="px-1.5 py-1.5 text-left">Scheduled</th>
+              <th className="px-1.5 py-1.5 text-left">Published</th>
+              <th className="px-1.5 py-1.5 text-right w-10"></th>
             </tr>
           </thead>
           <tbody>
             {loading && posts.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-12 text-center text-sm text-muted-foreground">
-                  Loading posts…
+                <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  Loading posts...
                 </td>
               </tr>
             ) : posts.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-12 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
                   No posts match the current filters.
                 </td>
               </tr>

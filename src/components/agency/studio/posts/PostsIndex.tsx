@@ -4,15 +4,90 @@ import { useCallback, useState } from 'react'
 import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { usePostsList } from '@/hooks/usePostsList'
+import type { StatusCounts } from '@/hooks/usePostsList'
 import { Button } from '@/components/ui/button'
 import { PostsFilters } from './PostsFilters'
 import { PostsTable } from './PostsTable'
 import { PostsBulkActions } from './PostsBulkActions'
+import type { ScheduledPostStatus } from '@/types/database'
+
+/* ── Status Tab Bar ─────────────────────────────────────────────────── */
+
+interface StatusTab {
+  key: ScheduledPostStatus | 'all'
+  label: string
+}
+
+const STATUS_TABS: StatusTab[] = [
+  { key: 'all', label: 'All' },
+  { key: 'draft', label: 'Draft' },
+  { key: 'scheduled', label: 'Scheduled' },
+  { key: 'published', label: 'Published' },
+  { key: 'failed', label: 'Failed' },
+  { key: 'cancelled', label: 'Cancelled' },
+]
+
+function StatusTabBar({
+  activeTab,
+  onTabChange,
+  allCount,
+  statusCounts,
+}: {
+  activeTab: ScheduledPostStatus | 'all'
+  onTabChange: (tab: ScheduledPostStatus | 'all') => void
+  allCount: number
+  statusCounts: StatusCounts
+}) {
+  return (
+    <div className="flex items-center gap-0 border-b border-border overflow-x-auto">
+      {STATUS_TABS.map((tab) => {
+        const count = tab.key === 'all' ? allCount : statusCounts[tab.key] ?? 0
+        const isActive = activeTab === tab.key
+        const isFailed = tab.key === 'failed'
+
+        return (
+          <button
+            key={tab.key}
+            onClick={() => onTabChange(tab.key)}
+            className={[
+              'relative px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors',
+              'hover:text-foreground focus-visible:outline-none',
+              isActive
+                ? 'text-foreground'
+                : isFailed && count > 0
+                  ? 'text-red-500'
+                  : 'text-muted-foreground',
+            ].join(' ')}
+          >
+            <span className={isFailed && count > 0 ? 'text-red-500' : ''}>
+              {tab.label}
+            </span>
+            <span
+              className={[
+                'ml-1.5 text-xs tabular-nums',
+                isActive ? 'text-foreground/70' : 'text-muted-foreground/60',
+                isFailed && count > 0 ? '!text-red-500/70' : '',
+              ].join(' ')}
+            >
+              ({count})
+            </span>
+            {/* Active underline */}
+            {isActive && (
+              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-foreground rounded-t" />
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ── Posts Index ─────────────────────────────────────────────────────── */
 
 /**
  * Posts Index — the All Posts surface for the active brand. Pulls from the
  * shared usePostsList hook (client-side filter, sort, pagination), wires
- * PostsFilters → PostsTable → PostsBulkActions, and handles per-row
+ * PostsFilters -> PostsTable -> PostsBulkActions, and handles per-row
  * actions (Edit jumps to the Creator route, Duplicate / Reschedule /
  * Delete delegate to PATCH /api/scheduled-posts).
  *
@@ -27,6 +102,8 @@ export function PostsIndex() {
   const {
     posts,
     total,
+    allCount,
+    statusCounts,
     loading,
     error,
     page,
@@ -39,6 +116,24 @@ export function PostsIndex() {
   } = usePostsList({ brandId: activeBrandId, pageSize: 20 })
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  /* Derive the active tab from the current statuses filter */
+  const activeTab: ScheduledPostStatus | 'all' =
+    filters.statuses && filters.statuses.length === 1
+      ? filters.statuses[0]
+      : 'all'
+
+  const handleTabChange = useCallback(
+    (tab: ScheduledPostStatus | 'all') => {
+      if (tab === 'all') {
+        const { statuses: _removed, ...rest } = filters
+        setFilters(rest)
+      } else {
+        setFilters({ ...filters, statuses: [tab] })
+      }
+    },
+    [filters, setFilters]
+  )
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -67,8 +162,6 @@ export function PostsIndex() {
 
   const handleEdit = useCallback(
     (id: string) => {
-      // Hand the draft id off to the Creator entry point. Creator listens
-      // for pendingDraftId in agency-store and opens that draft on mount.
       setPendingDraftId(id)
       window.location.href = '/agency/studio'
     },
@@ -164,16 +257,18 @@ export function PostsIndex() {
   }
 
   return (
-    <div className="space-y-4">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">All Posts</h1>
-          <p className="text-xs text-muted-foreground">
-            Every draft, scheduled, published, failed and cancelled post for this brand.
-          </p>
-        </div>
-      </header>
+    <div className="space-y-3">
+      {/* Status tab bar */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <StatusTabBar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          allCount={allCount}
+          statusCounts={statusCounts}
+        />
+      </div>
 
+      {/* Search + Platform + Date + Sort filters */}
       <PostsFilters filters={filters} onChange={setFilters} total={total} />
 
       {error && (
