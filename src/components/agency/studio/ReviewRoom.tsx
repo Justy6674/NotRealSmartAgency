@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Check, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Loader2, Check, RefreshCw, ExternalLink, Film, Image as ImageIcon } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
@@ -12,6 +12,18 @@ import { BatchActions } from './review/BatchActions'
 import { ComplianceBadge } from './review/ComplianceBadge'
 import { recordReviewDecision } from '@/lib/media/review-memory'
 import type { ScheduledPost, DraftSource, ComplianceResult, PostPlatform } from '@/types/database'
+
+// Lightweight shape — only the fields the detail pane renders.
+// Sourced from /api/media which returns top-level columns from the
+// consolidated pipeline (file_url, thumbnail_url, file_type, etc.)
+interface ReviewMediaItem {
+  id: string
+  file_url: string
+  file_type: string
+  file_name: string
+  thumbnail_url: string | null
+  duration_seconds: number | null
+}
 
 // ── Helper: extract source from metadata ──────────────────────────────────────
 
@@ -41,6 +53,10 @@ export function ReviewRoom() {
   const [editingCaption, setEditingCaption] = useState<string | null>(null)
   const [complianceCache, setComplianceCache] = useState<Map<string, ComplianceResult>>(new Map())
   const [complianceLoading, setComplianceLoading] = useState<Set<string>>(new Set())
+  // Cache of brand media keyed by media_item_id so the detail panel can
+  // render real video/image content for the active draft. Loaded once per
+  // brand from /api/media — same source the rest of Studio uses.
+  const [mediaCache, setMediaCache] = useState<Map<string, ReviewMediaItem>>(new Map())
 
   const [filters, setFilters] = useState<ReviewFilterState>({
     source: 'all',
@@ -71,6 +87,22 @@ export function ReviewRoom() {
   }, [activeBrandId])
 
   useEffect(() => { fetchDrafts() }, [fetchDrafts])
+
+  // ── Fetch media for the brand (so the detail pane can render the real
+  // video / image content for whichever draft is active). Single fetch per
+  // brand — keyed by media_item_id in a Map for O(1) lookup. ────────────────
+  useEffect(() => {
+    if (!activeBrandId) return
+    fetch(`/api/media?brandId=${activeBrandId}&sort=newest`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const items: ReviewMediaItem[] = Array.isArray(d) ? d : (d.items ?? [])
+        const next = new Map<string, ReviewMediaItem>()
+        for (const m of items) next.set(m.id, m)
+        setMediaCache(next)
+      })
+      .catch(() => setMediaCache(new Map()))
+  }, [activeBrandId])
 
   // ── Compliance checks (auto-run for health brands) ──────────────────────────
 
@@ -231,6 +263,34 @@ export function ReviewRoom() {
 
   const detailPost = detailPostId ? drafts.find(d => d.id === detailPostId) : null
 
+  // Resolve the actual media items attached to the active draft so the
+  // detail pane can render real video / image content (not just a caption).
+  const detailMedia: ReviewMediaItem[] = useMemo(() => {
+    if (!detailPost) return []
+    const ids: string[] = [
+      ...((detailPost.media_item_ids as string[] | null) ?? []),
+      ...((detailPost as ScheduledPost & { media_item_id?: string | null }).media_item_id
+        ? [(detailPost as ScheduledPost & { media_item_id?: string | null }).media_item_id as string]
+        : []),
+    ]
+    const unique = [...new Set(ids)]
+    return unique.map((id) => mediaCache.get(id)).filter((m): m is ReviewMediaItem => !!m)
+  }, [detailPost, mediaCache])
+
+  // Mixpost edit URL — only available once the background sync has completed.
+  // Reads metadata.mixpost set by syncDraftToMixpost.
+  const mixpostEditUrl = useMemo(() => {
+    if (!detailPost) return null
+    const meta = (detailPost.metadata as Record<string, unknown> | null) ?? {}
+    const mixpost = meta.mixpost as
+      | { post_uuid?: string; workspace_uuid?: string }
+      | undefined
+    if (!mixpost?.post_uuid || !mixpost.workspace_uuid) return null
+    // Mixpost web URL — bare host, no /api prefix.
+    const webBase = process.env.NEXT_PUBLIC_MIXPOST_WEB_URL ?? 'https://mixpost.notrealsmart.com.au/mixpost'
+    return `${webBase}/${mixpost.workspace_uuid}/posts/${mixpost.post_uuid}/edit`
+  }, [detailPost])
+
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (!activeBrandId) {
@@ -321,7 +381,7 @@ export function ReviewRoom() {
 
       {/* RIGHT: Detail panel + phone mockup */}
       {detailPost && (
-        <div className="hidden lg:flex lg:w-[380px] shrink-0 flex-col border-l border-border overflow-y-auto bg-muted/30">
+        <div className="hidden lg:flex lg:w-[460px] shrink-0 flex-col border-l border-border overflow-y-auto bg-muted/30">
           <div className="p-4 space-y-4">
             {/* Source info */}
             <div className="flex items-center gap-2">
@@ -337,6 +397,62 @@ export function ReviewRoom() {
                 />
               </div>
             </div>
+
+            {/* ── Real media — playable video, full-res image ────────────────
+               This is the bit Justin couldn't see before. Native HTML5
+               <video controls> IS the actual player Facebook uses on the
+               desktop web feed — same codec decoder, same scrubber. The
+               source URL points at Supabase Storage; the browser plays the
+               actual MP4. For images, we render full file_url (not the
+               compressed thumbnail). Always shown above the phone mockup
+               so you can press play and see what you're approving. */}
+            {detailMedia.length > 0 ? (
+              <div className="space-y-2">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block">
+                  Media ({detailMedia.length})
+                </label>
+                <div className="space-y-2">
+                  {detailMedia.map((m) => {
+                    const isVideo = m.file_type?.startsWith('video')
+                    const isImage = m.file_type?.startsWith('image')
+                    return (
+                      <div key={m.id} className="rounded-lg overflow-hidden border border-border bg-black">
+                        {isVideo ? (
+                          // eslint-disable-next-line jsx-a11y/media-has-caption
+                          <video
+                            src={m.file_url}
+                            poster={m.thumbnail_url ?? undefined}
+                            controls
+                            preload="metadata"
+                            className="w-full max-h-[420px] bg-black"
+                          />
+                        ) : isImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={m.file_url}
+                            alt={m.file_name}
+                            className="w-full max-h-[420px] object-contain bg-black"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-32 text-xs text-muted-foreground gap-1.5">
+                            <Film className="h-4 w-4" />
+                            Unsupported file type: {m.file_type}
+                          </div>
+                        )}
+                        <div className="px-2 py-1 text-[10px] text-muted-foreground bg-muted/30 truncate">
+                          {m.file_name}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (detailPost.media_item_ids?.length ?? 0) > 0 ? (
+              <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-[11px] text-amber-500/90 flex items-center gap-1.5">
+                <ImageIcon className="h-3.5 w-3.5" />
+                Media attached but not yet loaded — refresh in a sec.
+              </div>
+            ) : null}
 
             {/* Phone mockup preview */}
             <div className="flex justify-center">
@@ -396,6 +512,35 @@ export function ReviewRoom() {
               </div>
             )}
 
+            {/* View in Mixpost — opens the actual Mixpost edit screen for this
+                draft in a new tab. Available once the background sync (fired
+                from /api/scheduled-posts on save) has populated metadata.mixpost.
+                Mixpost is the publisher and owns the source-of-truth preview;
+                this gives you a one-click escape hatch when our in-NRS preview
+                isn't enough. Disabled state shows why with a tooltip. */}
+            <div>
+              {mixpostEditUrl ? (
+                <a
+                  href={mixpostEditUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/40 bg-violet-400/5 px-3 py-1.5 text-[11px] font-medium text-violet-500 hover:bg-violet-400/10 transition-colors"
+                  title="Opens this draft in Mixpost (the actual publisher) in a new tab"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  View in Mixpost
+                </a>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-[11px] font-medium text-muted-foreground/60"
+                  title="Mixpost sync still running — usually takes 5-10s for images, up to ~6 minutes for videos (one-time per video, then cached)"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Syncing to Mixpost…
+                </span>
+              )}
+            </div>
+
             {/* Actions */}
             <div className="flex gap-2 pt-2">
               <button
@@ -407,6 +552,7 @@ export function ReviewRoom() {
               <button
                 onClick={() => handleApprove(detailPost.id)}
                 className="flex-1 rounded-lg bg-[oklch(0.72_0.15_145)] px-3 py-2 text-xs font-medium text-white hover:bg-[oklch(0.65_0.15_145)] transition-colors"
+                title="Mark as scheduled — Mixpost queues it to the next free slot in your posting schedule"
               >
                 Approve
               </button>

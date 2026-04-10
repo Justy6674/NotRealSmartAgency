@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { syncDraftToMixpost } from '@/lib/mixpost/sync-draft'
+
+// Mixpost sync can take ~6 minutes per video transcode. Run on Node runtime
+// (not edge) and bump maxDuration so the request doesn't time out before the
+// sync completes. The sync itself is fired with `void` so the HTTP response
+// returns immediately — but Vercel still needs the function context alive
+// for the background work to finish.
+export const runtime = 'nodejs'
+export const maxDuration = 600
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -184,6 +194,26 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Fire-and-forget Mixpost draft sync. This pushes the post (and its media)
+  // to Mixpost as a draft so the Review tab can render the actual Mixpost
+  // preview / video player. Uses an admin client for the background task so
+  // RLS doesn't block the cross-row writes (media_items.mixpost_media_id +
+  // scheduled_posts.metadata.mixpost). All errors are swallowed and logged —
+  // the user's POST already succeeded; the sync is non-blocking enrichment.
+  if (data.status === 'draft' || data.status === 'scheduled') {
+    void (async () => {
+      try {
+        const admin = createAdminClient()
+        const result = await syncDraftToMixpost(admin, data.id)
+        if (!result.ok) {
+          console.warn(`[scheduled-posts] Mixpost sync warning for ${data.id}:`, result.error)
+        }
+      } catch (err) {
+        console.error(`[scheduled-posts] Mixpost sync threw for ${data.id}:`, err)
+      }
+    })()
   }
 
   return NextResponse.json(data, { status: 201 })
