@@ -7,7 +7,7 @@ import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import { Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon, List, ListOrdered, Undo, Redo } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { EmojiPickerPopover } from './EmojiPickerPopover'
 
 interface RichCaptionEditorProps {
@@ -45,11 +45,12 @@ export function RichCaptionEditor({
   characterLimit,
   compact = false,
 }: RichCaptionEditorProps) {
-  const editor = useEditor({
-    extensions: [
+  // Memoise extensions to prevent TipTap duplicate-name warnings caused
+  // by recreating the array on every render cycle.
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         heading: false,
-        // Bold/italic/strike/link all come from StarterKit defaults
       }),
       Underline,
       Link.configure({
@@ -62,6 +63,13 @@ export function RichCaptionEditor({
         ? [CharacterCount.configure({ limit: characterLimit })]
         : []),
     ],
+    // Recreate only when placeholder or limit actually change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [placeholder, characterLimit],
+  )
+
+  const editor = useEditor({
+    extensions,
     content: value,
     editorProps: {
       attributes: {

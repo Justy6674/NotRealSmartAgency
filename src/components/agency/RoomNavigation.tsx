@@ -56,7 +56,9 @@ export function RoomSubNavigation() {
   return (
     <div className="flex shrink-0 items-center gap-1.5 border-b px-4 py-2 overflow-x-auto">
       {activeRoom.subTabs.map((tab) => {
-        const isActive = tab.matchPrefixes.some((p) => pathname.startsWith(p))
+        const isActive = tab.exactMatch
+          ? tab.matchPrefixes.some((p) => pathname === p)
+          : tab.matchPrefixes.some((p) => pathname.startsWith(p))
 
         return (
           <Link

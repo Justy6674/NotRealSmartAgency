@@ -100,7 +100,9 @@ export function AgencyHeader() {
       {activeRoom?.subTabs && activeRoom.subTabs.length > 0 && (
         <div className="flex items-center gap-1.5 border-t px-4 py-2 overflow-x-auto">
           {activeRoom.subTabs.map((tab) => {
-            const isActive = tab.matchPrefixes.some((p) => pathname.startsWith(p))
+            const isActive = tab.exactMatch
+              ? tab.matchPrefixes.some((p) => pathname === p)
+              : tab.matchPrefixes.some((p) => pathname.startsWith(p))
 
             return (
               <Link

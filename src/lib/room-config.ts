@@ -4,6 +4,8 @@ export interface SubTabConfig {
   label: string
   href: string
   matchPrefixes: string[]
+  /** When true, pathname must equal (not just startsWith) a matchPrefix */
+  exactMatch?: boolean
 }
 
 export interface RoomConfig {
@@ -32,6 +34,16 @@ export const ROOMS: RoomConfig[] = [
     iconName: 'Palette',
     href: '/agency/studio',
     matchPrefixes: ['/agency/studio', '/agency/calendar'],
+    subTabs: [
+      { label: 'Studio', href: '/agency/studio', matchPrefixes: ['/agency/studio'], exactMatch: true },
+      { label: 'Posts', href: '/agency/studio/posts', matchPrefixes: ['/agency/studio/posts'] },
+      { label: 'Analytics', href: '/agency/studio/analytics', matchPrefixes: ['/agency/studio/analytics'] },
+      { label: 'Templates', href: '/agency/studio/templates', matchPrefixes: ['/agency/studio/templates'] },
+      { label: 'Hashtags', href: '/agency/studio/hashtags', matchPrefixes: ['/agency/studio/hashtags'] },
+      { label: 'Schedule', href: '/agency/studio/posting-schedule', matchPrefixes: ['/agency/studio/posting-schedule'] },
+      { label: 'Webhooks', href: '/agency/studio/webhooks', matchPrefixes: ['/agency/studio/webhooks'] },
+      { label: 'Accounts', href: '/agency/studio/accounts', matchPrefixes: ['/agency/studio/accounts'] },
+    ],
   },
   {
     id: 'command',
