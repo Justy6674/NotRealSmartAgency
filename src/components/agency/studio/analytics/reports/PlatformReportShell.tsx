@@ -1,6 +1,7 @@
 'use client'
 
-import { Loader2, AlertCircle, BarChart3 } from 'lucide-react'
+import { Loader2, AlertCircle, BarChart3, Sparkles } from 'lucide-react'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import {
   PLATFORM_BRAND_COLOURS,
   PLATFORM_LABELS,
@@ -23,6 +24,7 @@ export interface ReportMetricSpec {
 export interface PlatformReportShellProps {
   platform: PlatformKey
   brandId: string
+  brandName?: string
   /** Headline metric cards to render across the top. */
   metrics: ReportMetricSpec[]
   /** Optional note shown when no data is available (e.g. "API limited"). */
@@ -39,6 +41,7 @@ export interface PlatformReportShellProps {
 export function PlatformReportShell({
   platform,
   brandId,
+  brandName,
   metrics,
   emptyHint,
   timeseriesSeries = ['engagement'],
@@ -139,6 +142,20 @@ export function PlatformReportShell({
           )
         })}
       </div>
+
+      {/* Director Assist — platform-specific improvement advice */}
+      <button
+        type="button"
+        onClick={() =>
+          sendToDirector(
+            `How do I improve my ${label} performance for ${brandName ?? 'this brand'}? Use query_social_analytics to pull real ${label} data, then give me specific, actionable advice — best content types, posting times, hashtag strategy, and anything I should stop or start doing on ${label}.`
+          )
+        }
+        className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colours"
+      >
+        <Sparkles className="h-3 w-3" />
+        How do I improve?
+      </button>
 
       {charts.length > 0 && (
         <div className="grid gap-4 md:grid-cols-2">

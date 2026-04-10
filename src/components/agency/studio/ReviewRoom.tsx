@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Loader2, Check, RefreshCw, ExternalLink, Film, Image as ImageIcon, MessageSquare } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
+import { DirectorAssistBar } from '@/components/agency/studio/DirectorAssistBar'
 import { PlatformMockupPreview } from './preview'
 import { ReviewFilters, type ReviewFilterState } from './review/ReviewFilters'
 import { DraftCard } from './review/DraftCard'
@@ -358,7 +360,19 @@ export function ReviewRoom() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full overflow-hidden flex-col">
+      <div className="px-6 pt-4">
+        <DirectorAssistBar
+          brandName={brandName}
+          buttons={[
+            {
+              label: 'Review all drafts',
+              prompt: `Review all of ${brandName}'s current drafts. Check each for brand voice, caption quality, hashtag relevance, platform fit, ${isHealthBrand ? 'AHPRA/TGA compliance, ' : ''}and engagement potential. List what needs fixing and tell me what to change.`,
+            },
+          ]}
+        />
+      </div>
+      <div className="flex flex-1 overflow-hidden">
       {/* LEFT: Draft list + filters */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {/* Filters */}
@@ -569,6 +583,30 @@ export function ReviewRoom() {
               <span className="text-[10px] text-muted-foreground">
                 {(editingCaption ?? detailPost.caption).length} characters
               </span>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <button
+                  type="button"
+                  onClick={() => sendToDirector(
+                    `Improve this ${detailPost.platform} caption for ${brandName} in the brand voice. Keep the meaning but make it more engaging, platform-optimised, and scroll-stopping:\n\n"${editingCaption ?? detailPost.caption}"\n\nGive me the improved version ready to copy-paste.`
+                  )}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colours"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Improve caption
+                </button>
+                {isHealthBrand && (
+                  <button
+                    type="button"
+                    onClick={() => sendToDirector(
+                      `Check this ${detailPost.platform} caption for AHPRA/TGA compliance. This is for ${brandName}, a healthcare brand. Flag any violations, therapeutic claims, or misleading language. Penalties are $60K per offence.\n\nCaption: "${editingCaption ?? detailPost.caption}"\n\nTell me exactly what to fix.`
+                    )}
+                    className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colours"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Check compliance
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Hashtags */}
@@ -662,6 +700,7 @@ export function ReviewRoom() {
           buildMixpostEditUrl helper) rather than an in-page iframe.
           This is an escape-hatch for debugging only — the day-to-day
           workflow stays entirely inside NRS. */}
+      </div>
     </div>
   )
 }

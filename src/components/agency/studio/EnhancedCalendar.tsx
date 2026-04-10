@@ -12,6 +12,7 @@ import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 import { useScheduledPosts } from '@/hooks/useScheduledPosts'
+import { DirectorAssistBar } from './DirectorAssistBar'
 import { CalendarPostPill } from './calendar/CalendarPostPill'
 import {
   PLATFORM_BRAND_COLOURS,
@@ -213,8 +214,26 @@ export function EnhancedCalendar() {
     )
   }
 
+  const brandName = studioData.brand?.name ?? 'this brand'
+  const isHealthBrand = !!(studioData.brand?.compliance_flags?.ahpra || studioData.brand?.compliance_flags?.tga)
+
   return (
     <div className="space-y-3">
+      {/* Director Assist */}
+      <DirectorAssistBar
+        brandName={brandName}
+        buttons={[
+          {
+            label: 'Fill my week',
+            prompt: `Review ${brandName}'s marketing proforma, past posts, and connected social accounts. Then fill every empty day this week with draft posts in ${brandName}'s brand voice.${isHealthBrand ? ' Ensure all content is AHPRA/TGA compliant.' : ''} Use the fill_calendar tool.`,
+          },
+          {
+            label: "What's missing?",
+            prompt: `Review ${brandName}'s content calendar for the next 14 days against the strategy pillars in the proforma and the connected social accounts. Identify gaps — which platforms are under-served, which content pillars are missing, and which days have no posts scheduled.${isHealthBrand ? ' Flag any compliance risks.' : ''}`,
+          },
+        ]}
+      />
+
       {/* Strategy overlay */}
       {strategyContext && (
         <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2.5">

@@ -9,6 +9,7 @@ import {
   Trophy,
   Loader2,
 } from 'lucide-react'
+import { DirectorAssistBar } from '@/components/agency/studio/DirectorAssistBar'
 import {
   PLATFORM_BRAND_COLOURS,
   PLATFORM_LABELS,
@@ -20,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export interface AnalyticsOverviewProps {
   brandId: string
+  brandName?: string
   /** Optional ISO date range. Defaults to last 28 days. */
   from?: string
   to?: string
@@ -63,7 +65,7 @@ const initialReports: Record<PlatformKey, PlatformMetrics | null> = {
  *
  * Empty platforms (no connected account) are silently skipped, not errored.
  */
-export function AnalyticsOverview({ brandId, from, to }: AnalyticsOverviewProps) {
+export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOverviewProps) {
   const [state, setState] = useState<OverviewState>({
     loading: true,
     reports: { ...initialReports },
@@ -172,6 +174,21 @@ export function AnalyticsOverview({ brandId, from, to }: AnalyticsOverviewProps)
 
   return (
     <div className="space-y-4">
+      {/* Director Assist */}
+      <DirectorAssistBar
+        brandName={brandName ?? null}
+        buttons={[
+          {
+            label: "What's working?",
+            prompt: `Give me a quick performance summary for ${brandName ?? 'this brand'}. Use query_analytics and query_social_analytics to pull real data. What content types, platforms and posting times are performing best? Keep it concise with actionable takeaways.`,
+          },
+          {
+            label: 'Full performance review',
+            prompt: `Run a detailed cross-platform performance analysis for ${brandName ?? 'this brand'}. Use query_analytics and query_social_analytics to get real data from every connected platform. Compare engagement rates, reach, follower growth and content performance. Identify trends, winning patterns, underperformers, and specific recommendations to improve results over the next 30 days.`,
+          },
+        ]}
+      />
+
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <MetricCard
           label="Total reach"

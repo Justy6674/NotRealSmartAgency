@@ -3,9 +3,12 @@
 import { useCallback, useState } from 'react'
 import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useStudioData } from '@/hooks/useStudioData'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import { usePostsList } from '@/hooks/usePostsList'
 import type { StatusCounts } from '@/hooks/usePostsList'
 import { Button } from '@/components/ui/button'
+import { DirectorAssistBar } from '../DirectorAssistBar'
 import { PostsFilters } from './PostsFilters'
 import { PostsTable } from './PostsTable'
 import { PostsBulkActions } from './PostsBulkActions'
@@ -98,6 +101,9 @@ function StatusTabBar({
 export function PostsIndex() {
   const activeBrandId = useAgencyStore((s) => s.activeBrandId)
   const setPendingDraftId = useAgencyStore((s) => s.setPendingDraftId)
+  const studioData = useStudioData(activeBrandId)
+  const brandName = studioData.brand?.name ?? 'this brand'
+  const isHealthBrand = !!(studioData.brand?.compliance_flags?.ahpra || studioData.brand?.compliance_flags?.tga)
 
   const {
     posts,
@@ -256,8 +262,35 @@ export function PostsIndex() {
     )
   }
 
+  const handleAskDirector = useCallback(
+    (id: string) => {
+      const post = posts.find((p) => p.id === id)
+      if (!post) return
+      const snippet = post.caption?.slice(0, 120) ?? '(no caption)'
+      sendToDirector(
+        `Review this ${post.platform} post (status: ${post.status}): "${snippet}". What can be improved? If it failed, diagnose the issue and suggest a fix.${isHealthBrand ? ' Check AHPRA/TGA compliance.' : ''}`
+      )
+    },
+    [posts, isHealthBrand]
+  )
+
   return (
     <div className="space-y-3">
+      {/* Director Assist */}
+      <DirectorAssistBar
+        brandName={brandName}
+        buttons={[
+          {
+            label: 'Review my posts',
+            prompt: `Analyse ${brandName}'s recent posts across all platforms. What's performing well, what needs improvement, and what content gaps do you see?${isHealthBrand ? ' Flag any AHPRA/TGA compliance concerns.' : ''} Use query_outputs and query_social_analytics.`,
+          },
+          {
+            label: 'Fix failed posts',
+            prompt: `Check ${brandName}'s failed posts. For each one, diagnose why it failed (missing media, API error, compliance rejection, scheduling conflict) and create a fixed version as a new draft.${isHealthBrand ? ' Ensure AHPRA/TGA compliance.' : ''}`,
+          },
+        ]}
+      />
+
       {/* Status tab bar */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <StatusTabBar
@@ -286,6 +319,7 @@ export function PostsIndex() {
         onDuplicate={handleDuplicate}
         onReschedule={handleReschedule}
         onDelete={handleDelete}
+        onAskDirector={handleAskDirector}
         loading={loading}
       />
 

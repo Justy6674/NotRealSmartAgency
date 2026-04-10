@@ -12,7 +12,11 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react'
+import { DirectorAssistBar } from '@/components/agency/studio/DirectorAssistBar'
+import { sendToDirector } from '@/lib/chat-dispatch'
+import { useStudioData } from '@/hooks/useStudioData'
 
 interface HashtagGroup {
   id: string
@@ -50,6 +54,8 @@ const EMPTY_EDITOR: EditorState = {
  * Phase 6 of the Mixpost UI port.
  */
 export function HashtagManagerPage({ brandId }: HashtagManagerPageProps) {
+  const studioData = useStudioData(brandId)
+  const brandName = studioData.brand?.name ?? 'this brand'
   const [groups, setGroups] = useState<HashtagGroup[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -215,6 +221,21 @@ export function HashtagManagerPage({ brandId }: HashtagManagerPageProps) {
 
   return (
     <div className="space-y-5 px-6 py-4">
+      {/* Director Assist */}
+      <DirectorAssistBar
+        brandName={brandName}
+        buttons={[
+          {
+            label: 'Suggest hashtags for my brand',
+            prompt: `Research and create themed hashtag groups for ${brandName}. Analyse our niche, competitors, and target audience. Create groups like: core brand tags, industry tags, trending/seasonal tags, location tags, and campaign-specific tags. Use the manage_tags tool to save each group. Include a mix of high-volume and niche hashtags for maximum reach.`,
+          },
+          {
+            label: 'Audit my hashtag strategy',
+            prompt: `Review all existing hashtag groups for ${brandName}. Check for: overlap between groups, missing categories, outdated or banned tags, hashtag volume balance (mix of broad and niche), platform suitability, and overall strategy gaps. Give me specific recommendations to improve discoverability.`,
+          },
+        ]}
+      />
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -381,6 +402,18 @@ export function HashtagManagerPage({ brandId }: HashtagManagerPageProps) {
                         </div>
                       ) : (
                         <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            title="Optimise with Director"
+                            onClick={() =>
+                              sendToDirector(
+                                `Optimise my hashtag group "${group.name}" for ${brandName}. Current tags: ${group.tags.map(t => `#${t}`).join(' ')}. Suggest replacements for underperforming tags, add missing high-value tags, remove any banned or low-reach ones, and ensure a good mix of broad and niche hashtags for this group's purpose.`
+                              )
+                            }
+                            className="rounded-full bg-amber-500/10 p-1 text-amber-400 hover:bg-amber-500/20 transition-colours"
+                          >
+                            <Sparkles className="h-3 w-3" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => startEdit(group)}

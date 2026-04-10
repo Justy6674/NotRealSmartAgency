@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Tag, Images, Plus, Palette, Sparkles, Loader2, CheckSquare, Square, Trash2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useStudioData } from '@/hooks/useStudioData'
 import { sendToDirector } from '@/lib/chat-dispatch'
+import { DirectorAssistBar } from './DirectorAssistBar'
 import { MediaUploader } from '@/components/agency/MediaUploader'
 import { MediaLibraryFilters } from './MediaLibraryFilters'
 import { MediaLibraryCard } from './MediaLibraryCard'
@@ -21,6 +23,9 @@ type ViewMode = 'library' | 'collection'
 
 export function MediaLibrary() {
   const { activeBrandId, setPendingMediaId } = useAgencyStore()
+  const studioData = useStudioData(activeBrandId)
+  const brandName = studioData.brand?.name ?? 'this brand'
+  const isHealthBrand = !!(studioData.brand?.compliance_flags?.ahpra || studioData.brand?.compliance_flags?.tga)
 
   const [items, setItems] = useState<MediaItemWithUsage[]>([])
   const [loading, setLoading] = useState(true)
@@ -348,6 +353,20 @@ export function MediaLibrary() {
 
   return (
     <div className="space-y-4 overflow-y-auto p-6">
+      <DirectorAssistBar
+        brandName={brandName}
+        buttons={[
+          {
+            label: 'Organise my library',
+            prompt: `Review ${brandName}'s media library. Suggest tags, collections (carousels, campaigns), and organisation improvements based on the brand's content strategy and proforma.${isHealthBrand ? ' Flag any media that may need AHPRA/TGA compliance review.' : ''}`,
+          },
+          {
+            label: "What content am I missing?",
+            prompt: `Review ${brandName}'s media library against the marketing strategy pillars and connected social accounts. What types of content are missing — product shots, behind-the-scenes, testimonials, educational content, short-form video? Suggest what to create or upload next.${isHealthBrand ? ' Consider AHPRA/TGA content requirements.' : ''}`,
+          },
+        ]}
+      />
+
       <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} />
 
       {/* Actions row */}

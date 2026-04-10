@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MoreHorizontal, Pencil, Copy, CalendarClock, Trash2, ImageIcon } from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, CalendarClock, Sparkles, Trash2, ImageIcon } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,6 +27,7 @@ interface PostsTableProps {
   onDuplicate: (id: string) => void
   onReschedule: (id: string) => void
   onDelete: (id: string) => void
+  onAskDirector?: (id: string) => void
   loading: boolean
 }
 
@@ -144,8 +145,9 @@ function PostRow(props: {
   onDuplicate: (id: string) => void
   onReschedule: (id: string) => void
   onDelete: (id: string) => void
+  onAskDirector?: (id: string) => void
 }) {
-  const { post, selected, onToggleSelect, onEdit, onDuplicate, onReschedule, onDelete } = props
+  const { post, selected, onToggleSelect, onEdit, onDuplicate, onReschedule, onDelete, onAskDirector } = props
   const firstMediaId = post.media_item_ids?.[0] ?? post.media_item_id ?? null
   const thumb = useMediaThumb(firstMediaId)
 
@@ -232,6 +234,12 @@ function PostRow(props: {
               <CalendarClock />
               Reschedule
             </DropdownMenuItem>
+            {onAskDirector && (
+              <DropdownMenuItem onClick={() => onAskDirector(post.id)}>
+                <Sparkles />
+                Ask Director
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={() => onDelete(post.id)}>
               <Trash2 />
@@ -256,6 +264,7 @@ export function PostsTable(props: PostsTableProps) {
     onDuplicate,
     onReschedule,
     onDelete,
+    onAskDirector,
     loading,
   } = props
 
@@ -313,6 +322,7 @@ export function PostsTable(props: PostsTableProps) {
                   onDuplicate={onDuplicate}
                   onReschedule={onReschedule}
                   onDelete={onDelete}
+                  onAskDirector={onAskDirector}
                 />
               ))
             )}

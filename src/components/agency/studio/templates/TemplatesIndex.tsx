@@ -2,7 +2,9 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Copy, Trash2, FileText, Pencil, AlertCircle } from 'lucide-react'
+import { Plus, Search, Copy, Trash2, FileText, Pencil, AlertCircle, Sparkles } from 'lucide-react'
+import { DirectorAssistBar } from '@/components/agency/studio/DirectorAssistBar'
+import { sendToDirector } from '@/lib/chat-dispatch'
 import { useTemplates } from '@/hooks/useTemplates'
 import { useRouter } from 'next/navigation'
 import type { PostTemplate } from '@/types/database'
@@ -97,6 +99,21 @@ export function TemplatesIndex({ brandId, brandName }: TemplatesIndexProps) {
 
   return (
     <div className="space-y-5 px-6 py-4">
+      {/* Director Assist */}
+      <DirectorAssistBar
+        brandName={brandName ?? null}
+        buttons={[
+          {
+            label: 'Create templates for my brand',
+            prompt: `Create a set of platform-specific post templates with {variables} for ${brandName ?? 'this brand'}. Include templates for Instagram, Facebook, LinkedIn, TikTok and X. Use our brand voice and include default hashtags. Use the save_output tool to store each template.`,
+          },
+          {
+            label: 'Review my templates',
+            prompt: `Audit the existing post templates for ${brandName ?? 'this brand'}. Check coverage across platforms, variable usage, hashtag quality, and brand voice consistency. Identify gaps and suggest improvements. Use query_outputs to review what we have.`,
+          },
+        ]}
+      />
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -208,6 +225,18 @@ export function TemplatesIndex({ brandId, brandName }: TemplatesIndexProps) {
                       </span>
                     )}
                   </Link>
+                  <button
+                    type="button"
+                    title="Improve with Director"
+                    onClick={() =>
+                      sendToDirector(
+                        `Improve this post template called "${template.name}" for ${brandName ?? 'this brand'}. Current caption: "${template.caption_template.slice(0, 200)}". Hashtags: ${template.default_hashtags.map(t => `#${t}`).join(' ') || 'none'}. Suggest a better caption, stronger hashtags, and any missing {variables}. Keep our brand voice.`
+                      )
+                    }
+                    className="shrink-0 rounded-full bg-amber-500/10 p-1 text-amber-400 hover:bg-amber-500/20 transition-colours"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                  </button>
                 </div>
 
                 <p className="mt-2 text-xs text-muted-foreground/80 line-clamp-3 whitespace-pre-wrap">

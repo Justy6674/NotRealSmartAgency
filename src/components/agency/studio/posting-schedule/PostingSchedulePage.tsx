@@ -5,6 +5,8 @@ import { Calendar, Loader2, RefreshCcw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useStudioData } from '@/hooks/useStudioData'
+import { DirectorAssistBar } from '@/components/agency/studio/DirectorAssistBar'
 import type { PostingScheduleSlot } from '@/types/database'
 import { PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
 
@@ -13,6 +15,8 @@ import { SlotEditor, type SlotEditorValue } from './SlotEditor'
 
 export function PostingSchedulePage() {
   const activeBrandId = useAgencyStore((s) => s.activeBrandId)
+  const studioData = useStudioData(activeBrandId)
+  const brandName = studioData.brand?.name ?? 'this brand'
 
   const [slots, setSlots] = React.useState<PostingScheduleSlot[]>([])
   const [queuedCounts, setQueuedCounts] = React.useState<Record<string, number>>({})
@@ -222,6 +226,20 @@ export function PostingSchedulePage() {
           <span className="ml-2">Refresh</span>
         </Button>
       </header>
+
+      <DirectorAssistBar
+        brandName={brandName}
+        buttons={[
+          {
+            label: 'Optimise my schedule',
+            prompt: `Look at ${brandName}'s posting schedule and connected platforms. Use platform best practices and our analytics to suggest the best posting times. Consider Australian timezones. Show me a recommended weekly schedule.`,
+          },
+          {
+            label: 'Set up my week',
+            prompt: `Set up an optimal posting schedule for ${brandName} for this week. Create time slots for each connected platform at the best engagement times. Aim for consistent coverage without overwhelming any platform.`,
+          },
+        ]}
+      />
 
       {Object.keys(summary).length > 0 ? (
         <div className="flex flex-wrap gap-2">
