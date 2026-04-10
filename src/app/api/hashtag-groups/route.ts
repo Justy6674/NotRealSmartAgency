@@ -1,5 +1,23 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { ensureHashtagGroupTagInMixpost } from '@/lib/mixpost/sync-tags'
+
+// Fire-and-forget Mixpost mirror — runs after the user response is
+// returned so the UI doesn't wait on Mixpost. We use the admin client
+// because the sync writes to mixpost_tag_id/uuid/synced_at, which the
+// user's RLS policy doesn't cover. Errors are swallowed and logged —
+// this is enrichment, not a source of truth.
+function mirrorToMixpost(groupId: string) {
+  void (async () => {
+    try {
+      const admin = createAdminClient()
+      await ensureHashtagGroupTagInMixpost(admin, groupId)
+    } catch (err) {
+      console.warn(`[hashtag-groups] Mixpost mirror warning for ${groupId}:`, err)
+    }
+  })()
+}
 
 export async function GET(request: Request) {
   const supabase = await createClient()
@@ -37,6 +55,7 @@ export async function POST(request: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  mirrorToMixpost(data.id as string)
   return NextResponse.json(data, { status: 201 })
 }
 
@@ -61,6 +80,11 @@ export async function PATCH(request: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Only mirror on name change — renaming an existing group won't
+  // rename the Mixpost tag (tags are cached by id), but if the group
+  // was created before this feature and has no mixpost_tag_id yet,
+  // the next PATCH will lazily create it.
+  if (updates.name !== undefined) mirrorToMixpost(data.id as string)
   return NextResponse.json(data)
 }
 

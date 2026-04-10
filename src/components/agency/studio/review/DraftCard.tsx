@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, X, MessageSquare, Sparkles, Pencil } from 'lucide-react'
+import { Check, X, MessageSquare, Pencil, ExternalLink, Loader2 } from 'lucide-react'
 import { ComplianceBadge } from './ComplianceBadge'
 import { SOURCE_LABELS, PLATFORM_CONFIG } from './ReviewFilters'
 import type { ScheduledPost, DraftSource, ComplianceResult, PostPlatform } from '@/types/database'
@@ -17,6 +17,9 @@ interface DraftCardProps {
   onReject: (id: string) => void
   onAlter: (id: string) => void
   onAskDirector: (id: string) => void
+  /** Opens the full-screen Mixpost iframe modal for this draft. Only wired
+   *  when the post has finished syncing (metadata.mixpost.post_uuid set). */
+  onPreviewMixpost: (id: string) => void
 }
 
 function relativeTime(dateStr: string): string {
@@ -42,12 +45,22 @@ export function DraftCard({
   onReject,
   onAlter,
   onAskDirector,
+  onPreviewMixpost,
 }: DraftCardProps) {
   const meta = (post.metadata ?? {}) as Record<string, unknown>
   const source = (meta.source as DraftSource) ?? 'unknown'
   const createdBy = (meta.created_by as string) ?? undefined
   const sourceConfig = SOURCE_LABELS[source] ?? SOURCE_LABELS.unknown
   const platformConfig = PLATFORM_CONFIG[post.platform as PostPlatform]
+
+  // Mixpost sync state — drives the Preview pill in the action bar.
+  // post.metadata.mixpost.post_uuid is set by syncDraftToMixpost once the
+  // background push to Mixpost has completed. Until then the pill shows a
+  // non-clickable "Syncing…" label so the state is visible.
+  const mixpostMeta = (meta.mixpost ?? null) as
+    | { post_uuid?: string; workspace_uuid?: string }
+    | null
+  const isMixpostSynced = !!(mixpostMeta?.post_uuid && mixpostMeta.workspace_uuid)
 
   return (
     <div
@@ -153,6 +166,29 @@ export function DraftCard({
           <MessageSquare className="h-3 w-3" />
           Director
         </button>
+
+        {/* Mixpost Preview pill — one-click entry into the full-screen
+            iframe of the actual Mixpost edit screen. Greyed-out "Syncing…"
+            state until the background syncDraftToMixpost finishes (~5s for
+            images, up to ~6 min for videos one-time per file). */}
+        {isMixpostSynced ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPreviewMixpost(post.id) }}
+            className="inline-flex items-center gap-1 rounded-md border border-violet-400/40 bg-violet-400/10 px-2 py-1 text-[10px] font-medium text-violet-500 hover:bg-violet-400/20 transition-colors"
+            title="Preview in Mixpost — opens the actual Mixpost editor inside NRS"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Preview
+          </button>
+        ) : (
+          <span
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/30 px-2 py-1 text-[10px] text-muted-foreground/60"
+            title="Mixpost sync still running — images take ~5s, videos take up to ~6 min one-time"
+          >
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Syncing
+          </span>
+        )}
 
         <button
           onClick={(e) => { e.stopPropagation(); onApprove(post.id) }}

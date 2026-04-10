@@ -273,10 +273,15 @@ Users can paste (Cmd+V) or drag/drop images into chat. Images are sent as AI SDK
 Per-brand `post_signature` JSONB field on `brands` table. Three formats: plain text, `@mention`, or `#hashtag`. Injected into all agent system prompts as a mandatory attribution rule. Also appended by the cron publisher to scheduled posts before publishing via Mixpost/Ayrshare.
 
 ### Mixpost Integration
-- **Client**: `lib/mixpost/client.ts` — fetches connected accounts from Mixpost API
+- **Client**: `lib/mixpost/client.ts` — fetches connected accounts, media, tags, creates posts
 - **Brand mapping**: `lib/mixpost/brand-mapping.ts` — fuzzy matches Mixpost account names to NRS brands
 - **Auto-greet**: ChatInterface checks Mixpost accounts and shows "Socials: Instagram, Facebook, LinkedIn (connected via Mixpost)" instead of "Still missing: social profiles"
 - **API**: `/api/mixpost/accounts` — cached endpoint for brand-to-social mapping
+- **Draft sync** (`lib/mixpost/sync-draft.ts`): `syncDraftToMixpost(admin, postId)` pushes every NRS draft into Mixpost on save — idempotent via `metadata.mixpost.post_uuid`. Fired `void`-style from `POST /api/scheduled-posts`. Bug fixed 2026-04-10: `ensureMediaInMixpost`'s media_items cache writeback was originally fire-and-forget (`void supabase.update(...)`) which silently dropped and caused repeat ~6-min video transcodes — now awaited.
+- **Tag sync** (`lib/mixpost/sync-tags.ts`): `ensureBrandTagInMixpost` + `ensureHashtagGroupTagInMixpost` mirror NRS brand names and hashtag_group names into Mixpost tags. Auto-attached to every draft during `syncDraftToMixpost` so Mixpost's library filter works by brand. Cached via `brands.mixpost_tag_id` + `hashtag_groups.mixpost_tag_id` (migration 032).
+- **Webhook receiver** (`/api/webhooks/mixpost/route.ts`): handles all 9 Mixpost Pro events — `post.created`, `post.updated`, `post.scheduled`, `post.published`, `post.publishing_failed`, `post.deleted`, `account.{added,updated,deleted}`. HMAC SHA-256 verification on `X-Signature` header. **Setup guide: `~/Obsidian/Reference/nrs-mixpost-webhook-setup.md`** — register the webhook once in Mixpost admin UI and paste the secret into `MIXPOST_WEBHOOK_SECRET`. **Event catalogue: `~/Obsidian/Reference/nrs-mixpost-webhooks.md`** — full list derived from Mixpost Pro Laravel source on the VPS.
+- **Review iframe** (`components/agency/studio/ReviewRoom.tsx` + `review/DraftCard.tsx`): "Preview in Mixpost" button embeds the actual Mixpost edit screen as a 95vw×92vh iframe. Made possible by VPS nginx stripping `X-Frame-Options` and setting `frame-ancestors` CSP scoped to NRS hosts (configured 2026-04-10). DraftCard shows a "Syncing…" pill until `metadata.mixpost.post_uuid` is set, then becomes a clickable "Preview" pill.
+- **Backfill scripts**: `scripts/backfill-drafts-to-mixpost.ts` and `scripts/backfill-tags-to-mixpost.ts` — one-shot catch-up for existing data. Idempotent.
 
 ### Platform Algorithm Intelligence
 `lib/agents/knowledge/social-media-benchmarks.ts` includes deep platform-specific algorithm knowledge:

@@ -29,6 +29,7 @@ import {
   createMixpostPost,
   type MixpostVersion,
 } from './client'
+import { ensureBrandTagInMixpost, ensureHashtagGroupTagInMixpost } from './sync-tags'
 
 const POLL_MAX_SECONDS = 500 // 8m20s — covers Mixpost's worst-case ffmpeg transcode
 
@@ -120,8 +121,13 @@ export async function ensureMediaInMixpost(
     return { id: null, error: 'Mixpost remote/initiate returned an unexpected shape' }
   }
 
-  // Cache on the media_items row so future syncs are instant
-  void supabase
+  // Cache on the media_items row so future syncs are instant.
+  // MUST be awaited — the earlier fire-and-forget version silently
+  // dropped the writeback, causing subsequent sync calls to re-upload
+  // the same video and trigger a fresh ~6 minute ffmpeg transcode for
+  // every draft referencing it. Bug discovered 2026-04-10 during the
+  // drafts backfill when post 1 hung for 10+ min.
+  const { error: cacheErr } = await supabase
     .from('media_items')
     .update({
       mixpost_media_id: uploadedId,
@@ -129,6 +135,11 @@ export async function ensureMediaInMixpost(
       mixpost_cached_at: new Date().toISOString(),
     })
     .eq('id', mediaItemId)
+  if (cacheErr) {
+    console.warn(
+      `[sync-draft] Failed to cache mixpost_media_id on ${mediaItemId}: ${cacheErr.message}`,
+    )
+  }
 
   return { id: uploadedId }
 }
@@ -271,6 +282,32 @@ export async function syncDraftToMixpost(
     },
   ]
 
+  // Resolve Mixpost tag ids for this post — brand tag always, plus the
+  // hashtag-group tag if the post's content_pillar matches a group by
+  // name. Both calls are idempotent + cached on the source row, so this
+  // is a fast DB hit after the first call per brand/group. Failures
+  // here are non-blocking — we still create the post without tags.
+  const tagIds: number[] = []
+  try {
+    const brandTag = await ensureBrandTagInMixpost(supabase, post.brand_id as string)
+    if (brandTag) tagIds.push(brandTag.id)
+
+    if (post.content_pillar) {
+      const { data: matchingGroup } = await supabase
+        .from('hashtag_groups')
+        .select('id')
+        .eq('brand_id', post.brand_id as string)
+        .eq('name', post.content_pillar as string)
+        .maybeSingle()
+      if (matchingGroup?.id) {
+        const groupTag = await ensureHashtagGroupTagInMixpost(supabase, matchingGroup.id as string)
+        if (groupTag) tagIds.push(groupTag.id)
+      }
+    }
+  } catch (err) {
+    console.warn('[sync-draft] Mixpost tag resolution failed (non-blocking):', err)
+  }
+
   // Create as draft — schedule:false + schedule_now:false means Mixpost
   // creates the post in DRAFT status.
   const createResult = await createMixpostPost({
@@ -278,6 +315,7 @@ export async function syncDraftToMixpost(
     versions,
     schedule: false,
     schedule_now: false,
+    tags: tagIds,
   })
 
   if (!createResult || !createResult.uuid) {

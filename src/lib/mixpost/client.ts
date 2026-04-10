@@ -59,6 +59,11 @@ export interface CreatePostParams {
   timezone?: string    // IANA e.g. 'Australia/Brisbane'
   schedule?: boolean
   schedule_now?: boolean
+  /** Mixpost tag ids to attach to this post. Lets Justin filter the
+   *  Mixpost library by brand / hashtag-group taxonomy that NRS
+   *  already owns. Populated by ensureBrandTagInMixpost and
+   *  ensureHashtagGroupTagInMixpost from sync-tags.ts. */
+  tags?: number[]
 }
 
 export async function fetchMixpostAccounts(): Promise<MixpostAccount[] | null> {
@@ -178,6 +183,9 @@ export async function createMixpostPost(
         timezone: params.timezone ?? 'Australia/Brisbane',
         schedule: params.schedule ?? false,
         schedule_now: params.schedule_now ?? true,
+        // Only include tags when supplied — Mixpost rejects `tags: []`
+        // on some versions with a 422. Omitting the key is the safe default.
+        ...(params.tags && params.tags.length > 0 ? { tags: params.tags } : {}),
       }),
     })
 

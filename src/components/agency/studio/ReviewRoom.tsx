@@ -372,6 +372,15 @@ export function ReviewRoom() {
               onReject={(id) => handleReject(id)}
               onAlter={(id) => setPendingDraftId(id)}
               onAskDirector={handleAskDirector}
+              onPreviewMixpost={(id) => {
+                // One-click entry into the Mixpost iframe — set the active
+                // draft (so detailPost resolves) AND open the modal in a
+                // single tick. The detail pane still renders under the
+                // modal so Approve/Reject in the modal header can reuse
+                // its handlers.
+                setDetailPostId(id)
+                setMixpostModalOpen(true)
+              }}
             />
           ))}
         </div>
