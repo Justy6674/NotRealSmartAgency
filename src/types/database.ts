@@ -784,8 +784,23 @@ export interface ScheduledPost {
   metadata: Record<string, unknown>
   content_type?: ContentType | null
   content_pillar?: string | null
+  queue_slot_id?: string | null
   created_at: string
   updated_at: string
+}
+
+// ─── Posting Schedule (Phase 7) ────────────────────────────────────────────
+
+export interface PostingScheduleSlot {
+  id: string
+  brand_id: string
+  platform: PostPlatform
+  /** 0 = Sunday, 1 = Monday, …, 6 = Saturday */
+  day_of_week: number
+  /** "HH:MM" or "HH:MM:SS" — Postgres `time` type. */
+  time: string
+  timezone: string
+  created_at: string
 }
 
 // ─── Smart Media Pipeline ───────────────────────────────────────────────────
