@@ -13,6 +13,10 @@ import {
   X,
   Check,
   AlertCircle,
+  CloudSun,
+  Hash,
+  Pin,
+  AtSign,
   Clock,
   Sparkles,
 } from 'lucide-react'
@@ -30,6 +34,10 @@ const PLATFORM_CONFIG: Record<PostPlatform, { label: string; icon: typeof Instag
   twitter: { label: 'X', icon: Twitter, chipClass: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
   tiktok: { label: 'TikTok', icon: CalendarDays, chipClass: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' },
   youtube: { label: 'YouTube', icon: Youtube, chipClass: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  bluesky: { label: 'Bluesky', icon: CloudSun, chipClass: 'bg-blue-400/15 text-blue-300 border-blue-400/30' },
+  mastodon: { label: 'Mastodon', icon: Hash, chipClass: 'bg-purple-500/15 text-purple-400 border-purple-500/30' },
+  pinterest: { label: 'Pinterest', icon: Pin, chipClass: 'bg-red-600/15 text-red-400 border-red-600/30' },
+  threads: { label: 'Threads', icon: AtSign, chipClass: 'bg-zinc-400/15 text-zinc-300 border-zinc-400/30' },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -312,7 +320,7 @@ function PostChip({
   isSelected: boolean
   onClick: () => void
 }) {
-  const config = PLATFORM_CONFIG[post.platform]
+  const config = PLATFORM_CONFIG[post.platform] ?? { label: post.platform, icon: CalendarDays, chipClass: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' }
   const Icon = config.icon
   const isDraft = post.status === 'draft'
   const isPublished = post.status === 'published'
@@ -360,7 +368,7 @@ function PostDetail({
     setScheduledAt(post.scheduled_at ? new Date(post.scheduled_at).toISOString().slice(0, 16) : '')
   }, [post.id, post.caption, post.scheduled_at])
 
-  const config = PLATFORM_CONFIG[post.platform]
+  const config = PLATFORM_CONFIG[post.platform] ?? { label: post.platform, icon: CalendarDays, chipClass: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' }
   const Icon = config.icon
 
   const hasChanges = caption !== post.caption || scheduledAt !== new Date(post.scheduled_at).toISOString().slice(0, 16)

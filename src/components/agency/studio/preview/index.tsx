@@ -5,6 +5,10 @@ export { LinkedInMockup } from './LinkedInMockup'
 export { XMockup } from './XMockup'
 export { TikTokMockup } from './TikTokMockup'
 export { YouTubeMockup } from './YouTubeMockup'
+export { BlueskyMockup } from './BlueskyMockup'
+export { MastodonMockup } from './MastodonMockup'
+export { PinterestMockup } from './PinterestMockup'
+export { ThreadsMockup } from './ThreadsMockup'
 
 import { InstagramMockup } from './InstagramMockup'
 import { FacebookMockup } from './FacebookMockup'
@@ -12,6 +16,10 @@ import { LinkedInMockup } from './LinkedInMockup'
 import { XMockup } from './XMockup'
 import { TikTokMockup } from './TikTokMockup'
 import { YouTubeMockup } from './YouTubeMockup'
+import { BlueskyMockup } from './BlueskyMockup'
+import { MastodonMockup } from './MastodonMockup'
+import { PinterestMockup } from './PinterestMockup'
+import { ThreadsMockup } from './ThreadsMockup'
 
 interface PlatformMockupProps {
   platform: string
@@ -40,6 +48,14 @@ export function PlatformMockupPreview({ platform, ...props }: PlatformMockupProp
       return <TikTokMockup {...props} />
     case 'youtube':
       return <YouTubeMockup {...props} />
+    case 'bluesky':
+      return <BlueskyMockup {...props} />
+    case 'mastodon':
+      return <MastodonMockup {...props} />
+    case 'pinterest':
+      return <PinterestMockup {...props} />
+    case 'threads':
+      return <ThreadsMockup {...props} />
     default:
       return <InstagramMockup {...props} />
   }

@@ -35,6 +35,10 @@ const PLATFORM_CONFIG: Record<PostPlatform, { label: string; colour: string }> =
   twitter: { label: 'X', colour: 'oklch(0.5 0 0)' },
   tiktok: { label: 'TT', colour: 'oklch(0.65 0.15 190)' },
   youtube: { label: 'YT', colour: 'oklch(0.6 0.2 30)' },
+  bluesky: { label: 'BS', colour: 'oklch(0.6 0.18 250)' },
+  mastodon: { label: 'MD', colour: 'oklch(0.55 0.18 280)' },
+  pinterest: { label: 'PT', colour: 'oklch(0.55 0.2 25)' },
+  threads: { label: 'TH', colour: 'oklch(0.5 0 0)' },
 }
 
 export function ReviewFilters({ filters, onChange, availableSources, draftCount }: ReviewFiltersProps) {

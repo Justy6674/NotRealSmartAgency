@@ -25,6 +25,10 @@ const PLATFORM_LABELS: Record<string, string> = {
   twitter: 'X',
   tiktok: 'TikTok',
   youtube: 'YouTube',
+  bluesky: 'Bluesky',
+  mastodon: 'Mastodon',
+  pinterest: 'Pinterest',
+  threads: 'Threads',
 }
 
 export function MultiPlatformPreview({

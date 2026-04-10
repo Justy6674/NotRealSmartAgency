@@ -1,6 +1,44 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+/**
+ * POST /api/media — save an external URL (Giphy, Pexels, etc.) as a media item.
+ * No re-upload to storage; the external URL is stored directly.
+ */
+export async function POST(request: Request) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const body = await request.json()
+  const { brandId, file_url, file_name, file_type, source, metadata } = body
+
+  if (!brandId || !file_url) {
+    return NextResponse.json({ error: 'brandId and file_url are required' }, { status: 400 })
+  }
+
+  const { data, error } = await supabase
+    .from('media_items')
+    .insert({
+      user_id: user.id,
+      brand_id: brandId,
+      file_url,
+      file_name: file_name ?? 'Untitled',
+      file_type: file_type ?? 'image/jpeg',
+      source_type: 'import' as const,
+      tags: source ? [source] : [],
+      metadata: {
+        ...(metadata ?? {}),
+        external_source: source ?? null,
+      },
+    })
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data)
+}
+
 export async function GET(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

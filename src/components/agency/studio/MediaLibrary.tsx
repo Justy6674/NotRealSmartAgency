@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Tag, Images, Plus, Palette, Sparkles, Loader2, CheckSquare, Square, Trash2 } from 'lucide-react'
+import { Tag, Images, Plus, Palette, Sparkles, Loader2, CheckSquare, Square, Trash2, ImageIcon, Film } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { sendToDirector } from '@/lib/chat-dispatch'
@@ -15,11 +15,14 @@ import { CollectionView } from './CollectionView'
 import { MediaDetailPanel } from './MediaDetailPanel'
 import { CanvaImportModal } from './CanvaImportModal'
 import { UploadQueuePanel } from './media/UploadQueuePanel'
+import { GifPicker, type GifSelection } from './media/GifPicker'
+import { StockPhotoPicker, type StockPhotoSelection } from './media/StockPhotoPicker'
 import type { MediaItemWithUsage, MediaCollection } from '@/types/database'
 
 type TypeFilter = 'all' | 'image' | 'video' | 'audio'
 type SortOption = 'newest' | 'oldest' | 'name' | 'most_used'
 type ViewMode = 'library' | 'collection'
+type SourceTab = 'library' | 'gifs' | 'stock'
 
 export function MediaLibrary() {
   const { activeBrandId, setPendingMediaId } = useAgencyStore()
@@ -52,6 +55,68 @@ export function MediaLibrary() {
   const [showCanvaImport, setShowCanvaImport] = useState(false)
   const [retagging, setRetagging] = useState(false)
   const [retagResult, setRetagResult] = useState<string | null>(null)
+  const [sourceTab, setSourceTab] = useState<SourceTab>('library')
+  const [savingExternal, setSavingExternal] = useState(false)
+
+  const handleGifSelect = async (gif: GifSelection) => {
+    if (!activeBrandId || savingExternal) return
+    setSavingExternal(true)
+    try {
+      const res = await fetch('/api/media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId: activeBrandId,
+          file_url: gif.url,
+          file_name: gif.title || 'GIF',
+          file_type: 'image/gif',
+          source: 'giphy',
+          metadata: { giphy_id: gif.id, preview: gif.preview, width: gif.width, height: gif.height },
+        }),
+      })
+      if (res.ok) {
+        setSourceTab('library')
+        fetchMedia()
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Save failed' }))
+        alert(`Error: ${err.error}`)
+      }
+    } catch {
+      alert('Network error saving GIF.')
+    } finally {
+      setSavingExternal(false)
+    }
+  }
+
+  const handleStockPhotoSelect = async (photo: StockPhotoSelection) => {
+    if (!activeBrandId || savingExternal) return
+    setSavingExternal(true)
+    try {
+      const res = await fetch('/api/media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId: activeBrandId,
+          file_url: photo.url,
+          file_name: photo.alt || `Photo by ${photo.photographer}`,
+          file_type: 'image/jpeg',
+          source: 'pexels',
+          metadata: { pexels_id: photo.id, photographer: photo.photographer, preview: photo.preview, width: photo.width, height: photo.height },
+        }),
+      })
+      if (res.ok) {
+        setSourceTab('library')
+        fetchMedia()
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Save failed' }))
+        alert(`Error: ${err.error}`)
+      }
+    } catch {
+      alert('Network error saving photo.')
+    } finally {
+      setSavingExternal(false)
+    }
+  }
 
   const handleSmartRetag = async () => {
     if (!activeBrandId || retagging) return
@@ -367,6 +432,65 @@ export function MediaLibrary() {
         ]}
       />
 
+      {/* Source tabs */}
+      <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
+        <button
+          type="button"
+          onClick={() => setSourceTab('library')}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            sourceTab === 'library'
+              ? 'bg-[oklch(0.55_0.1_240)] text-white'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          <Images className="h-3.5 w-3.5" />
+          Library
+        </button>
+        <button
+          type="button"
+          onClick={() => setSourceTab('gifs')}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            sourceTab === 'gifs'
+              ? 'bg-[oklch(0.55_0.1_240)] text-white'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          <Film className="h-3.5 w-3.5" />
+          GIFs
+        </button>
+        <button
+          type="button"
+          onClick={() => setSourceTab('stock')}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+            sourceTab === 'stock'
+              ? 'bg-[oklch(0.55_0.1_240)] text-white'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          <ImageIcon className="h-3.5 w-3.5" />
+          Stock Photos
+        </button>
+        {savingExternal && (
+          <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Saving to library...
+          </span>
+        )}
+      </div>
+
+      {/* GIF Picker */}
+      {sourceTab === 'gifs' && (
+        <GifPicker onSelect={handleGifSelect} />
+      )}
+
+      {/* Stock Photo Picker */}
+      {sourceTab === 'stock' && (
+        <StockPhotoPicker onSelect={handleStockPhotoSelect} />
+      )}
+
+      {/* Library view */}
+      {sourceTab === 'library' && (
+        <>
       <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} />
 
       {/* Actions row */}
@@ -644,6 +768,9 @@ export function MediaLibrary() {
             />
           ))}
         </div>
+      )}
+
+      </>
       )}
 
       {/* Canva Import Modal */}

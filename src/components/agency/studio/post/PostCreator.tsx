@@ -88,6 +88,7 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
   const [creatorMode, setCreatorMode] = useState<CreatorMode>('fresh')
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
+  const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
 
   const brandName = data.brand?.name ?? 'Brand'
   const postType = CONTENT_TO_POST_TYPE[contentType]
@@ -331,6 +332,9 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
             metadata: {
               source: 'post_creator',
               created_by: 'You',
+              ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
+                ? { platform_options: platformOptions[platform] }
+                : {}),
             },
           }),
         })
@@ -345,10 +349,11 @@ export function PostCreator({ draftId, mediaId, onDone }: PostCreatorProps = {})
       setAiPrompt('')
       setContentType('post')
       setSelectedPlatforms([])
+      setPlatformOptions({})
     } finally {
       setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey])
+  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {
@@ -621,6 +626,8 @@ If any items have no AI description or transcription yet, name them and offer to
             value={caption}
             onChange={(text) => handleCaptionChange(text)}
             placeholder="Write your post here…"
+            brandName={brandName}
+            platforms={selectedPlatforms}
           />
           <PostContentValidator
             caption={caption}
@@ -654,6 +661,8 @@ If any items have no AI description or transcription yet, name them and offer to
             versions={versions}
             onMasterChange={(c, h) => { setCaption(c); setHashtags(h) }}
             onVersionsChange={setVersions}
+            platformOptions={platformOptions}
+            onPlatformOptionsChange={setPlatformOptions}
           />
         </StudioCard>
       )}

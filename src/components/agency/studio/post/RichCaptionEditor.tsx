@@ -6,9 +6,10 @@ import Link from '@tiptap/extension-link'
 import Underline from '@tiptap/extension-underline'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
-import { Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon, List, ListOrdered, Undo, Redo } from 'lucide-react'
-import { useEffect, useMemo } from 'react'
+import { Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon, List, ListOrdered, Undo, Redo, Sparkles } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
 import { EmojiPickerPopover } from './EmojiPickerPopover'
+import { AiSpotlight } from './AiSpotlight'
 
 interface RichCaptionEditorProps {
   value: string
@@ -18,6 +19,10 @@ interface RichCaptionEditorProps {
   characterLimit?: number
   /** Compact mode strips some toolbar buttons for dense UIs */
   compact?: boolean
+  /** Brand name passed through to AI Spotlight */
+  brandName?: string
+  /** Selected platforms passed through to AI Spotlight */
+  platforms?: string[]
 }
 
 /**
@@ -44,7 +49,10 @@ export function RichCaptionEditor({
   placeholder = 'What do you want to say?',
   characterLimit,
   compact = false,
+  brandName,
+  platforms,
 }: RichCaptionEditorProps) {
+  const [spotlightOpen, setSpotlightOpen] = useState(false)
   // Memoise extensions to prevent TipTap duplicate-name warnings caused
   // by recreating the array on every render cycle.
   const extensions = useMemo(
@@ -181,15 +189,31 @@ export function RichCaptionEditor({
           </>
         )}
 
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
           <EmojiPickerPopover
             onSelect={(emoji) => editor.chain().focus().insertContent(emoji).run()}
           />
+          <ToolbarButton
+            onClick={() => setSpotlightOpen(true)}
+            label="AI Spotlight"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+          </ToolbarButton>
         </div>
       </div>
 
       {/* Editor surface */}
       <EditorContent editor={editor} />
+
+      {/* AI Spotlight command palette */}
+      <AiSpotlight
+        open={spotlightOpen}
+        onOpenChange={setSpotlightOpen}
+        caption={value}
+        brandName={brandName ?? 'Brand'}
+        platforms={platforms ?? []}
+        charLimit={characterLimit}
+      />
     </div>
   )
 }

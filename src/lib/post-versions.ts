@@ -89,4 +89,8 @@ export const PLATFORM_CHAR_LIMITS: Record<string, number> = {
   twitter: 280,
   tiktok: 2200,
   youtube: 5000,
+  bluesky: 300,
+  mastodon: 500,
+  pinterest: 500,
+  threads: 500,
 }

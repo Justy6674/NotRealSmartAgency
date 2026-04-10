@@ -12,6 +12,10 @@ const PLATFORM_COLOURS: Record<PostPlatform, string> = {
   youtube: 'bg-red-400',
   linkedin: 'bg-sky-400',
   twitter: 'bg-zinc-400',
+  bluesky: 'bg-blue-300',
+  mastodon: 'bg-purple-400',
+  pinterest: 'bg-red-500',
+  threads: 'bg-zinc-300',
 }
 
 interface CreatorActionBarProps {

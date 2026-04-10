@@ -21,6 +21,10 @@ const PLATFORM_EMOJIS: Record<PostPlatform, string> = {
   twitter: '🐦',
   tiktok: '🎵',
   youtube: '🎬',
+  bluesky: '🦋',
+  mastodon: '🐘',
+  pinterest: '📌',
+  threads: '🧵',
 }
 
 const CONTENT_TYPE_DISTRIBUTION: Record<string, number> = {

@@ -6,6 +6,7 @@ import { RotateCcw } from 'lucide-react'
 import type { PostPlatform } from '@/types/database'
 import type { PostVersions } from '@/lib/post-versions'
 import { customisePlatform, resetPlatformToMaster, PLATFORM_CHAR_LIMITS } from '@/lib/post-versions'
+import { PlatformOptions } from './PlatformOptions'
 
 interface PlatformVersionEditorProps {
   platforms: PostPlatform[]
@@ -14,6 +15,10 @@ interface PlatformVersionEditorProps {
   versions: PostVersions
   onMasterChange: (caption: string, hashtags: string[]) => void
   onVersionsChange: (versions: PostVersions) => void
+  /** Per-platform metadata options keyed by platform name */
+  platformOptions?: Record<string, Record<string, unknown>>
+  /** Called when platform-specific metadata changes */
+  onPlatformOptionsChange?: (platformOptions: Record<string, Record<string, unknown>>) => void
 }
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -32,6 +37,8 @@ export function PlatformVersionEditor({
   versions,
   onMasterChange,
   onVersionsChange,
+  platformOptions,
+  onPlatformOptionsChange,
 }: PlatformVersionEditorProps) {
   const [activeTab, setActiveTab] = useState<'master' | PostPlatform>('master')
 
@@ -140,6 +147,20 @@ export function PlatformVersionEditor({
             {currentCaption.length} / {charLimit.toLocaleString()}
           </span>
         </div>
+
+        {/* Per-platform metadata fields */}
+        {activeTab !== 'master' && onPlatformOptionsChange && (
+          <PlatformOptions
+            platform={activeTab}
+            options={platformOptions?.[activeTab] ?? {}}
+            onChange={(opts) =>
+              onPlatformOptionsChange({
+                ...(platformOptions ?? {}),
+                [activeTab]: opts,
+              })
+            }
+          />
+        )}
       </div>
     </div>
   )
