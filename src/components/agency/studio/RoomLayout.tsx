@@ -6,7 +6,6 @@ import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 import { StrategyBrief } from './StrategyBrief'
-import { useEffect } from 'react'
 
 interface RoomLayoutProps {
   title: string
@@ -14,13 +13,13 @@ interface RoomLayoutProps {
 }
 
 export function RoomLayout({ title, children }: RoomLayoutProps) {
-  const { activeBrandId, setChatPanelOpen } = useAgencyStore()
+  const { activeBrandId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
 
-  useEffect(() => {
-    setChatPanelOpen(true)
-  }, [setChatPanelOpen])
+  // Studio pages use a left sidebar that takes horizontal space.
+  // Do NOT auto-open the chat panel — it overlaps the content.
+  // Users can open it manually via the chat button.
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
