@@ -9,7 +9,7 @@ import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import { AgentAvatar } from './AgentAvatar'
 import { AGENT_LABELS } from '@/types/database'
-import { MessageCircle, Minus, ChevronUp } from 'lucide-react'
+import { MessageCircle, Minus, ChevronUp, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function ChatPanel() {
@@ -228,15 +228,25 @@ export function ChatPanel() {
               setChatPanelMinimised(!chatPanelMinimised)
             }}
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title={chatPanelMinimised ? 'Expand' : 'Minimise'}
           >
             {chatPanelMinimised ? (
               <ChevronUp className="h-4 w-4" />
             ) : (
               <Minus className="h-4 w-4" />
             )}
-            <span className="sr-only">
-              {chatPanelMinimised ? 'Expand chat panel' : 'Minimise chat panel'}
-            </span>
+          </button>
+
+          {/* Close button — fully hides the panel */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setChatPanelOpen(false)
+            }}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Close chat panel"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
 
