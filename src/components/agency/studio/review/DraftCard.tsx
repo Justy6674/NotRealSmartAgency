@@ -11,12 +11,17 @@ interface DraftCardProps {
   active: boolean
   complianceResult: ComplianceResult | null | undefined
   complianceLoading: boolean
+  /** Number of post_activity rows (comments + system events) for this draft.
+   *  Hidden when 0. Populated in bulk by ReviewRoom. */
+  activityCount?: number
   onSelect: (id: string) => void
   onClick: (id: string) => void
   onApprove: (id: string) => void
   onReject: (id: string) => void
   onAlter: (id: string) => void
   onAskDirector: (id: string) => void
+  /** Opens the detail pane on the Activity tab for this draft. */
+  onOpenActivity?: (id: string) => void
   /** Opens the full-screen Mixpost iframe modal for this draft. Only wired
    *  when the post has finished syncing (metadata.mixpost.post_uuid set). */
   onPreviewMixpost: (id: string) => void
@@ -39,12 +44,14 @@ export function DraftCard({
   active,
   complianceResult,
   complianceLoading,
+  activityCount = 0,
   onSelect,
   onClick,
   onApprove,
   onReject,
   onAlter,
   onAskDirector,
+  onOpenActivity,
   onPreviewMixpost,
 }: DraftCardProps) {
   const meta = (post.metadata ?? {}) as Record<string, unknown>
@@ -148,6 +155,17 @@ export function DraftCard({
         />
 
         <div className="flex-1" />
+
+        {activityCount > 0 && onOpenActivity && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenActivity(post.id) }}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title={`${activityCount} activity item${activityCount === 1 ? '' : 's'}`}
+          >
+            <MessageSquare className="h-3 w-3" />
+            {activityCount}
+          </button>
+        )}
 
         <button
           onClick={(e) => { e.stopPropagation(); onAlter(post.id) }}

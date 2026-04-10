@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Loader2, Check, RefreshCw, ExternalLink, Film, Image as ImageIcon, X as XIcon } from 'lucide-react'
+import { Loader2, Check, RefreshCw, ExternalLink, Film, Image as ImageIcon, X as XIcon, MessageSquare } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
@@ -10,6 +10,7 @@ import { ReviewFilters, type ReviewFilterState } from './review/ReviewFilters'
 import { DraftCard } from './review/DraftCard'
 import { BatchActions } from './review/BatchActions'
 import { ComplianceBadge } from './review/ComplianceBadge'
+import { PostActivityThread } from './review/PostActivityThread'
 import { recordReviewDecision } from '@/lib/media/review-memory'
 import type { ScheduledPost, DraftSource, ComplianceResult, PostPlatform } from '@/types/database'
 
@@ -61,6 +62,14 @@ export function ReviewRoom() {
   // as a full-screen iframe. Mixpost's nginx now sends a frame-ancestors
   // CSP that allows embedding from notrealsmart.com.au (configured 2026-04-10).
   const [mixpostModalOpen, setMixpostModalOpen] = useState(false)
+  // Detail pane tab — Phase 4b adds an Activity tab alongside the default
+  // Details view. 'details' shows the editor + phone mockup + Mixpost
+  // preview button; 'activity' shows the PostActivityThread.
+  const [detailTab, setDetailTab] = useState<'details' | 'activity'>('details')
+  // Activity counts per draft id — powers the MessageSquare badge in
+  // DraftCard. Fetched in a single bulk call whenever the draft list
+  // changes. RLS filters to brand-accessible rows.
+  const [activityCounts, setActivityCounts] = useState<Record<string, number>>({})
 
   const [filters, setFilters] = useState<ReviewFilterState>({
     source: 'all',
@@ -129,6 +138,20 @@ export function ReviewRoom() {
       setComplianceLoading(prev => { const next = new Set(prev); next.delete(postId); return next })
     }
   }, [activeBrandId])
+
+  // Bulk-fetch activity counts whenever the draft list changes so each
+  // DraftCard can show a MessageSquare badge with the comment count.
+  useEffect(() => {
+    if (drafts.length === 0) {
+      setActivityCounts({})
+      return
+    }
+    const ids = drafts.map((d) => d.id).join(',')
+    fetch(`/api/post-activity?counts=${encodeURIComponent(ids)}`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((counts) => setActivityCounts(counts as Record<string, number>))
+      .catch(() => setActivityCounts({}))
+  }, [drafts])
 
   // Auto-check compliance for health brands on load
   useEffect(() => {
@@ -267,6 +290,12 @@ export function ReviewRoom() {
 
   const detailPost = detailPostId ? drafts.find(d => d.id === detailPostId) : null
 
+  // Reset detail tab whenever the active draft changes so you never
+  // see an orphaned Activity thread from the previous selection.
+  useEffect(() => {
+    setDetailTab('details')
+  }, [detailPostId])
+
   // Resolve the actual media items attached to the active draft so the
   // detail pane can render real video / image content (not just a caption).
   const detailMedia: ReviewMediaItem[] = useMemo(() => {
@@ -366,12 +395,20 @@ export function ReviewRoom() {
               active={detailPostId === post.id}
               complianceResult={complianceCache.get(post.id)}
               complianceLoading={complianceLoading.has(post.id)}
+              activityCount={activityCounts[post.id] ?? 0}
               onSelect={toggleSelect}
-              onClick={setDetailPostId}
+              onClick={(id) => {
+                setDetailPostId(id)
+                setDetailTab('details')
+              }}
               onApprove={handleApprove}
               onReject={(id) => handleReject(id)}
               onAlter={(id) => setPendingDraftId(id)}
               onAskDirector={handleAskDirector}
+              onOpenActivity={(id) => {
+                setDetailPostId(id)
+                setDetailTab('activity')
+              }}
               onPreviewMixpost={(id) => {
                 // One-click entry into the Mixpost iframe — set the active
                 // draft (so detailPost resolves) AND open the modal in a
@@ -394,8 +431,42 @@ export function ReviewRoom() {
 
       {/* RIGHT: Detail panel + phone mockup */}
       {detailPost && (
-        <div className="hidden lg:flex lg:w-[460px] shrink-0 flex-col border-l border-border overflow-y-auto bg-muted/30">
-          <div className="p-4 space-y-4">
+        <div className="hidden lg:flex lg:w-[460px] shrink-0 flex-col border-l border-border bg-muted/30">
+          {/* Tab header — Details | Activity. Phase 4b adds the
+              Activity tab which houses the comment thread. */}
+          <div className="flex items-center gap-1 border-b border-border px-2 py-1.5 bg-background/60">
+            <button
+              type="button"
+              onClick={() => setDetailTab('details')}
+              className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                detailTab === 'details'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Details
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetailTab('activity')}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                detailTab === 'activity'
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <MessageSquare className="h-3 w-3" />
+              Activity
+            </button>
+          </div>
+
+          {detailTab === 'activity' ? (
+            <PostActivityThread
+              scheduledPostId={detailPost.id}
+              className="flex-1 min-h-0"
+            />
+          ) : (
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {/* Source info */}
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
@@ -580,6 +651,7 @@ export function ReviewRoom() {
               </button>
             </div>
           </div>
+          )}
         </div>
       )}
 

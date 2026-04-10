@@ -32,7 +32,34 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const scheduledPostId = searchParams.get('scheduled_post_id')
+  const countsParam = searchParams.get('counts')
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '100', 10), 500)
+
+  // Counts mode — used by the Review tab to show activity badges on
+  // draft cards without N+1 fetches. Expects a comma-separated list
+  // of scheduled_post_ids. RLS filters to brand-accessible posts.
+  if (countsParam) {
+    const ids = countsParam
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+    if (ids.length === 0) {
+      return NextResponse.json({})
+    }
+    const { data, error } = await supabase
+      .from('post_activity')
+      .select('scheduled_post_id')
+      .in('scheduled_post_id', ids)
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    const counts: Record<string, number> = {}
+    for (const row of data ?? []) {
+      const key = row.scheduled_post_id as string
+      counts[key] = (counts[key] ?? 0) + 1
+    }
+    return NextResponse.json(counts)
+  }
 
   if (!scheduledPostId) {
     return NextResponse.json(
