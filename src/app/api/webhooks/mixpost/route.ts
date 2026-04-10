@@ -148,13 +148,30 @@ async function handlePublished(supabase: AdminClient, data: Record<string, unkno
   const mixpostPostId = extractMixpostPostId(data)
   if (!mixpostPostId) return
 
-  await supabase
+  const { data: updated } = await supabase
     .from('scheduled_posts')
     .update({
       status: 'published',
       published_at: new Date().toISOString(),
     })
     .eq('external_post_id', mixpostPostId)
+    .select('id, platform')
+    .single()
+
+  // Phase 4b — log a 'published' row into post_activity so the
+  // Review tab comment thread shows the system event inline with
+  // team comments. user_id is null because this is a system event
+  // arriving via webhook, not an authenticated user action. Admin
+  // client bypasses RLS.
+  if (updated?.id) {
+    await supabase.from('post_activity').insert({
+      scheduled_post_id: updated.id,
+      user_id: null,
+      type: 'published',
+      body: null,
+      metadata: { platform: updated.platform ?? 'social' },
+    })
+  }
 
   await sendPublishNotification(supabase, mixpostPostId, 'published')
 }
@@ -166,13 +183,28 @@ async function handlePublishingFailed(supabase: AdminClient, data: Record<string
   const errorReason =
     (data.reason as string) ?? (data.error as string) ?? (data.message as string) ?? 'Publishing failed'
 
-  await supabase
+  const { data: updated } = await supabase
     .from('scheduled_posts')
     .update({
       status: 'failed',
       error: errorReason,
     })
     .eq('external_post_id', mixpostPostId)
+    .select('id, platform')
+    .single()
+
+  if (updated?.id) {
+    await supabase.from('post_activity').insert({
+      scheduled_post_id: updated.id,
+      user_id: null,
+      type: 'failed',
+      body: null,
+      metadata: {
+        platform: updated.platform ?? 'social',
+        error: errorReason,
+      },
+    })
+  }
 
   await sendPublishNotification(supabase, mixpostPostId, 'failed', errorReason)
 }
@@ -192,10 +224,25 @@ async function handleScheduled(supabase: AdminClient, data: Record<string, unkno
   const update: Record<string, unknown> = { status: 'scheduled' }
   if (newScheduledAt) update.scheduled_at = new Date(newScheduledAt).toISOString()
 
-  await supabase
+  const { data: updated } = await supabase
     .from('scheduled_posts')
     .update(update)
     .eq('external_post_id', mixpostPostId)
+    .select('id')
+    .single()
+
+  // Phase 4b — log a 'scheduled' system event into post_activity
+  // so the Review tab comment thread shows when the post was
+  // scheduled (and by whom, if the webhook payload includes it).
+  if (updated?.id) {
+    await supabase.from('post_activity').insert({
+      scheduled_post_id: updated.id,
+      user_id: null,
+      type: 'scheduled',
+      body: null,
+      metadata: newScheduledAt ? { scheduled_at: newScheduledAt } : {},
+    })
+  }
 }
 
 async function handleUpdated(supabase: AdminClient, data: Record<string, unknown>) {
