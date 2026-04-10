@@ -72,7 +72,9 @@ export function useSocialAccounts(brandId: string | null): UseSocialAccountsResu
     try {
       const res = await fetch(`/api/mixpost/accounts?brandId=${brandId}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const raw = (await res.json()) as MixpostAccount[]
+      const body = await res.json()
+      // API returns { configured, accounts, brandMapping } — extract the array
+      const raw: MixpostAccount[] = Array.isArray(body) ? body : (body.accounts ?? [])
       setAccounts(raw.map(normaliseMixpostAccount))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'fetch failed')

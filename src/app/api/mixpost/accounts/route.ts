@@ -29,7 +29,13 @@ export async function GET() {
 
   return NextResponse.json({
     configured: true,
-    accounts: accounts.map(a => ({ id: a.id, name: a.name, provider: a.provider })),
+    accounts: accounts.map(a => ({
+      id: a.id,
+      name: a.name,
+      username: a.username,
+      provider: a.provider,
+      media_url: a.media_url,
+    })),
     brandMapping,
   })
 }
