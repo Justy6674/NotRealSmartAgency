@@ -1,13 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   X,
   Download,
   Sparkles,
   Repeat,
   Calendar,
-  Tag,
   FileText,
   Clock,
   HardDrive,
@@ -17,10 +16,11 @@ import {
   Plus,
   Music,
   Film,
+  PenLine,
   Image as ImageIcon,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
+import { AltTextDialog } from './media/AltTextDialog'
 import type { MediaItemWithUsage } from '@/types/database'
 
 function formatFileSize(bytes: number | null): string {
@@ -54,6 +54,7 @@ interface MediaDetailPanelProps {
   onGenerate: (id: string) => void
   onRepurpose: (id: string) => void
   availableTags: string[]
+  onItemUpdated?: (item: MediaItemWithUsage) => void
 }
 
 export function MediaDetailPanel({
@@ -64,15 +65,30 @@ export function MediaDetailPanel({
   onGenerate,
   onRepurpose,
   availableTags,
+  onItemUpdated,
 }: MediaDetailPanelProps) {
   const [copied, setCopied] = useState(false)
   const [showTagInput, setShowTagInput] = useState(false)
   const [tagValue, setTagValue] = useState('')
+  const [fileName, setFileName] = useState(item.file_name)
+  const [savingName, setSavingName] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [altDialogOpen, setAltDialogOpen] = useState(false)
+
+  // Keep local name in sync if parent swaps the item.
+  useEffect(() => {
+    setFileName(item.file_name)
+    setNameError(null)
+  }, [item.id, item.file_name])
 
   const isImage = item.file_type?.startsWith('image/')
   const isVideo = item.file_type?.startsWith('video/')
   const isAudio = item.file_type?.startsWith('audio/')
   const tags = item.tags ?? []
+  const altText =
+    typeof (item.metadata as { alt_text?: unknown } | null)?.alt_text === 'string'
+      ? ((item.metadata as { alt_text: string }).alt_text)
+      : ''
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(item.file_url)
@@ -94,20 +110,67 @@ export function MediaDetailPanel({
     onClose()
   }
 
+  const persistName = async () => {
+    const trimmed = fileName.trim()
+    if (!trimmed || trimmed === item.file_name) {
+      setFileName(item.file_name)
+      return
+    }
+    setSavingName(true)
+    setNameError(null)
+    try {
+      const res = await fetch('/api/media', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, file_name: trimmed }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Failed to rename file')
+      }
+      const updated = await res.json()
+      onItemUpdated?.({ ...item, file_name: updated.file_name ?? trimmed })
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : 'Failed to rename file')
+      setFileName(item.file_name)
+    } finally {
+      setSavingName(false)
+    }
+  }
+
   const suggestions = availableTags.filter(
     t => !tags.includes(t) && t.toLowerCase().includes(tagValue.toLowerCase())
   )
 
   return (
     <div className="flex h-full flex-col border-l border-border bg-background">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold text-foreground truncate pr-4">
-          {item.file_name}
-        </h3>
+      {/* Header — file name editable in place */}
+      <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <input
+            type="text"
+            value={fileName}
+            onChange={(e) => setFileName(e.target.value)}
+            onBlur={persistName}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+              if (e.key === 'Escape') {
+                setFileName(item.file_name)
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
+            disabled={savingName}
+            aria-label="File name"
+            className="w-full truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-sm font-semibold text-foreground outline-none hover:border-border focus:border-[oklch(0.65_0.12_240)]/60 focus:bg-background"
+          />
+          {nameError && (
+            <p className="mt-1 px-1.5 text-[10px] text-red-400">{nameError}</p>
+          )}
+        </div>
         <button
           onClick={onClose}
-          className="rounded-lg p-1 hover:bg-muted transition-colors"
+          aria-label="Close panel"
+          className="rounded-lg p-1 transition-colors hover:bg-muted"
         >
           <X className="h-4 w-4 text-muted-foreground" />
         </button>
@@ -178,6 +241,30 @@ export function MediaDetailPanel({
               <p className="text-sm text-foreground leading-relaxed">{item.ai_description}</p>
             </div>
           )}
+
+          {/* Alt text — accessibility text used by every platform that supports it */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Alt text
+              </h4>
+              <button
+                type="button"
+                onClick={() => setAltDialogOpen(true)}
+                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <PenLine className="h-3 w-3" />
+                {altText ? 'Edit alt text' : 'Add alt text'}
+              </button>
+            </div>
+            {altText ? (
+              <p className="text-xs text-foreground/80 leading-relaxed">{altText}</p>
+            ) : (
+              <p className="text-xs italic text-muted-foreground">
+                No alt text yet — describe this media for screen readers and AI search.
+              </p>
+            )}
+          </div>
 
           {/* Transcription */}
           {item.transcription && (
@@ -312,6 +399,15 @@ export function MediaDetailPanel({
           </div>
         </div>
       </div>
+
+      <AltTextDialog
+        item={item}
+        open={altDialogOpen}
+        onOpenChange={setAltDialogOpen}
+        onSaved={(updated) => {
+          onItemUpdated?.({ ...item, metadata: updated.metadata })
+        }}
+      />
     </div>
   )
 }

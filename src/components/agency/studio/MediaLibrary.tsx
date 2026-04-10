@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Tag, Images, Plus, Palette, Sparkles, Loader2, PenLine } from 'lucide-react'
+import { Tag, Images, Plus, Palette, Sparkles, Loader2, CheckSquare, Square, Trash2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { MediaUploader } from '@/components/agency/MediaUploader'
@@ -12,6 +12,7 @@ import { CollectionCard } from './CollectionCard'
 import { CollectionView } from './CollectionView'
 import { MediaDetailPanel } from './MediaDetailPanel'
 import { CanvaImportModal } from './CanvaImportModal'
+import { UploadQueuePanel } from './media/UploadQueuePanel'
 import type { MediaItemWithUsage, MediaCollection } from '@/types/database'
 
 type TypeFilter = 'all' | 'image' | 'video' | 'audio'
@@ -32,6 +33,10 @@ export function MediaLibrary() {
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [bulkTagInput, setBulkTagInput] = useState(false)
   const [bulkTagValue, setBulkTagValue] = useState('')
+  const [bulkRemoveTagInput, setBulkRemoveTagInput] = useState(false)
+  const [bulkRemoveTagValue, setBulkRemoveTagValue] = useState('')
+  const [selectMode, setSelectMode] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Collections
   const [collections, setCollections] = useState<(MediaCollection & { media_collection_items?: unknown[] })[]>([])
@@ -219,6 +224,62 @@ export function MediaLibrary() {
     fetchMedia()
   }
 
+  const handleBulkRemoveTag = async (tag: string) => {
+    const trimmed = tag.trim().toLowerCase()
+    if (!trimmed) return
+    await fetch('/api/media', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ids: Array.from(selectedIds),
+        tags_remove: [trimmed],
+      }),
+    })
+    setBulkRemoveTagInput(false)
+    setBulkRemoveTagValue('')
+    fetchMedia()
+    fetchTags()
+  }
+
+  const handleBulkDelete = async () => {
+    const count = selectedIds.size
+    if (count === 0) return
+    if (!confirm(`Delete ${count} item${count === 1 ? '' : 's'} from your library? This cannot be undone.`)) {
+      return
+    }
+    setBulkDeleting(true)
+    try {
+      // Delete sequentially via the existing single-item endpoint to keep
+      // storage cleanup deterministic. Bulk DELETE is not yet supported.
+      const ids = Array.from(selectedIds)
+      await Promise.all(
+        ids.map((id) =>
+          fetch(`/api/media?id=${id}`, { method: 'DELETE' }).catch(() => null)
+        )
+      )
+      setSelectedIds(new Set())
+      fetchMedia()
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === items.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(items.map((i) => i.id)))
+    }
+  }
+
+  const toggleSelectMode = () => {
+    setSelectMode((prev) => {
+      const next = !prev
+      if (!next) setSelectedIds(new Set())
+      return next
+    })
+  }
+
   const handleCreateCollection = async (type: 'carousel' | 'campaign' | 'album') => {
     if (selectedIds.size === 0) return
     const name = prompt(`Name this ${type}:`)
@@ -291,6 +352,30 @@ export function MediaLibrary() {
 
       {/* Actions row */}
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleSelectMode}
+          aria-pressed={selectMode}
+          className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-medium transition-colors ${
+            selectMode
+              ? 'border-[oklch(0.55_0.1_240)] bg-[oklch(0.55_0.1_240)]/10 text-foreground'
+              : 'border-border bg-card text-foreground hover:bg-muted'
+          }`}
+        >
+          {selectMode ? <CheckSquare className="h-4 w-4 text-[oklch(0.65_0.12_240)]" /> : <Square className="h-4 w-4" />}
+          {selectMode ? 'Selecting' : 'Select'}
+        </button>
+
+        {selectMode && items.length > 0 && (
+          <button
+            type="button"
+            onClick={handleSelectAll}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+          >
+            {selectedIds.size === items.length ? 'Clear all' : 'Select all'}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => setShowCanvaImport(true)}
@@ -448,11 +533,53 @@ export function MediaLibrary() {
             </button>
           )}
 
+          {bulkRemoveTagInput ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={bulkRemoveTagValue}
+                onChange={(e) => setBulkRemoveTagValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleBulkRemoveTag(bulkRemoveTagValue)
+                  if (e.key === 'Escape') {
+                    setBulkRemoveTagInput(false)
+                    setBulkRemoveTagValue('')
+                  }
+                }}
+                placeholder="Tag to remove..."
+                autoFocus
+                className="h-7 w-32 rounded border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <button
+                onClick={() => handleBulkRemoveTag(bulkRemoveTagValue)}
+                className="rounded-md bg-amber-500 px-2 py-1 text-xs text-white hover:bg-amber-600"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setBulkRemoveTagInput(true)}
+              className="inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-xs font-medium hover:bg-muted/80"
+            >
+              <Tag className="h-3 w-3" />
+              Remove tag
+            </button>
+          )}
+
           <button
             onClick={handleBulkArchive}
             className="rounded-md bg-muted px-2.5 py-1 text-xs font-medium hover:bg-muted/80"
           >
             Archive
+          </button>
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+          >
+            {bulkDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+            Delete
           </button>
           <button
             onClick={() => setSelectedIds(new Set())}
@@ -520,10 +647,17 @@ export function MediaLibrary() {
               onGenerate={handleGenerate}
               onRepurpose={handleRepurpose}
               availableTags={availableTags}
+              onItemUpdated={(updated) => {
+                setDetailItem(updated)
+                setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)))
+              }}
             />
           </div>
         </div>
       )}
+
+      {/* Persistent upload progress tray (visible across the studio) */}
+      <UploadQueuePanel />
     </div>
   )
 }
