@@ -21,7 +21,9 @@ import { StrategyContextBar } from './StrategyContextBar'
 // Existing components (reused as-is)
 import { ContentTypeSection, type ContentType } from './ContentTypeSection'
 import { PlatformSection } from './PlatformSection'
-import { PostEditor } from './PostEditor'
+import { RichCaptionEditor } from './RichCaptionEditor'
+import { PostContentValidator } from './PostContentValidator'
+import type { PlatformKey } from '@/lib/mixpost/ui-tokens'
 import { PlatformVersionEditor } from './PlatformVersionEditor'
 import { HashtagSection } from './HashtagSection'
 import { PostTemplatePicker } from '../templates/PostTemplatePicker'
@@ -611,14 +613,18 @@ If any items have no AI description or transcription yet, name them and offer to
             </button>
           </div>
 
-          {/* Editor */}
-          <PostEditor
-            content={caption}
-            onContentChange={handleCaptionChange}
-            selectedPlatforms={selectedPlatforms}
-            onPlatformsChange={handlePlatformsChange}
-            hashtags={hashtags.map(h => `#${h}`).join(' ')}
-            onHashtagsChange={() => {}}
+          {/* Phase 3 Mixpost UI port — RichCaptionEditor replaces PostEditor
+              with TipTap formatting toolbar + emoji picker.
+              PostContentValidator shows per-platform character rings
+              below the editor, replacing the old inline char counter. */}
+          <RichCaptionEditor
+            value={caption}
+            onChange={(text) => handleCaptionChange(text)}
+            placeholder="Write your post here…"
+          />
+          <PostContentValidator
+            caption={caption}
+            platforms={selectedPlatforms as PlatformKey[]}
           />
 
           {/* AI action pills */}
