@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Loader2, CalendarDays, Heart, Trophy, Clock } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
+import { MetricCard } from './analytics/MetricCard'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 import { useConnectedPlatforms } from '@/hooks/useConnectedPlatforms'
 import { StrategyBrief } from './StrategyBrief'
@@ -23,6 +24,93 @@ import { PostReviewPanel } from './PostReviewPanel'
 import { PostDetailPanel } from './PostDetailPanel'
 import type { StudioItem } from './StudioFeedCard'
 import type { ScheduledPost } from '@/types/database'
+
+/**
+ * Headline widget row — Mixpost-Dashboard-style snapshot of activity for
+ * the active brand. Counts come from the local `posts` array (already
+ * fetched by useStudioData) so this is free of any extra network calls.
+ *
+ * Engagement totals will hook into the platform analytics endpoint when
+ * the source moves direct in Phase 10. For now we surface the most recent
+ * published post as the "Top platform" so the row is never empty.
+ */
+function DashboardWidgets({ posts }: { posts: ScheduledPost[] }) {
+  const stats = useMemo(() => {
+    const now = new Date()
+    const startOfWeek = new Date(now)
+    startOfWeek.setDate(now.getDate() - 7)
+    const startOfMonth = new Date(now)
+    startOfMonth.setDate(now.getDate() - 30)
+
+    let postsThisWeek = 0
+    let postsThisMonth = 0
+    let upcoming = 0
+    let mostRecentPublished: ScheduledPost | null = null
+
+    for (const post of posts) {
+      const ref = post.published_at ?? post.scheduled_at
+      if (!ref) continue
+      const refDate = new Date(ref)
+
+      if (post.status === 'published') {
+        if (refDate >= startOfWeek) postsThisWeek += 1
+        if (refDate >= startOfMonth) postsThisMonth += 1
+        const mostRecentRef = mostRecentPublished
+          ? mostRecentPublished.published_at ?? mostRecentPublished.scheduled_at
+          : null
+        if (
+          !mostRecentPublished ||
+          (mostRecentRef && new Date(mostRecentRef) < refDate)
+        ) {
+          mostRecentPublished = post
+        }
+      }
+
+      if (
+        (post.status === 'scheduled' || post.status === 'draft') &&
+        refDate > now
+      ) {
+        upcoming += 1
+      }
+    }
+
+    return { postsThisWeek, postsThisMonth, upcoming, mostRecentPublished }
+  }, [posts])
+
+  const topPostLabel = stats.mostRecentPublished
+    ? stats.mostRecentPublished.platform.charAt(0).toUpperCase() +
+      stats.mostRecentPublished.platform.slice(1)
+    : '—'
+
+  return (
+    <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+      <MetricCard
+        compact
+        label="Posts this week"
+        value={stats.postsThisWeek}
+        icon={<CalendarDays className="h-3.5 w-3.5" />}
+      />
+      <MetricCard
+        compact
+        label="Posts this month"
+        value={stats.postsThisMonth}
+        icon={<Heart className="h-3.5 w-3.5" />}
+      />
+      <MetricCard
+        compact
+        label="Top platform (recent)"
+        value={topPostLabel}
+        icon={<Trophy className="h-3.5 w-3.5" />}
+      />
+      <MetricCard
+        compact
+        label="Upcoming scheduled"
+        value={stats.upcoming}
+        icon={<Clock className="h-3.5 w-3.5" />}
+      />
+    </div>
+  )
+}
 
 function postToStudioItem(post: ScheduledPost): StudioItem {
   const postType = post.post_type ?? 'single'
@@ -83,6 +171,9 @@ export function StudioDashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      {/* Mixpost-style headline widgets — week/month at a glance */}
+      <DashboardWidgets posts={data.posts} />
+
       {/* Strategy Brief */}
       <StrategyBrief context={strategyContext} />
 
