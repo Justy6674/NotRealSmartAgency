@@ -57,6 +57,7 @@ import { createManageCollectionsTool } from './manage-collections'
 import { createManageMediaTagsTool } from './manage-media-tags'
 import { createResearchIndustryTool } from './research-industry'
 import { createBlotatoListAccountsTool, createBlotatoPublishTool, createBlotatoExtractContentTool, createBlotatoSourceStatusTool, createBlotatoListTemplatesTool, createBlotatoCreateVisualTool, createBlotatoVisualStatusTool, createBlotatoPostStatusTool } from './blotato'
+import { createExtractBrandKitTool } from './extract-brand-kit'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -183,6 +184,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const manageCollections = createManageCollectionsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const manageMediaTags = createManageMediaTagsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const researchIndustry = createResearchIndustryTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const extractBrandKit = createExtractBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
 
   // Blotato tools (AI content creation, visual generation, content repurposing)
   // Used alongside Mixpost — Director chooses which is best per task
@@ -293,6 +295,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       manage_collections: manageCollections,
       manage_media_tags: manageMediaTags,
       research_industry: researchIndustry,
+      extract_brand_kit: extractBrandKit,
       // Blotato (AI content creation + visual generation + repurposing)
       blotato_list_accounts: blotatoListAccountsTool,
       blotato_publish: blotatoPublish,

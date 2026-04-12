@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   FileText,
   Globe,
+  Palette,
   Share2,
   Clock,
   Webhook,
@@ -88,6 +89,12 @@ const CONTENT_ITEMS: SidebarItem[] = [
     href: '/agency/studio/templates',
     icon: <FileText className="h-4 w-4" />,
     matchPrefixes: ['/agency/studio/templates'],
+  },
+  {
+    label: 'Brand Kit',
+    href: '/agency/studio/brand-kit',
+    icon: <Palette className="h-4 w-4" />,
+    matchPrefixes: ['/agency/studio/brand-kit'],
   },
   {
     label: 'Pages',

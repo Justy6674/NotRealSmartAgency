@@ -9,9 +9,11 @@ import { VoiceAudienceEditor } from './VoiceAudienceEditor'
 import { DigestSettings } from './DigestSettings'
 import { ProviderSettings } from './ProviderSettings'
 import { BrandWatermarkEditor } from './BrandWatermarkEditor'
+import { BrandDNAEditor } from './BrandDNAEditor'
+import { BrandColoursEditor } from './BrandColoursEditor'
 import { MemoryBrowser } from './MemoryBrowser'
 import type { Brand, BrandWatermark, Competitor, ToneOfVoice, TargetAudience } from '@/types/database'
-import { Settings, Swords, Volume2, Bell, Video, Stamp, Share2, Brain } from 'lucide-react'
+import { Settings, Swords, Volume2, Bell, Video, Stamp, Share2, Brain, Dna, Palette } from 'lucide-react'
 import { SocialAccountsManager } from './SocialAccountsManager'
 
 interface BrandSettingsProps {
@@ -23,6 +25,8 @@ const TABS = [
   { id: 'socials', label: 'Socials', icon: Share2 },
   { id: 'competitors', label: 'Competitors', icon: Swords },
   { id: 'voice', label: 'Voice & Audience', icon: Volume2 },
+  { id: 'dna', label: 'Brand DNA', icon: Dna },
+  { id: 'colours', label: 'Colours', icon: Palette },
   { id: 'watermark', label: 'Watermark', icon: Stamp },
   { id: 'memory', label: 'Memory', icon: Brain },
   { id: 'digest', label: 'Digest', icon: Bell },
@@ -147,6 +151,14 @@ export function BrandSettings({ brand }: BrandSettingsProps) {
               {saving ? 'Saving...' : 'Save Voice & Audience'}
             </button>
           </div>
+        )}
+
+        {activeTab === 'dna' && (
+          <BrandDNAEditor brandId={brand.id} initialData={brand.brand_dna_constraints ?? null} />
+        )}
+
+        {activeTab === 'colours' && (
+          <BrandColoursEditor brandId={brand.id} initialColours={brand.brand_colours ?? null} />
         )}
 
         {activeTab === 'watermark' && (
