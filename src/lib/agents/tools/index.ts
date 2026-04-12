@@ -58,6 +58,7 @@ import { createManageMediaTagsTool } from './manage-media-tags'
 import { createResearchIndustryTool } from './research-industry'
 import { createBlotatoListAccountsTool, createBlotatoPublishTool, createBlotatoExtractContentTool, createBlotatoSourceStatusTool, createBlotatoListTemplatesTool, createBlotatoCreateVisualTool, createBlotatoVisualStatusTool, createBlotatoPostStatusTool } from './blotato'
 import { createExtractBrandKitTool } from './extract-brand-kit'
+import { createReviewContentTool } from './review-content'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -185,6 +186,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const manageMediaTags = createManageMediaTagsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const researchIndustry = createResearchIndustryTool(ctx.supabase, ctx.userId, ctx.brandId)
   const extractBrandKit = createExtractBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const reviewContent = createReviewContentTool(ctx.supabase, ctx.userId, ctx.brandId)
 
   // Blotato tools (AI content creation, visual generation, content repurposing)
   // Used alongside Mixpost — Director chooses which is best per task
@@ -296,6 +298,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       manage_media_tags: manageMediaTags,
       research_industry: researchIndustry,
       extract_brand_kit: extractBrandKit,
+      review_content: reviewContent,
       // Blotato (AI content creation + visual generation + repurposing)
       blotato_list_accounts: blotatoListAccountsTool,
       blotato_publish: blotatoPublish,
@@ -312,7 +315,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, query_social_analytics: querySocialAnalytics, manage_tags: manageTags, request_outline_review: requestOutlineReview, import_design_from_url: importDesignFromUrl, get_presenter_notes: getPresenterNotes, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, analyse_content_gaps: analyseContentGaps, publish_to_social: publishToSocial, manage_collections: manageCollections, manage_media_tags: manageMediaTags, research_industry: researchIndustry, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, research_industry: researchIndustry, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
-    compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, get_design_content: getDesignContent, get_design_pages: getDesignPages, comment_on_design: commentOnDesign, list_comments: listComments, reply_to_comment: replyToComment, ...managementTools },
+    compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, get_design_content: getDesignContent, get_design_pages: getDesignPages, comment_on_design: commentOnDesign, list_comments: listComments, reply_to_comment: replyToComment, review_content: reviewContent, ...managementTools },
     seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, write_blog: writeBlog, ...managementTools },
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },

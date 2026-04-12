@@ -14,6 +14,9 @@ interface DraftCardProps {
   /** Number of post_activity rows (comments + system events) for this draft.
    *  Hidden when 0. Populated in bulk by ReviewRoom. */
   activityCount?: number
+  /** AI review overall score (0-100). Populated from post_activity where
+   *  type = 'review'. Null if no review has been run. */
+  reviewScore?: number | null
   onSelect: (id: string) => void
   onClick: (id: string) => void
   onApprove: (id: string) => void
@@ -45,6 +48,7 @@ export function DraftCard({
   complianceResult,
   complianceLoading,
   activityCount = 0,
+  reviewScore,
   onSelect,
   onClick,
   onApprove,
@@ -110,7 +114,40 @@ export function DraftCard({
             </span>
           )}
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1.5">
+            {reviewScore != null && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                title={`AI Review: ${reviewScore}/100`}
+                style={{
+                  backgroundColor:
+                    reviewScore >= 80
+                      ? 'oklch(0.72 0.15 145 / 0.15)'
+                      : reviewScore >= 60
+                      ? 'oklch(0.75 0.15 75 / 0.15)'
+                      : 'oklch(0.65 0.2 25 / 0.15)',
+                  color:
+                    reviewScore >= 80
+                      ? 'oklch(0.72 0.15 145)'
+                      : reviewScore >= 60
+                      ? 'oklch(0.75 0.15 75)'
+                      : 'oklch(0.65 0.2 25)',
+                }}
+              >
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{
+                    backgroundColor:
+                      reviewScore >= 80
+                        ? 'oklch(0.72 0.15 145)'
+                        : reviewScore >= 60
+                        ? 'oklch(0.75 0.15 75)'
+                        : 'oklch(0.65 0.2 25)',
+                  }}
+                />
+                {reviewScore}
+              </span>
+            )}
             <ComplianceBadge result={complianceResult} loading={complianceLoading} />
           </div>
         </div>

@@ -19,6 +19,7 @@ import { CompetitorIntelCard } from './CompetitorIntelCard'
 import { SocialAnalyticsCard } from './SocialAnalyticsCard'
 import { AgentActivityCard } from './AgentActivityCard'
 import { UpcomingPostsCard } from './UpcomingPostsCard'
+import { AlertsBanner } from './AlertsBanner'
 import { StudioFeed } from './StudioFeed'
 import { PostReviewPanel } from './PostReviewPanel'
 import { PostDetailPanel } from './PostDetailPanel'
@@ -171,6 +172,9 @@ export function StudioDashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      {/* Proactive alerts — failed posts, content gaps, neglected platforms */}
+      <AlertsBanner />
+
       {/* Mixpost-style headline widgets — week/month at a glance */}
       <DashboardWidgets posts={data.posts} />
 

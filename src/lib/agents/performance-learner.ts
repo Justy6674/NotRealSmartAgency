@@ -3,6 +3,15 @@ import { memoryStore } from '@/lib/ruflo/client'
 import { getBrandNamespace, getNamespace } from '@/lib/ruflo/namespaces'
 import { fetchMixpostAccounts, fetchMixpostReports } from '@/lib/mixpost/client'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
+import {
+  loadState,
+  saveState,
+  initializeState,
+  recordOutcome,
+  armKey,
+  getTimeSlot,
+  computeMedian,
+} from '@/lib/content-optimisation/bandit'
 
 // ── Platform benchmarks (2026 data from social-media-benchmarks.ts) ─────────
 
@@ -218,6 +227,63 @@ export async function learnFromPublishedPosts(
     getNamespace(brandSlug, 'overall'),
     ['performance', 'aggregate', 'weekly_review']
   )
+
+  // 6. Update bandit state for content optimisation
+  try {
+    // Collect engagement values from posts that have real metrics
+    const engagementValues = insights
+      .map(i => i.engagementRate)
+      .filter((v): v is number => v !== null)
+
+    // Only update bandit if we have at least some metrics to learn from
+    if (engagementValues.length > 0) {
+      const allPlatforms = [...new Set((posts as PublishedPost[]).map(p => p.platform))]
+      let banditState = await loadState(supabase, brandId)
+
+      if (!banditState) {
+        banditState = initializeState(brandId, allPlatforms)
+      }
+
+      // Recalculate rolling median from this batch
+      const rollingMedian = computeMedian(engagementValues)
+      banditState.median_engagement = rollingMedian
+      banditState.last_calibrated = new Date().toISOString()
+
+      // Record each post's outcome against the bandit
+      for (const insight of insights) {
+        if (insight.engagementRate === null) continue
+        const contentType = insight.contentType ?? 'educational'
+        const publishedDate = new Date(insight.publishedAt)
+        // Convert UTC to AEST (UTC+10) to determine time slot
+        const aestHour = (publishedDate.getUTCHours() + 10) % 24
+        const timeSlot = getTimeSlot(aestHour)
+        const key = armKey(contentType, insight.platform, timeSlot)
+
+        // Ensure this arm exists (platform may have been added after initialisation)
+        if (!banditState.arms.find(a => a.key === key)) {
+          banditState.arms.push({
+            key,
+            content_type: contentType,
+            platform: insight.platform,
+            time_slot: timeSlot,
+            alpha: 1,
+            beta: 1,
+            total_impressions: 0,
+            total_successes: 0,
+            last_updated: new Date().toISOString(),
+          })
+        }
+
+        const engaged = insight.engagementRate > rollingMedian
+        recordOutcome(banditState, key, engaged)
+      }
+
+      await saveState(supabase, brandId, banditState)
+    }
+  } catch (banditError) {
+    // Bandit learning is non-critical — log and continue
+    console.error('[performance-learner] Bandit update failed:', banditError)
+  }
 
   return { analysed: insights.length, insights }
 }

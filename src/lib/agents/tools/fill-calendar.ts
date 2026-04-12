@@ -5,6 +5,7 @@ import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Brand, PostPlatform } from '@/types/database'
 import { getComplianceRules } from '../compliance-rules'
+import { loadState, selectBestArms, hasEnoughData, type BanditArm } from '@/lib/content-optimisation/bandit'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,38 @@ const CONTENT_TYPE_DISTRIBUTION: Record<string, number> = {
 }
 
 const MAX_POSTS_PER_LLM_CALL = 10
+
+/**
+ * Build a content type distribution string for the LLM prompt.
+ * If bandit state exists with enough data, uses Thompson Sampling
+ * to determine the mix. Otherwise falls back to fixed percentages.
+ */
+function buildContentMixInstruction(
+  banditArms: BanditArm[] | null,
+): string {
+  if (!banditArms || banditArms.length === 0) {
+    // Fixed distribution fallback
+    return 'Rotate content types: educational (40%), promotional (20%), behind the scenes (15%), social proof (15%), engagement (10%)'
+  }
+
+  // Count how often each content_type appears in the bandit's top picks
+  const typeCounts: Record<string, number> = {}
+  for (const arm of banditArms) {
+    typeCounts[arm.content_type] = (typeCounts[arm.content_type] ?? 0) + 1
+  }
+
+  // Convert to percentages
+  const total = banditArms.length
+  const parts = Object.entries(typeCounts)
+    .sort(([, a], [, b]) => b - a)
+    .map(([type, count]) => {
+      const pct = Math.round((count / total) * 100)
+      const label = type.replace(/_/g, ' ')
+      return `${label} (${pct}%)`
+    })
+
+  return `Rotate content types based on past performance data: ${parts.join(', ')}. These proportions reflect what has worked best for this brand.`
+}
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -265,6 +298,20 @@ export function createFillCalendarTool(
       const isRegulated = complianceFlags?.ahpra || complianceFlags?.tga
       const complianceSection = isRegulated ? getComplianceRules(complianceFlags) : ''
 
+      // 5b. Check bandit state for data-driven content mix
+      let banditArms: BanditArm[] | null = null
+      try {
+        const banditState = await loadState(supabase, brandId)
+        if (banditState && hasEnoughData(banditState)) {
+          banditArms = selectBestArms(banditState, slots.length, {
+            platforms: targetPlatforms,
+          })
+        }
+      } catch {
+        // Bandit is optional — fall back to fixed distribution
+      }
+      const contentMixInstruction = buildContentMixInstruction(banditArms)
+
       // 6. Generate posts in batches
       const allGeneratedPosts: {
         platform: PostPlatform
@@ -296,7 +343,7 @@ ${complianceSection}
 
 Generate social media posts for the given time slots. Follow these rules:
 
-- Rotate content types: educational (40%), promotional (20%), behind the scenes (15%), social proof (15%), engagement (10%)
+- ${contentMixInstruction}
 - Match platform best practices:
   - TikTok: short punchy hooks, trend-aware, casual tone
   - LinkedIn: professional insights, thought leadership, value-driven
