@@ -41,10 +41,28 @@ async function authenticate(request: Request): Promise<{ userId: string } | Resp
  * Stateless — fresh instances per request (Vercel serverless compatible).
  */
 async function handleMcpRequest(request: Request): Promise<Response> {
-  const authResult = await authenticate(request)
-  if (authResult instanceof Response) return authResult
+  // Check if this is an initialize request — must be allowed WITHOUT auth
+  // so Claude Desktop can fetch serverInfo (including icons) before OAuth completes.
+  const clonedReq = request.clone()
+  let isInitialize = false
+  try {
+    const body = await clonedReq.json()
+    isInitialize = body?.method === 'initialize'
+  } catch {
+    // Not JSON — proceed with auth
+  }
 
-  const { userId } = authResult
+  let userId: string
+  if (isInitialize) {
+    // Allow initialize without auth — use a placeholder userId.
+    // The server returns serverInfo (name, version, icons) which doesn't
+    // require user context. All subsequent calls require real auth.
+    userId = 'anonymous-initialize'
+  } else {
+    const authResult = await authenticate(request)
+    if (authResult instanceof Response) return authResult
+    userId = authResult.userId
+  }
 
   // Create MCP server for this user
   const mcpServer = createNRSMcpServer(userId)
