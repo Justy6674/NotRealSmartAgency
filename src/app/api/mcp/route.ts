@@ -8,60 +8,90 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
-/**
- * Authenticate the request via Bearer token.
- * Returns userId or an error Response.
- */
-async function authenticate(request: Request): Promise<{ userId: string } | Response> {
-  const auth = request.headers.get('authorization')
-  if (!auth?.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({
-      jsonrpc: '2.0',
-      error: { code: -32001, message: 'Missing Authorization header. Use: Bearer nrs_sk_...' },
-      id: null,
-    }), { status: 401, headers: { 'Content-Type': 'application/json' } })
-  }
+const RESOURCE_METADATA_URL = 'https://www.notrealsmart.com.au/.well-known/oauth-protected-resource'
 
-  const token = auth.slice(7)
-  const result = await resolveApiKey(token)
-
-  if (!result) {
-    return new Response(JSON.stringify({
-      jsonrpc: '2.0',
-      error: { code: -32001, message: 'Invalid or revoked API key.' },
-      id: null,
-    }), { status: 401, headers: { 'Content-Type': 'application/json' } })
-  }
-
-  return result
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'content-type, authorization, mcp-protocol-version',
 }
+
+/**
+ * MCP discovery/handshake methods that don't access user data.
+ * These MUST be allowed without auth so Claude Desktop can:
+ * 1. Fetch serverInfo (name, version, icons) on initialize
+ * 2. Complete the notifications/initialized handshake
+ * 3. List available tools before the user authenticates
+ * 4. Respond to ping health checks
+ *
+ * Matches the pattern used by EndorsMe and other working MCP servers.
+ */
+const PUBLIC_METHODS = new Set([
+  'initialize',
+  'notifications/initialized',
+  'ping',
+  'tools/list',
+  'prompts/list',
+  'resources/list',
+])
 
 /**
  * Create transport + server and handle the request.
  * Stateless — fresh instances per request (Vercel serverless compatible).
  */
 async function handleMcpRequest(request: Request): Promise<Response> {
-  // Check if this is an initialize request — must be allowed WITHOUT auth
-  // so Claude Desktop can fetch serverInfo (including icons) before OAuth completes.
-  const clonedReq = request.clone()
-  let isInitialize = false
+  // Clone request so we can read the body to check the method
+  // without consuming it for the transport
+  const bodyText = await request.text()
+
+  // Parse method from JSON-RPC body
+  let method = ''
   try {
-    const body = await clonedReq.json()
-    isInitialize = body?.method === 'initialize'
+    const parsed = JSON.parse(bodyText)
+    method = parsed.method || ''
   } catch {
-    // Not JSON — proceed with auth
+    // Not valid JSON — will fail at transport level
   }
 
-  let userId: string
-  if (isInitialize) {
-    // Allow initialize without auth — use a placeholder userId.
-    // The server returns serverInfo (name, version, icons) which doesn't
-    // require user context. All subsequent calls require real auth.
-    userId = 'anonymous-initialize'
-  } else {
-    const authResult = await authenticate(request)
-    if (authResult instanceof Response) return authResult
-    userId = authResult.userId
+  const isPublicMethod = PUBLIC_METHODS.has(method)
+  const auth = request.headers.get('authorization')
+
+  // If this is a protected method without auth, return 401 with discovery hint
+  if (!isPublicMethod && !auth?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: 'Authentication required. Provide a Bearer token.' },
+      id: null,
+    }), {
+      status: 401,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+        'WWW-Authenticate': `Bearer resource_metadata="${RESOURCE_METADATA_URL}", scope="mcp:tools"`,
+      },
+    })
+  }
+
+  // Resolve user identity — anonymous for public methods, real user for protected
+  let userId = 'anonymous-initialize'
+  if (!isPublicMethod && auth?.startsWith('Bearer ')) {
+    const token = auth.slice(7)
+    const result = await resolveApiKey(token)
+    if (!result) {
+      return new Response(JSON.stringify({
+        jsonrpc: '2.0',
+        error: { code: -32001, message: 'Invalid or revoked API key.' },
+        id: null,
+      }), {
+        status: 401,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'WWW-Authenticate': `Bearer resource_metadata="${RESOURCE_METADATA_URL}", scope="mcp:tools"`,
+        },
+      })
+    }
+    userId = result.userId
   }
 
   // Create MCP server for this user
@@ -75,20 +105,39 @@ async function handleMcpRequest(request: Request): Promise<Response> {
   // Connect server to transport
   await mcpServer.connect(transport)
 
-  // Audit log (fire-and-forget)
-  const supabase = createAdminClient()
-  logAudit({
-    supabase,
-    userId,
-    action: 'mcp_request',
-    entityType: 'mcp',
-    detail: { method: request.method },
-    costCents: 0,
-  }).catch(() => {})
+  // Audit log (fire-and-forget, skip for public methods)
+  if (!isPublicMethod) {
+    const supabase = createAdminClient()
+    logAudit({
+      supabase,
+      userId,
+      action: 'mcp_request',
+      entityType: 'mcp',
+      detail: { method },
+      costCents: 0,
+    }).catch(() => {})
+  }
+
+  // Reconstruct request with the body text we already consumed
+  const reconstructedRequest = new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: bodyText,
+  })
 
   // Handle the request and return the response
-  const response = await transport.handleRequest(request)
-  return response
+  const response = await transport.handleRequest(reconstructedRequest)
+
+  // Add CORS headers to the response
+  const newHeaders = new Headers(response.headers)
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    newHeaders.set(key, value)
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    headers: newHeaders,
+  })
 }
 
 // MCP Streamable HTTP requires POST (tool calls, messages)
@@ -104,4 +153,9 @@ export async function GET(request: Request) {
 // DELETE is used for session termination
 export async function DELETE(request: Request) {
   return handleMcpRequest(request)
+}
+
+// CORS preflight
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: corsHeaders })
 }
