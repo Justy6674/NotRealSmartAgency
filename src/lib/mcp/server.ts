@@ -72,13 +72,14 @@ export function createNRSMcpServer(userId: string): McpServer {
     description: 'NotRealSmart AI Marketing Agency — 1 Director + 13 department agents running marketing for your brands.',
     icons: [
       {
+        src: 'https://www.notrealsmart.com.au/favicon-48.png',
+        mimeType: 'image/png',
+        sizes: ['48x48'],
+      },
+      {
         src: 'https://www.notrealsmart.com.au/favicon-64.png',
         mimeType: 'image/png',
         sizes: ['64x64'],
-      },
-      {
-        src: 'https://www.notrealsmart.com.au/Favicon.png',
-        mimeType: 'image/png',
       },
     ],
   })
