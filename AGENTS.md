@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 <!-- gbrain:project:v1 BEGIN — managed by gbrain-integration plan; do not edit between markers -->
 ## gbrain — central compounding brain (MANDATORY)
@@ -15,7 +15,7 @@ Every session in this project uses gbrain as the central knowledge layer. Full r
 <!-- gbrain:project:v1 END -->
 
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## MANDATORY: Read Before ANY Creative Studio Work
 
@@ -24,7 +24,7 @@ Before touching ANY Creative Studio code (Creator, Review, Schedule, Media, or r
 - `~/NotRealSmartAgency/2026-04-08-post-creator-redesign.md` — the 10-card Creator spec
 - `~/Obsidian/Reference/nrs-creative-studio-redesign-research.md` — competitor patterns
 
-**Key architecture:** Creator is THE centre. Three entry points (Media→Creator, fresh Creator, Review→Creator). Director is the expert marketer who delegates to 13 agents. Any AI (Cowork, Claude Desktop) plugs into the Director via MCP. Build to spec, never patch.
+**Key architecture:** Creator is THE centre. Three entry points (Media→Creator, fresh Creator, Review→Creator). Director is the expert marketer who delegates to 13 agents. Any AI (Cowork, Codex Desktop) plugs into the Director via MCP. Build to spec, never patch.
 
 ## Rule Zero — Tomorrow's Tech for Marketing
 
@@ -55,12 +55,12 @@ Every feature, every screen, every interaction must follow this rule:
 
 This is the founding design principle. Every PR, every feature, every refactor must be evaluated against it.
 
-## Session Start Checklist (every new Claude session)
+## Session Start Checklist (every new Codex session)
 
 1. If the task touches Creator / Review / Schedule / Media → read the three specs in the MANDATORY block above **before** any code.
 2. Confirm you are in `~/NotRealSmartAgency` (not `~/notrealsmart`).
 3. Confirm Supabase CLI is linked to `uyhtrwlotoriblicqqrl` per the global SUPABASE CLI GATE.
-4. Skim the Memory Index (`~/.claude/projects/-Users-jb-downscale-NotRealSmartAgency/memory/MEMORY.md`) — the `feedback_*` and `#CRITICAL` entries override defaults.
+4. Skim the Memory Index (`~/.Codex/projects/-Users-jb-downscale-NotRealSmartAgency/memory/MEMORY.md`) — the `feedback_*` and `#CRITICAL` entries override defaults.
 5. Plan mode first if the task touches files; answer directly if it's a question.
 
 ## Commands
@@ -152,13 +152,13 @@ Replaces Ayrshare ($299/mo) with $0/month self-hosted publishing.
 
 ## Required Reference: AI Agent Architecture
 
-Before building or modifying agent execution, tool systems, memory, MCP integrations, or any agentic features in NotRealSmart, **load the Claude Code architecture skill first**:
+Before building or modifying agent execution, tool systems, memory, MCP integrations, or any agentic features in NotRealSmart, **load the Codex architecture skill first**:
 
 ```
 /ai-agent-architecture
 ```
 
-This provides production-proven patterns from Claude Code's source (2,200 files analysed) including:
+This provides production-proven patterns from Codex's source (2,200 files analysed) including:
 - **Agent loop**: async generator pattern, state machine, error recovery
 - **Tool system**: concurrency partitioning, streaming execution, fail-closed defaults
 - **Sub-agents**: 5 agent types, context inheritance, coordinator mode
@@ -166,7 +166,7 @@ This provides production-proven patterns from Claude Code's source (2,200 files 
 - **Context management**: 4 compaction strategies for long conversations
 - **Memory**: auto-extraction, 4-type taxonomy, injection patterns
 
-Full reference: `~/Obsidian/Reference/claude-code-architecture.md`
+Full reference: `~/Obsidian/Reference/Codex-architecture.md`
 
 ### Superpowers Development Workflow (MANDATORY)
 
@@ -191,7 +191,7 @@ The `openclaw-video-toolkit` skill is installed globally. Use it when building o
 - **Image generation**: FLUX.2 for video scene frames — free on Modal's $30/mo starter
 - **AI music**: ACE-Step royalty-free music generation
 - **Commands**: `/video-setup`, `/video-video`, `/video-template`, `/video-brand`, `/video-generate-voiceover`
-- **Python tools**: `~/.claude/video-toolkit-tools/` (22 scripts: voiceover, image gen, music, upscale, face animation)
+- **Python tools**: `~/.Codex/video-toolkit-tools/` (22 scripts: voiceover, image gen, music, upscale, face animation)
 - **Templates**: Product demos, sprint reviews — extensible for marketing content
 
 Integration points in NotRealSmart:
@@ -220,7 +220,7 @@ No project-level `eslint.config.*` — uses Next.js v9 flat config defaults. Run
 3. Gets/creates agent registry entry, checks budget (`429` if exceeded)
 4. Builds system prompt with independent memory retrieval per agent namespace
 5. For Director: runs intent router, appends routing hints to system prompt
-6. Streams via `gateway('anthropic/claude-sonnet-4')` with fallbacks
+6. Streams via `gateway('anthropic/Codex-sonnet-4')` with fallbacks
 7. `stopWhen: stepCountIs(5)` — max 5 tool-use steps per turn
 8. `onFinish`: records spend, logs to `ai_usage` + `audit_log`, extracts memories
 
@@ -282,7 +282,7 @@ Rule-based keyword classification that analyses the user's message and suggests 
 - **API**: `/api/team` (GET list + POST invite), `/api/team/[id]` (PATCH + DELETE), `/api/team/accept`
 
 ### Chat Image/Screenshot Support
-Users can paste (Cmd+V) or drag/drop images into chat. Images are sent as AI SDK v6 `FileUIPart` (base64 data URL) so Claude actually sees them. Video/audio still goes through the media upload pipeline.
+Users can paste (Cmd+V) or drag/drop images into chat. Images are sent as AI SDK v6 `FileUIPart` (base64 data URL) so Codex actually sees them. Video/audio still goes through the media upload pipeline.
 
 ### Post Signature Branding
 Per-brand `post_signature` JSONB field on `brands` table. Three formats: plain text, `@mention`, or `#hashtag`. Injected into all agent system prompts as a mandatory attribution rule. Also appended by the cron publisher to scheduled posts before publishing via Mixpost/Ayrshare.
@@ -306,18 +306,18 @@ TikTok (watch time, completion rate, hook requirements), Instagram (saves/shares
 `design_graphic` and `export_design` tools use Canva MCP (connected via `mcp__claude_ai_Canva__*`). Creative Studio's Create tab also provides direct Canva access. Brand agent and Director can generate designs, search templates, export to formats.
 
 ### MCP Server — CLI & AI Client Access (LIVE)
-NRS is an MCP server. Users connect from Claude Desktop (includes Cowork), Claude Mobile, terminal Claude Code, or any MCP-compatible AI client.
+NRS is an MCP server. Users connect from Codex Desktop (includes Cowork), Codex Mobile, terminal Codex, or any MCP-compatible AI client.
 
 **Endpoint:** `https://www.notrealsmart.com.au/api/mcp` (Streamable HTTP, stateless)
 
 **Two auth methods:**
 1. **Bearer token** — user creates API key in Settings, adds to config. Key prefix `nrs_sk_`, SHA-256 hashed in `api_keys` table.
-2. **OAuth 2.0** — user clicks "Add custom connector" in Claude Desktop/Mobile, logs in via `/mcp-login`, token issued automatically. Full RFC 8414 + RFC 7591 + PKCE S256.
+2. **OAuth 2.0** — user clicks "Add custom connector" in Codex Desktop/Mobile, logs in via `/mcp-login`, token issued automatically. Full RFC 8414 + RFC 7591 + PKCE S256.
 
 **Access token = nrs_sk_ API key.** Both auth methods produce the same key type. The MCP server's `resolveApiKey()` validates both. Zero duplication.
 
 #### MCP ALLOWLIST — plug-in AIs don't orchestrate, the Director does (NON-NEGOTIABLE)
-**Plug-in AIs are MESSENGERS.** Claude Desktop, Cowork, Claude Code, any external MCP client — they hand user intent to `chat_with_director` and wait. They do NOT call multi-step orchestration tools directly, do NOT write marketing copy, do NOT bypass the Review queue.
+**Plug-in AIs are MESSENGERS.** Codex Desktop, Cowork, Codex, any external MCP client — they hand user intent to `chat_with_director` and wait. They do NOT call multi-step orchestration tools directly, do NOT write marketing copy, do NOT bypass the Review queue.
 
 Enforced structurally in `src/lib/mcp/server.ts` via `HIDDEN_FROM_MCP: ReadonlySet<string>` passed to `adaptToolsForMCP(..., hiddenFromMcp)`. Hidden tools are **never registered** on the MCP surface — they exist only inside the Director's internal AI SDK tool loop.
 
@@ -352,7 +352,7 @@ Enforced structurally in `src/lib/mcp/server.ts` via `HIDDEN_FROM_MCP: ReadonlyS
 - `src/app/api/mcp/token/route.ts` — OAuth token exchange
 - `src/app/mcp-login/page.tsx` — branded OAuth login page
 
-**Team invite emails** include step-by-step setup for web, Claude Desktop/Mobile (OAuth), and Claude Code (API key + "tell Claude to connect").
+**Team invite emails** include step-by-step setup for web, Codex Desktop/Mobile (OAuth), and Codex (API key + "tell Codex to connect").
 
 Full reference: `~/Obsidian/Reference/nrs-mcp-architecture.md`.
 
@@ -364,7 +364,7 @@ ONE canonical function owns all media_items row mutations that touch thumbnails,
 **Stages:**
 1. **Thumbnail** (videos only) — `extractFirstFrameFromUrl()` runs `ffmpeg -ss 1 -i <https-url> -frames:v 1`. Fast-seek before input streams only the bytes needed for frame 1. Memory-safe for 500 MB files on Vercel serverless. Hard 30s kill timeout. Thumb uploaded to `{path}_thumb.jpg` in the media bucket.
 2. **Transcription** (video/audio < 100MB) — `transcribeFile()` → Deepgram nova-2 URL mode → Whisper fallback. Persists to `transcription`, `transcription_model`, `transcription_status`, `duration_seconds`.
-3. **AI** — Claude vision (images) or transcript analysis (video/audio). Persists to `ai_description` + extends `tags`.
+3. **AI** — Codex vision (images) or transcript analysis (video/audio). Persists to `ai_description` + extends `tags`.
 
 **Per-stage report** at `metadata.processing` with `{status, error?, duration_ms?}` per stage. Merges prior reports (doesn't clobber). Failures never cascade.
 
@@ -381,7 +381,7 @@ ONE canonical function owns all media_items row mutations that touch thumbnails,
 Full reference: `~/Obsidian/Reference/nrs-media-processing-pipeline.md`.
 
 ### Upload diagnostics without DevTools — #CRITICAL
-**Never ask the user to open Chrome DevTools, Network tab, or console.** That violates the non-tech-user First Principle at the top of this file. Justin is not a developer; he uses the Claude app (which contains Cowork) and the terminal Claude Code CLI — nothing else.
+**Never ask the user to open Chrome DevTools, Network tab, or console.** That violates the non-tech-user First Principle at the top of this file. Justin is not a developer; he uses the Codex app (which contains Cowork) and the terminal Codex CLI — nothing else.
 
 When a client-side flow (upload, chat, preview) hangs and needs diagnosis, instrument the CLIENT to POST breadcrumbs to a server endpoint and query them from the terminal with the admin client. Build-time pattern in place for media uploads:
 
@@ -413,7 +413,7 @@ Video agent writes platform-specific scripts (Reels, TikTok, YouTube, LinkedIn).
 Brand cards have "Review Brand" button → `POST /api/brands/{brandId}/review` runs website + GitHub + social scans in parallel → builds structured message → stores in Zustand `pendingReviewMessage` → redirects to Director chat → ChatInterface auto-sends → triggers 6-department meeting (competitor, SEO, content, analytics, compliance, website).
 
 ### Compliance Filter
-`lib/agents/compliance-filter.ts` — uses Claude Haiku to evaluate content against AHPRA/TGA rules before saving outputs. Returns `{ isValid, flags, warnings }`. Runs automatically in `save_output` tool.
+`lib/agents/compliance-filter.ts` — uses Codex Haiku to evaluate content against AHPRA/TGA rules before saving outputs. Returns `{ isValid, flags, warnings }`. Runs automatically in `save_output` tool.
 
 ### Social Media Knowledge
 `lib/agents/knowledge/social-media-benchmarks.ts` — platform benchmarks (engagement rates, CTR, CPC, video specs, posting times). Injected into agent prompts filtered by agent type (video gets video specs, analytics gets all formulas, etc.).
@@ -597,9 +597,54 @@ All tools in `lib/agents/tools/`. Factory functions take context (supabase, user
 - **Agent registry = runtime state** (status, budget, model, org chart — per user, stored in `agent_registry` table)
 - **Zod v3** import path for AI SDK tool schemas (`import { z } from 'zod/v3'`)
 - **IBM Plex** font, **silver/chrome** palette
-- **Default model:** `anthropic/claude-sonnet-4` (overridable per agent in registry)
+- **Default model:** `anthropic/Codex-sonnet-4` (overridable per agent in registry)
 - **Cost calculation:** `(inputTokens * 0.3 + outputTokens * 1.5) / 100` → cents
 - **Types:** all in `src/types/database.ts` — `AgentType`, `Brand`, `AgentConfig`, `Task`, `Goal`, etc.
+
+## Imported Claude Cowork project instructions
+
+## NotRealSmart Agency — Project Rules
+
+  ### Tool Usage
+  - ALWAYS call list_brands first to get brand IDs before using any NRS tool
+  - Trust the tools. Don't validate Mixpost accounts or social connections yourself — the tools handle matching internally
+  - If a tool fails, read the error message and report it. Don't guess why it failed
+  - Use chat_with_director for complex/multi-step requests. Use individual tools for simple single-task requests
+  - Never tell the user accounts aren't connected unless the tool specifically returns that error
+
+  ### Connected Social Accounts (Mixpost)
+  - Downscale: Facebook, Instagram, LinkedIn
+  - TeleScribe: Facebook (x2), Instagram, YouTube, TikTok
+  - Scent Sell: Facebook, Instagram (x2), YouTube
+  - DownscaleDerm: Facebook, Instagram
+  - Man Clinic: Facebook
+  - EndorseMe: Facebook
+  - Justin Black: LinkedIn (personal)
+
+  ### Brand Rules
+  - Each brand has its own identity. NEVER cross-post between brands
+  - Health brands (Downscale, TeleScribe, DownscaleDerm, EndorseMe) are AHPRA/TGA regulated — $60K fines per offence
+  - Health content: no testimonials, no before/after, no guaranteed outcomes, no naming specific medications
+  - Scent Sell and NRS are NOT health brands — no compliance restrictions
+  - Always confirm which brand the user means before publishing
+
+  ### Content Rules
+  - Australian English throughout (colour, behaviour, organisation)
+  - Check the brand's tone and voice before writing — each brand has its own personality
+  - TeleScribe targets clinicians (GPs, NPs, allied health). NOT patients
+  - Downscale targets patients. NOT clinicians
+  - Never schedule posts without telling the user what's being posted and when
+  - Always include the post caption in your response so the user can review before publishing
+
+  ### Calendar
+  - Scheduled posts auto-appear in Google Calendar via iCal feed
+  - query_calendar shows upcoming posts. Use it when the user asks "what's planned"
+  - Don't create duplicate posts — check the calendar first
+
+  ### When in Doubt
+  - Ask the user rather than guess
+  - One action at a time — don't batch-publish 5 posts without approval
+  - Show the content, wait for approval, then publish
 
 <!-- gbrain:fragrance:v1 BEGIN — fragrance-specific gbrain mandate; managed by gbrain-integration plan -->
 ## gbrain — fragrance compounding (MANDATORY for sniffopotamus, scent-australia, ScentSell, NRS-fragrance work)
