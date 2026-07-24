@@ -8,11 +8,17 @@ import { dispatchTelegramDirectorRequest } from '@/lib/telegram/nrs-director-dis
 import { authoriseTelegramUpdate, type TelegramBrand, type TelegramUpdate } from '@/lib/telegram/nrs-telegram'
 import {
   buildTelegramProjectKeyboard,
+  getTelegramProjectPageAction,
   getTelegramProjectSelection,
   isTelegramProjectPickerRequest,
+  isTelegramStartRequest,
   toTelegramDirectorRequest,
 } from '@/lib/telegram/telegram-project'
-import { TELEGRAM_SELECTION_NAMESPACE, telegramSelectionKey } from '@/lib/telegram/telegram-selection'
+import {
+  TELEGRAM_SELECTION_NAMESPACE,
+  telegramProjectPickerPageKey,
+  telegramSelectionKey,
+} from '@/lib/telegram/telegram-selection'
 import { sendTelegramText, type TelegramReplyKeyboard } from '@/lib/telegram/telegram-api'
 
 export const runtime = 'nodejs'
@@ -88,30 +94,95 @@ export async function POST(request: Request) {
   }
 
   const telegramBrands = (brands ?? []) as TelegramBrand[]
-  const { data: savedSelection, error: selectionReadError } = await supabase
+  const selectionKey = telegramSelectionKey(config.ownerTelegramChatId)
+  const pickerPageKey = telegramProjectPickerPageKey(config.ownerTelegramChatId)
+  const { data: savedTelegramState, error: selectionReadError } = await supabase
     .from('agent_memories')
-    .select('value')
+    .select('key, value')
     .eq('user_id', config.ownerNrsUserId)
     .eq('namespace', TELEGRAM_SELECTION_NAMESPACE)
-    .eq('key', telegramSelectionKey(config.ownerTelegramChatId))
-    .maybeSingle()
+    .in('key', [selectionKey, pickerPageKey])
 
   if (selectionReadError) {
     console.error('[telegram] failed to load selected business:', selectionReadError.message)
   }
 
-  const selectedBrandId = savedSelection?.value ?? null
+  const savedSelection = savedTelegramState?.find((state) => state.key === selectionKey)
+  const savedPickerPage = savedTelegramState?.find((state) => state.key === pickerPageKey)
+  const selectedBrandId = typeof savedSelection?.value === 'string' ? savedSelection.value : null
   const selectedBrand = telegramBrands.find((brand) => brand.id === selectedBrandId) ?? null
+  const currentPickerPage = typeof savedPickerPage?.value === 'number' && savedPickerPage.value >= 0
+    ? Math.floor(savedPickerPage.value)
+    : 0
 
   if (isTelegramProjectPickerRequest(authorisation.text)) {
-    const message = selectedBrand
-      ? `${selectedBrand.name} is your active business. Choose another business below, or tell me what you want to grow.`
-      : 'Choose the business you want to work on. I’ll keep it as your active context until you change it.'
+    const isFreshStart = isTelegramStartRequest(authorisation.text)
+    if (isFreshStart) {
+      await Promise.all([
+        supabase
+          .from('agent_memories')
+          .delete()
+          .eq('user_id', config.ownerNrsUserId)
+          .eq('namespace', TELEGRAM_SELECTION_NAMESPACE)
+          .eq('key', selectionKey),
+        supabase
+          .from('agent_memories')
+          .upsert({
+            key: pickerPageKey,
+            namespace: TELEGRAM_SELECTION_NAMESPACE,
+            value: 0,
+            user_id: config.ownerNrsUserId,
+            memory_type: 'decision',
+            confidence: 1,
+            source: 'telegram',
+            tags: ['telegram', 'business-picker'],
+          }, { onConflict: 'key,namespace' }),
+      ])
+    }
+
+    const page = isFreshStart ? 0 : currentPickerPage
+    const message = isFreshStart
+      ? 'Choose the project you want to work on before we start. I will not use another project’s context.'
+      : selectedBrand
+        ? `${selectedBrand.name} is your active project. Choose another project below if you want to switch.`
+        : 'Choose the project you want to work on. I will keep its knowledge and marketing separate from every other project.'
 
     try {
-      await deliverTelegramText(config, message, buildTelegramProjectKeyboard(telegramBrands))
+      await deliverTelegramText(config, message, buildTelegramProjectKeyboard(telegramBrands, page))
     } catch (err) {
       console.error('[telegram] business picker delivery failed:', err)
+    }
+    return NextResponse.json({ received: true })
+  }
+
+  const nextPickerPage = getTelegramProjectPageAction(authorisation.text, currentPickerPage, telegramBrands)
+  if (nextPickerPage !== null) {
+    const { error: pickerPageWriteError } = await supabase
+      .from('agent_memories')
+      .upsert({
+        key: pickerPageKey,
+        namespace: TELEGRAM_SELECTION_NAMESPACE,
+        value: nextPickerPage,
+        user_id: config.ownerNrsUserId,
+        memory_type: 'decision',
+        confidence: 1,
+        source: 'telegram',
+        tags: ['telegram', 'business-picker'],
+      }, { onConflict: 'key,namespace' })
+
+    if (pickerPageWriteError) {
+      console.error('[telegram] failed to save project picker page:', pickerPageWriteError.message)
+      return NextResponse.json({ received: true })
+    }
+
+    try {
+      await deliverTelegramText(
+        config,
+        'Choose the project you want to work on. I will keep its context separate from every other project.',
+        buildTelegramProjectKeyboard(telegramBrands, nextPickerPage),
+      )
+    } catch (err) {
+      console.error('[telegram] project picker page delivery failed:', err)
     }
     return NextResponse.json({ received: true })
   }
@@ -121,7 +192,7 @@ export async function POST(request: Request) {
     const { error: selectionWriteError } = await supabase
       .from('agent_memories')
       .upsert({
-        key: telegramSelectionKey(config.ownerTelegramChatId),
+        key: selectionKey,
         namespace: TELEGRAM_SELECTION_NAMESPACE,
         value: chosenProject.id,
         user_id: config.ownerNrsUserId,
