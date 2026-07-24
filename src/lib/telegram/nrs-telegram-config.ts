@@ -12,8 +12,10 @@ export interface NRSTelegramConfig {
  * implicit passport to every project.
  */
 export function getNRSTelegramConfig(env: NodeJS.ProcessEnv = process.env): NRSTelegramConfig | null {
-  const botToken = env.TELEGRAM_BOT_TOKEN
-  const webhookSecret = env.TELEGRAM_WEBHOOK_SECRET_TOKEN
+  // Never inherit a product bot such as Downscale's. The central NRS control
+  // channel has its own Telegram identity, credentials and webhook secret.
+  const botToken = env.NRS_TELEGRAM_BOT_TOKEN
+  const webhookSecret = env.NRS_TELEGRAM_WEBHOOK_SECRET_TOKEN
 
   if (!botToken || !webhookSecret) {
     return null
