@@ -493,9 +493,12 @@ export interface BrandDNAConstraints {
   voice_rules?: string[]           // deterministic rules, not adjectives
   banned_words?: string[]          // words the brand never uses
   founder_voice?: {
-    name: string
-    platforms: string[]            // where founder voice is used
-    framing: 'first_person' | 'third_person'
+    /** Older and externally-ingested profiles may supply only a perspective or signature phrase. */
+    name?: string
+    platforms?: string[]           // where founder voice is used
+    framing?: 'first_person' | 'third_person'
+    perspective?: string
+    signature_phrases?: string[]
   }
   content_philosophy?: 'storytelling_first' | 'product_first' | 'educational_first' | 'community_first'
   never_do?: string[]              // hard constraints: "before_after_images", "testimonials_in_ads", etc.

@@ -332,7 +332,18 @@ function buildBrandContext(brand: Brand): string {
       lines.push(`BANNED words (never use): ${dna.banned_words.join(', ')}`)
     }
     if (dna.founder_voice) {
-      lines.push(`Founder voice: ${dna.founder_voice.name} — ${dna.founder_voice.framing === 'first_person' ? 'first person' : 'third person'} on ${dna.founder_voice.platforms.join(', ')}`)
+      const founder = dna.founder_voice
+      const identity = founder.name ?? founder.perspective ?? 'Founder'
+      const framing = founder.framing
+        ? ` — ${founder.framing === 'first_person' ? 'first person' : 'third person'}`
+        : ''
+      const platforms = Array.isArray(founder.platforms) && founder.platforms.length > 0
+        ? ` on ${founder.platforms.join(', ')}`
+        : ''
+      lines.push(`Founder voice: ${identity}${framing}${platforms}`)
+      if (founder.signature_phrases?.length) {
+        lines.push(`Founder signature phrases: ${founder.signature_phrases.join(', ')}`)
+      }
     }
     if (dna.content_philosophy) {
       lines.push(`Content philosophy: ${dna.content_philosophy.replace(/_/g, ' ')}`)
