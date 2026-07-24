@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { runDirectorJob } from '@/lib/mcp/director-job'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createTelegramCommandReply } from '@/lib/telegram/telegram-command'
+import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { dispatchTelegramDirectorRequest } from '@/lib/telegram/nrs-director-dispatch'
 import { authoriseTelegramUpdate, type TelegramBrand, type TelegramUpdate } from '@/lib/telegram/nrs-telegram'
 import { sendTelegramText } from '@/lib/telegram/telegram-api'
@@ -16,26 +17,16 @@ type TelegramJobRow = {
   error: string | null
 }
 
-function getTelegramConfig() {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN
-  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN
-  const ownerChatId = process.env.NRS_TELEGRAM_OWNER_CHAT_ID
-  const ownerUserId = process.env.NRS_TELEGRAM_OWNER_USER_ID
-
-  if (!botToken || !webhookSecret || !ownerChatId || !ownerUserId) return null
-  return { botToken, webhookSecret, ownerChatId, ownerUserId }
-}
-
 function getDirectorResponse(result: unknown): string | null {
   if (!result || typeof result !== 'object') return null
   const response = (result as Record<string, unknown>).response
   return typeof response === 'string' && response.trim() ? response : null
 }
 
-async function deliverTelegramText(config: NonNullable<ReturnType<typeof getTelegramConfig>>, text: string) {
+async function deliverTelegramText(config: NonNullable<ReturnType<typeof getNRSTelegramConfig>>, text: string) {
   await sendTelegramText({
     botToken: config.botToken,
-    chatId: config.ownerChatId,
+    chatId: config.ownerTelegramChatId,
     text,
   })
 }
@@ -45,7 +36,7 @@ async function deliverTelegramText(config: NonNullable<ReturnType<typeof getTele
  * queue. It neither selects a department nor calls publishing tools itself.
  */
 export async function POST(request: Request) {
-  const config = getTelegramConfig()
+  const config = getNRSTelegramConfig()
   if (!config) {
     return NextResponse.json({ error: 'Telegram bot is not configured.' }, { status: 503 })
   }
@@ -61,7 +52,7 @@ export async function POST(request: Request) {
     update,
     suppliedSecret: request.headers.get('x-telegram-bot-api-secret-token'),
     expectedSecret: config.webhookSecret,
-    owner: { chatId: config.ownerChatId, userId: config.ownerUserId },
+    owner: { chatId: config.ownerTelegramChatId, userId: config.ownerTelegramUserId },
   })
 
   if (!authorisation.ok) {
@@ -76,7 +67,7 @@ export async function POST(request: Request) {
   const { data: brands, error: brandsError } = await supabase
     .from('brands')
     .select('id, name, slug')
-    .eq('user_id', config.ownerUserId)
+    .eq('user_id', config.ownerNrsUserId)
     .order('name')
 
   if (brandsError) {
@@ -118,7 +109,7 @@ export async function POST(request: Request) {
       const { data: job, error: jobError } = await supabase
         .from('mcp_jobs')
         .insert({
-          user_id: config.ownerUserId,
+          user_id: config.ownerNrsUserId,
           brand_id: brandId,
           job_type: 'director_chat',
           status: 'queued',
@@ -160,7 +151,7 @@ export async function POST(request: Request) {
 
   after(async () => {
     try {
-      await runDirectorJob(dispatch.jobId, config.ownerUserId, jobInput!)
+      await runDirectorJob(dispatch.jobId, config.ownerNrsUserId, jobInput!)
 
       const { data: completedJob, error: completedJobError } = await supabase
         .from('mcp_jobs')
