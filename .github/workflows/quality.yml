@@ -15,9 +15,12 @@ jobs:
     timeout-minutes: 15
     # Route modules construct the Resend client at import time. The build never
     # sends mail, but it needs a syntactically valid non-secret value to load
-    # those modules in CI.
+    # those modules. Static help routes also construct a Supabase client;
+    # these non-secret placeholders are sufficient because CI makes no calls.
     env:
       RESEND_API_KEY: re_ci_build_placeholder
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci_build_placeholder
 
     steps:
       - uses: actions/checkout@v4
