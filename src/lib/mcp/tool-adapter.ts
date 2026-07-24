@@ -2,6 +2,7 @@ import { z } from 'zod/v3'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getToolsForAgent } from '@/lib/agents/tools'
+import { getDirectMcpToolEntries } from './director-only-tools'
 
 type ZodShape = Record<string, z.ZodTypeAny>
 
@@ -97,22 +98,18 @@ export function adaptToolForMCP(
  *
  * The toolFactory rebuilds tools with the correct brandId per call.
  *
- * `hiddenFromMcp` is an allowlist of Director tool names that must NOT be
- * exposed as direct MCP tools — plug-in AIs (Claude Desktop, Cowork, Claude
- * Code, external clients) should call `chat_with_director` for these
- * instead so the NRS Director owns orchestration. Hidden tools remain
- * available inside the Director's internal tool loop, they're just not
- * callable from the MCP surface.
+ * Direct MCP exposure is an explicit policy allowlist. Plug-in AIs must call
+ * `chat_with_director` for every other tool, so the NRS Director owns
+ * orchestration and approval. Tools that are not listed remain available
+ * inside the Director's internal tool loop.
  */
 export function adaptToolsForMCP(
   tools: Record<string, unknown>,
   mcpServer: McpServer,
   userId: string,
   toolFactory: (brandId: string) => Record<string, unknown>,
-  hiddenFromMcp?: ReadonlySet<string>,
 ) {
-  for (const [name, tool] of Object.entries(tools)) {
-    if (hiddenFromMcp?.has(name)) continue
+  for (const [name, tool] of getDirectMcpToolEntries(tools)) {
     if (tool && typeof tool === 'object' && 'execute' in tool) {
       adaptToolForMCP(name, tool, mcpServer, userId, toolFactory)
     }

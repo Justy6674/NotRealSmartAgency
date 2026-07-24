@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import crypto from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Resend } from 'resend'
 import { parseNotificationPreferences } from '@/lib/notification-preferences'
 import { buildPostPublishedEmail, buildPostFailedEmail } from '@/lib/emails/post-published'
+import { verifyMixpostWebhookSignature } from '@/lib/webhooks/mixpost-signature'
 
 /**
  * Mixpost Pro webhook receiver.
@@ -40,33 +40,6 @@ export const runtime = 'nodejs'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
-// ── Signature verification ───────────────────────────────────────────────────
-
-function verifySignature(rawBody: string, header: string | null): boolean {
-  const secret = process.env.MIXPOST_WEBHOOK_SECRET
-  if (!secret) {
-    // No secret configured — allow the request through so nothing
-    // breaks in dev, but log loudly so we notice in prod. Any prod
-    // deploy should have MIXPOST_WEBHOOK_SECRET set via Vercel env.
-    console.warn('[mixpost-webhook] MIXPOST_WEBHOOK_SECRET not set — skipping signature verification')
-    return true
-  }
-
-  if (!header) return false
-
-  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
-  if (header.length !== expected.length) return false
-
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(header, 'utf8'),
-      Buffer.from(expected, 'utf8'),
-    )
-  } catch {
-    return false
-  }
-}
-
 // ── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
@@ -75,8 +48,15 @@ export async function POST(request: Request) {
   // would always fail.
   const rawBody = await request.text()
 
-  if (!verifySignature(rawBody, request.headers.get('x-signature'))) {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 403 })
+  const verification = verifyMixpostWebhookSignature(
+    rawBody,
+    request.headers.get('x-signature'),
+  )
+  if (!verification.ok) {
+    return NextResponse.json(
+      { error: verification.reason === 'missing-secret' ? 'Webhook signing is not configured' : 'Invalid signature' },
+      { status: verification.reason === 'missing-secret' ? 503 : 403 },
+    )
   }
 
   let body: { event?: string; data?: Record<string, unknown> }

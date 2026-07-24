@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  // Keep standalone tracing inside this app instead of inheriting an unrelated
+  // workspace lockfile from the parent directory during Vercel builds.
+  outputFileTracingRoot: process.cwd(),
   transpilePackages: ['three'],
   images: {
     remotePatterns: [

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getDirectorCompletion } from './director-completion'
+import { getDirectorCompletion } from './director-completion.ts'
 
 test('accepts a final Director answer with no pending tools', () => {
   assert.deepEqual(getDirectorCompletion({

@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-default-type=module --test $(find src -name '*.test.ts' -print)"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
@@ -54,7 +55,7 @@
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.577.0",
     "motion": "^12.38.0",
-    "next": "15.3.8",
+    "next": "15.5.21",
     "next-themes": "^0.4.6",
     "react": "^19.2.0",
     "react-chartjs-2": "^5.3.1",
@@ -62,7 +63,6 @@
     "react-filerobot-image-editor": "^5.0.0-beta.156",
     "react-markdown": "^10.1.0",
     "resend": "^6.9.4",
-    "shadcn": "^4.0.6",
     "stripe": "^20.4.1",
     "tailwind-merge": "^3.5.0",
     "three": "^0.183.2",
@@ -78,6 +78,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
+    "shadcn": "^4.14.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

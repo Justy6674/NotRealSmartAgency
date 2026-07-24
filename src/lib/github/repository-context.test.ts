@@ -4,7 +4,7 @@ import {
   PRODUCT_CONTEXT_PATHS,
   appendRepositoryContext,
   repositoryContentUnavailableMessage,
-} from './repository-context'
+} from './repository-context.ts'
 
 test('includes recognised product documentation paths', () => {
   assert.ok(PRODUCT_CONTEXT_PATHS.includes('docs/CAPABILITY-MAP.md'))
