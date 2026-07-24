@@ -6,10 +6,26 @@ import { getDesignIntelligence } from './knowledge/social-media-design-intellige
 import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
 import { memorySearch } from '@/lib/ruflo/client'
 import { memorySearchV2 } from '@/lib/memory/store'
-import { getNamespace, getGlobalNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
+import { getNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
 import { getSessionMemoryForPrompt } from '@/lib/memory/session-memory'
 
-export function buildSystemPrompt(brand: Brand, agentConfig: AgentConfig, userWorkContext?: string | null, siblingBrands?: Partial<Brand>[], proformaSummary?: string | null): string {
+export interface ProjectPromptOptions {
+  proformaSummary?: string | null
+}
+
+/**
+ * The only memory namespaces ordinary project work may retrieve. Portfolio or
+ * cross-project retrieval is a separately approved future capability.
+ */
+export function getProjectMemoryNamespaces(brandSlug: string, agentType: AgentConfig['agent_type']): string[] {
+  return [getNamespace(brandSlug, agentType), getBrandNamespace(brandSlug)]
+}
+
+export function buildSystemPrompt(
+  brand: Brand,
+  agentConfig: AgentConfig,
+  options: ProjectPromptOptions | null = {},
+): string {
   const sections: string[] = []
 
   // Base agency rules
@@ -116,19 +132,14 @@ When a brand is missing key information, DON'T list what's missing. GUIDE the us
 - The Director should proactively suggest competitive angles: "Your competitors charge $200-300/mo but you're $69 — we should lead with that."
 - Marketing is not just creating content. It's positioning a product in a market. Every output should strengthen the brand's position.`)
 
-  // User work context (how the founder operates)
-  if (userWorkContext) {
-    sections.push(`## About the User\n${userWorkContext}`)
-  }
-
   // Brand context
   sections.push(buildBrandContext(brand))
 
   // Master Marketing Proforma summary
-  if (proformaSummary) {
+  if (options?.proformaSummary) {
     sections.push(`## Master Marketing Proforma
 
-${proformaSummary}
+${options.proformaSummary}
 
 ### How to Use the Proforma
 - You have access to a Master Marketing Proforma for this brand — a living document that is the single source of truth.
@@ -157,17 +168,6 @@ ${proformaSummary}
   const designKnowledge = getDesignIntelligence(agentConfig.agent_type)
   if (designKnowledge) {
     sections.push(designKnowledge)
-  }
-
-  // Brand ecosystem — sibling brands owned by the same user
-  if (siblingBrands?.length) {
-    const ecosystemLines = [`## Brand Ecosystem\nThe owner also runs these related brands — use this for cross-promotion and ecosystem awareness:\n`]
-    for (const sib of siblingBrands) {
-      const products = sib.products_services?.map(p => p.name).join(', ') || ''
-      ecosystemLines.push(`- **${sib.name}** (${sib.niche || 'general'})${sib.description ? ': ' + sib.description : ''}${products ? ' — Products: ' + products : ''}${sib.website_url ? ' — ' + sib.website_url : ''}`)
-    }
-    ecosystemLines.push(`\nWhen relevant, suggest cross-promotion opportunities between ${brand.name} and these related brands. They share the same owner and can strengthen each other's marketing.`)
-    sections.push(ecosystemLines.join('\n'))
   }
 
   // Compliance layer (conditional)
@@ -477,41 +477,33 @@ export async function buildSystemPromptWithMemory(
   brand: Brand,
   agentConfig: AgentConfig,
   latestMessage: string,
-  userWorkContext?: string | null,
-  siblingBrands?: Partial<Brand>[],
-  proformaSummary?: string | null,
+  options: ProjectPromptOptions | null = {},
   userId?: string | null
 ): Promise<{ prompt: string; memoryCount: number }> {
-  const basePrompt = buildSystemPrompt(brand, agentConfig, userWorkContext, siblingBrands, proformaSummary)
+  const basePrompt = buildSystemPrompt(brand, agentConfig, options)
 
   try {
-    const namespace = getNamespace(brand.slug, agentConfig.agent_type)
+    const namespaces = getProjectMemoryNamespaces(brand.slug, agentConfig.agent_type)
 
     // Try semantic search (v2) first, fall back to keyword search (v1)
     let allMemories: { key: string; value: string | Record<string, unknown>; similarity?: number; memory_type?: string; confidence?: number; tags?: string[] }[] = []
 
     if (userId) {
       // v2: Semantic vector search
-      const memories = await memorySearchV2(latestMessage, namespace, userId, 10)
-      let crossMemories: typeof memories = []
-      if (agentConfig.agent_type === 'overall') {
-        crossMemories = await memorySearchV2(latestMessage, getGlobalNamespace(), userId, 5)
-      } else {
-        crossMemories = await memorySearchV2(latestMessage, getBrandNamespace(brand.slug), userId, 5)
-      }
-      allMemories = [...memories, ...crossMemories]
+      const [departmentMemories, brandMemories] = await Promise.all([
+        memorySearchV2(latestMessage, namespaces[0], userId, 10),
+        memorySearchV2(latestMessage, namespaces[1], userId, 5),
+      ])
+      allMemories = [...departmentMemories, ...brandMemories]
     }
 
     // Fallback to v1 keyword search if v2 returned nothing
     if (allMemories.length === 0) {
-      const memories = await memorySearch(latestMessage, namespace, 10)
-      let crossMemories: typeof memories = []
-      if (agentConfig.agent_type === 'overall') {
-        crossMemories = await memorySearch(latestMessage, getGlobalNamespace(), 5)
-      } else {
-        crossMemories = await memorySearch(latestMessage, getBrandNamespace(brand.slug), 5)
-      }
-      allMemories = [...memories, ...crossMemories]
+      const [departmentMemories, brandMemories] = await Promise.all([
+        memorySearch(latestMessage, namespaces[0], 10),
+        memorySearch(latestMessage, namespaces[1], 5),
+      ])
+      allMemories = [...departmentMemories, ...brandMemories]
     }
 
     if (allMemories.length === 0) {

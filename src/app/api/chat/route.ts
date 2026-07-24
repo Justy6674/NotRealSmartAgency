@@ -18,6 +18,7 @@ import { logAudit } from '@/lib/agents/audit'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
 import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
+import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 
 const VALID_AGENT_TYPES: AgentType[] = [
   'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
@@ -114,12 +115,17 @@ export async function POST(request: Request) {
       ?? ''
     : ''
 
-  // Fetch user work context + sibling brands + proforma (for ecosystem awareness)
-  const [{ data: userProfile }, { data: siblingBrands }, proformaSections] = await Promise.all([
-    supabase.from('users').select('work_context').eq('id', user.id).single(),
-    supabase.from('brands').select('name, slug, description, niche, website_url, github_url, products_services').eq('user_id', user.id).neq('id', brandId),
-    ensureProforma(supabase, brand as Brand),
-  ])
+  const inspection = inspectMarketingInput(lastMessageText)
+  if (!inspection.allowed) {
+    return new Response(JSON.stringify({ error: 'Restricted marketing input', friendlyMessage: inspection.reason }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // Ordinary project work loads only the active project's proforma. User-wide
+  // work context and sibling projects are not prompt context.
+  const proformaSections = await ensureProforma(supabase, brand as Brand)
 
   // Build proforma summary for system prompt
   let proformaSummary: string | null = null
@@ -160,9 +166,7 @@ export async function POST(request: Request) {
     brand as Brand,
     agentConfig as AgentConfig,
     lastMessageText,
-    userProfile?.work_context,
-    (siblingBrands as Brand[]) ?? [],
-    proformaSummary,
+    { proformaSummary },
     user.id
   )
 

@@ -16,6 +16,7 @@ import { after } from 'next/server'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runDirectorJob } from './director-job'
+import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 
 export function registerDirectorChatTool(mcpServer: McpServer, userId: string) {
   mcpServer.registerTool(
@@ -48,6 +49,14 @@ Example messages:
       },
     },
     async ({ brand_id, message }: { brand_id: string; message: string }) => {
+      const inspection = inspectMarketingInput(message)
+      if (!inspection.allowed) {
+        return {
+          content: [{ type: 'text' as const, text: inspection.reason }],
+          isError: true,
+        }
+      }
+
       const supabase = createAdminClient()
 
       // Verify brand ownership before queuing

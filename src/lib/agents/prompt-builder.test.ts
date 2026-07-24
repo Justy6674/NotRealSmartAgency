@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildSystemPrompt } from './prompt-builder.ts'
+import { buildSystemPrompt, getProjectMemoryNamespaces } from './prompt-builder.ts'
 import type { AgentConfig, Brand } from '@/types/database'
 
 const brand: Brand = {
@@ -61,4 +61,28 @@ test('builds a prompt when an imported founder voice omits platforms', () => {
 
   assert.match(prompt, /Founder voice: small-batch house authorship/)
   assert.doesNotMatch(prompt, /undefined/)
+})
+
+test('does not inject a sibling project into an ordinary project prompt', () => {
+  const prompt = Reflect.apply(buildSystemPrompt, undefined, [
+    brand,
+    director,
+    null,
+    [{
+      id: 'scent-sell-id',
+      name: 'Scent Sell sentinel',
+      slug: 'scent-sell',
+      description: 'must never enter an Underground prompt',
+    }],
+  ]) as string
+
+  assert.doesNotMatch(prompt, /Scent Sell sentinel/)
+  assert.doesNotMatch(prompt, /Brand Ecosystem/)
+})
+
+test('Director memory search stays inside the active project', () => {
+  assert.deepEqual(
+    getProjectMemoryNamespaces('downscale', 'overall'),
+    ['nrs-downscale-overall', 'nrs-downscale'],
+  )
 })

@@ -29,6 +29,7 @@ import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { getDirectorCompletion } from './director-completion'
 import type { Brand, AgentConfig } from '@/types/database'
+import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 
 export interface DirectorJobInput {
   brand_id: string
@@ -64,6 +65,12 @@ export async function runDirectorJob(
 
   try {
     const { brand_id, message } = input
+
+    const inspection = inspectMarketingInput(message)
+    if (!inspection.allowed) {
+      await markJobError(supabase, jobId, inspection.reason, startTime)
+      return
+    }
 
     // Verify brand ownership (defence in depth — already checked in tool)
     const { data: brand, error: brandError } = await supabase
@@ -105,16 +112,9 @@ export async function runDirectorJob(
       }
     }
 
-    // Fetch user context + sibling brands + proforma in parallel
-    const [{ data: userProfile }, { data: siblingBrands }, proformaSections] = await Promise.all([
-      supabase.from('users').select('work_context').eq('id', userId).single(),
-      supabase
-        .from('brands')
-        .select('name, slug, description, niche, website_url, github_url, products_services')
-        .eq('user_id', userId)
-        .neq('id', brand_id),
-      ensureProforma(supabase, brand as Brand),
-    ])
+    // Ordinary Director work loads only the active project's proforma. Owner
+    // work context and sibling projects are never prompt context by default.
+    const proformaSections = await ensureProforma(supabase, brand as Brand)
 
     // Build proforma summary (same shape as web Director)
     let proformaSummary: string | null = null
@@ -149,9 +149,7 @@ export async function runDirectorJob(
       brand as Brand,
       agentConfig as AgentConfig,
       message,
-      userProfile?.work_context,
-      (siblingBrands as Brand[]) ?? [],
-      proformaSummary,
+      { proformaSummary },
       userId,
     )
 

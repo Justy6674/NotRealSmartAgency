@@ -196,3 +196,18 @@ The next plan begins only after explicit approval of a live Supabase migration. 
 - Scope coverage: prompt/memory contamination, inbound data boundary and Telegram containment are covered now; database grants/connectors are explicitly deferred because they require a live schema migration.
 - No placeholders: every foundation task names its files, interfaces, test command and expected boundary.
 - Type consistency: `ExecutionScope` is the single cross-channel scope contract introduced in Task 1.
+
+## Execution record — 24 July 2026
+
+- Implemented `ExecutionScope` with synthetic scope-boundary tests.
+- Removed default owner work context, sibling-project context and global-agency
+  memory retrieval from both web and MCP Director prompt paths.
+- Removed global-agency writes from the conversation memory extractor.
+- Added a conservative pre-model marketing-data boundary to web chat, MCP
+  Director chat, direct MCP post drafting and the Director job runner.
+- Replaced the Telegram webhook implementation with a fail-closed maintenance
+  response. It creates no jobs, reads no memory and lists no projects.
+- Added `tsx` as the local test runner so `npm test` exercises TypeScript
+  modules that use normal application import paths.
+- Verified: `npm test` (50 passing), `npm run lint` (0 errors; 41 existing
+  warnings), and `npm run build` (successful).

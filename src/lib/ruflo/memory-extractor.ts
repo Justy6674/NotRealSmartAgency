@@ -1,5 +1,5 @@
 import { memoryStore } from './client'
-import { getNamespace, getGlobalNamespace } from './namespaces'
+import { getNamespace } from './namespaces'
 import type { AgentType } from '@/types/database'
 
 /**
@@ -176,22 +176,6 @@ export async function extractAndStoreMemories(params: {
   for (const extraction of extractions) {
     await memoryStore(extraction.key, extraction.value, namespace, extraction.tags)
       .catch((err) => console.error('[memory-extractor] Store failed:', err))
-  }
-
-  // Also store to global namespace for Director cross-department visibility
-  if (agentType !== 'overall') {
-    await memoryStore(
-      `cross-${agentType}-${Date.now()}`,
-      {
-        type: 'cross_department',
-        department: agentType,
-        brand: brandSlug,
-        summary: `${agentType} worked on: ${userMessage.slice(0, 100)}`,
-        timestamp,
-      },
-      getGlobalNamespace(),
-      [agentType, brandSlug, 'cross_department']
-    ).catch(() => {})
   }
 
   return memoriesStored

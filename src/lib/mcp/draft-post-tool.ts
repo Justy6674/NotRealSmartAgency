@@ -22,6 +22,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runAgentWorker } from '@/lib/agents/worker'
 import { runComplianceFilter } from '@/lib/agents/compliance-filter'
 import type { Brand, DraftSourceMeta } from '@/types/database'
+import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 
 const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'] as const
 type Platform = (typeof PLATFORMS)[number]
@@ -83,6 +84,14 @@ After this tool returns, tell the user the draft is in Review and they can appro
       tone?: string
       media_id?: string
     }) => {
+      const inspection = inspectMarketingInput(intent)
+      if (!inspection.allowed) {
+        return {
+          content: [{ type: 'text' as const, text: inspection.reason }],
+          isError: true,
+        }
+      }
+
       const supabase = createAdminClient()
 
       // Verify brand ownership + load full brand row for the worker
