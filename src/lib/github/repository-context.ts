@@ -15,7 +15,7 @@ const MAX_DOCUMENT_CHARS = 3_500
 export function repositoryContentUnavailableMessage(responseOk: readonly boolean[]): string | null {
   if (responseOk.some(Boolean)) return null
 
-  return 'GitHub did not return any readable repository context. For a private repository, configure a read-only GITHUB_TOKEN for this deployment.'
+  return 'GitHub did not return any readable repository context. For a private repository, connect it to this project through the read-only NRS GitHub App.'
 }
 
 export function appendRepositoryContext(summary: string, path: string, content: string): string {

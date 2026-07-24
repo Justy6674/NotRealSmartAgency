@@ -1,7 +1,10 @@
 import { splitTelegramMessage } from './nrs-telegram.ts'
 
 export interface TelegramInlineKeyboard {
-  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
+  inline_keyboard: Array<Array<
+    | { text: string; callback_data: string }
+    | { text: string; url: string }
+  >>
 }
 
 /**

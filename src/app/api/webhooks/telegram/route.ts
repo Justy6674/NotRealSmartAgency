@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto'
+import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { after } from 'next/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -6,6 +6,8 @@ import { runDirectorJob } from '@/lib/mcp/director-job'
 import { createTelegramDirectorExecution } from '@/lib/agents/director-execution'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
+import { getGitHubAppConfig } from '@/lib/github/github-app'
+import { hashGitHubConnectState } from '@/lib/github/project-connection'
 import { TELEGRAM_CHANNEL_STATUS } from '@/lib/telegram/telegram-channel-status'
 import { hashTelegramPairCode } from '@/lib/telegram/telegram-pairing'
 import { sendTelegramText } from '@/lib/telegram/telegram-api'
@@ -135,6 +137,68 @@ async function sendProjectPicker({
     chatId,
     text: 'Choose the project for this marketing request. NRS keeps every project separate unless you explicitly create an approved link.',
     replyMarkup: buildScopedProjectKeyboard(grants),
+  })
+}
+
+async function startTelegramGitHubConnection({
+  admin,
+  account,
+  grants,
+  botToken,
+  chatId,
+  requestUrl,
+}: {
+  admin: ReturnType<typeof createAdminClient>
+  account: { id: string; actor_user_id: string }
+  grants: TelegramGrant[]
+  botToken: string
+  chatId: string
+  requestUrl: string
+}): Promise<void> {
+  if (!getGitHubAppConfig()) {
+    await sendTelegramText({
+      botToken,
+      chatId,
+      text: 'The private GitHub connection is not configured on NRS yet. No project data was accessed.',
+    })
+    return
+  }
+  if (grants.length === 0) {
+    await sendTelegramText({ botToken, chatId, text: 'Choose a project with /projects before connecting GitHub.' })
+    return
+  }
+
+  const state = randomBytes(32).toString('base64url')
+  const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString()
+  const { error } = await admin.from('github_connect_requests').insert({
+    actor_user_id: account.actor_user_id,
+    telegram_account_id: account.id,
+    project_access_grant_ids: grants.map((grant) => grant.grantId),
+    brand_ids: grants.map((grant) => grant.projectId),
+    state_hash: hashGitHubConnectState(state),
+    expires_at: expiresAt,
+  })
+
+  if (error) {
+    await sendTelegramText({ botToken, chatId, text: 'NRS could not create the private GitHub connection link. Your selected projects are unchanged; please try again.' })
+    return
+  }
+
+  const connectUrl = new URL('/api/integrations/github/start', requestUrl)
+  connectUrl.searchParams.set('state', state)
+  await sendTelegramText({
+    botToken,
+    chatId,
+    text: `Open GitHub to connect ${grants.length === 1 ? grants[0].projectName : `${grants.length} selected projects`}. Select only the repositories you want NRS to read. NRS gets read-only product documentation and public-site discovery—not secrets, databases, or customer data.`,
+    replyMarkup: {
+      inline_keyboard: [[{ text: 'Connect private GitHub repositories', url: connectUrl.toString() }]],
+    },
+  })
+  await logExecution(admin, {
+    actorUserId: account.actor_user_id,
+    action: 'github_connect_started',
+    outcome: 'allowed',
+    detail: { project_count: grants.length },
   })
 }
 
@@ -461,6 +525,23 @@ export async function POST(request: NextRequest) {
     })
     await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: `Using ${grant.projectName}. Send a marketing request whenever you are ready.` })
     return NextResponse.json({ received: true, status: 'project_selected' })
+  }
+
+  if (intent.kind === 'connect_github') {
+    const session = await getActiveSession(admin, account.id)
+    const selectedGrant = session
+      ? grants.find((candidate) => candidate.grantId === session.grantId && candidate.projectId === session.projectId)
+      : undefined
+    const projectsToConnect = intent.scope === 'all' ? grants : selectedGrant ? [selectedGrant] : []
+    await startTelegramGitHubConnection({
+      admin,
+      account,
+      grants: projectsToConnect,
+      botToken: config.botToken,
+      chatId: inbound.chatId,
+      requestUrl: request.url,
+    })
+    return NextResponse.json({ received: true, status: 'github_connect_started' })
   }
 
   if (intent.kind !== 'marketing_request') return NextResponse.json({ received: true, status: 'ignored' })

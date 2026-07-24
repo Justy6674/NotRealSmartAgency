@@ -61,9 +61,8 @@ export async function POST(request: Request) {
       Accept: 'application/vnd.github.v3.raw',
       'User-Agent': 'NotRealSmart-App',
     }
-    if (process.env.GITHUB_TOKEN) {
-      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
-    }
+    // A web request must never inherit a deployment-wide GitHub credential.
+    // Private repositories are connected only via the project-scoped GitHub App.
 
     // Fetch README, package metadata and optional product documentation in parallel.
     // The latter carries actual capabilities into marketing context rather than

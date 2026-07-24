@@ -48,9 +48,8 @@ export async function GET(request: Request) {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   }
-  if (process.env.GITHUB_TOKEN) {
-    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`
-  }
+  // Keep this endpoint public-only. Private repository reads go through the
+  // GitHub App binding for the active project, never a global credential.
 
   // Fetch repo info, README, and package.json in parallel
   const [repoRes, readmeRes, pkgRes] = await Promise.allSettled([

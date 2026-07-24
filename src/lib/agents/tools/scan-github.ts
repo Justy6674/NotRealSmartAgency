@@ -42,9 +42,9 @@ export async function scanGithubCore(
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
   }
-  if (process.env.GITHUB_TOKEN) {
-    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`
-  }
+  // This public scanner intentionally never falls back to a deployment-wide
+  // GitHub credential. Private repositories use the per-project GitHub App
+  // connector, where access is scoped to one selected repository at a time.
 
   const [readmeRes, pkgRes, commitsRes] = await Promise.allSettled([
     fetch(`${apiBase}/readme`, { headers: { ...headers, Accept: 'application/vnd.github.raw' } }),

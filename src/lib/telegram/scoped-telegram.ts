@@ -1,11 +1,15 @@
 export interface TelegramInlineKeyboard {
-  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
+  inline_keyboard: Array<Array<
+    | { text: string; callback_data: string }
+    | { text: string; url: string }
+  >>
 }
 
 export type ScopedTelegramIntent =
   | { kind: 'pair'; code: string }
   | { kind: 'choose_project' }
   | { kind: 'select_project'; grantId: string }
+  | { kind: 'connect_github'; scope: 'current' | 'all' }
   | { kind: 'marketing_request'; message: string }
   | { kind: 'ignore' }
 
@@ -37,6 +41,9 @@ export function parseScopedTelegramIntent(
   if (message.startsWith('/start') || message === '/projects' || message === '/project') {
     return { kind: 'choose_project' }
   }
+
+  if (message === '/connect') return { kind: 'connect_github', scope: 'current' }
+  if (message === '/connect all') return { kind: 'connect_github', scope: 'all' }
 
   return { kind: 'marketing_request', message }
 }

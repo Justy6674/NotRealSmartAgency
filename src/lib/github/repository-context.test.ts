@@ -20,7 +20,7 @@ test('labels and appends repository product context', () => {
 test('explains when a repository sync returned no readable source files', () => {
   assert.equal(
     repositoryContentUnavailableMessage([false, false, false]),
-    'GitHub did not return any readable repository context. For a private repository, configure a read-only GITHUB_TOKEN for this deployment.',
+    'GitHub did not return any readable repository context. For a private repository, connect it to this project through the read-only NRS GitHub App.',
   )
   assert.equal(repositoryContentUnavailableMessage([true, false]), null)
 })
