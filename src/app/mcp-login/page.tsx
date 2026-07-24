@@ -12,6 +12,9 @@ function McpLoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [projects, setProjects] = useState<Array<{ id: string; name: string; slug: string }>>([])
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
 
   const clientId = searchParams.get('client_id')
   const redirectUri = searchParams.get('redirect_uri')
@@ -50,19 +53,42 @@ function McpLoginForm() {
         return
       }
 
-      // Generate auth code on the server — pass access token directly
-      // (cookies aren't ready yet due to Supabase lock timing)
+      const { data: projectRows, error: projectsError } = await supabase
+        .from('brands')
+        .select('id, name, slug')
+        .order('name')
+
+      if (projectsError) throw new Error('Could not load your project workspaces')
+      setProjects(projectRows ?? [])
+      setAccessToken(session.access_token)
+      setLoading(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+      setLoading(false)
+    }
+  }
+
+  const handleScopeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!isValid || !accessToken || selectedProjectIds.length === 0) return
+
+    setLoading(true)
+    setError(null)
+    try {
+      // Generate the PKCE code only after the user has explicitly selected
+      // the project set this external MCP connection may access.
       const res = await fetch('/api/mcp/code', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           client_id: clientId,
           code_challenge: codeChallenge,
           redirect_uri: redirectUri,
           state,
+          project_ids: selectedProjectIds,
         }),
       })
 
@@ -94,6 +120,56 @@ function McpLoginForm() {
           This page is used by Claude to connect to your agency.
           Open Claude and add NotRealSmart as a connector.
         </p>
+      </div>
+    )
+  }
+
+  if (accessToken) {
+    return (
+      <div className="w-full max-w-lg space-y-6">
+        <div className="space-y-2 text-center">
+          <h1 className="text-2xl font-bold">Choose projects for this connection</h1>
+          <p className="text-sm text-muted-foreground">
+            Claude will only be able to list and work inside the projects you select. You can create another connection later for a different project set.
+          </p>
+        </div>
+
+        <form onSubmit={handleScopeSubmit} className="space-y-4">
+          {projects.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {projects.map((project) => {
+                const selected = selectedProjectIds.includes(project.id)
+                return (
+                  <label key={project.id} className="flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => setSelectedProjectIds((current) => selected
+                        ? current.filter((id) => id !== project.id)
+                        : [...current, project.id])}
+                      className="size-4 shrink-0"
+                    />
+                    <span className="min-w-0 truncate">{project.name}</span>
+                  </label>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+              No project workspaces are available for this account yet.
+            </p>
+          )}
+
+          {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading || selectedProjectIds.length === 0}
+            className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {loading ? 'Connecting...' : 'Connect selected projects'}
+          </button>
+        </form>
       </div>
     )
   }

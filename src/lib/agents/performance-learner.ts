@@ -62,7 +62,8 @@ interface PerformanceInsight {
 export async function learnFromPublishedPosts(
   supabase: SupabaseClient,
   brandId: string,
-  brandSlug: string
+  brandSlug: string,
+  userId: string,
 ): Promise<{ analysed: number; insights: PerformanceInsight[] }> {
   // 1. Find posts published 24-72 hours ago
   const now = new Date()
@@ -194,7 +195,8 @@ export async function learnFromPublishedPosts(
       `perf-${post.id}`,
       memoryValue,
       namespace,
-      ['performance', 'published', post.platform, post.post_type, ...(post.content_pillar ? [post.content_pillar] : [])]
+      ['performance', 'published', post.platform, post.post_type, ...(post.content_pillar ? [post.content_pillar] : [])],
+      { brandId, userId },
     )
 
     // Also store to brand-wide namespace so Director can see it
@@ -202,7 +204,8 @@ export async function learnFromPublishedPosts(
       `perf-${post.id}`,
       memoryValue,
       getBrandNamespace(brandSlug),
-      ['performance', 'published', post.platform, 'cross_department']
+      ['performance', 'published', post.platform, 'cross_department'],
+      { brandId, userId },
     )
   }
 
@@ -225,7 +228,8 @@ export async function learnFromPublishedPosts(
     `perf-aggregate-${now.toISOString().slice(0, 10)}`,
     aggregateInsight,
     getNamespace(brandSlug, 'overall'),
-    ['performance', 'aggregate', 'weekly_review']
+    ['performance', 'aggregate', 'weekly_review'],
+    { brandId, userId },
   )
 
   // 6. Update bandit state for content optimisation

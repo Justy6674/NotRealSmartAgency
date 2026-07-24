@@ -30,6 +30,10 @@ import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { getDirectorCompletion } from './director-completion'
 import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
+import {
+  matchesDirectorJobScope,
+  type DirectorExecutionScope,
+} from '@/lib/agents/director-execution'
 
 export interface DirectorJobInput {
   brand_id: string
@@ -51,11 +55,12 @@ export interface DirectorJobResult {
  */
 export async function runDirectorJob(
   jobId: string,
-  userId: string,
+  execution: DirectorExecutionScope,
   input: DirectorJobInput,
 ): Promise<void> {
   const supabase = createAdminClient()
   const startTime = Date.now()
+  const userId = execution.actorUserId
 
   // Mark running
   await supabase
@@ -66,18 +71,34 @@ export async function runDirectorJob(
   try {
     const { brand_id, message } = input
 
+    if (brand_id !== execution.projectId) {
+      await markJobError(supabase, jobId, 'Job project does not match its execution scope.', startTime)
+      return
+    }
+
+    const { data: scopedJob, error: scopedJobError } = await supabase
+      .from('mcp_jobs')
+      .select('user_id, brand_id, channel, project_access_grant_id, api_key_id')
+      .eq('id', jobId)
+      .single()
+
+    if (scopedJobError || !scopedJob || !matchesDirectorJobScope(execution, scopedJob)) {
+      await markJobError(supabase, jobId, 'Job scope could not be verified.', startTime)
+      return
+    }
+
     const inspection = inspectMarketingInput(message)
     if (!inspection.allowed) {
       await markJobError(supabase, jobId, inspection.reason, startTime)
       return
     }
 
-    // Verify brand ownership (defence in depth — already checked in tool)
+    // The grant is the authority; querying owner-wide access here would widen
+    // the scope after the job was safely queued.
     const { data: brand, error: brandError } = await supabase
       .from('brands')
       .select('*')
       .eq('id', brand_id)
-      .eq('user_id', userId)
       .single()
 
     if (brandError || !brand) {
@@ -192,7 +213,7 @@ export async function runDirectorJob(
     systemPrompt += `\n\nBRAND CONTEXT SAFETY:
 - You are currently working on: **${(brand as Record<string, unknown>).name}** (${brandNiche})
 - NEVER reference, publish to, or use context from other brands in this conversation
-- If the user mentions a different brand by name, confirm they want to switch.`
+- A mention of another brand NEVER changes this job's project scope. Explain that this request remains scoped to the current project; the user must start a separately scoped request through the project picker or by selecting that project in MCP.`
 
     // ── Injection 4: product-mention search-first ──
     const mentionsProducts =
@@ -459,6 +480,8 @@ NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media an
     // Memory extraction — same as web Director
     if (response.length > 20) {
       extractAndStoreMemories({
+        brandId: typedBrand.id,
+        userId,
         brandSlug: typedBrand.slug,
         agentType: 'overall',
         userMessage: message,
@@ -471,7 +494,7 @@ NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media an
           if (facts.length === 0) return
           const ns = `nrs-${typedBrand.slug}-overall`
           for (const fact of facts) {
-            await memoryStoreV2(fact, ns, userId).catch((err) =>
+              await memoryStoreV2(fact, ns, userId, typedBrand.id).catch((err) =>
               console.error('[director-job] Memory v2 store failed:', err),
             )
           }

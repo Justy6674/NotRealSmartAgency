@@ -24,7 +24,8 @@ export async function memoryStore(
   key: string,
   value: string | Record<string, unknown>,
   namespace: string,
-  tags: string[] = []
+  tags: string[] = [],
+  scope?: { brandId: string; userId?: string },
 ): Promise<void> {
   const supabase = getAdminClient()
   const serialised = typeof value === 'string' ? value : JSON.stringify(value)
@@ -37,6 +38,9 @@ export async function memoryStore(
         namespace,
         value: serialised,
         tags,
+        brand_id: scope?.brandId ?? null,
+        user_id: scope?.userId ?? null,
+        isolation_status: scope?.brandId ? 'active' : 'quarantined',
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'key,namespace' }
@@ -55,6 +59,7 @@ export async function memoryStore(
 export async function memorySearch(
   query: string,
   namespace: string,
+  brandId: string,
   limit: number = 10
 ): Promise<MemorySearchResult[]> {
   const supabase = getAdminClient()
@@ -68,6 +73,8 @@ export async function memorySearch(
       .from('agent_memories')
       .select('key, namespace, value, tags, created_at, updated_at')
       .eq('namespace', namespace)
+      .eq('brand_id', brandId)
+      .eq('isolation_status', 'active')
       .order('updated_at', { ascending: false })
       .limit(fetchLimit)
 
@@ -138,7 +145,8 @@ export async function memorySearch(
 
 export async function memoryRetrieve(
   key: string,
-  namespace: string
+  namespace: string,
+  brandId: string,
 ): Promise<MemoryEntry | null> {
   const supabase = getAdminClient()
 
@@ -147,6 +155,8 @@ export async function memoryRetrieve(
     .select('*')
     .eq('key', key)
     .eq('namespace', namespace)
+    .eq('brand_id', brandId)
+    .eq('isolation_status', 'active')
     .single()
 
   if (error || !data) return null
@@ -167,7 +177,8 @@ export async function memoryRetrieve(
 
 export async function memoryDelete(
   key: string,
-  namespace: string
+  namespace: string,
+  brandId: string,
 ): Promise<void> {
   const supabase = getAdminClient()
 
@@ -176,6 +187,8 @@ export async function memoryDelete(
     .delete()
     .eq('key', key)
     .eq('namespace', namespace)
+    .eq('brand_id', brandId)
+    .eq('isolation_status', 'active')
 }
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,13 @@ interface ApiKeyDisplay {
   prefix: string
   last_used_at: string | null
   created_at: string
+  projects?: Array<{ id: string; name: string }>
+}
+
+interface ProjectOption {
+  id: string
+  name: string
+  slug: string
 }
 
 interface GlobalSettingsProps {
@@ -261,6 +268,10 @@ export function GlobalSettings({ userId, userEmail, workContext }: GlobalSetting
 
       {/* API Keys for CLI / MCP Access */}
       <ApiKeysSection />
+
+      <div className="h-px bg-border" />
+
+      <TelegramPairingSection />
     </div>
   )
 }
@@ -309,36 +320,45 @@ function CalendarFeedSection() {
 
 function ApiKeysSection() {
   const [keys, setKeys] = useState<ApiKeyDisplay[]>([])
+  const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
   const [newKeyName, setNewKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const loadKeys = useCallback(async () => {
     const res = await fetch('/api/keys')
     if (res.ok) {
       const data = await res.json()
       setKeys(data.keys ?? [])
+      setProjects(data.projects ?? [])
     }
   }, [])
 
   useEffect(() => { loadKeys() }, [loadKeys])
 
   const handleCreate = async () => {
-    if (!newKeyName.trim()) return
+    if (!newKeyName.trim() || selectedProjectIds.length === 0) return
     setCreating(true)
     setCreatedKey(null)
+    setCreateError(null)
     try {
       const res = await fetch('/api/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newKeyName.trim() }),
+        body: JSON.stringify({ name: newKeyName.trim(), project_ids: selectedProjectIds }),
       })
       if (res.ok) {
         const data = await res.json()
         setCreatedKey(data.key)
         setNewKeyName('')
+        setSelectedProjectIds([])
         loadKeys()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setCreateError(data.error ?? 'Could not create this scoped connection.')
       }
     } finally {
       setCreating(false)
@@ -380,6 +400,37 @@ function ApiKeysSection() {
           Or add it to ~/.mcp.json manually.
         </p>
       </div>
+
+      <fieldset className="space-y-2" aria-describedby="mcp-project-scope-help">
+        <legend className="text-xs font-medium text-muted-foreground">Projects this connection can use</legend>
+        <p id="mcp-project-scope-help" className="text-[11px] text-muted-foreground">
+          Choose only the workspaces you want this device or AI connection to access. You can create another key later for a different set.
+        </p>
+        {projects.length > 0 ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {projects.map((project) => {
+              const selected = selectedProjectIds.includes(project.id)
+              return (
+                <label key={project.id} className="flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => setSelectedProjectIds((current) => selected
+                      ? current.filter((id) => id !== project.id)
+                      : [...current, project.id])}
+                    className="size-4 shrink-0"
+                  />
+                  <span className="min-w-0 truncate">{project.name}</span>
+                </label>
+              )
+            })}
+          </div>
+        ) : (
+          <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+            No project workspaces are available for this account yet.
+          </p>
+        )}
+      </fieldset>
 
       {/* Created key banner — shown once */}
       {createdKey && (
@@ -425,12 +476,14 @@ function ApiKeysSection() {
         />
         <button
           onClick={handleCreate}
-          disabled={creating || !newKeyName.trim()}
+          disabled={creating || !newKeyName.trim() || selectedProjectIds.length === 0}
           className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
           {creating ? 'Creating...' : 'Create Key'}
         </button>
       </div>
+
+      {createError && <p role="alert" className="text-xs text-red-500">{createError}</p>}
 
       {/* Existing keys */}
       {keys.length > 0 && (
@@ -440,6 +493,7 @@ function ApiKeysSection() {
               <tr className="border-b bg-muted/30">
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Name</th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Key</th>
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Projects</th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">Last used</th>
                 <th className="px-3 py-2 text-right font-medium text-muted-foreground" />
               </tr>
@@ -449,6 +503,11 @@ function ApiKeysSection() {
                 <tr key={k.id} className="border-b last:border-0">
                   <td className="px-3 py-2">{k.name}</td>
                   <td className="px-3 py-2 font-mono text-muted-foreground">{k.prefix}...</td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    <span className="block max-w-48 truncate" title={(k.projects ?? []).map((project) => project.name).join(', ')}>
+                      {(k.projects ?? []).map((project) => project.name).join(', ') || 'No project scope'}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {k.last_used_at
                       ? new Date(k.last_used_at).toLocaleDateString('en-AU')
@@ -473,6 +532,114 @@ function ApiKeysSection() {
         <p className="text-[11px] text-muted-foreground italic">
           No API keys yet. Create one to connect your AI client.
         </p>
+      )}
+    </section>
+  )
+}
+
+function TelegramPairingSection() {
+  const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
+  const [pairCommand, setPairCommand] = useState<string | null>(null)
+  const [expiresAt, setExpiresAt] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/keys')
+      .then((response) => response.ok ? response.json() : { projects: [] })
+      .then((data) => setProjects(data.projects ?? []))
+      .catch(() => setProjects([]))
+  }, [])
+
+  const createPairCommand = async () => {
+    if (selectedProjectIds.length === 0) return
+    setCreating(true)
+    setError(null)
+    setPairCommand(null)
+    try {
+      const response = await fetch('/api/telegram/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_ids: selectedProjectIds }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setError(data.error ?? 'Could not create a Telegram pairing command.')
+        return
+      }
+      setPairCommand(data.start_command)
+      setExpiresAt(data.expires_at)
+    } catch {
+      setError('Could not create a Telegram pairing command.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const copyPairCommand = () => {
+    if (!pairCommand) return
+    navigator.clipboard.writeText(pairCommand)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2_000)
+  }
+
+  return (
+    <section className="space-y-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Private Telegram Control Channel
+      </p>
+      <p className="text-[11px] text-muted-foreground">
+        Choose which project workspaces this private Telegram chat can use. It cannot discover or switch to any other project from a message. Telegram remains disabled until its token is rotated and production verification is complete.
+      </p>
+
+      <fieldset className="space-y-2" aria-describedby="telegram-project-scope-help">
+        <legend className="text-xs font-medium text-muted-foreground">Projects this Telegram chat can use</legend>
+        <p id="telegram-project-scope-help" className="text-[11px] text-muted-foreground">
+          You will choose one of these projects in Telegram before making a marketing request. You can make another pairing command later if the access needs to change.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {projects.map((project) => {
+            const selected = selectedProjectIds.includes(project.id)
+            return (
+              <label key={project.id} className="flex min-w-0 items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => setSelectedProjectIds((current) => selected
+                    ? current.filter((id) => id !== project.id)
+                    : [...current, project.id])}
+                  className="size-4 shrink-0"
+                />
+                <span className="min-w-0 truncate">{project.name}</span>
+              </label>
+            )
+          })}
+        </div>
+      </fieldset>
+
+      <button
+        onClick={createPairCommand}
+        disabled={creating || selectedProjectIds.length === 0}
+        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+      >
+        {creating ? 'Creating pairing command…' : 'Create pairing command'}
+      </button>
+
+      {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
+
+      {pairCommand && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 space-y-2">
+          <p className="text-sm font-medium">Send this once to the NRS Telegram bot</p>
+          <p className="text-[11px] text-muted-foreground">It expires {expiresAt ? new Date(expiresAt).toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }) : 'soon'} and cannot be used again.</p>
+          <div className="flex gap-2">
+            <code className="flex-1 rounded bg-background px-3 py-2 text-xs font-mono break-all select-all">{pairCommand}</code>
+            <button onClick={copyPairCommand} className="shrink-0 rounded-md border px-3 py-1 text-xs hover:bg-muted transition-colors">
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
       )}
     </section>
   )

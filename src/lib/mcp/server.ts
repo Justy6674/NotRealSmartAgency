@@ -5,6 +5,7 @@ import { adaptToolsForMCP } from './tool-adapter'
 import { registerDirectorChatTool } from './director-chat'
 import { registerGetDirectorResponseTool } from './director-job-tool'
 import { registerDraftPostTool } from './draft-post-tool'
+import { listGrantedProjectIds, type McpPrincipal } from '@/lib/security/project-access'
 
 /**
  * Register ALL tools upfront. Tool list must never change after launch —
@@ -14,10 +15,11 @@ import { registerDraftPostTool } from './draft-post-tool'
  */
 
 /**
- * Create a fully configured MCP server for a given user.
+ * Create a fully configured MCP server for one authenticated, project-scoped
+ * connection. A user identity alone is never enough to enumerate workspaces.
  * Stateless — created fresh per request.
  */
-export function createNRSMcpServer(userId: string): McpServer {
+export function createNRSMcpServer(principal: McpPrincipal): McpServer {
   const server = new McpServer({
     name: 'notrealsmart',
     version: '1.0.0',
@@ -31,18 +33,36 @@ export function createNRSMcpServer(userId: string): McpServer {
     ],
   })
 
-  // Register brands://list resource
-  server.registerResource('brands_list', 'brands://list', {
-    description: 'List all your brands. Returns brand ID, name, slug, and description.',
-  }, async () => {
+  const grantedProjectIds = listGrantedProjectIds(principal)
+
+  async function loadGrantedProjects() {
+    if (grantedProjectIds.length === 0) return []
+
     const supabase = createAdminClient()
-    const { data: brands, error } = await supabase
+    const { data, error } = await supabase
       .from('brands')
       .select('id, name, slug, description, niche, website_url')
-      .eq('user_id', userId)
+      .in('id', grantedProjectIds)
       .order('name')
 
-    if (error || !brands) {
+    if (error) throw new Error('Failed to load granted projects.')
+    return data ?? []
+  }
+
+  // Register the compatible resource name. Its contents are strictly scoped.
+  server.registerResource('brands_list', 'brands://list', {
+    description: 'List only the project workspaces granted to this connection.',
+  }, async () => {
+    try {
+      const projects = await loadGrantedProjects()
+      return {
+        contents: [{
+          uri: 'brands://list',
+          mimeType: 'application/json',
+          text: JSON.stringify(projects, null, 2),
+        }],
+      }
+    } catch {
       return {
         contents: [{
           uri: 'brands://list',
@@ -51,59 +71,49 @@ export function createNRSMcpServer(userId: string): McpServer {
         }],
       }
     }
-
-    return {
-      contents: [{
-        uri: 'brands://list',
-        mimeType: 'application/json',
-        text: JSON.stringify(brands, null, 2),
-      }],
-    }
   })
 
-  // Register list_brands as a TOOL (not just a resource) — Claude clients
-  // reliably call tools but don't always read resources
-  server.registerTool('list_brands', {
-    description: 'List all your brands. CALL THIS FIRST before using any other NotRealSmart tool — every tool requires a brand_id. Returns brand ID, name, slug, description, and website URL for each brand.',
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }, async (_args: any) => {
-    const supabase = createAdminClient()
-    const { data: brands, error } = await supabase
-      .from('brands')
-      .select('id, name, slug, description, niche, website_url')
-      .eq('user_id', userId)
-      .order('name')
-
-    if (error || !brands) {
-      return {
-        content: [{ type: 'text' as const, text: 'Error: Failed to load brands.' }],
-        isError: true,
+  const registerProjectListTool = (name: 'list_projects' | 'list_brands', compatibility = false) => {
+    server.registerTool(name, {
+      description: compatibility
+        ? 'Compatibility alias for list_projects. Returns only project workspaces granted to this connection.'
+        : 'List only the project workspaces granted to this connection. Call this before selecting a project for another tool.',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }, async (_args: any) => {
+      try {
+        const projects = await loadGrantedProjects()
+        const formatted = projects.map((project) =>
+          `- **${project.name}** (${project.slug})\n  ID: ${project.id}\n  ${project.description || 'No description'}\n  ${project.website_url || ''}`,
+        ).join('\n\n')
+        return {
+          content: [{ type: 'text' as const, text: `Your permitted projects:\n\n${formatted || 'No project workspaces are granted to this connection.'}` }],
+        }
+      } catch {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Failed to load granted projects.' }],
+          isError: true,
+        }
       }
-    }
+    })
+  }
 
-    const formatted = brands.map(b =>
-      `- **${b.name}** (${b.slug})\n  ID: ${b.id}\n  ${b.description || 'No description'}\n  ${b.website_url || ''}`
-    ).join('\n\n')
-
-    return {
-      content: [{ type: 'text' as const, text: `Your brands:\n\n${formatted}` }],
-    }
-  })
+  registerProjectListTool('list_projects')
+  registerProjectListTool('list_brands', true)
 
   // Register chat_with_director — async pattern, returns job_id immediately
-  registerDirectorChatTool(server, userId)
+  registerDirectorChatTool(server, principal)
   // Register get_director_response — poll for the async job result
-  registerGetDirectorResponseTool(server, userId)
+  registerGetDirectorResponseTool(server, principal)
   // Register draft_post — Content & Copy writes a single draft, lands in Review
-  registerDraftPostTool(server, userId)
+  registerDraftPostTool(server, principal)
 
   // Register ALL tools from the Director's tool set
-  // Tool factory rebuilds tools with the correct brandId per MCP call
+  // Tool factory rebuilds tools with the correct project ID per MCP call.
   const toolFactory = (brandId: string) => {
     const supabase = createAdminClient()
     return getToolsForAgent('overall', {
       supabase,
-      userId,
+      userId: principal.userId,
       brandId,
       conversationId: null,
       agentRegistryId: null,
@@ -111,11 +121,9 @@ export function createNRSMcpServer(userId: string): McpServer {
   }
 
   // Get tool definitions (shape/description) from a dummy context — the actual
-  // execution uses freshly-built tools with the correct brandId per call.
-  // The MCP adapter uses a default-deny allowlist. Anything not explicitly
-  // reviewed as a safe, direct utility stays inside the Director flow.
+  // execution uses freshly-built tools with the correct project ID per call.
   const templateTools = toolFactory('00000000-0000-0000-0000-000000000000')
-  adaptToolsForMCP(templateTools, server, userId, toolFactory)
+  adaptToolsForMCP(templateTools, server, principal, toolFactory)
 
   // Register quick_start prompt
   server.registerPrompt('quick_start', {
@@ -130,6 +138,12 @@ export function createNRSMcpServer(userId: string): McpServer {
           text: `Welcome to NotRealSmart Agency — your AI marketing team.
 
 CRITICAL RULE: You are the messenger, not the marketer. The NRS Director (and its 13 specialist departments) writes, plans, and orchestrates everything. NEVER write captions, blog copy, ad copy, video scripts, email campaigns, or any marketing content yourself. NEVER try to orchestrate multi-step work (transcription + caption + drafting) yourself. Pass the user's request verbatim to the Director via chat_with_director.
+
+Project safety:
+
+1. Call **list_projects** first. It returns only project workspaces granted to this connection.
+2. Every tool needs an explicit project ID. Never infer a project from the message text or a previous request.
+3. The Director receives only the selected project's marketing context. It cannot use another project's data unless NRS has an explicit approved project link.
 
 Tool policy:
 
@@ -166,21 +180,15 @@ create_video, create_multi_scene_video, analyse_voice, analyse_content_gaps,
 translate_video, generate_photo_avatar, text_to_speech, generate_slides,
 repurpose_content.
 
-ALWAYS start by calling list_brands to get brand IDs.
-
 Example — user says "turn this uploaded video into posts":
-  WRONG:  call process_media directly
-  RIGHT:  chat_with_director({ brand_id, message: "Turn media_item_id
+  RIGHT:  list_projects()
+          → chat_with_director({ brand_id, message: "Turn media_item_id
           4c342177-... into a week of social posts across Instagram,
           LinkedIn, and TikTok." })
           → returns { job_id }
           → poll get_director_response(job_id) until done
           The Director delegates to Video & Scripting and Content & Copy,
-          and returns the drafts in the Review queue.
-
-Example — user says "publish the approved fake-fragrance post to Instagram":
-chat_with_director({ brand_id, message: "Publish the approved fake-fragrance post to Instagram." })
-The Director confirms the final caption, media, and timing with the user before publishing.`,
+          and returns the drafts in the Review queue.`,
         },
       }],
     }

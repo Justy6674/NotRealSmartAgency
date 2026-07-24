@@ -70,6 +70,7 @@ export async function memoryStoreV2(
   fact: ExtractedFact,
   namespace: string,
   userId: string,
+  brandId: string,
   conversationId?: string
 ): Promise<MemoryStoreResult> {
   const supabase = getAdminClient()
@@ -91,6 +92,7 @@ export async function memoryStoreV2(
           match_count: 1,
           filter_namespace: namespace,
           filter_user_id: userId,
+          filter_brand_id: brandId,
         })
 
         if (matches && matches.length > 0) {
@@ -134,6 +136,8 @@ export async function memoryStoreV2(
       memory_type: fact.type,
       confidence: fact.confidence,
       user_id: userId,
+      brand_id: brandId,
+      isolation_status: 'active',
       updated_at: new Date().toISOString(),
     }
 
@@ -198,6 +202,7 @@ export async function memorySearchV2(
   query: string,
   namespace: string,
   userId: string,
+  brandId: string,
   limit: number = 10
 ): Promise<MemorySearchResult[]> {
   const supabase = getAdminClient()
@@ -208,7 +213,7 @@ export async function memorySearchV2(
 
     if (embedding.length === 0) {
       // No embedding — fall back to keyword search
-      return keywordFallback(supabase, query, namespace, limit)
+      return keywordFallback(supabase, query, namespace, brandId, limit)
     }
 
     // Step 2: Semantic search via match_memories
@@ -218,11 +223,12 @@ export async function memorySearchV2(
       match_count: limit,
       filter_namespace: namespace,
       filter_user_id: userId,
+      filter_brand_id: brandId,
     })
 
     if (error) {
       console.error('[memory/v2] match_memories search failed:', error.message)
-      return keywordFallback(supabase, query, namespace, limit)
+      return keywordFallback(supabase, query, namespace, brandId, limit)
     }
 
     if (!data?.length) return []
@@ -238,7 +244,7 @@ export async function memorySearchV2(
     }))
   } catch (err) {
     console.error('[memory/v2] memorySearchV2 failed:', err)
-    return keywordFallback(supabase, query, namespace, limit)
+    return keywordFallback(supabase, query, namespace, brandId, limit)
   }
 }
 
@@ -249,6 +255,7 @@ async function keywordFallback(
   supabase: any,
   query: string,
   namespace: string,
+  brandId: string,
   limit: number
 ): Promise<MemorySearchResult[]> {
   try {
@@ -258,6 +265,8 @@ async function keywordFallback(
       .from('agent_memories')
       .select('key, namespace, value, tags, memory_type, confidence, updated_at, created_at')
       .eq('namespace', namespace)
+      .eq('brand_id', brandId)
+      .eq('isolation_status', 'active')
       .order('updated_at', { ascending: false })
       .limit(fetchLimit)
 

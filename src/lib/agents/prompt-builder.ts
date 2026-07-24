@@ -491,8 +491,8 @@ export async function buildSystemPromptWithMemory(
     if (userId) {
       // v2: Semantic vector search
       const [departmentMemories, brandMemories] = await Promise.all([
-        memorySearchV2(latestMessage, namespaces[0], userId, 10),
-        memorySearchV2(latestMessage, namespaces[1], userId, 5),
+        memorySearchV2(latestMessage, namespaces[0], userId, brand.id, 10),
+        memorySearchV2(latestMessage, namespaces[1], userId, brand.id, 5),
       ])
       allMemories = [...departmentMemories, ...brandMemories]
     }
@@ -500,8 +500,8 @@ export async function buildSystemPromptWithMemory(
     // Fallback to v1 keyword search if v2 returned nothing
     if (allMemories.length === 0) {
       const [departmentMemories, brandMemories] = await Promise.all([
-        memorySearch(latestMessage, namespaces[0], 10),
-        memorySearch(latestMessage, namespaces[1], 5),
+        memorySearch(latestMessage, namespaces[0], brand.id, 10),
+        memorySearch(latestMessage, namespaces[1], brand.id, 5),
       ])
       allMemories = [...departmentMemories, ...brandMemories]
     }
@@ -550,7 +550,7 @@ Use this context to provide continuity. Apply brand rules strictly. Follow prefe
     // Session memory — compounding brand knowledge (Anthropic pattern)
     if (userId) {
       try {
-        const sessionMemory = await getSessionMemoryForPrompt(brand.slug, userId)
+        const sessionMemory = await getSessionMemoryForPrompt(brand.id, brand.slug, userId)
         if (sessionMemory) {
           const sessionSection = `## Brand Learning — What I've Learned Over Time
 

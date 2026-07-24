@@ -1,10 +1,15 @@
 import { splitTelegramMessage } from './nrs-telegram.ts'
 
-export interface TelegramReplyKeyboard {
-  keyboard: string[][]
-  resize_keyboard?: boolean
-  input_field_placeholder?: string
+export interface TelegramInlineKeyboard {
+  inline_keyboard: Array<Array<{ text: string; callback_data: string }>>
 }
+
+/**
+ * Telegram project changes must use opaque callback data.  Deliberately do
+ * not support reply keyboards: their visible text can be replayed as normal
+ * chat input and must never be interpreted as a project selector.
+ */
+export type TelegramReplyMarkup = TelegramInlineKeyboard
 
 export async function sendTelegramText({
   botToken,
@@ -16,7 +21,7 @@ export async function sendTelegramText({
   botToken: string
   chatId: string
   text: string
-  replyMarkup?: TelegramReplyKeyboard
+  replyMarkup?: TelegramReplyMarkup
   fetchImpl?: typeof fetch
 }): Promise<void> {
   for (const chunk of splitTelegramMessage(text)) {

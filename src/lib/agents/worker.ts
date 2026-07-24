@@ -298,6 +298,8 @@ Rules:
     if (result.text && result.text.length > 20) {
       // v1: regex extraction (fast, catches common patterns)
       extractAndStoreMemories({
+        brandId: ctx.brand.id,
+        userId: ctx.userId,
         brandSlug: ctx.brand.slug,
         agentType: dept as AgentType,
         userMessage: task,
@@ -311,7 +313,7 @@ Rules:
           if (facts.length === 0) return
           const ns = `nrs-${ctx.brand.slug}-${dept}`
           for (const fact of facts) {
-            await memoryStoreV2(fact, ns, ctx.userId, ctx.conversationId ?? undefined)
+            await memoryStoreV2(fact, ns, ctx.userId, ctx.brand.id, ctx.conversationId ?? undefined)
               .catch((err) => console.error(`[worker:${dept}] Memory v2 store failed:`, err))
           }
         })

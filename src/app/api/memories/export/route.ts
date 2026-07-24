@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 // GET /api/memories/export — export all user memories as JSON download
 // ---------------------------------------------------------------------------
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -15,13 +15,25 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
-  // Fetch all memories for this user (exclude embedding — too large)
+  const brandId = new URL(request.url).searchParams.get('brandId')
+  if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
+
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('id, name')
+    .eq('id', brandId)
+    .single()
+  if (!brand) return NextResponse.json({ error: 'Brand not found or access denied' }, { status: 404 })
+
+  // Export only the active memories for this exact project (exclude embeddings).
   const { data: memories, error } = await supabase
     .from('agent_memories')
     .select(
       'id, key, value, namespace, memory_type, confidence, source, tags, created_at, updated_at'
     )
     .eq('user_id', user.id)
+    .eq('brand_id', brand.id)
+    .eq('isolation_status', 'active')
     .order('namespace')
     .order('updated_at', { ascending: false })
 
@@ -35,7 +47,7 @@ export async function GET() {
 
   const payload = {
     exported_at: new Date().toISOString(),
-    user_email: user.email ?? 'unknown',
+    project: brand.name,
     memory_count: memories?.length ?? 0,
     memories: memories ?? [],
   }

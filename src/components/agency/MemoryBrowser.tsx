@@ -107,7 +107,7 @@ export function MemoryBrowser({ brandId }: MemoryBrowserProps) {
   const handleDelete = async (id: string) => {
     setDeletingId(id)
     try {
-      const res = await fetch(`/api/memories?scope=single&id=${id}`, {
+      const res = await fetch(`/api/memories?scope=single&id=${id}&brandId=${brandId}`, {
         method: 'DELETE',
       })
       if (res.ok) {
@@ -199,7 +199,7 @@ export function MemoryBrowser({ brandId }: MemoryBrowserProps) {
         </p>
         <div className="flex gap-2">
           <a
-            href="/api/memories/export"
+            href={`/api/memories/export?brandId=${brandId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"

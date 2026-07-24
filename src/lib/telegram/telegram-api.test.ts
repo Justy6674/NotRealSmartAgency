@@ -41,17 +41,15 @@ test('surfaces a Telegram delivery failure instead of silently dropping a Direct
   )
 })
 
-test('sends a Telegram reply keyboard when the Director asks the owner to choose a business', async () => {
+test('sends an inline project picker so selection carries an opaque grant ID', async () => {
   const calls: Array<{ body: Record<string, unknown> }> = []
 
   await sendTelegramText({
     botToken: 'bot-token',
     chatId: '12345',
-    text: 'Choose a business.',
+    text: 'Choose a project.',
     replyMarkup: {
-      keyboard: [['Do Today', 'TeleScribe']],
-      resize_keyboard: true,
-      input_field_placeholder: 'Choose a business',
+      inline_keyboard: [[{ text: 'Do Today', callback_data: 'nrs_project:grant-id' }]],
     },
     fetchImpl: async (_url, init) => {
       calls.push({ body: JSON.parse(String(init?.body)) })
@@ -60,8 +58,6 @@ test('sends a Telegram reply keyboard when the Director asks the owner to choose
   })
 
   assert.deepEqual(calls[0].body.reply_markup, {
-    keyboard: [['Do Today', 'TeleScribe']],
-    resize_keyboard: true,
-    input_field_placeholder: 'Choose a business',
+    inline_keyboard: [[{ text: 'Do Today', callback_data: 'nrs_project:grant-id' }]],
   })
 })

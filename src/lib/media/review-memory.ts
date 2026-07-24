@@ -8,6 +8,7 @@ import type { ScheduledPost, DraftSource } from '@/types/database'
 interface ReviewDecision {
   action: 'approve' | 'reject'
   post: ScheduledPost
+  brandId: string
   brandSlug: string
   reason?: string
 }
@@ -18,7 +19,7 @@ interface ReviewDecision {
  * Fire-and-forget — never blocks the UI.
  */
 export function recordReviewDecision(decision: ReviewDecision) {
-  const { action, post, brandSlug, reason } = decision
+  const { action, post, brandId, brandSlug, reason } = decision
   const meta = (post.metadata ?? {}) as Record<string, unknown>
   const source = (meta.source as DraftSource) ?? 'unknown'
   const contentType = post.content_type ?? 'general'
@@ -41,6 +42,7 @@ export function recordReviewDecision(decision: ReviewDecision) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      brandId,
       namespace: `nrs-${brandSlug}-content`,
       key: `review-${action}-${post.platform}-${Date.now()}`,
       value: memoryValue,

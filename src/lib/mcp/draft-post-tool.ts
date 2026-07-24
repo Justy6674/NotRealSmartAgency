@@ -23,6 +23,7 @@ import { runAgentWorker } from '@/lib/agents/worker'
 import { runComplianceFilter } from '@/lib/agents/compliance-filter'
 import type { Brand, DraftSourceMeta } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
+import { assertProjectCapability, type McpPrincipal } from '@/lib/security/project-access'
 
 const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'] as const
 type Platform = (typeof PLATFORMS)[number]
@@ -36,7 +37,7 @@ const PLATFORM_GUIDANCE: Record<Platform, string> = {
   twitter: 'X/Twitter post — 280 character limit. One sharp idea. Optional thread hint at end.',
 }
 
-export function registerDraftPostTool(mcpServer: McpServer, userId: string) {
+export function registerDraftPostTool(mcpServer: McpServer, principal: McpPrincipal) {
   mcpServer.registerTool(
     'draft_post',
     {
@@ -84,6 +85,15 @@ After this tool returns, tell the user the draft is in Review and they can appro
       tone?: string
       media_id?: string
     }) => {
+      try {
+        assertProjectCapability(principal, brand_id, 'draft:post')
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: error instanceof Error ? error.message : 'Project access denied.' }],
+          isError: true,
+        }
+      }
+
       const inspection = inspectMarketingInput(intent)
       if (!inspection.allowed) {
         return {
@@ -94,12 +104,12 @@ After this tool returns, tell the user the draft is in Review and they can appro
 
       const supabase = createAdminClient()
 
-      // Verify brand ownership + load full brand row for the worker
+      // Project scope is checked above; this only verifies that the project
+      // still exists and loads the active workspace for the worker.
       const { data: brand, error: brandError } = await supabase
         .from('brands')
         .select('*')
         .eq('id', brand_id)
-        .eq('user_id', userId)
         .single()
 
       if (brandError || !brand) {
@@ -145,7 +155,7 @@ After this tool returns, tell the user the draft is in Review and they can appro
         brief,
         {
           supabase,
-          userId,
+          userId: principal.userId,
           brandId: brand_id,
           brand: typedBrand,
           conversationId: null,
@@ -259,7 +269,7 @@ After this tool returns, tell the user the draft is in Review and they can appro
       const { data: draft, error: insertError } = await supabase
         .from('scheduled_posts')
         .insert({
-          user_id: userId,
+          user_id: principal.userId,
           brand_id,
           platform,
           caption,

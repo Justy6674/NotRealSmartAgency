@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { generateApiKey } from '@/lib/auth/api-key'
+import { issueRefreshToken, issueScopedMcpAccessKey } from '@/lib/auth/api-key'
 
 export const dynamic = 'force-dynamic'
 
@@ -126,30 +126,39 @@ async function handleAuthCodeExchange(
     .update({ used: true })
     .eq('code', code)
 
-  // Generate an API key as the access token (reuses existing system!)
-  const { raw, hash, prefix } = generateApiKey()
-  const keyHash = await hash
+  const untrustedProjectIds: unknown[] = Array.isArray(authCode.project_ids) ? authCode.project_ids : []
+  const projectIds = untrustedProjectIds.filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  )
+  if (projectIds.length === 0) {
+    return NextResponse.json(
+      { error: 'invalid_grant', error_description: 'This authorization code has no project scope' },
+      { status: 400 },
+    )
+  }
 
-  await supabase.from('api_keys').insert({
-    user_id: authCode.user_id,
-    name: 'Claude (connected via OAuth)',
-    prefix,
-    key_hash: keyHash,
-  })
-
-  // Generate a refresh token (another API key, stored separately)
-  const refresh = generateApiKey()
-  const refreshHash = await refresh.hash
-
-  await supabase.from('api_keys').insert({
-    user_id: authCode.user_id,
-    name: 'Claude refresh token',
-    prefix: refresh.prefix,
-    key_hash: refreshHash,
-  })
+  let access
+  let refresh
+  try {
+    access = await issueScopedMcpAccessKey({
+      userId: authCode.user_id,
+      projectIds,
+      name: 'NRS MCP connection',
+    })
+    refresh = await issueRefreshToken({
+      userId: authCode.user_id,
+      name: 'NRS MCP refresh token',
+      parentKeyId: access.id,
+    })
+  } catch {
+    return NextResponse.json(
+      { error: 'server_error', error_description: 'Could not create scoped MCP credentials' },
+      { status: 500 },
+    )
+  }
 
   return NextResponse.json({
-    access_token: raw,
+    access_token: access.raw,
     token_type: 'bearer',
     expires_in: 31536000, // 1 year
     refresh_token: refresh.raw,
@@ -177,31 +186,50 @@ async function handleRefreshToken(
 
   const { data: existingKey } = await supabase
     .from('api_keys')
-    .select('user_id, id')
+    .select('user_id, id, parent_key_id, token_kind')
     .eq('key_hash', refreshHash)
     .is('revoked_at', null)
     .single()
 
-  if (!existingKey) {
+  if (!existingKey || existingKey.token_kind !== 'refresh' || !existingKey.parent_key_id) {
     return NextResponse.json(
       { error: 'invalid_grant', error_description: 'Invalid refresh token' },
       { status: 400 }
     )
   }
 
-  // Generate new access token
-  const { raw, hash, prefix } = generateApiKey()
-  const keyHash = await hash
+  const { data: previousMappings, error: mappingsError } = await supabase
+    .from('api_key_project_grants')
+    .select('project_access_grant_id, project_access_grants!inner(brand_id)')
+    .eq('api_key_id', existingKey.parent_key_id)
 
-  await supabase.from('api_keys').insert({
-    user_id: existingKey.user_id,
-    name: 'Claude (refreshed)',
-    prefix,
-    key_hash: keyHash,
-  })
+  if (mappingsError || !previousMappings?.length) {
+    return NextResponse.json(
+      { error: 'invalid_grant', error_description: 'The original project grants are unavailable' },
+      { status: 400 },
+    )
+  }
+
+  const projectIds = previousMappings.map(
+    (mapping) => (mapping.project_access_grants as unknown as { brand_id: string }).brand_id,
+  )
+  let access
+  try {
+    access = await issueScopedMcpAccessKey({
+      userId: existingKey.user_id,
+      projectIds,
+      name: 'NRS MCP connection (refreshed)',
+      parentKeyId: existingKey.parent_key_id,
+    })
+  } catch {
+    return NextResponse.json(
+      { error: 'server_error', error_description: 'Could not refresh scoped MCP credentials' },
+      { status: 500 },
+    )
+  }
 
   return NextResponse.json({
-    access_token: raw,
+    access_token: access.raw,
     token_type: 'bearer',
     expires_in: 31536000,
     refresh_token: refreshToken, // Keep same refresh token

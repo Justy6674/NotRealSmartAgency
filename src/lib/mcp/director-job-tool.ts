@@ -12,8 +12,9 @@
 import { z } from 'zod/v3'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createAdminClient } from '@/lib/supabase/admin'
+import type { McpPrincipal } from '@/lib/security/project-access'
 
-export function registerGetDirectorResponseTool(mcpServer: McpServer, userId: string) {
+export function registerGetDirectorResponseTool(mcpServer: McpServer, principal: McpPrincipal) {
   mcpServer.registerTool(
     'get_director_response',
     {
@@ -39,7 +40,8 @@ DO NOT call this tool repeatedly without waiting between calls. Wait at least 10
         .from('mcp_jobs')
         .select('id, status, result, error, cost_cents, duration_ms, created_at, started_at, completed_at')
         .eq('id', job_id)
-        .eq('user_id', userId)
+        .eq('user_id', principal.userId)
+        .eq('api_key_id', principal.keyId)
         .single()
 
       if (error || !job) {

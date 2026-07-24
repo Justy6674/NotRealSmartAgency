@@ -7,13 +7,15 @@ import type { AgentType } from '@/types/database'
  * and facts from a conversation, rather than just dumping raw text.
  */
 export async function extractAndStoreMemories(params: {
+  brandId: string
+  userId: string
   brandSlug: string
   agentType: AgentType
   userMessage: string
   assistantResponse: string
   conversationId: string | null
 }): Promise<number> {
-  const { brandSlug, agentType, userMessage, assistantResponse, conversationId } = params
+  const { brandId, userId, brandSlug, agentType, userMessage, assistantResponse, conversationId } = params
   const namespace = getNamespace(brandSlug, agentType)
   const timestamp = new Date().toISOString()
   let memoriesStored = 0
@@ -174,7 +176,7 @@ export async function extractAndStoreMemories(params: {
 
   // Store all extractions
   for (const extraction of extractions) {
-    await memoryStore(extraction.key, extraction.value, namespace, extraction.tags)
+    await memoryStore(extraction.key, extraction.value, namespace, extraction.tags, { brandId, userId })
       .catch((err) => console.error('[memory-extractor] Store failed:', err))
   }
 

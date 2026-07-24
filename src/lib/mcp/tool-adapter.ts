@@ -3,6 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getToolsForAgent } from '@/lib/agents/tools'
 import { getDirectMcpToolEntries } from './director-only-tools'
+import { assertProjectCapability, type McpPrincipal } from '@/lib/security/project-access'
 
 type ZodShape = Record<string, z.ZodTypeAny>
 
@@ -18,7 +19,7 @@ export function adaptToolForMCP(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   aiSdkTool: any,
   mcpServer: McpServer,
-  userId: string,
+  principal: McpPrincipal,
   toolFactory: (brandId: string) => Record<string, unknown>,
 ) {
   if (!aiSdkTool.execute) return
@@ -40,13 +41,22 @@ export function adaptToolForMCP(
     const toolArgs = { ...args }
     delete toolArgs.brand_id
 
-    // Verify brand ownership
+    try {
+      assertProjectCapability(principal, brandId, 'direct:utility')
+    } catch (error) {
+      return {
+        content: [{ type: 'text' as const, text: error instanceof Error ? error.message : 'Project access denied.' }],
+        isError: true,
+      }
+    }
+
+    // Verify the requested project exists. Its scope has already been checked
+    // against the authenticated key; never expand that check to owner-wide.
     const supabase = createAdminClient()
     const { data: brand, error } = await supabase
       .from('brands')
       .select('id')
       .eq('id', brandId)
-      .eq('user_id', userId)
       .single()
 
     if (error || !brand) {
@@ -106,12 +116,12 @@ export function adaptToolForMCP(
 export function adaptToolsForMCP(
   tools: Record<string, unknown>,
   mcpServer: McpServer,
-  userId: string,
+  principal: McpPrincipal,
   toolFactory: (brandId: string) => Record<string, unknown>,
 ) {
   for (const [name, tool] of getDirectMcpToolEntries(tools)) {
     if (tool && typeof tool === 'object' && 'execute' in tool) {
-      adaptToolForMCP(name, tool, mcpServer, userId, toolFactory)
+      adaptToolForMCP(name, tool, mcpServer, principal, toolFactory)
     }
   }
 }

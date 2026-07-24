@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     // Fetch brand details
     const { data: brands } = await supabase
       .from('brands')
-      .select('id, slug')
+      .select('id, slug, user_id')
       .in('id', brandIds)
 
     if (!brands?.length) {
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     const results: Record<string, number> = {}
 
     for (const brand of brands) {
-      const { analysed } = await learnFromPublishedPosts(supabase, brand.id, brand.slug)
+      const { analysed } = await learnFromPublishedPosts(supabase, brand.id, brand.slug, brand.user_id)
       totalAnalysed += analysed
       results[brand.slug] = analysed
     }

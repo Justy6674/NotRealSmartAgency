@@ -35,17 +35,46 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { client_id, code_challenge, redirect_uri, state } = body as {
+  const { client_id, code_challenge, redirect_uri, state, project_ids } = body as {
     client_id: string
     code_challenge: string
     redirect_uri: string
     state: string
+    project_ids?: unknown
   }
 
   if (!client_id || !code_challenge || !redirect_uri) {
     return NextResponse.json(
       { error: 'invalid_request', error_description: 'Missing parameters' },
       { status: 400 }
+    )
+  }
+
+  const untrustedProjectIds: unknown[] = Array.isArray(project_ids) ? project_ids : []
+  const projectIds = [...new Set(
+    untrustedProjectIds.filter((value): value is string => typeof value === 'string' && value.length > 0),
+  )]
+  if (projectIds.length === 0) {
+    return NextResponse.json(
+      { error: 'invalid_request', error_description: 'Select at least one project for this connection' },
+      { status: 400 },
+    )
+  }
+
+  const scopedSupabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${accessToken}` } } },
+  )
+  const { data: permittedProjects, error: projectsError } = await scopedSupabase
+    .from('brands')
+    .select('id')
+    .in('id', projectIds)
+
+  if (projectsError || !permittedProjects || permittedProjects.length !== projectIds.length) {
+    return NextResponse.json(
+      { error: 'access_denied', error_description: 'One or more selected projects are not available to you' },
+      { status: 403 },
     )
   }
 
@@ -75,6 +104,7 @@ export async function POST(request: Request) {
     code_challenge,
     redirect_uri,
     state,
+    project_ids: projectIds,
     expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
   })
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@supabase/supabase-js'
+import { memoryStore } from '@/lib/ruflo/client'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -148,12 +149,12 @@ export async function GET(request: Request) {
   // ── 3. Alert Director about new products ───────────────────────────────
 
   if (results.newItems.length > 0) {
-    const { memoryStore } = await import('@/lib/ruflo/client')
     await memoryStore(
       `scentsell-sync-${Date.now()}`,
       `NEW SCENT SELL PRODUCTS SYNCED (${new Date().toLocaleDateString('en-AU')}): ${results.newItems.join(', ')}. Now in Media Pantry — consider creating social posts about them.`,
       'nrs-scent-sell-overall',
-      ['scentsell', 'sync', 'new-products', 'alert']
+      ['scentsell', 'sync', 'new-products', 'alert'],
+      { brandId: brand.id, userId: brand.user_id },
     )
   }
 

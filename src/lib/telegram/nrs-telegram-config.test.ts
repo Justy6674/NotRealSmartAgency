@@ -2,29 +2,31 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { getNRSTelegramConfig } from './nrs-telegram-config.ts'
 
-test('keeps the Telegram caller identity separate from the NRS account identity', () => {
+test('configures a channel without a hard-coded NRS owner identity', () => {
   const config = getNRSTelegramConfig({
     TELEGRAM_BOT_TOKEN: 'bot-token',
     TELEGRAM_WEBHOOK_SECRET_TOKEN: 'webhook-secret',
-    NRS_TELEGRAM_OWNER_CHAT_ID: '8123637329',
-    NRS_TELEGRAM_OWNER_USER_ID: '8123637329',
-    NRS_TELEGRAM_OWNER_NRS_USER_ID: '11111111-1111-4111-8111-111111111111',
+    NRS_TELEGRAM_CHANNEL_ENABLED: 'true',
   })
 
   assert.deepEqual(config, {
     botToken: 'bot-token',
     webhookSecret: 'webhook-secret',
-    ownerTelegramChatId: '8123637329',
-    ownerTelegramUserId: '8123637329',
-    ownerNrsUserId: '11111111-1111-4111-8111-111111111111',
+    enabled: true,
   })
 })
 
-test('does not configure the bot when the NRS owner account is missing', () => {
-  assert.equal(getNRSTelegramConfig({
+test('keeps the channel fail-closed unless the explicit enable switch is true', () => {
+  assert.deepEqual(getNRSTelegramConfig({
     TELEGRAM_BOT_TOKEN: 'bot-token',
     TELEGRAM_WEBHOOK_SECRET_TOKEN: 'webhook-secret',
-    NRS_TELEGRAM_OWNER_CHAT_ID: '8123637329',
-    NRS_TELEGRAM_OWNER_USER_ID: '8123637329',
+  }), {
+    botToken: 'bot-token',
+    webhookSecret: 'webhook-secret',
+    enabled: false,
+  })
+
+  assert.equal(getNRSTelegramConfig({
+    TELEGRAM_BOT_TOKEN: 'bot-token',
   }), null)
 })

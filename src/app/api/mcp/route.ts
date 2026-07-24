@@ -5,6 +5,7 @@ import { resolveApiKey } from '@/lib/auth/api-key'
 import { createNRSMcpServer } from '@/lib/mcp/server'
 import { logAudit } from '@/lib/agents/audit'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createMcpPrincipal, type McpPrincipal } from '@/lib/security/project-access'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,8 +73,12 @@ async function handleMcpRequest(request: Request): Promise<Response> {
     })
   }
 
-  // Resolve user identity — anonymous for public methods, real user for protected
-  let userId = 'anonymous-initialize'
+  // Resolve a project-scoped principal — anonymous discovery gets no grants.
+  let principal: McpPrincipal = createMcpPrincipal({
+    userId: 'anonymous-initialize',
+    keyId: 'anonymous-initialize',
+    grants: [],
+  })
   if (!isPublicMethod && auth?.startsWith('Bearer ')) {
     const token = auth.slice(7)
     const result = await resolveApiKey(token)
@@ -91,11 +96,11 @@ async function handleMcpRequest(request: Request): Promise<Response> {
         },
       })
     }
-    userId = result.userId
+    principal = result
   }
 
-  // Create MCP server for this user
-  const mcpServer = createNRSMcpServer(userId)
+  // Create MCP server for this scoped connection.
+  const mcpServer = createNRSMcpServer(principal)
 
   // Stateless transport — no sessionIdGenerator
   const transport = new WebStandardStreamableHTTPServerTransport({
@@ -110,7 +115,7 @@ async function handleMcpRequest(request: Request): Promise<Response> {
     const supabase = createAdminClient()
     logAudit({
       supabase,
-      userId,
+      userId: principal.userId,
       action: 'mcp_request',
       entityType: 'mcp',
       detail: { method },

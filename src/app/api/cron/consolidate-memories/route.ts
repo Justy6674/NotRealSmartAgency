@@ -40,6 +40,7 @@ function phraseOverlap(a: Set<string>, b: Set<string>): number {
 
 interface MemoryRow {
   id: string
+  brand_id: string
   key: string
   value: string | Record<string, unknown>
   namespace: string
@@ -67,6 +68,7 @@ export async function GET(request: Request) {
     .from('agent_memories')
     .delete({ count: 'exact' })
     .eq('memory_type', 'conversation')
+    .eq('isolation_status', 'active')
     .lt('updated_at', ninetyDaysAgo)
 
   if (staleError) {
@@ -81,7 +83,8 @@ export async function GET(request: Request) {
   // Get distinct namespaces
   const { data: allMemories, error: fetchError } = await supabase
     .from('agent_memories')
-    .select('id, key, value, namespace, memory_type, updated_at')
+    .select('id, brand_id, key, value, namespace, memory_type, updated_at')
+    .eq('isolation_status', 'active')
     .order('namespace')
     .order('updated_at', { ascending: false })
     .limit(5000)
@@ -98,10 +101,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: 'No memories to consolidate', stats })
   }
 
-  // Group by namespace
+  // Group by exact project plus namespace. A similarly named namespace in a
+  // sibling project must not participate in the same learning consolidation.
   const byNamespace = new Map<string, MemoryRow[]>()
   for (const mem of allMemories as MemoryRow[]) {
-    const ns = mem.namespace
+    const ns = `${mem.brand_id}:${mem.namespace}`
     if (!byNamespace.has(ns)) byNamespace.set(ns, [])
     byNamespace.get(ns)!.push(mem)
   }

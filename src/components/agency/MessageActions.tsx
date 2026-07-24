@@ -7,7 +7,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
-import { memoryStore } from '@/lib/ruflo/client'
 import { getNamespace } from '@/lib/ruflo/namespaces'
 
 interface MessageActionsProps {
@@ -144,15 +143,21 @@ export function MessageActions({ content, onRegenerate }: MessageActionsProps) {
       // Get brand slug from the store
       const brandsRes = await fetch('/api/brands')
       const brands = await brandsRes.json()
-      const brand = brands.find((b: { id: string }) => b.id === activeBrandId)
-      if (brand) {
-        const namespace = getNamespace(brand.slug, activeAgentType)
-        await memoryStore(
-          `Report summary: ${getTitle()}`,
-          content.slice(0, 500),
-          namespace
-        )
-      }
+        const brand = brands.find((b: { id: string }) => b.id === activeBrandId)
+        if (brand) {
+          const namespace = getNamespace(brand.slug, activeAgentType)
+          await fetch('/api/memories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              brandId: activeBrandId,
+              namespace,
+              key: `Report summary: ${getTitle()}`,
+              value: content.slice(0, 500),
+              tags: ['saved_report'],
+            }),
+          })
+        }
       setState('memory', 'done')
     } catch { setState('memory', 'error') }
   }

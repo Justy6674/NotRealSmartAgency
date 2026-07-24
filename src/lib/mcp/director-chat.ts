@@ -17,8 +17,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runDirectorJob } from './director-job'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
+import { type McpPrincipal } from '@/lib/security/project-access'
+import { createMcpDirectorExecution } from '@/lib/agents/director-execution'
 
-export function registerDirectorChatTool(mcpServer: McpServer, userId: string) {
+export function registerDirectorChatTool(mcpServer: McpServer, principal: McpPrincipal) {
   mcpServer.registerTool(
     'chat_with_director',
     {
@@ -49,6 +51,16 @@ Example messages:
       },
     },
     async ({ brand_id, message }: { brand_id: string; message: string }) => {
+      let execution
+      try {
+        execution = createMcpDirectorExecution(principal, brand_id)
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: error instanceof Error ? error.message : 'Project access denied.' }],
+          isError: true,
+        }
+      }
+
       const inspection = inspectMarketingInput(message)
       if (!inspection.allowed) {
         return {
@@ -59,12 +71,12 @@ Example messages:
 
       const supabase = createAdminClient()
 
-      // Verify brand ownership before queuing
+      // The scoped grant above is authoritative. Check existence only; a
+      // user-wide ownership lookup would reintroduce the old leak path.
       const { data: brand, error: brandError } = await supabase
         .from('brands')
         .select('id')
         .eq('id', brand_id)
-        .eq('user_id', userId)
         .single()
 
       if (brandError || !brand) {
@@ -78,8 +90,12 @@ Example messages:
       const { data: job, error: jobError } = await supabase
         .from('mcp_jobs')
         .insert({
-          user_id: userId,
+          user_id: principal.userId,
           brand_id,
+          channel: execution.channel,
+          api_key_id: execution.apiKeyId,
+          project_access_grant_id: execution.projectAccessGrantId,
+          policy_version: execution.policyVersion,
           job_type: 'director_chat',
           status: 'queued',
           input: { brand_id, message },
@@ -105,7 +121,7 @@ Example messages:
       // job_id immediately and starts polling.
       after(async () => {
         try {
-          await runDirectorJob(job.id, userId, { brand_id, message })
+          await runDirectorJob(job.id, execution, { brand_id, message })
         } catch (err) {
           console.error('[chat_with_director] background runner threw:', err)
         }

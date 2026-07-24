@@ -70,6 +70,7 @@ export function shouldExtractSessionMemory(conversationId: string): boolean {
 }
 
 export async function extractSessionMemory(params: {
+  brandId: string
   brandSlug: string
   brandName: string
   userId: string
@@ -77,7 +78,7 @@ export async function extractSessionMemory(params: {
   assistantResponse: string
   conversationId: string | null
 }): Promise<void> {
-  const { brandSlug, brandName, userId, userMessage, assistantResponse, conversationId } = params
+  const { brandId, brandSlug, brandName, userId, userMessage, assistantResponse, conversationId } = params
   const supabase = getAdminClient()
   const memoryKey = `session-memory-${brandSlug}`
   const namespace = `nrs-${brandSlug}`
@@ -90,6 +91,8 @@ export async function extractSessionMemory(params: {
       .eq('key', memoryKey)
       .eq('namespace', namespace)
       .eq('user_id', userId)
+      .eq('brand_id', brandId)
+      .eq('isolation_status', 'active')
       .single()
 
     const currentRecord = (existing?.value as string) ?? SESSION_MEMORY_TEMPLATE.replace('{brandName}', brandName)
@@ -153,6 +156,8 @@ Return ONLY the updated markdown document. No explanation.`,
         namespace,
         value: updatedRecord,
         user_id: userId,
+        brand_id: brandId,
+        isolation_status: 'active',
         memory_type: 'session',
         confidence: 1.0,
         tags: [brandSlug, 'session_memory'],
@@ -181,6 +186,7 @@ Return ONLY the updated markdown document. No explanation.`,
           .eq('key', memoryKey)
           .eq('namespace', namespace)
           .eq('user_id', userId)
+          .eq('brand_id', brandId)
       }
     }
 
@@ -196,6 +202,7 @@ Return ONLY the updated markdown document. No explanation.`,
 }
 
 export async function getSessionMemoryForPrompt(
+  brandId: string,
   brandSlug: string,
   userId: string
 ): Promise<string | null> {
@@ -208,6 +215,8 @@ export async function getSessionMemoryForPrompt(
       .eq('key', `session-memory-${brandSlug}`)
       .eq('namespace', `nrs-${brandSlug}`)
       .eq('user_id', userId)
+      .eq('brand_id', brandId)
+      .eq('isolation_status', 'active')
       .single()
 
     return (data?.value as string) ?? null

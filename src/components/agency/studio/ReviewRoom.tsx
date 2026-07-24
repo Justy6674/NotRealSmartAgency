@@ -178,7 +178,7 @@ export function ReviewRoom() {
   const handleApprove = async (id: string) => {
     const post = drafts.find(d => d.id === id)
     await patchPost(id, { status: 'scheduled' })
-    if (post && brandSlug) recordReviewDecision({ action: 'approve', post, brandSlug })
+    if (post && brandSlug && activeBrandId) recordReviewDecision({ action: 'approve', post, brandId: activeBrandId, brandSlug })
     setDrafts(prev => prev.filter(d => d.id !== id))
     setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
     if (detailPostId === id) setDetailPostId(null)
@@ -190,7 +190,7 @@ export function ReviewRoom() {
       status: 'cancelled',
       metadata: reason ? { rejection_reason: reason } : undefined,
     })
-    if (post && brandSlug) recordReviewDecision({ action: 'reject', post, brandSlug, reason })
+    if (post && brandSlug && activeBrandId) recordReviewDecision({ action: 'reject', post, brandId: activeBrandId, brandSlug, reason })
     setDrafts(prev => prev.filter(d => d.id !== id))
     setSelectedIds(prev => { const next = new Set(prev); next.delete(id); return next })
     if (detailPostId === id) setDetailPostId(null)

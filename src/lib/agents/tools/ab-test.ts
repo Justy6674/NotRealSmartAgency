@@ -1,6 +1,8 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { memoryStore } from '@/lib/ruflo/client'
+import { getNamespace } from '@/lib/ruflo/namespaces'
 
 // ─── A/B Content Testing Tool ────────────────────────────────────────────────
 //
@@ -31,7 +33,7 @@ export function createAbTestTool(
         if (action === 'create') {
           return await createAbTest(supabase, userId, brandId, post_id, dimension, variant_caption)
         } else {
-          return await checkAbTest(supabase, ab_test_id)
+          return await checkAbTest(supabase, userId, brandId, ab_test_id)
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -60,6 +62,7 @@ async function createAbTest(
     .select('*')
     .eq('id', postId)
     .eq('user_id', userId)
+    .eq('brand_id', brandId)
     .single()
 
   if (fetchErr || !original) {
@@ -156,6 +159,8 @@ async function createAbTest(
 
 async function checkAbTest(
   supabase: SupabaseClient,
+  userId: string,
+  brandId: string,
   abTestId?: string,
 ) {
   if (!abTestId) return { success: false, error: 'ab_test_id is required for "check" action.' }
@@ -164,6 +169,8 @@ async function checkAbTest(
   const { data: posts, error: fetchErr } = await supabase
     .from('scheduled_posts')
     .select('*')
+    .eq('user_id', userId)
+    .eq('brand_id', brandId)
     .filter('metadata->>ab_test_id', 'eq', abTestId)
     .order('created_at', { ascending: true })
 
@@ -226,22 +233,24 @@ async function checkAbTest(
     ? Math.round(Math.abs(variantScore - controlScore) / controlScore * 100)
     : 0
 
-  // Store learning in agent_memories
+  // Store the learning in this project only. A/B results must never become
+  // agency-global context or affect a sibling brand's recommendations.
   const learning = `A/B test on ${dimension}: ${winner === 'control' ? 'Original' : 'Variant'} won with ${improvement}% ${winner === 'variant_a' ? 'improvement' : 'higher'} engagement score. Platform: ${control.platform}. Control score: ${controlScore}, Variant score: ${variantScore}.`
 
-  await supabase.from('agent_memories').insert({
-    namespace: `nrs-agency`,
-    key: `ab-test-${abTestId}`,
-    content: learning,
-    metadata: {
-      type: 'ab_test_result',
-      ab_test_id: abTestId,
-      dimension,
-      winner,
-      improvement_pct: improvement,
-      platform: control.platform,
-    },
-  }).then(() => { /* fire and forget is fine for memories */ })
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('slug')
+    .eq('id', brandId)
+    .single()
+  if (brand?.slug) {
+    await memoryStore(
+      `ab-test-${abTestId}`,
+      learning,
+      getNamespace(brand.slug, 'overall'),
+      ['ab_test_result', dimension, winner, control.platform],
+      { brandId, userId },
+    )
+  }
 
   return {
     success: true,

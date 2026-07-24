@@ -424,6 +424,8 @@ That's the difference between a marketing director and a tech support agent. Def
       if (text && text.length > 20) {
         // v1: Regex extraction (fast, immediate, catches common patterns)
         extractAndStoreMemories({
+          brandId: typedBrand.id,
+          userId: user.id,
           brandSlug: typedBrand.slug,
           agentType,
           userMessage: lastMessageText,
@@ -437,7 +439,7 @@ That's the difference between a marketing director and a tech support agent. Def
             if (facts.length === 0) return
             const ns = `nrs-${typedBrand.slug}-${agentType}`
             for (const fact of facts) {
-              await memoryStoreV2(fact, ns, user.id, conversationId ?? undefined)
+              await memoryStoreV2(fact, ns, user.id, typedBrand.id, conversationId ?? undefined)
                 .catch((err) => console.error('[chat] Memory v2 store failed:', err))
             }
           })
@@ -449,6 +451,7 @@ That's the difference between a marketing director and a tech support agent. Def
         recordTurn(conversationId)
         if (shouldExtractSessionMemory(conversationId)) {
           extractSessionMemory({
+            brandId: typedBrand.id,
             brandSlug: typedBrand.slug,
             brandName: typedBrand.name,
             userId: user.id,
