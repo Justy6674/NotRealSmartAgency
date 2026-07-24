@@ -27,6 +27,7 @@ import { extractFacts } from '@/lib/memory/fact-extractor'
 import { memoryStoreV2 } from '@/lib/memory/store'
 import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
+import { getDirectorCompletion } from './director-completion'
 import type { Brand, AgentConfig } from '@/types/database'
 
 export interface DirectorJobInput {
@@ -422,6 +423,12 @@ NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media an
       },
     })
 
+    const completion = getDirectorCompletion(result)
+    if (!completion.complete) {
+      throw new Error(completion.reason)
+    }
+    const response = completion.response
+
     const inputTokens = result.usage?.inputTokens ?? 0
     const outputTokens = result.usage?.outputTokens ?? 0
     const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
@@ -452,16 +459,16 @@ NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media an
     })
 
     // Memory extraction — same as web Director
-    if (result.text && result.text.length > 20) {
+    if (response.length > 20) {
       extractAndStoreMemories({
         brandSlug: typedBrand.slug,
         agentType: 'overall',
         userMessage: message,
-        assistantResponse: result.text,
+        assistantResponse: response,
         conversationId: null,
       }).catch((err) => console.error('[director-job] Memory v1 extraction failed:', err))
 
-      extractFacts(message, result.text, typedBrand.name)
+      extractFacts(message, response, typedBrand.name)
         .then(async (facts) => {
           if (facts.length === 0) return
           const ns = `nrs-${typedBrand.slug}-overall`
@@ -476,7 +483,7 @@ NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media an
 
     // Mark done
     const jobResult: DirectorJobResult = {
-      response: result.text || 'Done.',
+      response,
       cost_cents: costCents,
       duration_ms: durationMs,
       input_tokens: inputTokens,

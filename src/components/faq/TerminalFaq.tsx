@@ -729,7 +729,7 @@ export function TerminalFaq() {
 
         {/* Section header */}
         <header className="nrs-faq-section-header">
-          <p className="nrs-faq-section-header__eyebrow">// help &amp; documentation</p>
+          <p className="nrs-faq-section-header__eyebrow">{'// help & documentation'}</p>
           <h1 className="nrs-faq-section-header__title">
             Frequently Asked Questions
             <span className="nrs-cursor" aria-hidden="true" />

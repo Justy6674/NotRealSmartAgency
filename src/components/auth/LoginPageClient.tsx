@@ -299,13 +299,13 @@ void main() {
                 </p>
                 <p className="text-xs mb-3" style={{ color: 'oklch(0.5 0 0)' }}>{existingUser.email}</p>
                 <div className="flex gap-2 justify-center">
-                  <a
+                  <Link
                     href="/agency/chat"
                     className="rounded-lg px-4 py-2 text-xs font-semibold"
                     style={{ background: 'oklch(0.75 0 0)', color: 'oklch(0.06 0 0)' }}
                   >
                     Continue to Agency
-                  </a>
+                  </Link>
                   <button
                     type="button"
                     onClick={async () => {

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
+import { PRODUCT_CONTEXT_PATHS, appendRepositoryContext } from '@/lib/github/repository-context'
 
 const SyncSchema = z.object({
   brand_id: z.string().uuid(),
@@ -60,10 +61,15 @@ export async function POST(request: Request) {
       headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
     }
 
-    // Fetch README and package.json in parallel
-    const [readmeRes, packageRes] = await Promise.all([
+    // Fetch README, package metadata and optional product documentation in parallel.
+    // The latter carries actual capabilities into marketing context rather than
+    // leaving the Director to infer a product from its framework alone.
+    const [readmeRes, packageRes, ...productContextResponses] = await Promise.all([
       fetch(`https://api.github.com/repos/${owner}/${repo}/readme`, { headers }),
       fetch(`https://api.github.com/repos/${owner}/${repo}/contents/package.json`, { headers }),
+      ...PRODUCT_CONTEXT_PATHS.map((path) =>
+        fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, { headers })
+      ),
     ])
 
     if (readmeRes.ok) readme = await readmeRes.text()
@@ -93,6 +99,11 @@ export async function POST(request: Request) {
     if (readme) {
       const truncatedReadme = readme.length > 3000 ? readme.substring(0, 3000) + '... (truncated)' : readme
       summary += `README Snippet:\n${truncatedReadme}`
+    }
+
+    for (const [index, response] of productContextResponses.entries()) {
+      if (!response.ok) continue
+      summary = appendRepositoryContext(summary, PRODUCT_CONTEXT_PATHS[index], await response.text())
     }
 
     // Save GitHub context

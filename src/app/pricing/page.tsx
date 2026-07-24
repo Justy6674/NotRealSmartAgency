@@ -96,7 +96,7 @@ export default function PricingPage() {
                 marginBottom: '0.75rem',
               }}
             >
-              // pricing
+              {'// pricing'}
             </p>
             <h1
               style={{
@@ -195,7 +195,7 @@ export default function PricingPage() {
                 marginBottom: '1.25rem',
               }}
             >
-              // the comparison
+              {'// the comparison'}
             </p>
             {[
               { label: 'Social media manager', cost: '$3,000 – 5,000/month' },

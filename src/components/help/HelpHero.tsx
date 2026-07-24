@@ -27,7 +27,7 @@ export function HelpHero({ searchIndex }: HelpHeroProps) {
           marginBottom: '0.75rem',
         }}
       >
-        // help centre
+        {'// help centre'}
       </p>
       <h1
         style={{

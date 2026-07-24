@@ -132,7 +132,7 @@ export default async function ArticlePage({
                   marginBottom: '0.5rem',
                 }}
               >
-                // {category.slug}
+                {`// ${category.slug}`}
               </p>
               <h1
                 style={{

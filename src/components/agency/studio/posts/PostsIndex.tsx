@@ -251,17 +251,6 @@ export function PostsIndex() {
     [refetch]
   )
 
-  if (!activeBrandId) {
-    return (
-      <div className="rounded-xl border border-border bg-card p-8 text-center">
-        <AlertCircle className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          Pick a brand from the sidebar to see its posts.
-        </p>
-      </div>
-    )
-  }
-
   const handleAskDirector = useCallback(
     (id: string) => {
       const post = posts.find((p) => p.id === id)
@@ -273,6 +262,17 @@ export function PostsIndex() {
     },
     [posts, isHealthBrand]
   )
+
+  if (!activeBrandId) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-8 text-center">
+        <AlertCircle className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">
+          Pick a brand from the sidebar to see its posts.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3">

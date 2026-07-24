@@ -388,7 +388,7 @@ export function MediaSelector({
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="py-6 text-center text-xs text-muted-foreground/60">
-            Nothing matches "{search}"
+            {`Nothing matches "${search}"`}
           </div>
         ) : (
           <div className="max-h-72 overflow-y-auto rounded-lg border border-border divide-y divide-border">

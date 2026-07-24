@@ -67,7 +67,7 @@ export default function AboutPage() {
               marginBottom: '0.75rem',
             }}
           >
-            // the agency
+            {'// the agency'}
           </p>
           <h2
             style={{
@@ -225,7 +225,7 @@ export default function AboutPage() {
               marginBottom: '2.5rem',
             }}
           >
-            // what your agency does
+            {'// what your agency does'}
           </p>
 
           {/* Three columns */}
@@ -256,7 +256,7 @@ export default function AboutPage() {
                   marginBottom: '1rem',
                 }}
               >
-                // create
+                {'// create'}
               </h3>
               <ul
                 style={{
@@ -323,7 +323,7 @@ export default function AboutPage() {
                   marginBottom: '1rem',
                 }}
               >
-                // publish
+                {'// publish'}
               </h3>
               <ul
                 style={{
@@ -390,7 +390,7 @@ export default function AboutPage() {
                   marginBottom: '1rem',
                 }}
               >
-                // protect
+                {'// protect'}
               </h3>
               <ul
                 style={{
@@ -459,7 +459,7 @@ export default function AboutPage() {
                 marginBottom: '1rem',
               }}
             >
-              // connect from anywhere
+              {'// connect from anywhere'}
             </h3>
             <p
               style={{
