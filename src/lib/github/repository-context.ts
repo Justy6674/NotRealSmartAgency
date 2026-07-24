@@ -12,6 +12,12 @@ export const PRODUCT_CONTEXT_PATHS = [
 
 const MAX_DOCUMENT_CHARS = 3_500
 
+export function repositoryContentUnavailableMessage(responseOk: readonly boolean[]): string | null {
+  if (responseOk.some(Boolean)) return null
+
+  return 'GitHub did not return any readable repository context. For a private repository, configure a read-only GITHUB_TOKEN for this deployment.'
+}
+
 export function appendRepositoryContext(summary: string, path: string, content: string): string {
   const trimmed = content.trim()
   if (!trimmed) return summary

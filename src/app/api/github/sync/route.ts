@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
-import { PRODUCT_CONTEXT_PATHS, appendRepositoryContext } from '@/lib/github/repository-context'
+import {
+  PRODUCT_CONTEXT_PATHS,
+  appendRepositoryContext,
+  repositoryContentUnavailableMessage,
+} from '@/lib/github/repository-context'
 
 const SyncSchema = z.object({
   brand_id: z.string().uuid(),
@@ -71,6 +75,15 @@ export async function POST(request: Request) {
         fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, { headers })
       ),
     ])
+
+    const unavailableMessage = repositoryContentUnavailableMessage([
+      readmeRes.ok,
+      packageRes.ok,
+      ...productContextResponses.map((response) => response.ok),
+    ])
+    if (unavailableMessage) {
+      throw new Error(unavailableMessage)
+    }
 
     if (readmeRes.ok) readme = await readmeRes.text()
     if (packageRes.ok) packageJson = await packageRes.text()
