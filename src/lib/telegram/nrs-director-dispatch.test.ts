@@ -48,3 +48,27 @@ test('asks for a named brand instead of sending an ambiguous request to the Dire
     text: 'Which brand should I work on? Name one: DoToday, TeleScribe.',
   })
 })
+
+test('uses the owner-selected business when a plain-language request does not name one', async () => {
+  const queued: Array<{ brandId: string; message: string }> = []
+
+  const result = await dispatchTelegramDirectorRequest({
+    text: 'Make five topical social posts for this week',
+    brands,
+    selectedBrandId: 'telescribe-id',
+    queueDirectorJob: async (input) => {
+      queued.push(input)
+      return { jobId: 'job-selected' }
+    },
+  })
+
+  assert.deepEqual(queued, [{
+    brandId: 'telescribe-id',
+    message: 'Make five topical social posts for this week',
+  }])
+  assert.deepEqual(result, {
+    kind: 'queued',
+    jobId: 'job-selected',
+    brand: brands[1],
+  })
+})

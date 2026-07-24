@@ -40,3 +40,28 @@ test('surfaces a Telegram delivery failure instead of silently dropping a Direct
     /Telegram sendMessage failed: 502/,
   )
 })
+
+test('sends a Telegram reply keyboard when the Director asks the owner to choose a business', async () => {
+  const calls: Array<{ body: Record<string, unknown> }> = []
+
+  await sendTelegramText({
+    botToken: 'bot-token',
+    chatId: '12345',
+    text: 'Choose a business.',
+    replyMarkup: {
+      keyboard: [['Do Today', 'TeleScribe']],
+      resize_keyboard: true,
+      input_field_placeholder: 'Choose a business',
+    },
+    fetchImpl: async (_url, init) => {
+      calls.push({ body: JSON.parse(String(init?.body)) })
+      return new Response('{}', { status: 200 })
+    },
+  })
+
+  assert.deepEqual(calls[0].body.reply_markup, {
+    keyboard: [['Do Today', 'TeleScribe']],
+    resize_keyboard: true,
+    input_field_placeholder: 'Choose a business',
+  })
+})

@@ -11,13 +11,15 @@ export type TelegramDirectorDispatch =
 export async function dispatchTelegramDirectorRequest({
   text,
   brands,
+  selectedBrandId,
   queueDirectorJob,
 }: {
   text: string
   brands: TelegramBrand[]
+  selectedBrandId?: string | null
   queueDirectorJob: (input: { brandId: string; message: string }) => Promise<{ jobId: string }>
 }): Promise<TelegramDirectorDispatch> {
-  const resolution = resolveTelegramBrand(text, brands)
+  const resolution = resolveTelegramBrand(text, brands, selectedBrandId)
   if (resolution.kind !== 'matched') {
     return {
       kind: 'needs_brand',

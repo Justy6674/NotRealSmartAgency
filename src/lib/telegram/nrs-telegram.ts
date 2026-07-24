@@ -90,12 +90,21 @@ function containsBrandReference(message: string, brand: TelegramBrand): boolean 
 }
 
 /** Never pick a brand by default: a Telegram request must name one exactly. */
-export function resolveTelegramBrand(message: string, brands: TelegramBrand[]): TelegramBrandResolution {
+export function resolveTelegramBrand(
+  message: string,
+  brands: TelegramBrand[],
+  selectedBrandId?: string | null,
+): TelegramBrandResolution {
   const matches = brands.filter((brand) => containsBrandReference(message, brand))
 
-  return matches.length === 1
-    ? { kind: 'matched', brand: matches[0] }
-    : { kind: 'needs_brand' }
+  if (matches.length === 1) return { kind: 'matched', brand: matches[0] }
+  if (matches.length > 1) return { kind: 'needs_brand' }
+
+  const selectedBrand = selectedBrandId
+    ? brands.find((brand) => brand.id === selectedBrandId)
+    : undefined
+
+  return selectedBrand ? { kind: 'matched', brand: selectedBrand } : { kind: 'needs_brand' }
 }
 
 /** Telegram limits each sendMessage body to 4,096 UTF-16 code units. */

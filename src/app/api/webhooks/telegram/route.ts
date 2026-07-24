@@ -6,7 +6,14 @@ import { createTelegramCommandReply } from '@/lib/telegram/telegram-command'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { dispatchTelegramDirectorRequest } from '@/lib/telegram/nrs-director-dispatch'
 import { authoriseTelegramUpdate, type TelegramBrand, type TelegramUpdate } from '@/lib/telegram/nrs-telegram'
-import { sendTelegramText } from '@/lib/telegram/telegram-api'
+import {
+  buildTelegramProjectKeyboard,
+  getTelegramProjectSelection,
+  isTelegramProjectPickerRequest,
+  toTelegramDirectorRequest,
+} from '@/lib/telegram/telegram-project'
+import { TELEGRAM_SELECTION_NAMESPACE, telegramSelectionKey } from '@/lib/telegram/telegram-selection'
+import { sendTelegramText, type TelegramReplyKeyboard } from '@/lib/telegram/telegram-api'
 
 export const runtime = 'nodejs'
 export const maxDuration = 600
@@ -23,11 +30,16 @@ function getDirectorResponse(result: unknown): string | null {
   return typeof response === 'string' && response.trim() ? response : null
 }
 
-async function deliverTelegramText(config: NonNullable<ReturnType<typeof getNRSTelegramConfig>>, text: string) {
+async function deliverTelegramText(
+  config: NonNullable<ReturnType<typeof getNRSTelegramConfig>>,
+  text: string,
+  replyMarkup?: TelegramReplyKeyboard,
+) {
   await sendTelegramText({
     botToken: config.botToken,
     chatId: config.ownerTelegramChatId,
     text,
+    replyMarkup,
   })
 }
 
@@ -76,6 +88,78 @@ export async function POST(request: Request) {
   }
 
   const telegramBrands = (brands ?? []) as TelegramBrand[]
+  const { data: savedSelection, error: selectionReadError } = await supabase
+    .from('agent_memories')
+    .select('value')
+    .eq('user_id', config.ownerNrsUserId)
+    .eq('namespace', TELEGRAM_SELECTION_NAMESPACE)
+    .eq('key', telegramSelectionKey(config.ownerTelegramChatId))
+    .maybeSingle()
+
+  if (selectionReadError) {
+    console.error('[telegram] failed to load selected business:', selectionReadError.message)
+  }
+
+  const selectedBrandId = savedSelection?.value ?? null
+  const selectedBrand = telegramBrands.find((brand) => brand.id === selectedBrandId) ?? null
+
+  if (isTelegramProjectPickerRequest(authorisation.text)) {
+    const message = selectedBrand
+      ? `${selectedBrand.name} is your active business. Choose another business below, or tell me what you want to grow.`
+      : 'Choose the business you want to work on. I’ll keep it as your active context until you change it.'
+
+    try {
+      await deliverTelegramText(config, message, buildTelegramProjectKeyboard(telegramBrands))
+    } catch (err) {
+      console.error('[telegram] business picker delivery failed:', err)
+    }
+    return NextResponse.json({ received: true })
+  }
+
+  const chosenProject = getTelegramProjectSelection(authorisation.text, telegramBrands)
+  if (chosenProject) {
+    const { error: selectionWriteError } = await supabase
+      .from('agent_memories')
+      .upsert({
+        key: telegramSelectionKey(config.ownerTelegramChatId),
+        namespace: TELEGRAM_SELECTION_NAMESPACE,
+        value: chosenProject.id,
+        user_id: config.ownerNrsUserId,
+        memory_type: 'decision',
+        confidence: 1,
+        source: 'telegram',
+        tags: ['telegram', 'business-selection'],
+      }, { onConflict: 'key,namespace' })
+
+    if (selectionWriteError) {
+      console.error('[telegram] failed to save selected business:', selectionWriteError.message)
+      return NextResponse.json({ received: true })
+    }
+
+    try {
+      await deliverTelegramText(
+        config,
+        `${chosenProject.name} is now your active business. Tell me what you want to grow, or send /social for topical social drafts.`,
+      )
+    } catch (err) {
+      console.error('[telegram] selection confirmation delivery failed:', err)
+    }
+    return NextResponse.json({ received: true })
+  }
+
+  if ((/^\/(?:social|topical)(?:@\w+)?\s*$/i.test(authorisation.text)) && !selectedBrand) {
+    try {
+      await deliverTelegramText(
+        config,
+        'Choose a business first, then I can create topical social drafts from its own context.',
+        buildTelegramProjectKeyboard(telegramBrands),
+      )
+    } catch (err) {
+      console.error('[telegram] social business picker delivery failed:', err)
+    }
+    return NextResponse.json({ received: true })
+  }
+
   const commandReply = createTelegramCommandReply(authorisation.text, telegramBrands.map((brand) => brand.name))
   if (commandReply) {
     try {
@@ -101,10 +185,15 @@ export async function POST(request: Request) {
 
   if (existingJob) return NextResponse.json({ received: true })
 
+  const directorMessage = selectedBrand
+    ? toTelegramDirectorRequest(authorisation.text, selectedBrand)
+    : authorisation.text
+
   let jobInput: { brand_id: string; message: string } | null = null
   const dispatch = await dispatchTelegramDirectorRequest({
-    text: authorisation.text,
+    text: directorMessage,
     brands: telegramBrands,
+    selectedBrandId,
     queueDirectorJob: async ({ brandId, message }) => {
       const { data: job, error: jobError } = await supabase
         .from('mcp_jobs')
