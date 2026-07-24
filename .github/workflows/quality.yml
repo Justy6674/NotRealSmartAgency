@@ -13,6 +13,11 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Route modules construct the Resend client at import time. The build never
+    # sends mail, but it needs a syntactically valid non-secret value to load
+    # those modules in CI.
+    env:
+      RESEND_API_KEY: re_ci_build_placeholder
 
     steps:
       - uses: actions/checkout@v4
