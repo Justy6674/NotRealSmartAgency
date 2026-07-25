@@ -604,6 +604,12 @@ export interface Goal {
   owner_agent_id: string | null
   brand_id: string | null
   deadline: string | null
+  success_criteria: Record<string, unknown>
+  progress: Record<string, unknown>
+  last_reviewed_at: string | null
+  next_review_at: string | null
+  review_claimed_at: string | null
+  review_claim_expires_at: string | null
   created_at: string
   updated_at: string
 }

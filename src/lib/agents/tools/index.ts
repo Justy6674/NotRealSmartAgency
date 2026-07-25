@@ -60,6 +60,7 @@ import { createBlotatoListAccountsTool, createBlotatoPublishTool, createBlotatoE
 import { createExtractBrandKitTool } from './extract-brand-kit'
 import { createReviewContentTool } from './review-content'
 import { createInspectProjectMarketingBackendTool } from './project-backend-marketing'
+import { createSetActiveGoalTool, createUpdateGoalProgressTool } from './manage-goal'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -97,6 +98,19 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   })
 
   const handoff = createHandoffTool({
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    brandId: ctx.brandId,
+    agentRegistryId: ctx.agentRegistryId ?? null,
+  })
+
+  const setActiveGoal = createSetActiveGoalTool({
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    brandId: ctx.brandId,
+    agentRegistryId: ctx.agentRegistryId ?? null,
+  })
+  const updateGoalProgress = createUpdateGoalProgressTool({
     supabase: ctx.supabase,
     userId: ctx.userId,
     brandId: ctx.brandId,
@@ -302,6 +316,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       extract_brand_kit: extractBrandKit,
       review_content: reviewContent,
       inspect_project_marketing_backend: inspectProjectMarketingBackend,
+      set_active_goal: setActiveGoal,
+      update_goal_progress: updateGoalProgress,
       // Blotato (AI content creation + visual generation + repurposing)
       blotato_list_accounts: blotatoListAccountsTool,
       blotato_publish: blotatoPublish,

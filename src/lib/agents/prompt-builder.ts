@@ -8,10 +8,13 @@ import { memorySearch } from '@/lib/ruflo/client'
 import { memorySearchV2 } from '@/lib/memory/store'
 import { getNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
 import { getSessionMemoryForPrompt } from '@/lib/memory/session-memory'
+import { buildGoalDirective, type ActiveGoal } from './goal-loop'
 
 export interface ProjectPromptOptions {
   proformaSummary?: string | null
   deliveryChannel?: 'web' | 'mcp' | 'telegram'
+  /** Present whenever the caller has resolved this selected brand's goal state. */
+  activeGoal?: ActiveGoal | null
 }
 
 /**
@@ -29,6 +32,13 @@ export function buildSystemPrompt(
 ): string {
   const sections: string[] = []
   const isTelegram = options?.deliveryChannel === 'telegram'
+
+  // This must be supplied by every Director and worker entry point. Keeping
+  // the lookup outside the prompt builder preserves this module's pure prompt
+  // assembly role while making the active outcome visible to every agent.
+  if (options && Object.prototype.hasOwnProperty.call(options, 'activeGoal')) {
+    sections.push(buildGoalDirective(options.activeGoal ?? null, brand.name))
+  }
 
   // Base agency rules
   sections.push(`You are working for ${brand.name} as part of NotRealSmart, an AI marketing agency.

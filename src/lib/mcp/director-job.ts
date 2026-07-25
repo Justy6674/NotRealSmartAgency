@@ -38,6 +38,7 @@ import {
 import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { buildTelegramExecutionContract } from '@/lib/telegram/telegram-execution-contract'
+import { getActiveGoal } from '@/lib/agents/goal-loop'
 import {
   buildTelegramResponseRepairPrompt,
   needsTelegramResponseRepair,
@@ -197,11 +198,12 @@ export async function runDirectorJob(
     }
 
     // Build system prompt with memory
+    const activeGoal = await getActiveGoal(supabase, userId, brand_id)
     let { prompt: systemPrompt } = await buildSystemPromptWithMemory(
       brand as Brand,
       agentConfig as AgentConfig,
       message,
-      { proformaSummary, deliveryChannel: execution.channel },
+      { proformaSummary, deliveryChannel: execution.channel, activeGoal },
       userId,
     )
 

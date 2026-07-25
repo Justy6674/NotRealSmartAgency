@@ -24,6 +24,7 @@ import { runComplianceFilter } from '@/lib/agents/compliance-filter'
 import type { Brand, DraftSourceMeta } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { assertProjectCapability, type McpPrincipal } from '@/lib/security/project-access'
+import { getActiveGoal, markGoalReadyForReview } from '@/lib/agents/goal-loop'
 
 const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'] as const
 type Platform = (typeof PLATFORMS)[number]
@@ -120,6 +121,16 @@ After this tool returns, tell the user the draft is in Review and they can appro
       }
 
       const typedBrand = brand as Brand
+      const activeGoal = await getActiveGoal(supabase, principal.userId, brand_id)
+      if (!activeGoal) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'Set the end-user outcome with chat_with_director before drafting ongoing marketing work for this project.',
+          }],
+          isError: true,
+        }
+      }
       const platformGuide = PLATFORM_GUIDANCE[platform]
 
       // Build a structured brief for Content & Copy. Worker will call
@@ -295,6 +306,8 @@ After this tool returns, tell the user the draft is in Review and they can appro
           isError: true,
         }
       }
+
+      await markGoalReadyForReview(supabase, principal.userId, activeGoal.id)
 
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.notrealsmart.com.au'
       const reviewUrl = `${baseUrl}/agency/studio?tab=review`

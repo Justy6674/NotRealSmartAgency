@@ -10,7 +10,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json()
 
   // Track timestamps on status changes
-  const updates: Record<string, unknown> = { ...body }
+  const { user_id: _ignoredUserId, goal_id: _ignoredGoalId, ...bodyUpdates } = body
+  const updates: Record<string, unknown> = { ...bodyUpdates }
   if (body.status === 'in_progress' && !body.started_at) {
     updates.started_at = new Date().toISOString()
   }

@@ -27,6 +27,7 @@ import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget, updateAgentSta
 import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
 import { extractFacts } from '@/lib/memory/fact-extractor'
 import { memoryStoreV2 } from '@/lib/memory/store'
+import { getActiveGoal } from './goal-loop'
 
 /** Maximum workers running simultaneously to prevent AI Gateway rate limit exhaustion.
  *  AI Gateway enforces per-user concurrency limits; 4 is conservative for most providers. */
@@ -57,6 +58,8 @@ export interface WorkerResult {
   tokensUsed: number
   model: string
   durationMs: number
+  /** Tools actually executed, used by code gates for autonomous workflows. */
+  toolNames: string[]
   error?: string
 }
 
@@ -120,7 +123,7 @@ export async function runAgentWorker(
       return {
         department: dept, departmentName: deptName, result: '',
         costCents: 0, tokensUsed: 0, model: 'none',
-        durationMs: Date.now() - startTime, error: `Agent ${dept} not configured`,
+        durationMs: Date.now() - startTime, toolNames: [], error: `Agent ${dept} not configured`,
       }
     }
 
@@ -136,6 +139,7 @@ export async function runAgentWorker(
           department: dept, departmentName: deptName, result: '',
           costCents: 0, tokensUsed: 0, model,
           durationMs: Date.now() - startTime,
+          toolNames: [],
           error: `${deptName} has exhausted its monthly budget (${budget.spent}/${budget.limit} cents)`,
         }
       }
@@ -149,11 +153,12 @@ export async function runAgentWorker(
 
     // 5. Build THIS agent's system prompt with ITS OWN memory retrieval
     //    buildSystemPromptWithMemory searches the agent's namespace independently
+    const activeGoal = await getActiveGoal(ctx.supabase, ctx.userId, ctx.brandId)
     const { prompt: basePrompt, memoryCount } = await buildSystemPromptWithMemory(
       ctx.brand,
       agentConfig as AgentConfig,
       task,
-      {},
+      { activeGoal },
       ctx.userId, // userId for v2 semantic search
     )
 
@@ -198,6 +203,7 @@ Rules:
       userId: ctx.userId,
       brandId: ctx.brandId,
       conversationId: ctx.conversationId,
+      agentRegistryId: registry?.id ?? null,
     })
 
     // 8. Add web search — auto-detect if agent type needs it, or honour explicit option
@@ -240,6 +246,10 @@ Rules:
       abortSignal: controller.signal,
     })
     clearTimeout(timeout)
+    const toolNames = (result.toolCalls ?? []).flatMap((call) => {
+      const toolName = (call as { toolName?: unknown }).toolName
+      return typeof toolName === 'string' ? [toolName] : []
+    })
 
     // 11. Set THIS agent's status back to 'idle'
     if (registry) {
@@ -328,6 +338,7 @@ Rules:
       tokensUsed: inputTokens + outputTokens,
       model,
       durationMs: Date.now() - startTime,
+      toolNames,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -349,6 +360,7 @@ Rules:
       tokensUsed: 0,
       model: 'none',
       durationMs: Date.now() - startTime,
+      toolNames: [],
       error: message,
     }
   }
@@ -397,6 +409,7 @@ export async function runParallelAgents(
           tokensUsed: 0,
           model: 'none',
           durationMs: 0,
+          toolNames: [],
           error: res.reason?.message ?? 'Unknown failure',
         })
       }

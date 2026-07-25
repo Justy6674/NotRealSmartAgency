@@ -19,6 +19,7 @@ import type { AgentType, Brand, AgentConfig } from '@/types/database'
 import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
+import { getActiveGoal } from '@/lib/agents/goal-loop'
 
 const VALID_AGENT_TYPES: AgentType[] = [
   'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
@@ -162,11 +163,12 @@ export async function POST(request: Request) {
   }
 
   // Build system prompt with memory + user context + proforma
+  const activeGoal = await getActiveGoal(supabase, user.id, brandId)
   let { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
     brand as Brand,
     agentConfig as AgentConfig,
     lastMessageText,
-    { proformaSummary },
+    { proformaSummary, activeGoal },
     user.id
   )
 

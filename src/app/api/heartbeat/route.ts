@@ -1,12 +1,103 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runAgentWorker, type WorkerContext } from '@/lib/agents/worker'
-import { checkBudget } from '@/lib/agents/registry'
+import { checkBudget, getOrCreateAgentRegistry } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
 import type { Brand, AgentRegistryEntry, Task } from '@/types/database'
+import {
+  buildGoalReviewBrief,
+  claimDueGoalReview,
+  markGoalReadyForReview,
+  nextGoalReviewAt,
+  releaseGoalReviewClaim,
+} from '@/lib/agents/goal-loop'
 
 // Fluid Compute — allow up to 5 minutes for processing multiple agents
 export const maxDuration = 300
+
+const GOAL_REVIEW_DEFER_HOURS = 4
+
+/**
+ * A goal review is the bridge between completed activity and the next useful
+ * action. Claiming the goal first makes this safe when Vercel overlaps cron
+ * invocations; the claim expires automatically if a process dies mid-run.
+ */
+async function enqueueDueGoalReviews(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<number> {
+  const now = new Date().toISOString()
+  const { data: dueGoals, error } = await supabase
+    .from('goals')
+    .select('id, user_id, brand_id')
+    .eq('level', 'objective')
+    .eq('status', 'active')
+    .not('brand_id', 'is', null)
+    .lte('next_review_at', now)
+    .limit(20)
+
+  if (error) {
+    console.error('[heartbeat] Failed to find due goal reviews:', error.message)
+    return 0
+  }
+
+  let queued = 0
+  for (const candidate of dueGoals ?? []) {
+    if (!candidate.brand_id) continue
+
+    const goal = await claimDueGoalReview(supabase, candidate.id)
+    if (!goal) continue
+
+    const { data: openWork, error: openWorkError } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('goal_id', goal.id)
+      .in('status', ['assigned', 'in_progress', 'review'])
+      .limit(1)
+
+    if (openWorkError) {
+      console.error('[heartbeat] Failed to inspect goal work:', openWorkError.message)
+      await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(1))
+      continue
+    }
+
+    if (openWork && openWork.length > 0) {
+      await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(GOAL_REVIEW_DEFER_HOURS))
+      continue
+    }
+
+    const director = await getOrCreateAgentRegistry(supabase, candidate.user_id, 'overall')
+    if (!director) {
+      await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(1))
+      continue
+    }
+
+    const { error: taskError } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: candidate.user_id,
+        brand_id: candidate.brand_id,
+        goal_id: goal.id,
+        created_by_agent_id: director.id,
+        assigned_agent_id: director.id,
+        title: `Goal review: ${goal.title}`,
+        description: buildGoalReviewBrief(goal),
+        priority: 'high',
+        status: 'assigned',
+        context: { kind: 'goal_review', goal_id: goal.id, triggered_by: 'heartbeat' },
+      })
+
+    if (taskError) {
+      console.error('[heartbeat] Failed to queue goal review:', taskError.message)
+      await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(1))
+      continue
+    }
+
+    await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt())
+    queued++
+  }
+
+  return queued
+}
 
 export async function GET(request: Request) {
   // Verify cron secret (Vercel injects this)
@@ -19,6 +110,7 @@ export async function GET(request: Request) {
   const startTime = Date.now()
   let totalChecked = 0
   let totalActioned = 0
+  let goalReviewsQueued = 0
 
   try {
     // Monthly budget reset on 1st of month
@@ -30,15 +122,25 @@ export async function GET(request: Request) {
         .neq('spent_monthly_cents', 0)
     }
 
-    // Find all agents with assigned tasks
+    // Establish the next safe action for any active outcome with no open work
+    // before fetching the assigned queue, so newly-created reviews can run in
+    // this heartbeat.
+    goalReviewsQueued = await enqueueDueGoalReviews(supabase)
+
+    // Only outcome-linked work may execute autonomously. Legacy unscoped tasks
+    // stay visible for the owner but cannot create background activity.
     const { data: assignedTasks, error: taskError } = await supabase
       .from('tasks')
       .select(`
         *,
-        agent_registry:assigned_agent_id (*)
+        agent_registry:assigned_agent_id (*),
+        goals!inner(status, level)
       `)
       .eq('status', 'assigned')
       .not('assigned_agent_id', 'is', null)
+      .not('goal_id', 'is', null)
+      .eq('goals.status', 'active')
+      .eq('goals.level', 'objective')
 
     if (taskError || !assignedTasks) {
       return NextResponse.json({
@@ -52,6 +154,7 @@ export async function GET(request: Request) {
     for (const taskRow of assignedTasks) {
       const task = taskRow as Task & { agent_registry: AgentRegistryEntry }
       const registry = task.agent_registry
+      const isGoalReview = task.context?.kind === 'goal_review'
 
       if (!registry || !registry.is_active || registry.status === 'paused') continue
 
@@ -113,6 +216,9 @@ export async function GET(request: Request) {
         if (result.error) {
           throw new Error(result.error)
         }
+        if (isGoalReview && !result.toolNames.includes('update_goal_progress')) {
+          throw new Error('Goal review did not record evidence-based progress.')
+        }
 
         // Update task as done
         await supabase
@@ -144,6 +250,13 @@ export async function GET(request: Request) {
           costCents: result.costCents,
         })
 
+        // A completed delivery makes its parent outcome immediately eligible
+        // for the Director's next evidence-based review. Goal-review tasks
+        // schedule themselves through update_goal_progress instead.
+        if (task.goal_id && !isGoalReview) {
+          await markGoalReadyForReview(supabase, task.user_id, task.goal_id)
+        }
+
         // Update heartbeat
         if (heartbeat) {
           await supabase
@@ -167,6 +280,10 @@ export async function GET(request: Request) {
           .from('tasks')
           .update({ status: 'blocked' })
           .eq('id', task.id)
+
+        if (task.goal_id) {
+          await markGoalReadyForReview(supabase, task.user_id, task.goal_id)
+        }
 
         // Update heartbeat as failed
         if (heartbeat) {
@@ -196,6 +313,7 @@ export async function GET(request: Request) {
     status: 'ok',
     tasksChecked: totalChecked,
     tasksActioned: totalActioned,
+    goalReviewsQueued,
     durationMs: Date.now() - startTime,
   })
 }
