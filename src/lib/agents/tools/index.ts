@@ -61,6 +61,8 @@ import { createExtractBrandKitTool } from './extract-brand-kit'
 import { createReviewContentTool } from './review-content'
 import { createInspectProjectMarketingBackendTool } from './project-backend-marketing'
 import { createSetActiveGoalTool, createUpdateGoalProgressTool } from './manage-goal'
+import { createAbeAiTool } from './abeai'
+import { createPicoSearchTool } from './pico'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -206,6 +208,18 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const extractBrandKit = createExtractBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
   const reviewContent = createReviewContentTool(ctx.supabase, ctx.userId, ctx.brandId)
   const inspectProjectMarketingBackend = createInspectProjectMarketingBackendTool(ctx.supabase, ctx.brandId)
+  const abeAi = createAbeAiTool({
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    agentRegistryId: ctx.agentRegistryId ?? null,
+    taskId: ctx.taskId ?? null,
+  })
+  const picoSearch = createPicoSearchTool({
+    supabase: ctx.supabase,
+    userId: ctx.userId,
+    agentRegistryId: ctx.agentRegistryId ?? null,
+    taskId: ctx.taskId ?? null,
+  })
 
   // Blotato tools (AI content creation, visual generation, content repurposing)
   // Used alongside Mixpost — Director chooses which is best per task
@@ -319,6 +333,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       extract_brand_kit: extractBrandKit,
       review_content: reviewContent,
       inspect_project_marketing_backend: inspectProjectMarketingBackend,
+      use_abe_ai: abeAi,
+      use_pico_search: picoSearch,
       set_active_goal: setActiveGoal,
       update_goal_progress: updateGoalProgress,
       // Blotato (AI content creation + visual generation + repurposing)

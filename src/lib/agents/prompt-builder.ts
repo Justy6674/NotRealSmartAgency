@@ -194,6 +194,25 @@ ${options.proformaSummary}
   // Compliance layer (conditional)
   if (brand.compliance_flags.ahpra || brand.compliance_flags.tga) {
     sections.push(getComplianceRules(brand.compliance_flags))
+
+    if (agentConfig.agent_type === 'overall') {
+      sections.push(`## Abe Healthcare Intelligence
+For this regulated healthcare brand, Abe AI is your grounded Australian healthcare governance and regulatory intelligence engine. Use \`use_abe_ai\` when the user needs current cited regulatory research, AHPRA/TGA interpretation grounded in source material, NP endorsement research, healthcare privacy/data governance, accreditation/readiness work, governance documentation, or a healthcare website/security/SEO review.
+
+- Use the corpus search operations for immediate source retrieval. Do not invent a regulation or cite a source that Abe did not return.
+- Abe Oracle and workflow operations are available through the same tool. They create an audit trail in the linked Abe organisation, so the tool will request NRS approval before running them.
+- After the user approves an Abe action, execute the exact returned approval ID with \`execute_approved_abe_action\`; do not recreate the action or substitute a different request.
+- Never send patient, customer, clinician, or other personally identifying health information to Abe. Keep questions at business, policy, public-website, or de-identified aggregate level.
+- Abe strengthens the evidence base; NRS remains responsible for the final marketing recommendation, review queue, and publishing approval.`)
+
+      sections.push(`## PICO Clinical Evidence
+For clinical literature, research evidence, evidence gaps, safety signals, or a cited evidence brief, use \`use_pico_search\`. PICO Search is the clinical-evidence branch alongside Abe: use PICO for literature and source-grounded clinical evidence; use Abe for Australian regulation, governance, accreditation, and operational workflows.
+
+- PICO presents evidence and citations. It is never a diagnosis, treatment, prescribing, clinical decision-making, or patient-specific advice service.
+- Starting a PICO search creates a metered asynchronous job, so the tool requests NRS approval before it runs. After approval, execute the exact returned approval ID with \`execute_approved_pico_search\`, then poll the returned PICO job ID with \`get_clinical_evidence_result\`.
+- Never send patient, customer, clinician, or other personally identifying health information to PICO. Keep every search at public, business, clinical-literature, or de-identified aggregate level.
+- Preserve the returned citations and uncertainties. Do not turn preliminary evidence into a clinical claim or a marketing promise.`)
+    }
   }
 
   // Help Centre awareness

@@ -105,3 +105,22 @@ test('prompts turn source-grounded build opportunities into approval-only develo
   assert.match(prompt, /never make or imply a code, backend, or product change/i)
   assert.match(prompt, /say what evidence is missing instead of inventing/i)
 })
+
+test('gives the Director the full Abe bridge for regulated healthcare brands only', () => {
+  const regulatedBrand: Brand = {
+    ...brand,
+    compliance_flags: { ahpra: true, tga: false, tga_categories: [] },
+  }
+
+  const regulatedPrompt = buildSystemPrompt(regulatedBrand, director)
+  const nonRegulatedPrompt = buildSystemPrompt(brand, director)
+
+  assert.match(regulatedPrompt, /Abe Healthcare Intelligence/)
+  assert.match(regulatedPrompt, /use_abe_ai/)
+  assert.match(regulatedPrompt, /execute_approved_abe_action/)
+  assert.match(regulatedPrompt, /PICO Clinical Evidence/)
+  assert.match(regulatedPrompt, /use_pico_search/)
+  assert.match(regulatedPrompt, /execute_approved_pico_search/)
+  assert.doesNotMatch(nonRegulatedPrompt, /Abe Healthcare Intelligence/)
+  assert.doesNotMatch(nonRegulatedPrompt, /PICO Clinical Evidence/)
+})

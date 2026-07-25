@@ -38,6 +38,14 @@ test('keeps new, unreviewed tools Director-only by default', () => {
   assert.equal(isDirectorOnlyMcpTool('future_external_tool'), true)
 })
 
+test('keeps the complete Abe gateway inside the Director flow', () => {
+  assert.equal(isDirectorOnlyMcpTool('use_abe_ai'), true)
+})
+
+test('keeps PICO clinical evidence work inside the Director flow', () => {
+  assert.equal(isDirectorOnlyMcpTool('use_pico_search'), true)
+})
+
 test('registers only explicit direct-MCP tool names', () => {
   const entries = getDirectMcpToolEntries({
     query_calendar: {},
