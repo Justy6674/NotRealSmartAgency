@@ -37,8 +37,9 @@ test('The picker contains only the paired account grant names and opaque grant i
   })
 })
 
-test('a project-scoped GitHub connection is an explicit command, never inferred from a marketing message', () => {
+test('a project-scoped GitHub connection understands normal language', () => {
   assert.deepEqual(parseScopedTelegramIntent('/connect'), { kind: 'connect_github', scope: 'current' })
   assert.deepEqual(parseScopedTelegramIntent('/connect all'), { kind: 'connect_github', scope: 'all' })
-  assert.deepEqual(parseScopedTelegramIntent('connect all my projects'), { kind: 'marketing_request', message: 'connect all my projects' })
+  assert.deepEqual(parseScopedTelegramIntent('connect to my git hub'), { kind: 'connect_github', scope: 'current' })
+  assert.deepEqual(parseScopedTelegramIntent('connect all my GitHub projects'), { kind: 'connect_github', scope: 'all' })
 })
