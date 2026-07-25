@@ -10,6 +10,7 @@ import {
   markGoalReadyForReview,
   nextGoalReviewAt,
   releaseGoalReviewClaim,
+  validateGoalReviewFollowUp,
 } from '@/lib/agents/goal-loop'
 
 // Fluid Compute — allow up to 5 minutes for processing multiple agents
@@ -206,6 +207,7 @@ export async function GET(request: Request) {
           brandId: task.brand_id ?? '',
           brand: (brand ?? { slug: 'unknown', name: 'Unknown', niche: '', compliance_flags: { ahpra: false, tga: false, tga_categories: [] } }) as Brand,
           conversationId: null,
+          taskId: task.id,
         }
 
         const result = await runAgentWorker(registry.agent_type, taskPrompt, workerCtx, {
@@ -218,6 +220,42 @@ export async function GET(request: Request) {
         }
         if (isGoalReview && !result.toolNames.includes('update_goal_progress')) {
           throw new Error('Goal review did not record evidence-based progress.')
+        }
+        if (isGoalReview) {
+          if (!task.goal_id) throw new Error('Goal review is missing its parent goal.')
+
+          const [goalStateResult, followUpTasksResult, approvalResult] = await Promise.all([
+            supabase
+              .from('goals')
+              .select('status')
+              .eq('id', task.goal_id)
+              .eq('user_id', task.user_id)
+              .maybeSingle(),
+            supabase
+              .from('tasks')
+              .select('id')
+              .eq('goal_id', task.goal_id)
+              .neq('id', task.id)
+              .in('status', ['assigned', 'in_progress', 'review']),
+            supabase
+              .from('approval_queue')
+              .select('id')
+              .eq('task_id', task.id)
+              .eq('status', 'pending'),
+          ])
+
+          if (goalStateResult.error || !goalStateResult.data) {
+            throw new Error(goalStateResult.error?.message ?? 'Goal review could not confirm the parent outcome.')
+          }
+          if (followUpTasksResult.error) throw new Error(followUpTasksResult.error.message)
+          if (approvalResult.error) throw new Error(approvalResult.error.message)
+
+          const nextActionError = validateGoalReviewFollowUp(
+            goalStateResult.data.status,
+            followUpTasksResult.data?.length ?? 0,
+            approvalResult.data?.length ?? 0,
+          )
+          if (nextActionError) throw new Error(nextActionError)
         }
 
         // Update task as done

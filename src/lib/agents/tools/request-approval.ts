@@ -6,6 +6,8 @@ interface ApprovalContext {
   supabase: SupabaseClient
   userId: string
   agentRegistryId: string | null
+  /** Present only for a heartbeat task, so its owner decision is auditable. */
+  taskId?: string | null
 }
 
 export function createRequestApprovalTool(ctx: ApprovalContext) {
@@ -23,6 +25,7 @@ export function createRequestApprovalTool(ctx: ApprovalContext) {
         .insert({
           user_id: ctx.userId,
           agent_id: ctx.agentRegistryId,
+          task_id: ctx.taskId ?? null,
           action_type: actionType,
           payload: {
             description,

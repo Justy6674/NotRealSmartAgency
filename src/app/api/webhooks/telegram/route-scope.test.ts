@@ -14,7 +14,7 @@ test('Telegram route is paired-grant scoped and contains no legacy brand inferen
   assert.match(route, /\.eq\('channel', 'telegram'\)/)
   assert.match(route, /createTelegramDirectorExecution/)
   assert.match(route, /\.eq\('project_access_grant_id', execution\.projectAccessGrantId\)/)
-  assert.doesNotMatch(route, /resolveTelegramBrand|telegram-selection|\.eq\('user_id', account\.actor_user_id\).*from\('brands'\)/s)
+  assert.doesNotMatch(route, /resolveTelegramBrand|telegram-selection|\.eq\('user_id', account\.actor_user_id\)[\s\S]*from\('brands'\)/)
 })
 
 test('Telegram delivery runs through the clean marketing-copy renderer', () => {

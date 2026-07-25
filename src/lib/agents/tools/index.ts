@@ -68,6 +68,8 @@ export interface ToolContext {
   brandId: string
   conversationId: string | null
   agentRegistryId?: string | null
+  /** Present for autonomous heartbeat work; approval requests retain this link. */
+  taskId?: string | null
 }
 
 export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
@@ -95,6 +97,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     supabase: ctx.supabase,
     userId: ctx.userId,
     agentRegistryId: ctx.agentRegistryId ?? null,
+    taskId: ctx.taskId ?? null,
   })
 
   const handoff = createHandoffTool({

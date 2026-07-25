@@ -162,6 +162,29 @@ export function validateGoalProgressUpdate(input: GoalProgressUpdate): string | 
   return null
 }
 
+/**
+ * A review may either schedule one executable task or surface one owner
+ * decision. The heartbeat uses this after the worker has written its records,
+ * so a model cannot claim that it advanced an active outcome without leaving
+ * an auditable next action behind.
+ */
+export function validateGoalReviewFollowUp(
+  goalStatus: string | null,
+  followUpTaskCount: number,
+  reviewApprovalCount: number,
+): string | null {
+  if (goalStatus !== 'active') return null
+
+  const nextActionCount = followUpTaskCount + reviewApprovalCount
+  if (nextActionCount === 0) {
+    return 'An active goal review must create exactly one goal-linked task or one review-linked approval request.'
+  }
+  if (nextActionCount > 1) {
+    return 'An active goal review created more than one next action; keep exactly one path active.'
+  }
+  return null
+}
+
 export function nextGoalReviewAt(hours = DEFAULT_REVIEW_HOURS): string {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
 }

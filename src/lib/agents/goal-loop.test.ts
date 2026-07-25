@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   buildGoalDirective,
   buildGoalReviewBrief,
+  validateGoalReviewFollowUp,
   validateGoalProgressUpdate,
 } from './goal-loop.ts'
 
@@ -73,4 +74,14 @@ test('goal completion is rejected without evidence and full progress', () => {
     evidence: ['draft queue'],
     status: 'active',
   }), null)
+})
+
+test('an active goal review must leave exactly one safe next action', () => {
+  assert.equal(validateGoalReviewFollowUp('active', 0, 0),
+    'An active goal review must create exactly one goal-linked task or one review-linked approval request.')
+  assert.equal(validateGoalReviewFollowUp('active', 1, 0), null)
+  assert.equal(validateGoalReviewFollowUp('active', 0, 1), null)
+  assert.equal(validateGoalReviewFollowUp('active', 1, 1),
+    'An active goal review created more than one next action; keep exactly one path active.')
+  assert.equal(validateGoalReviewFollowUp('completed', 0, 0), null)
 })

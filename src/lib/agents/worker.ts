@@ -48,6 +48,8 @@ export interface WorkerContext {
   brandId: string
   brand: Brand
   conversationId: string | null
+  /** The heartbeat task currently being executed, if any. */
+  taskId?: string | null
 }
 
 export interface WorkerResult {
@@ -204,6 +206,7 @@ Rules:
       brandId: ctx.brandId,
       conversationId: ctx.conversationId,
       agentRegistryId: registry?.id ?? null,
+      taskId: ctx.taskId ?? null,
     })
 
     // 8. Add web search — auto-detect if agent type needs it, or honour explicit option
