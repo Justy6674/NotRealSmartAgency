@@ -7,6 +7,31 @@ export interface TelegramInlineKeyboard {
   >>
 }
 
+export interface TelegramWebAppMenuButton {
+  type: 'web_app'
+  text: string
+  web_app: { url: string }
+}
+
+export async function setTelegramChatMenuButton({
+  botToken,
+  url,
+  text = 'Open NRS',
+  fetchImpl = fetch,
+}: {
+  botToken: string
+  url: string
+  text?: string
+  fetchImpl?: typeof fetch
+}): Promise<void> {
+  const response = await fetchImpl(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ menu_button: { type: 'web_app', text, web_app: { url } } satisfies TelegramWebAppMenuButton }),
+  })
+  if (!response.ok) throw new Error(`Telegram setChatMenuButton failed: ${response.status}`)
+}
+
 /**
  * Telegram project changes must use opaque callback data.  Deliberately do
  * not support reply keyboards: their visible text can be replayed as normal

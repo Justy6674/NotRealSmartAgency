@@ -3,6 +3,8 @@ import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google'
 import { Providers } from '@/providers/Providers'
 import { HelpSearchOverlay } from '@/components/help/HelpSearchOverlay'
 import { constructMetadata } from '@/lib/seo'
+import { JsonLd } from '@/components/seo/JsonLd'
+import { SITE_CONFIG } from '@/lib/constants'
 import './globals.css'
 
 const ibmSans = IBM_Plex_Sans({
@@ -34,6 +36,14 @@ export default function RootLayout({
         className={`${ibmSans.variable} ${ibmMono.variable} antialiased`}
         style={{ fontFamily: 'var(--font-sans), system-ui, sans-serif' }}
       >
+        <JsonLd data={{
+          '@context': 'https://schema.org',
+          '@graph': [
+            { '@type': 'Organization', '@id': `${SITE_CONFIG.url}/#organization`, name: SITE_CONFIG.name, url: SITE_CONFIG.url, description: SITE_CONFIG.description, legalName: SITE_CONFIG.company, identifier: SITE_CONFIG.abn },
+            { '@type': 'SoftwareApplication', '@id': `${SITE_CONFIG.url}/#application`, name: SITE_CONFIG.name, applicationCategory: 'BusinessApplication', operatingSystem: 'Web', url: SITE_CONFIG.url, description: SITE_CONFIG.description, creator: { '@id': `${SITE_CONFIG.url}/#organization` } },
+            { '@type': 'WebSite', '@id': `${SITE_CONFIG.url}/#website`, name: SITE_CONFIG.name, url: SITE_CONFIG.url, publisher: { '@id': `${SITE_CONFIG.url}/#organization` } },
+          ],
+        }} />
         <Providers>
           {children}
           <HelpSearchOverlay />

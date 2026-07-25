@@ -435,10 +435,12 @@ Generate the ad copy now. Remember: character limits are STRICT — count carefu
         variant_count: result.variants.length,
         platform,
         objective,
-        ...(complianceResult && !complianceResult.isValid
+        ...(complianceResult
           ? {
-              compliance_warnings: complianceResult.warnings,
-              compliance_flags: complianceResult.flags,
+              ...(complianceResult.warnings.length ? { compliance_warnings: complianceResult.warnings } : {}),
+              ...(complianceResult.flags.length ? { compliance_flags: complianceResult.flags } : {}),
+              ...(complianceResult.regulatoryCitations.length ? { regulatory_citations: complianceResult.regulatoryCitations } : {}),
+              ...(complianceResult.regulatoryCorpusVersion ? { regulatory_corpus_version: complianceResult.regulatoryCorpusVersion } : {}),
             }
           : {}),
       }

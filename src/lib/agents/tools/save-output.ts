@@ -78,8 +78,13 @@ export function createSaveOutputTool(
         saved: true,
         id: data.id,
         title,
-        ...(complianceResult && !complianceResult.isValid
-          ? { compliance_warnings: complianceResult.warnings, compliance_flags: complianceResult.flags }
+        ...(complianceResult
+          ? {
+              ...(complianceResult.warnings.length ? { compliance_warnings: complianceResult.warnings } : {}),
+              ...(complianceResult.flags.length ? { compliance_flags: complianceResult.flags } : {}),
+              ...(complianceResult.regulatoryCitations.length ? { regulatory_citations: complianceResult.regulatoryCitations } : {}),
+              ...(complianceResult.regulatoryCorpusVersion ? { regulatory_corpus_version: complianceResult.regulatoryCorpusVersion } : {}),
+            }
           : {}),
       }
     },
