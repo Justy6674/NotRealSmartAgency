@@ -17,6 +17,7 @@ import { runDirectorJob } from '@/lib/mcp/director-job'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTelegramText } from '@/lib/telegram/telegram-api'
+import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-copy'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 
 export const runtime = 'nodejs'
@@ -138,7 +139,7 @@ async function deliverDiscoveryBrief({
       .maybeSingle()
     const response = (completed?.result as { response?: unknown } | null)?.response
     if (completed?.status === 'done' && typeof response === 'string' && inspectMarketingInput(response).allowed) {
-      await sendSafeTelegramUpdate(chatId, response)
+      await sendSafeTelegramUpdate(chatId, formatTelegramMarketingCopy(response))
     }
   } catch {
     // The source discovery is complete even if the optional AI brief fails.

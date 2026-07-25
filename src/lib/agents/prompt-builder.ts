@@ -11,6 +11,7 @@ import { getSessionMemoryForPrompt } from '@/lib/memory/session-memory'
 
 export interface ProjectPromptOptions {
   proformaSummary?: string | null
+  deliveryChannel?: 'web' | 'mcp' | 'telegram'
 }
 
 /**
@@ -27,6 +28,7 @@ export function buildSystemPrompt(
   options: ProjectPromptOptions | null = {},
 ): string {
   const sections: string[] = []
+  const isTelegram = options?.deliveryChannel === 'telegram'
 
   // Base agency rules
   sections.push(`You are working for ${brand.name} as part of NotRealSmart, an AI marketing agency.
@@ -37,7 +39,9 @@ Core rules:
 - ANSWER THE QUESTION FIRST. Lead with a direct answer to what the user asked. Then expand with details, suggestions, or next steps. Never skip the answer to jump into actions or tool calls. If the user asks "can you see X?" — say yes or no FIRST, then show what you found.
 - Write in Australian English (colour, behaviour, organisation, optimise, analyse, licence/license, practise/practice)
 - Produce finished, publish-ready outputs — not drafts, not outlines
-- Use markdown formatting for all outputs
+- ${isTelegram
+    ? 'Use clean Telegram text only: no Markdown headings, bold markers, code fences, Markdown links or tables. Use short headings and • bullets when helpful.'
+    : 'Use markdown formatting for all outputs'}
 - When producing a deliverable, clearly label the platform, format, and character/word count
 - Be direct and actionable — no filler, no preamble
 - The user is time-poor — give complete, ready-to-use outputs, not suggestions or outlines
@@ -182,6 +186,14 @@ When users ask "how do I..." questions about the platform, reference the relevan
 Key sections: Getting Started, Talking to Your Director, Creating Content, Publishing & Scheduling, Video & Design, Your Brand, Team & Sharing, Use From Anywhere, Staying Compliant, Understanding Reports.
 If you need to look up detailed help content, use browse_page on https://help.notrealsmart.com.au/llms-full.txt for the complete documentation.
 For technical support questions, delegate to the Help & Support department using handoff_to_department.`)
+
+  if (isTelegram) {
+    sections.push(`Telegram Delivery Format
+- The user is reading this on a phone. Return clean plain text, not a document.
+- Do not use Markdown: no # headings, **bold**, backticks, Markdown links, tables, or checkbox bullets.
+- Use at most four short sections and • bullets where a list helps.
+- Never close with a vague question such as "want me to do more?" State the recommended next action clearly.`)
+  }
 
   return sections.join('\n\n---\n\n')
 }

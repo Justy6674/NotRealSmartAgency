@@ -28,6 +28,12 @@ import { memoryStoreV2 } from '@/lib/memory/store'
 import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { getDirectorCompletion } from './director-completion'
+import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
+import {
+  buildWebsiteScanGroundingDirective,
+  isWebsiteScanRequest,
+  resolveWebsiteScanUrl,
+} from '@/lib/agents/website-scan-directive'
 import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import {
@@ -133,6 +139,25 @@ export async function runDirectorJob(
       }
     }
 
+    // A short request such as "scan the site" is a deterministic action, not
+    // a vague creative brief. Scan first, then constrain the response to the
+    // actual page evidence so stale memory cannot masquerade as a live audit.
+    let websiteScanDirective: string | null = null
+    if (isWebsiteScanRequest(message)) {
+      const websiteUrl = resolveWebsiteScanUrl(message, (brand as Brand).website_url)
+      if (!websiteUrl) {
+        await markJobError(supabase, jobId, 'This project does not have a website configured for scanning.', startTime)
+        return
+      }
+
+      const websiteScan = await scanWebsiteCore(supabase, userId, brand_id, websiteUrl, 'messaging')
+      if ('error' in websiteScan) {
+        await markJobError(supabase, jobId, websiteScan.error, startTime)
+        return
+      }
+      websiteScanDirective = buildWebsiteScanGroundingDirective(websiteScan)
+    }
+
     // Ordinary Director work loads only the active project's proforma. Owner
     // work context and sibling projects are never prompt context by default.
     const proformaSections = await ensureProforma(supabase, brand as Brand)
@@ -170,14 +195,14 @@ export async function runDirectorJob(
       brand as Brand,
       agentConfig as AgentConfig,
       message,
-      { proformaSummary },
+      { proformaSummary, deliveryChannel: execution.channel },
       userId,
     )
 
     // ── Injection 1: routing hints ──
     const routing = classifyIntent(message)
     const multiRouting = classifyIntentMulti(message)
-    const routingContext = buildRoutingContext(routing, multiRouting)
+    const routingContext = websiteScanDirective ? null : buildRoutingContext(routing, multiRouting)
     if (routingContext) {
       systemPrompt += '\n\n---\n\n' + routingContext
     }
@@ -396,6 +421,10 @@ Iteration loop:
 5. On approval → call publish_to_social (or draft_post via handoff) with the finalised caption + hashtags + media_id
 
 NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media and call publish directly. NEVER finalise without explicit user approval. The AI client (Claude/Grok/Gemini via MCP) is acting on behalf of a human user — wait for their sign-off.`
+
+    if (websiteScanDirective) {
+      systemPrompt += `\n\n---\n\n${websiteScanDirective}`
+    }
 
     // Get tools — full Director set including delegation + meetings
     const tools = getToolsForAgent('overall', {

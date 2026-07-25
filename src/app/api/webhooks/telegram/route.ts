@@ -11,6 +11,8 @@ import { hashGitHubConnectState } from '@/lib/github/project-connection'
 import { TELEGRAM_CHANNEL_STATUS } from '@/lib/telegram/telegram-channel-status'
 import { hashTelegramPairCode } from '@/lib/telegram/telegram-pairing'
 import { sendTelegramText } from '@/lib/telegram/telegram-api'
+import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-copy'
+import { getTelegramJobAcknowledgement } from '@/lib/telegram/telegram-job-status'
 import {
   buildScopedProjectKeyboard,
   parseScopedTelegramIntent,
@@ -384,7 +386,11 @@ async function queueTelegramDirectorWork({
     outcome: 'allowed',
     detail: { job_created: true },
   })
-  await sendTelegramText({ botToken, chatId, text: `Working on ${grant.projectName}. I’ll send the marketing draft here when it is ready.` })
+  await sendTelegramText({
+    botToken,
+    chatId,
+    text: getTelegramJobAcknowledgement(grant.projectName, message),
+  })
 
   after(async () => {
     try {
@@ -419,15 +425,17 @@ async function queueTelegramDirectorWork({
         return
       }
 
+      const telegramResponse = formatTelegramMarketingCopy(response)
+
       await logExecution(admin, {
         actorUserId: execution.actorUserId,
         grantId: execution.projectAccessGrantId,
         projectId: execution.projectId,
         action: 'director_response',
         outcome: 'allowed',
-        detail: { delivered: true, response_length: response.length },
+        detail: { delivered: true, response_length: telegramResponse.length },
       })
-      await sendTelegramText({ botToken, chatId, text: response })
+      await sendTelegramText({ botToken, chatId, text: telegramResponse })
     } catch {
       await logExecution(admin, {
         actorUserId: execution.actorUserId,

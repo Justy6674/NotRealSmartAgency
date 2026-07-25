@@ -16,3 +16,13 @@ test('Telegram route is paired-grant scoped and contains no legacy brand inferen
   assert.match(route, /\.eq\('project_access_grant_id', execution\.projectAccessGrantId\)/)
   assert.doesNotMatch(route, /resolveTelegramBrand|telegram-selection|\.eq\('user_id', account\.actor_user_id\).*from\('brands'\)/s)
 })
+
+test('Telegram delivery runs through the clean marketing-copy renderer', () => {
+  const route = readFileSync(
+    resolve(process.cwd(), 'src/app/api/webhooks/telegram/route.ts'),
+    'utf8',
+  )
+
+  assert.match(route, /formatTelegramMarketingCopy/)
+  assert.match(route, /text: telegramResponse/)
+})

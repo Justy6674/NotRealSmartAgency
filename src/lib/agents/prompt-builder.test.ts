@@ -86,3 +86,11 @@ test('Director memory search stays inside the active project', () => {
     ['nrs-downscale-overall', 'nrs-downscale'],
   )
 })
+
+test('Telegram prompts ask for clean text rather than raw Markdown', () => {
+  const prompt = buildSystemPrompt(brand, director, { deliveryChannel: 'telegram' })
+
+  assert.match(prompt, /Telegram Delivery Format/)
+  assert.match(prompt, /Do not use Markdown/)
+  assert.doesNotMatch(prompt, /Use markdown formatting for all outputs/)
+})
