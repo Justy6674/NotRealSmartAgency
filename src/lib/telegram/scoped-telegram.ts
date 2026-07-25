@@ -2,6 +2,7 @@ export interface TelegramInlineKeyboard {
   inline_keyboard: Array<Array<
     | { text: string; callback_data: string }
     | { text: string; url: string }
+    | { text: string; web_app: { url: string } }
   >>
 }
 
@@ -70,4 +71,8 @@ export function buildScopedProjectKeyboard(
       callback_data: `nrs_project:${grant.grantId}`,
     }]),
   }
+}
+
+export function addMiniAppButton(keyboard: TelegramInlineKeyboard, url = 'https://www.notrealsmart.com.au/telegram'): TelegramInlineKeyboard {
+  return { inline_keyboard: [...keyboard.inline_keyboard, [{ text: 'Open NRS Mini App', web_app: { url } }]] }
 }

@@ -4,6 +4,7 @@ export interface TelegramInlineKeyboard {
   inline_keyboard: Array<Array<
     | { text: string; callback_data: string }
     | { text: string; url: string }
+    | { text: string; web_app: { url: string } }
   >>
 }
 

@@ -14,6 +14,7 @@ import { sendTelegramText } from '@/lib/telegram/telegram-api'
 import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-copy'
 import { getTelegramJobAcknowledgement } from '@/lib/telegram/telegram-job-status'
 import {
+  addMiniAppButton,
   buildScopedProjectKeyboard,
   parseScopedTelegramIntent,
 } from '@/lib/telegram/scoped-telegram'
@@ -138,7 +139,7 @@ async function sendProjectPicker({
     botToken,
     chatId,
     text: 'Choose the project for this marketing request. NRS keeps every project separate unless you explicitly create an approved link.',
-    replyMarkup: buildScopedProjectKeyboard(grants),
+    replyMarkup: addMiniAppButton(buildScopedProjectKeyboard(grants)),
   })
 }
 
