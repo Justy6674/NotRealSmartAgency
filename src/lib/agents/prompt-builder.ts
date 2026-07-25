@@ -332,6 +332,10 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`\n**Technical/GitHub Context:**\n${brand.github_context}`)
   }
 
+  if (brand.slug === 'scent-sell') {
+    lines.push(`\n**Approved backend marketing evidence:** For a Scent Sell backend or product optimisation request, use inspect_project_marketing_backend before drawing conclusions. It returns aggregate marketing evidence only. Never request or imply access to customer records, messages, payments, payouts, credentials, or product writes. Turn its signals into a clearly labelled proposal with evidence, expected marketing impact, risk, rollback, and the approval needed; never present it as an applied backend change.`)
+  }
+
   // Brand DNA Constraints — deterministic rules, not adjectives (Layer 0)
   const dna = brand.brand_dna_constraints
   if (dna && Object.keys(dna).length > 0) {

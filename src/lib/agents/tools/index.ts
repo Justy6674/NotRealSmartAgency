@@ -59,6 +59,7 @@ import { createResearchIndustryTool } from './research-industry'
 import { createBlotatoListAccountsTool, createBlotatoPublishTool, createBlotatoExtractContentTool, createBlotatoSourceStatusTool, createBlotatoListTemplatesTool, createBlotatoCreateVisualTool, createBlotatoVisualStatusTool, createBlotatoPostStatusTool } from './blotato'
 import { createExtractBrandKitTool } from './extract-brand-kit'
 import { createReviewContentTool } from './review-content'
+import { createInspectProjectMarketingBackendTool } from './project-backend-marketing'
 
 export interface ToolContext {
   supabase: SupabaseClient
@@ -187,6 +188,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const researchIndustry = createResearchIndustryTool(ctx.supabase, ctx.userId, ctx.brandId)
   const extractBrandKit = createExtractBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
   const reviewContent = createReviewContentTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const inspectProjectMarketingBackend = createInspectProjectMarketingBackendTool(ctx.supabase, ctx.brandId)
 
   // Blotato tools (AI content creation, visual generation, content repurposing)
   // Used alongside Mixpost — Director chooses which is best per task
@@ -299,6 +301,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       research_industry: researchIndustry,
       extract_brand_kit: extractBrandKit,
       review_content: reviewContent,
+      inspect_project_marketing_backend: inspectProjectMarketingBackend,
       // Blotato (AI content creation + visual generation + repurposing)
       blotato_list_accounts: blotatoListAccountsTool,
       blotato_publish: blotatoPublish,
@@ -320,8 +323,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },
     brand: { save_output: saveOutput, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_kits: listBrandKits, get_design: getDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, comment_on_design: commentOnDesign, list_comments: listComments, list_replies: listReplies, reply_to_comment: replyToComment, create_folder: createFolder, move_item_to_folder: moveItemToFolder, resolve_shortlink: resolveShortlink, analyse_voice: analyseVoice, generate_photo_avatar: generatePhotoAvatar, list_heygen_assets: listHeyGenAssets, get_brand_glossary: getBrandGlossary, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, ...managementTools },
-    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, query_social_analytics: querySocialAnalytics, analyse_content_gaps: analyseContentGaps, ...managementTools },
-    automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, register_webhook: registerWebhook, ...managementTools },
+    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, query_social_analytics: querySocialAnalytics, analyse_content_gaps: analyseContentGaps, inspect_project_marketing_backend: inspectProjectMarketingBackend, ...managementTools },
+    automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, register_webhook: registerWebhook, inspect_project_marketing_backend: inspectProjectMarketingBackend, ...managementTools },
     video: { save_output: saveOutput, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, propose_post_from_media: proposePost, create_video: createVideo, generate_video_agent: videoAgent, create_multi_scene_video: multiSceneVideo, translate_video: translateVideoTool, translation_status: translationStatus, list_heygen_templates: listHeyGenTemplates, get_heygen_template: getHeyGenTemplate, generate_from_template: generateFromTemplateTool, upload_asset_from_url: uploadAssetFromUrl, browse_mixpost_media: browseMixpostMedia, generate_photo_avatar: generatePhotoAvatar, text_to_speech: textToSpeechTool, list_talking_photos: listTalkingPhotos, upload_talking_photo: uploadTalkingPhoto, list_heygen_assets: listHeyGenAssets, list_heygen_videos: listHeyGenVideos, get_video_share_url: getVideoShareUrl, get_brand_glossary: getBrandGlossary, list_voice_locales: listVoiceLocales, publish_to_social: publishToSocial, upload_media: uploadMedia, ...managementTools },
     help: { save_output: saveOutput, browse_page: browsePage, ...managementTools },
     martech: { save_output: saveOutput, scan_github: scanGithub },
