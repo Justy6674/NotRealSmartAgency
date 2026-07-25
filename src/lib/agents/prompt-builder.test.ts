@@ -94,3 +94,14 @@ test('Telegram prompts ask for clean text rather than raw Markdown', () => {
   assert.match(prompt, /Do not use Markdown/)
   assert.doesNotMatch(prompt, /Use markdown formatting for all outputs/)
 })
+
+test('prompts turn source-grounded build opportunities into approval-only developer handoffs', () => {
+  const prompt = buildSystemPrompt(brand, director)
+
+  assert.match(prompt, /Proactive Build Opportunities/)
+  assert.match(prompt, /source-grounded evidence/)
+  assert.match(prompt, /expected marketing impact/i)
+  assert.match(prompt, /risk and rollback/i)
+  assert.match(prompt, /never make or imply a code, backend, or product change/i)
+  assert.match(prompt, /say what evidence is missing instead of inventing/i)
+})
