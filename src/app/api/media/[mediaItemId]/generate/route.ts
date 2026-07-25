@@ -5,6 +5,7 @@ import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { Brand } from '@/types/database'
 
 const VIBE_GUIDANCE: Record<string, string> = {
@@ -155,7 +156,8 @@ export async function POST(
       : ''
 
     const { object: content } = await generateObject({
-      model: gateway('anthropic/claude-sonnet-4'),
+      model: gateway(getGatewayModel('agency')),
+      providerOptions: getGatewayProviderOptions('agency'),
       system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions.
 
 ${brandContext}

@@ -2,6 +2,7 @@ import { tool, generateObject } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 const brandKitSchema = z.object({
   colours: z.object({
@@ -159,7 +160,8 @@ ${bodyText}`
 
       try {
         const { object: kit } = await generateObject({
-          model: gateway('anthropic/claude-haiku-4-5-20251001'),
+          model: gateway(getGatewayModel('fast')),
+          providerOptions: getGatewayProviderOptions('fast'),
           system: systemPrompt,
           prompt: userPrompt,
           schema: brandKitSchema,

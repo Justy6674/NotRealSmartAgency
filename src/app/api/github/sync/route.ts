@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import {
   PRODUCT_CONTEXT_PATHS,
   appendRepositoryContext,
@@ -143,7 +144,8 @@ export async function POST(request: Request) {
 
       if (needsProducts || needsDescription) {
         const enrichResult = await generateObject({
-          model: gateway('anthropic/claude-haiku-4-5-20251001'),
+          model: gateway(getGatewayModel('fast')),
+          providerOptions: getGatewayProviderOptions('fast'),
           schema: z.object({
             description: z.string().describe('One-sentence brand description based on the repo'),
             niche: z.string().describe('Business niche, e.g. "telehealth", "saas", "ecommerce"'),

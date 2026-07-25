@@ -1,6 +1,7 @@
 import { tool, generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Brand } from '@/types/database'
 import { runComplianceFilter } from '../compliance-filter'
@@ -352,7 +353,8 @@ Generate the ad copy now. Remember: character limits are STRICT — count carefu
       let result: z.infer<typeof WriteAdsOutputSchema>
       try {
         const { object } = await generateObject({
-          model: gateway('anthropic/claude-sonnet-4'),
+          model: gateway(getGatewayModel('agency')),
+          providerOptions: getGatewayProviderOptions('agency'),
           system: systemPrompt,
           prompt: userPrompt,
           schema: WriteAdsOutputSchema,

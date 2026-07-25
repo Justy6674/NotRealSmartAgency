@@ -28,6 +28,7 @@ import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
 import { extractFacts } from '@/lib/memory/fact-extractor'
 import { memoryStoreV2 } from '@/lib/memory/store'
 import { getActiveGoal } from './goal-loop'
+import { resolveAgentModelRoute } from '@/lib/ai/model-routing'
 
 /** Maximum workers running simultaneously to prevent AI Gateway rate limit exhaustion.
  *  AI Gateway enforces per-user concurrency limits; 4 is conservative for most providers. */
@@ -131,7 +132,14 @@ export async function runAgentWorker(
 
     // 2. Get THIS agent's registry entry (its own model + budget)
     const registry = await getOrCreateAgentRegistry(ctx.supabase, ctx.userId, dept as AgentType)
-    const model = registry?.model || 'anthropic/claude-sonnet-4'
+    const isHealthBrand = ctx.brand.compliance_flags?.ahpra || ctx.brand.compliance_flags?.tga
+    const modelRoute = resolveAgentModelRoute({
+      agentType: dept,
+      input: task,
+      isHealthBrand,
+      registeredModel: registry?.model,
+    })
+    const model = modelRoute.model
 
     // 3. Check THIS agent's budget independently
     if (registry) {
@@ -223,10 +231,9 @@ Rules:
       : departmentTools
 
     // 9. Gateway options — THIS agent's tags
-    const isHealthBrand = ctx.brand.compliance_flags?.ahpra || ctx.brand.compliance_flags?.tga
     const gatewayOptions = {
       gateway: {
-        models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'] as string[],
+        models: [...modelRoute.fallbacks],
         user: ctx.userId,
         tags: [dept, ctx.brand.slug, options.meetingDepartments ? 'meeting' : 'delegation'],
         ...(isHealthBrand && { zeroDataRetention: true }),

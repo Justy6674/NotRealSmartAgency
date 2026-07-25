@@ -21,6 +21,7 @@ import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
+import { resolveAgentModelRoute } from '@/lib/ai/model-routing'
 
 const VALID_AGENT_TYPES: AgentType[] = [
   'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
@@ -375,17 +376,23 @@ That's the difference between a marketing director and a tech support agent. Def
 
   // Gateway options — fallbacks, tracking, compliance
   const isHealthBrand = typedBrand.compliance_flags?.ahpra || typedBrand.compliance_flags?.tga
+  const modelRoute = resolveAgentModelRoute({
+    agentType,
+    input: lastMessageText,
+    isHealthBrand,
+    registeredModel: registry?.model,
+  })
 
   // Stream with all features
   const result = streamText({
-    model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
+    model: gateway(modelRoute.model),
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
     tools,
     stopWhen: stepCountIs(8),
     providerOptions: {
       gateway: {
-        models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],
+        models: [...modelRoute.fallbacks],
         user: user.id,
         tags: [agentType, typedBrand.slug, 'chat'],
         ...(isHealthBrand && { zeroDataRetention: true }),
@@ -407,7 +414,7 @@ That's the difference between a marketing director and a tech support agent. Def
         query_type: `agency_${agentType}`,
         tokens_input: inputTokens,
         tokens_output: outputTokens,
-        model: registry?.model || 'anthropic/claude-sonnet-4',
+        model: modelRoute.model,
         cost_usd: costCents / 100,
         metadata: { memoryCount, agentRegistryId: registry?.id },
       })

@@ -3,6 +3,7 @@ import { generateObject } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { Brand, PostPlatform } from '@/types/database'
 import { getComplianceRules } from '../compliance-rules'
 import { loadState, selectBestArms, hasEnoughData, type BanditArm } from '@/lib/content-optimisation/bandit'
@@ -334,7 +335,8 @@ export function createFillCalendarTool(
 
         try {
           const { object } = await generateObject({
-            model: gateway('anthropic/claude-sonnet-4'),
+            model: gateway(getGatewayModel('agency')),
+            providerOptions: getGatewayProviderOptions('agency'),
             system: `You are a social media strategist for ${brand.name} (${brand.niche}).
 
 ${brandContext}

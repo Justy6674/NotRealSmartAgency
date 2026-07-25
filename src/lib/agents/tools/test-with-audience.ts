@@ -3,6 +3,7 @@ import { generateObject } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { Brand, PostPlatform } from '@/types/database'
 
 // ─── Synthetic Personas Tool ─────────────────────────────────────────────────
@@ -58,7 +59,8 @@ export function createTestWithAudienceTool(
 
         // Generate personas + reactions via Claude Haiku
         const { object } = await generateObject({
-          model: gateway('anthropic/claude-haiku-4-5-20251001'),
+          model: gateway(getGatewayModel('fast')),
+          providerOptions: getGatewayProviderOptions('fast'),
           schema: personaSchema,
           prompt: `You are a social media audience research expert. Based on the following brand and audience data, create exactly ${persona_count} realistic synthetic personas and simulate their reaction to a draft post.
 

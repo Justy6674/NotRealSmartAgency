@@ -9,6 +9,7 @@ import { z } from 'zod/v3'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import { scanWebsiteCore } from './scan-website'
 
 // ---------------------------------------------------------------------------
@@ -259,7 +260,8 @@ export function createDeepCompetitorScanTool(
 
       // 3. Use generateObject to produce structured analysis
       const { object: analysis } = await generateObject({
-        model: gateway('anthropic/claude-sonnet-4'),
+        model: gateway(getGatewayModel('agency')),
+        providerOptions: getGatewayProviderOptions('agency'),
         schema: analysisSchema,
         prompt: `You are an expert competitive intelligence analyst. Analyse the following competitor website data and compare it to our brand.
 

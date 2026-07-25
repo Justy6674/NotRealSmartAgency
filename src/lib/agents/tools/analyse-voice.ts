@@ -2,6 +2,7 @@ import { tool, generateObject } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 const voiceAnalysisSchema = z.object({
   overall_score: z.number().min(0).max(100).describe('Overall brand voice consistency score out of 100'),
@@ -113,7 +114,8 @@ ${content}`
 
       try {
         const { object } = await generateObject({
-          model: gateway('anthropic/claude-haiku-4-5-20251001'),
+          model: gateway(getGatewayModel('fast')),
+          providerOptions: getGatewayProviderOptions('fast'),
           system: systemPrompt,
           prompt: userPrompt,
           schema: voiceAnalysisSchema,

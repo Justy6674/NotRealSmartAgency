@@ -1,6 +1,7 @@
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { createClient } from '@supabase/supabase-js'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import { embedText } from './embeddings'
 
 // ---------------------------------------------------------------------------
@@ -99,7 +100,8 @@ export async function extractSessionMemory(params: {
 
     // 2. Call Haiku to update the session memory
     const { text: updatedRecord } = await generateText({
-      model: gateway('anthropic/claude-haiku-4-5-20251001'),
+      model: gateway(getGatewayModel('fast')),
+      providerOptions: getGatewayProviderOptions('fast'),
       maxOutputTokens: 2000,
       messages: [
         {

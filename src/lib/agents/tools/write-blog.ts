@@ -2,6 +2,7 @@ import { tool } from 'ai'
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ComplianceFlags } from '@/types/database'
 import { runComplianceFilter } from '../compliance-filter'
@@ -189,7 +190,8 @@ slug: "url-friendly-slug"
       try {
         // 2. Generate the blog
         const { text, usage } = await generateText({
-          model: gateway('anthropic/claude-sonnet-4'),
+          model: gateway(getGatewayModel('agency')),
+          providerOptions: getGatewayProviderOptions('agency'),
           system: systemPrompt,
           prompt: `Write a ${word_count}-word ${intent} blog post about: ${topic}`,
         })

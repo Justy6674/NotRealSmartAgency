@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
@@ -20,7 +21,8 @@ export async function POST(request: Request) {
   try {
     // Use LLM to extract action items
     const result = await generateText({
-      model: gateway('anthropic/claude-sonnet-4'),
+      model: gateway(getGatewayModel('fast')),
+      providerOptions: getGatewayProviderOptions('fast'),
       system: `You extract action items from marketing reports. Return ONLY a JSON array of objects with "title" (short action item, max 80 chars) and "priority" (one of: critical, high, medium, low). No other text. Max 15 items. Focus on actionable, specific tasks a developer or marketer can execute.`,
       prompt: `Extract action items from this report:\n\n${content.slice(0, 4000)}`,
     })

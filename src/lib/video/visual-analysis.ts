@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 export interface VisualAnalysis {
   scenes: string[]
@@ -37,7 +38,8 @@ export async function analyseVideoFrames(
       : ''
 
     const { text } = await generateText({
-      model: gateway('anthropic/claude-sonnet-4-20250514'),
+      model: gateway(getGatewayModel('agency')),
+      providerOptions: getGatewayProviderOptions('agency'),
       messages: [
         {
           role: 'user',

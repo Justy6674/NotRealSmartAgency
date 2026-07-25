@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AgentType, AgentRegistryEntry } from '@/types/database'
+import { getGatewayModel } from '@/lib/ai/model-routing'
 
 /**
  * Get or create an agent registry entry for a user + agent type.
@@ -33,7 +34,7 @@ export async function getOrCreateAgentRegistry(
       agent_type: agentType,
       role: agentType === 'overall' ? 'director' : 'head',
       department: agentType,
-      model: 'anthropic/claude-sonnet-4',
+      model: getGatewayModel('agency'),
       status: 'idle',
       is_active: true,
       budget_monthly_cents: agentType === 'overall' ? 10000 : 5000,

@@ -7,6 +7,7 @@
 
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -108,7 +109,8 @@ export async function generateAITagsForImage(
     : ''
 
   const { text } = await generateText({
-    model: gateway('anthropic/claude-haiku-4-5-20251001'),
+    model: gateway(getGatewayModel('fast')),
+    providerOptions: getGatewayProviderOptions('fast'),
     messages: [
       {
         role: 'user',
@@ -161,7 +163,8 @@ export async function generateAITagsFromTranscript(
   const truncatedTranscript = transcript.slice(0, 2000)
 
   const { text } = await generateText({
-    model: gateway('anthropic/claude-haiku-4-5-20251001'),
+    model: gateway(getGatewayModel('fast')),
+    providerOptions: getGatewayProviderOptions('fast'),
     messages: [
       {
         role: 'user',

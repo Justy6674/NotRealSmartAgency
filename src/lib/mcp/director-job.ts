@@ -40,6 +40,7 @@ import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { buildTelegramExecutionContract } from '@/lib/telegram/telegram-execution-contract'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
+import { resolveAgentModelRoute } from '@/lib/ai/model-routing'
 import {
   buildTelegramResponseRepairPrompt,
   needsTelegramResponseRepair,
@@ -469,18 +470,24 @@ Iteration loop:
 
     const typedBrand = brand as Brand
     const isHealthBrand = typedBrand.compliance_flags?.ahpra || typedBrand.compliance_flags?.tga
+    const modelRoute = resolveAgentModelRoute({
+      agentType: 'overall',
+      input: message,
+      isHealthBrand,
+      registeredModel: registry?.model,
+    })
 
     // Run the Director — full power, 8 tool steps, delegation allowed.
     // No timeout fight: this runs in after() so the MCP route already returned.
     const result = await generateText({
-      model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
+      model: gateway(modelRoute.model),
       system: systemPrompt,
       messages: [{ role: 'user', content: message }],
       tools,
       stopWhen: stepCountIs(8),
       providerOptions: {
         gateway: {
-          models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],
+          models: [...modelRoute.fallbacks],
           user: userId,
           tags: ['overall', typedBrand.slug, 'mcp'],
           ...(isHealthBrand && { zeroDataRetention: true }),
@@ -498,13 +505,13 @@ Iteration loop:
 
     if (execution.channel === 'telegram' && needsTelegramResponseRepair(message, response)) {
       const repaired = await generateText({
-        model: gateway(registry?.model || 'anthropic/claude-sonnet-4'),
+        model: gateway(modelRoute.model),
         system: systemPrompt,
         prompt: buildTelegramResponseRepairPrompt(message, response),
         stopWhen: stepCountIs(1),
         providerOptions: {
           gateway: {
-            models: ['openai/gpt-4.1', 'google/gemini-2.5-flash'],
+            models: [...modelRoute.fallbacks],
             user: userId,
             tags: ['overall', typedBrand.slug, 'telegram-repair'],
             ...(isHealthBrand && { zeroDataRetention: true }),
@@ -534,7 +541,7 @@ Iteration loop:
       query_type: 'agency_overall_mcp',
       tokens_input: inputTokens,
       tokens_output: outputTokens,
-      model: registry?.model || 'anthropic/claude-sonnet-4',
+      model: modelRoute.model,
       cost_usd: costCents / 100,
       metadata: { source: 'mcp', job_id: jobId },
     })

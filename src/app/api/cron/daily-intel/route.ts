@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { Resend } from 'resend'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildDailyIntelHtml } from '@/lib/email/templates/daily-intel'
 import type { Brand, Competitor } from '@/types/database'
@@ -96,7 +97,8 @@ export async function GET(request: Request) {
 
         if (combinedText.length > 100) {
           const result = await generateText({
-            model: gateway('anthropic/claude-sonnet-4'),
+            model: gateway(getGatewayModel('fast')),
+            providerOptions: getGatewayProviderOptions('fast'),
             system: `You summarise AI/tech news for a marketing agency owner who builds with Next.js, Vercel AI SDK, Supabase, and Claude. Return JSON array: [{"headline":"...","summary":"one line, why it matters","url":"source if known"}]. Max 8 items. Focus on: ${keywords.join(', ')}. Australian English.`,
             prompt: `Today's scraped content:\n${combinedText}`,
           })
@@ -149,7 +151,8 @@ export async function GET(request: Request) {
             if (changed) {
               // Summarise what changed
               const changeResult = await generateText({
-                model: gateway('anthropic/claude-sonnet-4'),
+                model: gateway(getGatewayModel('fast')),
+                providerOptions: getGatewayProviderOptions('fast'),
                 system: `You detect website changes for competitive intelligence. Given the competitor name and their page content, briefly describe what seems new or changed. One sentence. Australian English.`,
                 prompt: `Competitor: ${comp.name} (${comp.url}). Change detected on their site.`,
               })
@@ -184,7 +187,8 @@ export async function GET(request: Request) {
       if (settings.what_am_i_missing && brands && brands.length > 0) {
         const brandList = (brands as Brand[]).map(b => `${b.name} (${b.niche})`).join(', ')
         const missingResult = await generateText({
-          model: gateway('anthropic/claude-sonnet-4'),
+          model: gateway(getGatewayModel('agency')),
+          providerOptions: getGatewayProviderOptions('agency'),
           system: `You are a strategic AI advisor. Given the user's portfolio of brands, identify 2-3 emerging trends, tools, or opportunities they might not be tracking. Be specific and actionable. Australian English.`,
           prompt: `Portfolio: ${brandList}. Stack: Next.js, Vercel, Supabase, Claude, Resend. What trends or opportunities should they be watching that they might not know about?`,
         })

@@ -13,6 +13,7 @@ import { tool, generateText, generateObject, stepCountIs } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 // ---------------------------------------------------------------------------
 // Structured output schema for industry knowledge
@@ -59,7 +60,8 @@ export async function researchIndustryCore(
   const maxSteps = depth === 'deep' ? 4 : 2
 
   const { text: researchText } = await generateText({
-    model: gateway('anthropic/claude-haiku-4-5-20251001'),
+    model: gateway(getGatewayModel('fast')),
+    providerOptions: getGatewayProviderOptions('fast'),
     tools: {
       web_search: gateway.tools.perplexitySearch({
         maxResults: 5,
@@ -97,7 +99,8 @@ Compile everything into a comprehensive research brief.`,
 
   // 3. Synthesis phase — structure the research into proforma-ready knowledge
   const { object: knowledge } = await generateObject({
-    model: gateway('anthropic/claude-haiku-4-5-20251001'),
+    model: gateway(getGatewayModel('fast')),
+    providerOptions: getGatewayProviderOptions('fast'),
     schema: industryKnowledgeSchema,
     prompt: `You are a marketing strategist synthesising research into structured intelligence for a "${industry}" brand called "${brandName}".
 

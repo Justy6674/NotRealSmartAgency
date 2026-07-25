@@ -1,5 +1,6 @@
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 // ---------------------------------------------------------------------------
 // LLM-based fact extractor for memory v2
@@ -65,7 +66,8 @@ export async function extractFacts(
 
   try {
     const { text } = await generateText({
-      model: gateway('anthropic/claude-haiku-4-5-20251001'),
+      model: gateway(getGatewayModel('fast')),
+      providerOptions: getGatewayProviderOptions('fast'),
       prompt: buildPrompt(userMessage, assistantResponse, brandName),
       maxOutputTokens: 1024,
       temperature: 0,

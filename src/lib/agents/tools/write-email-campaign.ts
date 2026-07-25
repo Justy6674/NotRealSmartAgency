@@ -2,6 +2,7 @@ import { tool } from 'ai'
 import { generateObject } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { runComplianceFilter } from '../compliance-filter'
 
@@ -164,7 +165,8 @@ Generate the full campaign now. Remember:
       let campaign: z.infer<typeof CampaignOutputSchema>
       try {
         const { object } = await generateObject({
-          model: gateway('anthropic/claude-sonnet-4'),
+          model: gateway(getGatewayModel('agency')),
+          providerOptions: getGatewayProviderOptions('agency'),
           system: systemPrompt,
           prompt: userPrompt,
           schema: CampaignOutputSchema,

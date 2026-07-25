@@ -2,6 +2,7 @@ import { tool } from 'ai'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Brand } from '@/types/database'
 
@@ -84,7 +85,8 @@ function buildComplianceNote(brand: Brand): string {
   return ''
 }
 
-const MODEL = gateway('anthropic/claude-sonnet-4')
+const MODEL = gateway(getGatewayModel('agency'))
+const PROVIDER_OPTIONS = getGatewayProviderOptions('agency')
 
 // --- Generators ---
 
@@ -95,6 +97,7 @@ async function generateClips(
 ): Promise<z.infer<typeof ClipsSchema>> {
   const { object } = await generateObject({
     model: MODEL,
+    providerOptions: PROVIDER_OPTIONS,
     system: `You are a viral video editor working for an Australian marketing agency. Write in Australian English.${complianceNote}`,
     prompt: `${brandCtx}
 
@@ -114,6 +117,7 @@ async function generateQuotes(
 ): Promise<z.infer<typeof QuotesSchema>> {
   const { object } = await generateObject({
     model: MODEL,
+    providerOptions: PROVIDER_OPTIONS,
     system: `You are a social media content designer for an Australian marketing agency. Write in Australian English.${complianceNote}`,
     prompt: `${brandCtx}
 
@@ -133,6 +137,7 @@ async function generateBlog(
 ): Promise<z.infer<typeof BlogSchema>> {
   const { object } = await generateObject({
     model: MODEL,
+    providerOptions: PROVIDER_OPTIONS,
     system: `You are a blog writer for an Australian marketing agency. Write in Australian English. Produce SEO-optimised, engaging long-form content.${complianceNote}`,
     prompt: `${brandCtx}
 
@@ -152,6 +157,7 @@ async function generateNewsletter(
 ): Promise<z.infer<typeof NewsletterSchema>> {
   const { object } = await generateObject({
     model: MODEL,
+    providerOptions: PROVIDER_OPTIONS,
     system: `You are an email marketing specialist for an Australian marketing agency. Write in Australian English. Create engaging, scannable newsletter content.${complianceNote}`,
     prompt: `${brandCtx}
 
@@ -171,6 +177,7 @@ async function generateSocialPosts(
 ): Promise<z.infer<typeof SocialPostsSchema>> {
   const { object } = await generateObject({
     model: MODEL,
+    providerOptions: PROVIDER_OPTIONS,
     system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready posts.${complianceNote}`,
     prompt: `${brandCtx}
 
