@@ -166,7 +166,7 @@ async function startTelegramGitHubConnection({
     return
   }
   if (grants.length === 0) {
-    await sendTelegramText({ botToken, chatId, text: 'Choose a project with /projects before connecting GitHub.' })
+    await sendTelegramText({ botToken, chatId, text: 'Choose a project from the NRS project list before connecting GitHub.' })
     return
   }
 
@@ -475,7 +475,7 @@ export async function POST(request: NextRequest) {
 
   if (intent.kind === 'pair') {
     if (account) {
-      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'This Telegram chat is already paired with NRS. Use /projects to choose a project.' })
+      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'This Telegram chat is already paired with NRS. Choose a project from the list below.' })
       return NextResponse.json({ received: true, status: 'already_paired' })
     }
     const paired = await redeemPairCode({ admin, inbound, code: intent.code })
@@ -509,7 +509,7 @@ export async function POST(request: NextRequest) {
   if (intent.kind === 'select_project') {
     const grant = grants.find((candidate) => candidate.grantId === intent.grantId)
     if (!grant) {
-      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'That project selection is not available to this Telegram account. Use /projects.' })
+      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'That project selection is not available to this Telegram account. Choose a project from the current list.' })
       return NextResponse.json({ received: true, status: 'selection_denied' })
     }
 
@@ -540,7 +540,13 @@ export async function POST(request: NextRequest) {
     const selectedGrant = session
       ? grants.find((candidate) => candidate.grantId === session.grantId && candidate.projectId === session.projectId)
       : undefined
-    const projectsToConnect = intent.scope === 'all' ? grants : selectedGrant ? [selectedGrant] : []
+    if (intent.scope === 'current' && !selectedGrant) {
+      await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants })
+      return NextResponse.json({ received: true, status: 'project_required' })
+    }
+    const projectsToConnect: TelegramGrant[] = intent.scope === 'all'
+      ? grants
+      : selectedGrant ? [selectedGrant] : []
     await startTelegramGitHubConnection({
       admin,
       account,

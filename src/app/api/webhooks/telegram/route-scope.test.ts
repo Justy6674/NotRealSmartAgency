@@ -26,3 +26,12 @@ test('Telegram delivery runs through the clean marketing-copy renderer', () => {
   assert.match(route, /formatTelegramMarketingCopy/)
   assert.match(route, /text: telegramResponse/)
 })
+
+test('Telegram route never tells the owner to use a slash command', () => {
+  const route = readFileSync(
+    resolve(process.cwd(), 'src/app/api/webhooks/telegram/route.ts'),
+    'utf8',
+  )
+
+  assert.doesNotMatch(route, /Use \/(?:projects|connect)/)
+})

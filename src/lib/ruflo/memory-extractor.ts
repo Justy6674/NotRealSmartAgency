@@ -14,8 +14,20 @@ export async function extractAndStoreMemories(params: {
   userMessage: string
   assistantResponse: string
   conversationId: string | null
+  captureAssistantInferences?: boolean
+  captureConversationSummary?: boolean
 }): Promise<number> {
-  const { brandId, userId, brandSlug, agentType, userMessage, assistantResponse, conversationId } = params
+  const {
+    brandId,
+    userId,
+    brandSlug,
+    agentType,
+    userMessage,
+    assistantResponse,
+    conversationId,
+    captureAssistantInferences = true,
+    captureConversationSummary = true,
+  } = params
   const namespace = getNamespace(brandSlug, agentType)
   const timestamp = new Date().toISOString()
   let memoriesStored = 0
@@ -114,29 +126,31 @@ export async function extractAndStoreMemories(params: {
   ]
 
   // 2b. Social media metrics (from assistant response) — cross-agent learning
-  const metricsPatterns = [
-    /(?:engagement rate|CTR|click-through rate|conversion rate|ROI|ROAS|CPM|CPC|CPE)\s*(?:is|was|of|at|=|:)\s*(.{5,100})/gi,
-  ]
-  for (const pattern of metricsPatterns) {
-    const matches = assistantResponse.matchAll(pattern)
-    for (const match of matches) {
-      extractions.push({
-        key: `metrics-${Date.now()}-${memoriesStored}`,
-        value: { type: 'metrics', content: match[0].trim(), source: 'agent', timestamp },
-        tags: ['metrics', agentType, brandSlug],
-      })
-      memoriesStored++
+  if (captureAssistantInferences) {
+    const metricsPatterns = [
+      /(?:engagement rate|CTR|click-through rate|conversion rate|ROI|ROAS|CPM|CPC|CPE)\s*(?:is|was|of|at|=|:)\s*(.{5,100})/gi,
+    ]
+    for (const pattern of metricsPatterns) {
+      const matches = assistantResponse.matchAll(pattern)
+      for (const match of matches) {
+        extractions.push({
+          key: `metrics-${Date.now()}-${memoriesStored}`,
+          value: { type: 'metrics', content: match[0].trim(), source: 'agent', timestamp },
+          tags: ['metrics', agentType, brandSlug],
+        })
+        memoriesStored++
+      }
     }
-  }
-  for (const pattern of decisionPatterns) {
-    const matches = assistantResponse.matchAll(pattern)
-    for (const match of matches) {
-      extractions.push({
-        key: `decision-${Date.now()}-${memoriesStored}`,
-        value: { type: 'decision', content: match[1].trim(), source: 'agent', timestamp },
-        tags: [agentType, brandSlug, 'decision'],
-      })
-      memoriesStored++
+    for (const pattern of decisionPatterns) {
+      const matches = assistantResponse.matchAll(pattern)
+      for (const match of matches) {
+        extractions.push({
+          key: `decision-${Date.now()}-${memoriesStored}`,
+          value: { type: 'decision', content: match[1].trim(), source: 'agent', timestamp },
+          tags: [agentType, brandSlug, 'decision'],
+        })
+        memoriesStored++
+      }
     }
   }
 
@@ -160,19 +174,21 @@ export async function extractAndStoreMemories(params: {
   }
 
   // 3. Always store a conversation summary (fallback)
-  extractions.push({
-    key: `conv-${conversationId ?? 'new'}-${Date.now()}`,
-    value: {
-      type: 'conversation',
-      agent: agentType,
-      brand: brandSlug,
-      userQuery: userMessage.slice(0, 200),
-      summary: assistantResponse.slice(0, 500),
-      timestamp,
-    },
-    tags: [agentType, brandSlug, 'conversation'],
-  })
-  memoriesStored++
+  if (captureConversationSummary) {
+    extractions.push({
+      key: `conv-${conversationId ?? 'new'}-${Date.now()}`,
+      value: {
+        type: 'conversation',
+        agent: agentType,
+        brand: brandSlug,
+        userQuery: userMessage.slice(0, 200),
+        summary: assistantResponse.slice(0, 500),
+        timestamp,
+      },
+      tags: [agentType, brandSlug, 'conversation'],
+    })
+    memoriesStored++
+  }
 
   // Store all extractions
   for (const extraction of extractions) {
