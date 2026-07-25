@@ -13,6 +13,7 @@ import { recordTurn, shouldExtractSessionMemory, extractSessionMemory } from '@/
 import { extractFacts } from '@/lib/memory/fact-extractor'
 import { memoryStoreV2 } from '@/lib/memory/store'
 import { classifyIntent, classifyIntentMulti, buildRoutingContext } from '@/lib/agents/intent-router'
+import { buildMarketingSkillContext } from '@/lib/agents/marketing-skills'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
 import type { AgentType, Brand, AgentConfig } from '@/types/database'
@@ -181,6 +182,7 @@ export async function POST(request: Request) {
     if (routingContext) {
       systemPrompt = systemPrompt + '\n\n---\n\n' + routingContext
     }
+    systemPrompt += `\n\n---\n\n${buildMarketingSkillContext(lastMessageText, 'web')}`
 
     // Inject pending draft context so Director knows what's in the review queue
     try {

@@ -20,6 +20,7 @@ import { getToolsForAgent } from '@/lib/agents/tools'
 import { createDelegateTool } from '@/lib/agents/tools/delegate'
 import { createConveneMeetingTool } from '@/lib/agents/tools/convene-meeting'
 import { classifyIntent, classifyIntentMulti, buildRoutingContext } from '@/lib/agents/intent-router'
+import { buildMarketingSkillContext } from '@/lib/agents/marketing-skills'
 import { getOrCreateAgentRegistry, recordAgentSpend, checkBudget } from '@/lib/agents/registry'
 import { logAudit } from '@/lib/agents/audit'
 import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
@@ -214,6 +215,7 @@ export async function runDirectorJob(
     if (routingContext) {
       systemPrompt += '\n\n---\n\n' + routingContext
     }
+    systemPrompt += `\n\n---\n\n${buildMarketingSkillContext(message, execution.channel)}`
 
     // ── Injection 2: pending review queue (mirrored from /api/chat/route.ts) ──
     try {
