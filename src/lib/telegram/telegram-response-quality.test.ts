@@ -21,3 +21,11 @@ Test that trial in the first paid-social campaign.`
 
   assert.equal(needsTelegramResponseRepair('Scan the site', completedReply), false)
 })
+
+test('repairs an explicit task that is handed back as a final question', () => {
+  const handBack = `The raw scan was thin, so I need a deeper browse first.
+
+One question first: what result matters most from this review — signups, messaging, or SEO?`
+
+  assert.equal(needsTelegramResponseRepair('Scan the site', handBack), true)
+})

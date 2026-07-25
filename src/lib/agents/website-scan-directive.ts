@@ -25,6 +25,10 @@ export function buildWebsiteScanGroundingDirective(scan: WebsiteScanEvidence): s
     .slice(0, 12)
     .map((heading) => `- ${heading.level}: ${heading.text}`)
     .join('\n') || '- No headings were extracted.'
+  const thinRawHtmlShell = scan.headings.length === 0 && scan.bodyText.trim().length <= 280
+  const thinRawHtmlRule = thinRawHtmlShell
+    ? `\nTHIN RAW HTML SHELL:\nThe server HTML contains too little usable page copy for a content or SEO audit. This does not prove an SEO or indexing problem. Do not infer missing content, JavaScript rendering, or search-engine behaviour from this limitation. State only that the raw HTML scan is insufficient, then recommend one concrete way to obtain rendered-page evidence.\n`
+    : ''
 
   return `LIVE WEBSITE SCAN — SOURCE OF TRUTH
 The user asked you to scan the site. A live scan has already completed for ${scan.url}.
@@ -36,6 +40,7 @@ Evidence from the live page:
 - Headings:
 ${headings}
 - Extracted page copy: ${scan.bodyText.slice(0, 3000)}
+${thinRawHtmlRule}
 
 Response rules for this scan:
 - State only factual observations that are supported by the evidence above. Quote the exact heading or copy that supports each observation.

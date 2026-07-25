@@ -27,3 +27,17 @@ test('fresh scan evidence explicitly overrides stale brand memory', () => {
   assert.match(directive, /Do Today — AI Weight-Loss Companion for Australians/)
   assert.match(directive, /Do not use Markdown/i)
 })
+
+test('a thin raw HTML scan cannot be used to claim an SEO or indexing problem', () => {
+  const directive = buildWebsiteScanGroundingDirective({
+    url: 'https://www.scentsell.com.au',
+    title: 'ScentSell | Australia’s Fragrance Marketplace',
+    description: 'Australia',
+    headings: [],
+    bodyText: 'Loading the marketplace...',
+  })
+
+  assert.match(directive, /thin raw HTML shell/i)
+  assert.match(directive, /does not prove.*SEO.*indexing/i)
+  assert.match(directive, /Do not infer missing content, JavaScript rendering, or search-engine behaviour/i)
+})
