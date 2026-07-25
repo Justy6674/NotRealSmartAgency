@@ -21,6 +21,12 @@ test('fresh scan evidence explicitly overrides stale brand memory', () => {
     description: 'The Australian AI companion for the reasons in between.',
     headings: [{ level: 'h2', text: 'You talk. Abraham does the rest.' }],
     bodyText: 'Do Today is for Australians.',
+    evidence_source: 'rendered_browser',
+    status: 'completed',
+    ctas: ['Start today'],
+    forms: [],
+    pages: [{ finalUrl: 'https://www.dotoday.com.au/' }],
+    unknowns: ['Search-engine indexing requires separate evidence.'],
   })
 
   assert.match(directive, /overrides any conflicting stored brand context/i)
@@ -28,16 +34,23 @@ test('fresh scan evidence explicitly overrides stale brand memory', () => {
   assert.match(directive, /Do not use Markdown/i)
 })
 
-test('a thin raw HTML scan cannot be used to claim an SEO or indexing problem', () => {
+test('a partial rendered audit cannot be used to claim an SEO or indexing problem', () => {
   const directive = buildWebsiteScanGroundingDirective({
     url: 'https://www.scentsell.com.au',
     title: 'ScentSell | Australia’s Fragrance Marketplace',
     description: 'Australia',
     headings: [],
-    bodyText: 'Loading the marketplace...',
+    bodyText: '',
+    evidence_source: 'rendered_browser',
+    status: 'partial',
+    warnings: ['Timed out waiting for client-rendered content.'],
+    ctas: [],
+    forms: [],
+    pages: [{ finalUrl: 'https://www.scentsell.com.au/' }],
+    unknowns: ['Search-engine indexing requires separate evidence.'],
   })
 
-  assert.match(directive, /thin raw HTML shell/i)
-  assert.match(directive, /does not prove.*SEO.*indexing/i)
-  assert.match(directive, /Do not infer missing content, JavaScript rendering, or search-engine behaviour/i)
+  assert.match(directive, /limited rendered evidence/i)
+  assert.match(directive, /Do not turn unavailable evidence into an SEO, indexing, JavaScript, traffic, conversion, or visitor-behaviour claim/i)
+  assert.match(directive, /Timed out waiting for client-rendered content/i)
 })

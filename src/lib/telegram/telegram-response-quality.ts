@@ -22,5 +22,5 @@ ${response}
 
 Return the completed answer now. Do not describe your capabilities, ask what the owner wants, or end with any question. Keep only the specific finding or deliverable, supporting evidence or reasoning, and one recommended next action.
 
-If the available website evidence is a thin raw HTML shell, state that it is insufficient for a full content or SEO audit. Do not infer missing content, JavaScript rendering, search-engine indexing, or visitor behaviour from that limitation. Use clean plain text, never Markdown.`
+If the available rendered website evidence is limited, state that limitation plainly. Do not infer missing content, JavaScript rendering, search-engine indexing, traffic, conversion, or visitor behaviour from unavailable evidence. Use clean plain text, never Markdown.`
 }

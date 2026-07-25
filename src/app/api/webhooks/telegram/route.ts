@@ -20,6 +20,7 @@ import {
 } from '@/lib/telegram/scoped-telegram'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 const TELEGRAM_CAPABILITIES = [
   'director:chat',

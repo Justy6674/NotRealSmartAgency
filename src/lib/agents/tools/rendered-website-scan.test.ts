@@ -10,6 +10,8 @@ test('only accepts public http URLs for a rendered website scan', () => {
   assert.equal(getSafeWebsiteUrl('https://www.scentsell.com.au/').ok, true)
   assert.equal(getSafeWebsiteUrl('http://localhost:3000/').ok, false)
   assert.equal(getSafeWebsiteUrl('http://127.0.0.1/').ok, false)
+  assert.equal(getSafeWebsiteUrl('http://[::1]/').ok, false)
+  assert.equal(getSafeWebsiteUrl('http://[fe80::1]/').ok, false)
   assert.equal(getSafeWebsiteUrl('http://169.254.169.254/latest/meta-data/').ok, false)
   assert.equal(getSafeWebsiteUrl('ftp://example.com/').ok, false)
   assert.equal(getSafeWebsiteUrl('https://user:password@example.com/').ok, false)

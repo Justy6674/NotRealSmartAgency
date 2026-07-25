@@ -163,7 +163,7 @@ export async function runDirectorJob(
         return
       }
 
-      const websiteScan = await scanWebsiteCore(supabase, userId, brand_id, websiteUrl, 'messaging')
+      const websiteScan = await scanWebsiteCore(supabase, userId, brand_id, websiteUrl, 'messaging', jobId)
       if ('error' in websiteScan) {
         await markJobError(supabase, jobId, websiteScan.error, startTime)
         return

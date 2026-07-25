@@ -1,73 +1,125 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/agents/audit'
+import {
+  renderWebsiteEvidence,
+  type RenderedWebsiteScanResult,
+} from './rendered-website-scan'
 
-/** Core scan logic — callable from both the AI tool and the review API */
+async function persistScreenshotArtifact(
+  supabase: SupabaseClient,
+  userId: string,
+  brandId: string,
+  scan: RenderedWebsiteScanResult,
+): Promise<{ url: string; mediaItemId: string } | null> {
+  if (!scan.screenshot_base64) return null
+
+  const screenshot = Buffer.from(scan.screenshot_base64, 'base64')
+  if (!screenshot.length || screenshot.length > 1_500_000) return null
+
+  const storagePath = `${userId}/${brandId}/website-audits/${scan.trace_id}.png`
+  const { error: uploadError } = await supabase.storage
+    .from('media')
+    .upload(storagePath, screenshot, { contentType: 'image/png', upsert: false })
+  if (uploadError) return null
+
+  const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+  const { data: mediaItem, error: mediaError } = await supabase
+    .from('media_items')
+    .insert({
+      user_id: userId,
+      brand_id: brandId,
+      file_url: urlData.publicUrl,
+      file_name: `website-audit-${scan.trace_id}.png`,
+      file_type: 'image/png',
+      file_size_bytes: screenshot.byteLength,
+      transcription_status: 'transcribed',
+      source_type: 'screenshot',
+      tags: ['website-audit', 'rendered-evidence'],
+      metadata: {
+        trace_id: scan.trace_id,
+        source_url: scan.url,
+        evidence_source: scan.evidence_source,
+      },
+    })
+    .select('id')
+    .single()
+
+  if (mediaError || !mediaItem?.id) {
+    await supabase.storage.from('media').remove([storagePath])
+    return null
+  }
+
+  return { url: urlData.publicUrl, mediaItemId: mediaItem.id }
+}
+
+/**
+ * Core rendered scan logic. Every NRS entry point uses this single evidence
+ * source; callers receive facts and explicit unknowns, never a raw HTML guess.
+ */
 export async function scanWebsiteCore(
   supabase: SupabaseClient,
   userId: string,
   brandId: string,
   url: string,
-  focus?: string
+  focus?: string,
+  traceId?: string,
 ) {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
-
-  let html: string
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; NRSAgencyBot/1.0; +https://notrealsmart.com.au)',
-      },
+  const rendered = await renderWebsiteEvidence(url)
+  if ('error' in rendered) {
+    await supabase.from('project_scans').insert({
+      brand_id: brandId,
+      user_id: userId,
+      scan_type: 'website',
+      status: 'failed',
+      results: { schema_version: 'nrs.rendered_website_scan.v1', evidence_source: 'rendered_browser', url, focus: focus ?? 'general' },
+      error: rendered.error,
     })
-    html = await response.text()
-  } catch {
-    return {
-      error: 'Could not scan website',
-      suggestion:
-        'Try pasting your website copy directly into the chat so I can analyse it for you.',
-    }
-  } finally {
-    clearTimeout(timeout)
+    await logAudit({
+      supabase,
+      userId,
+      action: 'rendered_website_scan',
+      entityType: 'website_scan',
+      detail: { outcome: 'failed', trace_id: traceId ?? null, reason: rendered.error },
+    })
+    return rendered
   }
 
-  const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i)
-  const title = titleMatch ? titleMatch[1].trim() : null
-
-  const metaMatch = html.match(
-    /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i
-  ) ?? html.match(
-    /<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i
-  )
-  const description = metaMatch ? metaMatch[1].trim() : null
-
-  const headingRegex = /<h([123])[^>]*>([\s\S]*?)<\/h\1>/gi
-  const headings: { level: string; text: string }[] = []
-  let headingMatch
-  while ((headingMatch = headingRegex.exec(html)) !== null) {
-    const text = headingMatch[2].replace(/<[^>]+>/g, '').trim()
-    if (text) headings.push({ level: `h${headingMatch[1]}`, text })
+  const scan: RenderedWebsiteScanResult = traceId && rendered.trace_id !== traceId
+    ? { ...rendered, trace_id: traceId }
+    : rendered
+  const screenshot = await persistScreenshotArtifact(supabase, userId, brandId, scan)
+  const { screenshot_base64, ...scanWithoutBinary } = scan
+  const results = {
+    ...scanWithoutBinary,
+    focus: focus ?? 'general',
+    screenshot: screenshot ? { media_item_id: screenshot.mediaItemId, url: screenshot.url } : null,
   }
-
-  const bodyText = html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 3000)
-
-  const results = { url, focus: focus ?? 'general', title, description, headings, bodyText }
 
   await supabase.from('project_scans').insert({
     brand_id: brandId,
     user_id: userId,
     scan_type: 'website',
+    // The renderer did finish; `results.status` preserves whether its evidence
+    // is partial so downstream marketing audits can still use what was observed.
     status: 'completed',
     results,
-    error: null,
+    error: scan.status === 'partial' ? scan.warnings.join(' ') : null,
+  })
+  await logAudit({
+    supabase,
+    userId,
+    action: 'rendered_website_scan',
+    entityType: 'website_scan',
+    entityId: scan.trace_id,
+    detail: {
+      outcome: scan.status,
+      trace_id: scan.trace_id,
+      page_count: scan.pages.length,
+      screenshot_saved: Boolean(screenshot),
+      warning_count: scan.warnings.length,
+    },
   })
 
   return results
@@ -76,17 +128,17 @@ export async function scanWebsiteCore(
 export function createScanWebsiteTool(
   supabase: SupabaseClient,
   userId: string,
-  brandId: string
+  brandId: string,
 ) {
   return tool({
     description:
-      'Scan a website URL to extract its title, meta description, headings, and body copy. Use this when the user wants to analyse their website content, improve their messaging, check for SEO issues, or audit compliance. Always scan the website before making recommendations about it.',
+      'Render and inspect a public website in a real browser. Returns observed visible copy, metadata, headings, calls to action, forms, linked same-origin pages, and explicit unknowns. Use this before making website, messaging, SEO, conversion, or compliance recommendations.',
     inputSchema: z.object({
-      url: z.string().url().describe('The full URL of the website to scan (e.g. https://example.com.au)'),
+      url: z.string().url().describe('The public website URL to render and inspect (for example https://example.com.au).'),
       focus: z
         .enum(['general', 'seo', 'compliance', 'messaging'])
         .optional()
-        .describe('Optional scan focus to guide the analysis: general, seo, compliance, or messaging'),
+        .describe('Optional focus to guide the evidence summary.'),
     }),
     execute: async ({ url, focus }) => scanWebsiteCore(supabase, userId, brandId, url, focus),
   })

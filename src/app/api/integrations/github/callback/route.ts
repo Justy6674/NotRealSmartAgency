@@ -21,6 +21,7 @@ import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-c
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 const CONNECT_STATE = /^[A-Za-z0-9_-]{40,128}$/
 

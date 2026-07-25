@@ -8,6 +8,7 @@ import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 export async function POST(request: Request) {
   const config = getNRSTelegramConfig()
