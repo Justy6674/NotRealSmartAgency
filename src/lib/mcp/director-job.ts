@@ -40,7 +40,11 @@ import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { buildTelegramExecutionContract } from '@/lib/telegram/telegram-execution-contract'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
-import { resolveAgentModelRoute } from '@/lib/ai/model-routing'
+import {
+  estimateGatewayCost,
+  getGatewayRouteProviderOptions,
+  resolveAgentModelRoute,
+} from '@/lib/ai/model-routing'
 import {
   buildTelegramResponseRepairPrompt,
   needsTelegramResponseRepair,
@@ -485,14 +489,11 @@ Iteration loop:
       messages: [{ role: 'user', content: message }],
       tools,
       stopWhen: stepCountIs(8),
-      providerOptions: {
-        gateway: {
-          models: [...modelRoute.fallbacks],
-          user: userId,
-          tags: ['overall', typedBrand.slug, 'mcp'],
-          ...(isHealthBrand && { zeroDataRetention: true }),
-        },
-      },
+      providerOptions: getGatewayRouteProviderOptions(modelRoute, {
+        user: userId,
+        tags: ['overall', typedBrand.slug, 'mcp'],
+        zeroDataRetention: isHealthBrand,
+      }),
     })
 
     const completion = getDirectorCompletion(result)
@@ -502,6 +503,10 @@ Iteration loop:
     let response = completion.response
     let repairInputTokens = 0
     let repairOutputTokens = 0
+    let repairCostUsd = 0
+    let repairCacheReadTokens = 0
+    let repairCacheWriteTokens = 0
+    let repairModel: string | undefined
 
     if (execution.channel === 'telegram' && needsTelegramResponseRepair(message, response)) {
       const repaired = await generateText({
@@ -509,27 +514,32 @@ Iteration loop:
         system: systemPrompt,
         prompt: buildTelegramResponseRepairPrompt(message, response),
         stopWhen: stepCountIs(1),
-        providerOptions: {
-          gateway: {
-            models: [...modelRoute.fallbacks],
-            user: userId,
-            tags: ['overall', typedBrand.slug, 'telegram-repair'],
-            ...(isHealthBrand && { zeroDataRetention: true }),
-          },
-        },
+        providerOptions: getGatewayRouteProviderOptions(modelRoute, {
+          user: userId,
+          tags: ['overall', typedBrand.slug, 'telegram-repair'],
+          zeroDataRetention: isHealthBrand,
+        }),
       })
       const repairedCompletion = getDirectorCompletion(repaired)
       if (!repairedCompletion.complete || needsTelegramResponseRepair(message, repairedCompletion.response)) {
         throw new Error('The Director did not return a completed Telegram result.')
       }
       response = repairedCompletion.response
-      repairInputTokens = repaired.usage?.inputTokens ?? 0
-      repairOutputTokens = repaired.usage?.outputTokens ?? 0
+      repairInputTokens = repaired.totalUsage?.inputTokens ?? 0
+      repairOutputTokens = repaired.totalUsage?.outputTokens ?? 0
+      repairModel = repaired.response.modelId || modelRoute.model
+      const repairCost = estimateGatewayCost(repairModel, repaired.totalUsage)
+      repairCostUsd = repairCost.usd
+      repairCacheReadTokens = repairCost.cacheReadTokens
+      repairCacheWriteTokens = repairCost.cacheWriteTokens
     }
 
-    const inputTokens = (result.usage?.inputTokens ?? 0) + repairInputTokens
-    const outputTokens = (result.usage?.outputTokens ?? 0) + repairOutputTokens
-    const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
+    const inputTokens = (result.totalUsage?.inputTokens ?? 0) + repairInputTokens
+    const outputTokens = (result.totalUsage?.outputTokens ?? 0) + repairOutputTokens
+    const actualModel = result.response.modelId || modelRoute.model
+    const primaryCost = estimateGatewayCost(actualModel, result.totalUsage)
+    const costUsd = Number((primaryCost.usd + repairCostUsd).toFixed(9))
+    const costCents = costUsd > 0 ? Math.ceil(costUsd * 100) : 0
     const durationMs = Date.now() - startTime
 
     if (registry) {
@@ -541,9 +551,20 @@ Iteration loop:
       query_type: 'agency_overall_mcp',
       tokens_input: inputTokens,
       tokens_output: outputTokens,
-      model: modelRoute.model,
-      cost_usd: costCents / 100,
-      metadata: { source: 'mcp', job_id: jobId },
+      model: actualModel,
+      cost_usd: costUsd,
+      metadata: {
+        source: 'mcp',
+        job_id: jobId,
+        gateway: {
+          tier: modelRoute.tier,
+          pricing_model: primaryCost.pricingModel,
+          repair_model: repairModel,
+          cache_read_tokens: primaryCost.cacheReadTokens + repairCacheReadTokens,
+          cache_write_tokens: primaryCost.cacheWriteTokens + repairCacheWriteTokens,
+          budget_charge_cents: costCents,
+        },
+      },
     })
 
     await logAudit({
@@ -552,7 +573,18 @@ Iteration loop:
       agentId: registry?.id,
       action: 'mcp_chat_completed',
       entityType: 'mcp',
-      detail: { brand: typedBrand.slug, jobId, inputTokens, outputTokens, costCents, durationMs },
+      detail: {
+        brand: typedBrand.slug,
+        jobId,
+        actualModel,
+        repairModel,
+        inputTokens,
+        outputTokens,
+        costCents,
+        cacheReadTokens: primaryCost.cacheReadTokens + repairCacheReadTokens,
+        cacheWriteTokens: primaryCost.cacheWriteTokens + repairCacheWriteTokens,
+        durationMs,
+      },
       costCents,
     })
 

@@ -28,7 +28,11 @@ import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
 import { extractFacts } from '@/lib/memory/fact-extractor'
 import { memoryStoreV2 } from '@/lib/memory/store'
 import { getActiveGoal } from './goal-loop'
-import { resolveAgentModelRoute } from '@/lib/ai/model-routing'
+import {
+  estimateGatewayCost,
+  getGatewayRouteProviderOptions,
+  resolveAgentModelRoute,
+} from '@/lib/ai/model-routing'
 
 /** Maximum workers running simultaneously to prevent AI Gateway rate limit exhaustion.
  *  AI Gateway enforces per-user concurrency limits; 4 is conservative for most providers. */
@@ -231,14 +235,11 @@ Rules:
       : departmentTools
 
     // 9. Gateway options — THIS agent's tags
-    const gatewayOptions = {
-      gateway: {
-        models: [...modelRoute.fallbacks],
-        user: ctx.userId,
-        tags: [dept, ctx.brand.slug, options.meetingDepartments ? 'meeting' : 'delegation'],
-        ...(isHealthBrand && { zeroDataRetention: true }),
-      },
-    }
+    const gatewayOptions = getGatewayRouteProviderOptions(modelRoute, {
+      user: ctx.userId,
+      tags: [dept, ctx.brand.slug, options.meetingDepartments ? 'meeting' : 'delegation'],
+      zeroDataRetention: isHealthBrand,
+    })
 
     // 10. Execute THIS agent independently with ITS OWN model + step limit
     const controller = new AbortController()
@@ -268,9 +269,11 @@ Rules:
     }
 
     // 12. Track THIS agent's spend independently
-    const inputTokens = result.usage?.inputTokens ?? 0
-    const outputTokens = result.usage?.outputTokens ?? 0
-    const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
+    const inputTokens = result.totalUsage?.inputTokens ?? 0
+    const outputTokens = result.totalUsage?.outputTokens ?? 0
+    const actualModel = result.response.modelId || model
+    const cost = estimateGatewayCost(actualModel, result.totalUsage)
+    const costCents = cost.budgetCents
 
     if (registry) {
       await recordAgentSpend(ctx.supabase, registry.id, costCents)
@@ -285,7 +288,20 @@ Rules:
       output_type: OUTPUT_TYPE_MAP[dept] ?? 'other',
       title: `${source === 'meeting' ? '[Meeting] ' : ''}${deptName}: ${task.slice(0, 60)}`,
       content: result.text,
-      metadata: { source, department: dept, model, tokensUsed: inputTokens + outputTokens, costCents, memoryCount },
+      metadata: {
+        source,
+        department: dept,
+        model: actualModel,
+        tokensUsed: inputTokens + outputTokens,
+        costCents,
+        memoryCount,
+        gateway: {
+          tier: modelRoute.tier,
+          pricing_model: cost.pricingModel,
+          cache_read_tokens: cost.cacheReadTokens,
+          cache_write_tokens: cost.cacheWriteTokens,
+        },
+      },
     })
 
     // 14. Audit THIS agent's execution independently
@@ -298,10 +314,12 @@ Rules:
       entityId: dept,
       detail: {
         task: task.slice(0, 200),
-        model,
+        model: actualModel,
         inputTokens,
         outputTokens,
         costCents,
+        cacheReadTokens: cost.cacheReadTokens,
+        cacheWriteTokens: cost.cacheWriteTokens,
         memoryCount,
         maxSteps,
         resultLength: result.text.length,

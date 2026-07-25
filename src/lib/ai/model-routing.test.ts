@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  estimateGatewayCost,
   getGatewayFallbackModels,
   getGatewayModel,
   getGatewayProviderOptions,
+  getGatewayRouteProviderOptions,
   resolveAgentModelRoute,
 } from './model-routing.ts'
 
@@ -67,6 +69,74 @@ test('keeps a deliberate non-legacy registry model and centralises direct tiers'
   assert.equal(getGatewayModel('fast'), 'anthropic/claude-haiku-4.5')
   assert.deepEqual(getGatewayFallbackModels('fast'), ['google/gemini-3-flash', 'openai/gpt-5.4-nano'])
   assert.deepEqual(getGatewayProviderOptions('fast'), {
-    gateway: { models: ['google/gemini-3-flash', 'openai/gpt-5.4-nano'] },
+    gateway: {
+      models: ['google/gemini-3-flash', 'openai/gpt-5.4-nano'],
+      caching: 'auto',
+      disallowPromptTraining: true,
+    },
   })
+})
+
+test('preserves the custom route fallback policy under shared Gateway controls', () => {
+  const route = resolveAgentModelRoute({
+    agentType: 'analytics',
+    input: 'Summarise this report.',
+    registeredModel: 'google/gemini-3-flash',
+  })
+
+  assert.deepEqual(getGatewayRouteProviderOptions(route, { user: 'user-123' }), {
+    gateway: {
+      models: ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'],
+      caching: 'auto',
+      disallowPromptTraining: true,
+      user: 'user-123',
+    },
+  })
+})
+
+test('uses current Gateway caching, no-training, privacy, and attribution controls', () => {
+  assert.deepEqual(
+    getGatewayProviderOptions('agency', {
+      user: 'user-123',
+      tags: ['overall', 'downscale', 'chat'],
+      zeroDataRetention: true,
+    }),
+    {
+      gateway: {
+        models: ['openai/gpt-5.4', 'google/gemini-3-flash'],
+        caching: 'auto',
+        disallowPromptTraining: true,
+        user: 'user-123',
+        tags: ['overall', 'downscale', 'chat'],
+        zeroDataRetention: true,
+      },
+    },
+  )
+})
+
+test('estimates Gateway spend by the model actually used and separates cache reads and writes', () => {
+  const estimate = estimateGatewayCost('anthropic/claude-sonnet-5', {
+    inputTokens: 2000,
+    outputTokens: 1000,
+    inputTokenDetails: {
+      noCacheTokens: 500,
+      cacheReadTokens: 1000,
+      cacheWriteTokens: 500,
+    },
+  })
+
+  assert.equal(estimate.usd, 0.01245)
+  assert.equal(estimate.budgetCents, 2)
+  assert.equal(estimate.pricingModel, 'anthropic/claude-sonnet-5')
+})
+
+test('charges an unknown custom model at the conservative frontier rate', () => {
+  const estimate = estimateGatewayCost('custom/private-model', {
+    inputTokens: 1000,
+    outputTokens: 1000,
+  })
+
+  assert.equal(estimate.usd, 0.03)
+  assert.equal(estimate.budgetCents, 3)
+  assert.equal(estimate.pricingModel, 'anthropic/claude-opus-5')
 })

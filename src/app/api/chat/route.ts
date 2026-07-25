@@ -21,7 +21,11 @@ import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
-import { resolveAgentModelRoute } from '@/lib/ai/model-routing'
+import {
+  estimateGatewayCost,
+  getGatewayRouteProviderOptions,
+  resolveAgentModelRoute,
+} from '@/lib/ai/model-routing'
 
 const VALID_AGENT_TYPES: AgentType[] = [
   'overall', 'content', 'seo', 'paid_ads', 'strategy', 'email',
@@ -390,18 +394,17 @@ That's the difference between a marketing director and a tech support agent. Def
     messages: await convertToModelMessages(messages),
     tools,
     stopWhen: stepCountIs(8),
-    providerOptions: {
-      gateway: {
-        models: [...modelRoute.fallbacks],
-        user: user.id,
-        tags: [agentType, typedBrand.slug, 'chat'],
-        ...(isHealthBrand && { zeroDataRetention: true }),
-      },
-    },
-    onFinish: async ({ text, usage }) => {
-      const inputTokens = usage.inputTokens ?? 0
-      const outputTokens = usage.outputTokens ?? 0
-      const costCents = Math.round((inputTokens * 0.3 + outputTokens * 1.5) / 100)
+    providerOptions: getGatewayRouteProviderOptions(modelRoute, {
+      user: user.id,
+      tags: [agentType, typedBrand.slug, 'chat'],
+      zeroDataRetention: isHealthBrand,
+    }),
+    onFinish: async ({ text, totalUsage, response }) => {
+      const inputTokens = totalUsage.inputTokens ?? 0
+      const outputTokens = totalUsage.outputTokens ?? 0
+      const actualModel = response.modelId || modelRoute.model
+      const cost = estimateGatewayCost(actualModel, totalUsage)
+      const costCents = cost.budgetCents
 
       // Record spend
       if (registry) {
@@ -414,9 +417,19 @@ That's the difference between a marketing director and a tech support agent. Def
         query_type: `agency_${agentType}`,
         tokens_input: inputTokens,
         tokens_output: outputTokens,
-        model: modelRoute.model,
-        cost_usd: costCents / 100,
-        metadata: { memoryCount, agentRegistryId: registry?.id },
+        model: actualModel,
+        cost_usd: cost.usd,
+        metadata: {
+          memoryCount,
+          agentRegistryId: registry?.id,
+          gateway: {
+            tier: modelRoute.tier,
+            pricing_model: cost.pricingModel,
+            cache_read_tokens: cost.cacheReadTokens,
+            cache_write_tokens: cost.cacheWriteTokens,
+            budget_charge_cents: costCents,
+          },
+        },
       })
 
       // Audit log
@@ -427,7 +440,17 @@ That's the difference between a marketing director and a tech support agent. Def
         action: 'chat_completed',
         entityType: 'conversation',
         entityId: conversationId ?? undefined,
-        detail: { agentType, brand: typedBrand.slug, inputTokens, outputTokens, costCents, memoryCount },
+        detail: {
+          agentType,
+          brand: typedBrand.slug,
+          actualModel,
+          inputTokens,
+          outputTokens,
+          costCents,
+          cacheReadTokens: cost.cacheReadTokens,
+          cacheWriteTokens: cost.cacheWriteTokens,
+          memoryCount,
+        },
         costCents,
       })
 

@@ -1,4 +1,5 @@
 import type { AgentType } from '@/types/database'
+import type { GatewayProviderOptions } from '@ai-sdk/gateway'
 
 export type GatewayModelTier = 'fast' | 'agency' | 'frontier' | 'code'
 export type ResolvedGatewayModelTier = GatewayModelTier | 'custom'
@@ -14,6 +15,12 @@ export interface AgentModelRouteInput {
   input: string
   isHealthBrand?: boolean
   registeredModel?: string | null
+}
+
+export interface GatewayRequestOptions {
+  user?: string
+  tags?: readonly string[]
+  zeroDataRetention?: boolean
 }
 
 /**
@@ -32,6 +39,46 @@ const GATEWAY_FALLBACKS: Record<GatewayModelTier, readonly string[]> = {
   agency: ['openai/gpt-5.4', 'google/gemini-3-flash'],
   frontier: ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'],
   code: ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'],
+}
+
+interface GatewayModelPricing {
+  input: number
+  output: number
+  cacheRead?: number
+  cacheWrite?: number
+}
+
+/**
+ * USD per token from the Gateway model catalogue, refreshed 2026-07-25.
+ * Unknown custom registry models are conservatively budgeted as Opus 5.
+ */
+const GATEWAY_MODEL_PRICING: Record<string, GatewayModelPricing> = {
+  'anthropic/claude-haiku-4.5': { input: 0.000001, output: 0.000005, cacheRead: 0.0000001, cacheWrite: 0.00000125 },
+  'anthropic/claude-sonnet-5': { input: 0.000002, output: 0.00001, cacheRead: 0.0000002, cacheWrite: 0.0000025 },
+  'anthropic/claude-opus-5': { input: 0.000005, output: 0.000025, cacheRead: 0.0000005, cacheWrite: 0.00000625 },
+  'openai/gpt-5.3-codex': { input: 0.00000175, output: 0.000014, cacheRead: 0.000000175 },
+  'openai/gpt-5.4': { input: 0.0000025, output: 0.000015, cacheRead: 0.00000025 },
+  'openai/gpt-5.4-nano': { input: 0.0000002, output: 0.00000125, cacheRead: 0.00000002 },
+  'google/gemini-3-flash': { input: 0.0000005, output: 0.000003, cacheRead: 0.00000005 },
+}
+
+export interface GatewayUsageForCosting {
+  inputTokens?: number
+  outputTokens?: number
+  cachedInputTokens?: number
+  inputTokenDetails?: {
+    noCacheTokens?: number
+    cacheReadTokens?: number
+    cacheWriteTokens?: number
+  }
+}
+
+export interface GatewayCostEstimate {
+  usd: number
+  budgetCents: number
+  pricingModel: string
+  cacheReadTokens: number
+  cacheWriteTokens: number
 }
 
 const LEGACY_MODEL_IDS = new Set([
@@ -59,14 +106,76 @@ export function getGatewayFallbackModels(tier: GatewayModelTier): readonly strin
 }
 
 /**
- * The AI Gateway consumes this shape for automatic cross-provider failover.
- * Return a fresh array so individual SDK calls cannot mutate shared policy.
+ * One current Gateway policy for every text request. Caching is provider-aware
+ * (not response caching), no-training applies across all brands, and regulated
+ * requests retain their stricter ZDR routing requirement.
  */
-export function getGatewayProviderOptions(tier: GatewayModelTier) {
+function createGatewayProviderOptions(
+  fallbacks: readonly string[],
+  request: GatewayRequestOptions = {},
+) {
+  const gateway = {
+    models: [...fallbacks],
+    caching: 'auto',
+    disallowPromptTraining: true,
+    ...(request.user ? { user: request.user } : {}),
+    ...(request.tags?.length ? { tags: [...request.tags] } : {}),
+    ...(request.zeroDataRetention ? { zeroDataRetention: true } : {}),
+  } satisfies GatewayProviderOptions
+
   return {
-    gateway: {
-      models: [...GATEWAY_FALLBACKS[tier]],
-    },
+    gateway,
+  }
+}
+
+export function getGatewayProviderOptions(
+  tier: GatewayModelTier,
+  request?: GatewayRequestOptions,
+) {
+  return createGatewayProviderOptions(GATEWAY_FALLBACKS[tier], request)
+}
+
+export function getGatewayRouteProviderOptions(
+  route: GatewayModelRoute,
+  request?: GatewayRequestOptions,
+) {
+  return createGatewayProviderOptions(route.fallbacks, request)
+}
+
+/**
+ * Estimate the actual Gateway request, rather than applying one old rate to
+ * every model. Budget charges round up to a whole cent; the usage record keeps
+ * the precise estimate for reporting.
+ */
+export function estimateGatewayCost(
+  modelId: string,
+  usage: GatewayUsageForCosting,
+): GatewayCostEstimate {
+  const pricingModel = GATEWAY_MODEL_PRICING[modelId]
+    ? modelId
+    : GATEWAY_MODELS.frontier
+  const pricing = GATEWAY_MODEL_PRICING[pricingModel]
+  const inputTokens = usage.inputTokenDetails?.noCacheTokens
+    ?? usage.inputTokens
+    ?? 0
+  const cacheReadTokens = usage.inputTokenDetails?.cacheReadTokens
+    ?? usage.cachedInputTokens
+    ?? 0
+  const cacheWriteTokens = usage.inputTokenDetails?.cacheWriteTokens ?? 0
+  const outputTokens = usage.outputTokens ?? 0
+  const usd = Number((
+    inputTokens * pricing.input
+    + cacheReadTokens * (pricing.cacheRead ?? pricing.input)
+    + cacheWriteTokens * (pricing.cacheWrite ?? pricing.input)
+    + outputTokens * pricing.output
+  ).toFixed(9))
+
+  return {
+    usd,
+    budgetCents: usd > 0 ? Math.ceil(usd * 100) : 0,
+    pricingModel,
+    cacheReadTokens,
+    cacheWriteTokens,
   }
 }
 
