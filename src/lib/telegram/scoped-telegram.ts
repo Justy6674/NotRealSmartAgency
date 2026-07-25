@@ -16,6 +16,7 @@ export type ScopedTelegramIntent =
 const PAIR_CODE = /^\/start\s+nrs_pair_([a-f0-9]{32,128})$/i
 const PROJECT_CALLBACK = /^nrs_project:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
 const NATURAL_GITHUB_CONNECTION = /^(?:please\s+)?(?:connect|link)\s+(?:(?:to|with)\s+)?(?:(?:all|every)\s+)?(?:my\s+)?git(?:[\s-]?hub)(?:\s+(?:account|repo(?:sitories)?|projects?))?(?:\s+(?:to|with)\s+(?:nrs|not\s+real\s+smart))?[.!?]*$/i
+const NATURAL_PROJECT_PICKER = /^(?:please\s+)?(?:(?:change|switch|choose|show|list)\s+(?:(?:my|the)\s+)?projects?|(?:change|switch|move)\s+(?:my\s+)?project(?:\s+(?:to\s+)?[^.!?]+)?|(?:change|switch|move)\s+to\s+[^.!?]+|work\s+on\s+another\s+project)[.!?]*$/i
 
 /**
  * A marketing request can never name a project to change its scope. Scope
@@ -42,6 +43,10 @@ export function parseScopedTelegramIntent(
   if (message.startsWith('/start') || message === '/projects' || message === '/project') {
     return { kind: 'choose_project' }
   }
+
+  // Project names in prose deliberately never select a scope. A user can ask
+  // for the picker naturally, then the signed inline button carries the grant.
+  if (NATURAL_PROJECT_PICKER.test(message)) return { kind: 'choose_project' }
 
   if (message === '/connect') return { kind: 'connect_github', scope: 'current' }
   if (message === '/connect all') return { kind: 'connect_github', scope: 'all' }

@@ -25,6 +25,17 @@ test('Project selection is an explicit grant identifier, never inferred from a m
   assert.deepEqual(parseScopedTelegramIntent(undefined, 'nrs_project:do-today'), { kind: 'ignore' })
 })
 
+test('natural project-change requests open the picker without inferring a project from words', () => {
+  assert.deepEqual(parseScopedTelegramIntent('switch project'), { kind: 'choose_project' })
+  assert.deepEqual(parseScopedTelegramIntent('change my project'), { kind: 'choose_project' })
+  assert.deepEqual(parseScopedTelegramIntent('switch to Scent Sell'), { kind: 'choose_project' })
+  assert.deepEqual(parseScopedTelegramIntent('work on another project'), { kind: 'choose_project' })
+  assert.deepEqual(parseScopedTelegramIntent('make social posts for Do Today'), {
+    kind: 'marketing_request',
+    message: 'make social posts for Do Today',
+  })
+})
+
 test('The picker contains only the paired account grant names and opaque grant identifiers', () => {
   assert.deepEqual(buildScopedProjectKeyboard([
     { grantId: 'grant-1', projectName: 'Do Today' },
