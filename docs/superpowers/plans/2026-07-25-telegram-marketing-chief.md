@@ -13,6 +13,8 @@
 - Telegram is natural language first. Never tell Justin to type `/` for routine work; retain slash parsing only as undocumented backwards compatibility.
 - A Telegram session has exactly one active project. A plain-language switch request opens an explicit project picker; wording alone never expands scope.
 - Every connector is project-bound, read-only by default, and limited to a named resource contract. Never retrieve raw database tables, customer lists, patient data, credentials, or source secrets.
+- Each product may expose an approved, first-party marketing-intelligence connector to its own backend. NRS may read only aggregate product/funnel signals, public-ready assets, verified product facts, and operational opportunities; the product backend remains the source of truth.
+- NRS may propose a backend or conversion optimisation with evidence, expected marketing impact, risk, rollback, and implementation owner. It never changes a product backend, customer journey, pricing, messages, or data model without an explicit approval and a separate project-scoped execution path.
 - Brand facts, founder decisions, preferences, generated drafts, and performance outcomes are separate data classes. Generated copy is never promoted to fact merely because the model wrote it.
 - Live website/repository/social evidence overrides conflicting stale memory, is time-stamped, and is cited internally in the delivery record.
 - All publishing, messaging to customers, email, paid-spend, and data export remain explicit approval actions. NRS may prepare a draft and a proposed audience rule, never broadcast by itself.
@@ -43,6 +45,8 @@ NRS replies with:
 - `src/lib/memory/store.ts`, `src/lib/memory/fact-extractor.ts`, and `src/lib/ruflo/memory-extractor.ts` — add typed, attributable project learning with confidence, source, and review state.
 - `src/lib/agents/performance-learner.ts`, `src/app/api/cron/consolidate-memories/route.ts`, and `src/app/api/cron/performance-learn/route.ts` — consolidate only proven project outcomes and expire stale source facts.
 - `src/lib/github/github-app-client.ts`, `src/lib/github/repository-context.ts`, and `src/app/api/integrations/github/callback/route.ts` — build bounded evidence from installed, selected GitHub repositories only.
+- `src/lib/connectors/marketing-intelligence-contract.ts` and `src/lib/connectors/project-marketing-intelligence.ts` — register and enforce named read-only product-backend marketing resources.
+- `src/lib/agents/tools/query-project-marketing-intelligence.ts` and `src/lib/agents/tools/propose-product-optimisation.ts` — let the Director retrieve approved aggregate signals and write an approval-gated optimisation brief.
 - `supabase/migrations/041_telegram_marketing_chief.sql` — add the durable run/evidence/learning schema, RLS, and provenance checks after explicit migration approval.
 
 **Create**
@@ -91,6 +95,19 @@ NRS replies with:
 - [ ] Require the Director to label uncertainty and missing evidence rather than inventing positioning, analytics, testimonials, compliance status, or repository facts.
 - [ ] Persist a short redacted run summary and delivery status for debugging and quality measurement.
 - [ ] Commit: `feat: add marketing work contracts`.
+
+### Task 3A: Connect approved product backends as marketing-intelligence sources
+
+**Files:** connector contract/registry, Director tools, `project_connectors` migration extension, per-project adapter repositories, tests.
+
+- [ ] Define a versioned first-party contract with narrow read tools: `get_marketing_snapshot`, `get_funnel_summary`, `list_approved_marketing_assets`, `get_verified_product_facts`, and `list_optimisation_opportunities`.
+- [ ] Require every result to contain project id, source timestamp, aggregation level, freshness, and a data-class declaration. Reject customer identifiers, message bodies, medical information, payment details, addresses, credentials, and unrestricted SQL/filter inputs at the connector boundary.
+- [ ] Register connectors per project in `project_connectors` with explicit allowed resources and expiry. A Scent Sell connector, for example, may expose aggregate listing/swap/funnel health and public-ready collection facts—not seller profiles, private chat, payouts, or buyer data.
+- [ ] Add a Director read tool that can use only the active project’s registered contract. It returns evidence, not a direct database client or a sibling-project connector.
+- [ ] Add an optimisation-proposal tool that produces: observation, marketing impact, affected product surface, proposed change, evidence, risk/compliance note, rollback, and owner approval needed. It saves a proposal or GitHub issue/draft only after explicit approval; it never changes the backend itself.
+- [ ] Create Scent Sell as the first proof connector, then repeat the same contract for each project rather than inventing bespoke cross-project access.
+- [ ] Test cross-project denial, resource allow-lists, redaction, stale-source handling, proposal-only behaviour, and a real Scent Sell aggregate snapshot before calling the connector live.
+- [ ] Commit: `feat: add project marketing intelligence connectors`.
 
 ### Task 4: Implement durable, project-bound learning
 
@@ -155,6 +172,7 @@ NRS replies with:
 - Justin never needs a slash command to operate NRS on Telegram.
 - Every reply identifies the active project, completes a defined job, and stays free of raw Markdown and generic filler.
 - NRS can reliably research the project’s approved website, selected repository, approved social profiles, and aggregate analytics.
+- NRS can query each opted-in project’s approved backend marketing-intelligence contract and turn the evidence into a safe, approval-gated product or conversion optimisation proposal.
 - It learns direct founder corrections and measured outcomes for that project only, with provenance and a way to review/expire facts.
 - It cannot use or reveal another project’s context, private repository paths outside the allow-list, customer/patient information, or credentials.
 - It never publishes or broadcasts without an explicit approval event.
