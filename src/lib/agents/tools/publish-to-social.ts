@@ -27,7 +27,7 @@ export function createPublishToSocialTool(
         .array(z.string().uuid())
         .optional()
         .describe(
-          "UUIDs of media_items rows to attach. Use this for videos (from HeyGen, uploads, or query_media) — the tool looks up file_url, mime type, and thumbnail. For Instagram Reels, YouTube Shorts, TikTok, always use media_ids. For carousels of uploaded images, use media_ids instead of image_urls.",
+          "UUIDs of media_items rows to attach. Use this for videos from uploads or query_media — the tool looks up file_url, mime type, and thumbnail. For Instagram Reels, YouTube Shorts, TikTok, always use media_ids. For carousels of uploaded images, use media_ids instead of image_urls.",
         ),
       image_url: z
         .string()

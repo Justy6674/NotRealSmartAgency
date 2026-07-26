@@ -20,12 +20,7 @@ test('keeps review-queue changes outside the direct MCP surface', () => {
 
 test('keeps external media generation and configuration inside the Director flow', () => {
   for (const name of [
-    'create_multi_scene_video',
-    'generate_photo_avatar',
-    'generate_from_template',
-    'upload_talking_photo',
     'blotato_create_visual',
-    'register_webhook',
     'create_mixpost_template',
     'manage_tags',
     'manage_media_tags',

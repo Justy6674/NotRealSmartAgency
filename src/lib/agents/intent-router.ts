@@ -70,7 +70,7 @@ const INTENT_PATTERNS: { pattern: RegExp; agent: AgentType; reason: string }[] =
   { pattern: /\b(automat|workflow|zapier|make\.com|integration|api|webhook|prompt engineering)\b/i, agent: 'automation', reason: 'Automation work requested' },
 
   // Video
-  { pattern: /\b(video|script|scene|presenter|avatar|heygen|talking head|explainer video|product demo video)\b/i, agent: 'video', reason: 'Video content requested' },
+  { pattern: /\b(video|script|scene|presenter|avatar|talking head|explainer video|product demo video)\b/i, agent: 'video', reason: 'Video content requested' },
 
   // Pricing
   { pattern: /\b(pric|pricing|subscription|billing|cost|revenue model|freemium|tier)\b/i, agent: 'strategy', reason: 'Pricing analysis requested' },

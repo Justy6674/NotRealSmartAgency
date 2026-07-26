@@ -501,7 +501,7 @@ const ROOM_CARDS = [
     icon: Video,
     colour: 'bg-red-500/15 text-red-400',
     title: 'Create a Video',
-    description: 'AI presenter, edit yourself, or bulk import. HeyGen + OpenClaw + Canva.',
+    description: 'Plan, edit yourself, or bulk import. NRS Video Toolkit + Canva.',
     href: '/agency/studio/video',
   },
   {

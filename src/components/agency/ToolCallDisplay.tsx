@@ -33,7 +33,6 @@ const TOOL_LABELS: Record<string, string> = {
   web_search: 'Searching the web',
   design_graphic: 'Designing in Canva',
   export_design: 'Exporting design',
-  create_video: 'Creating video',
   fill_calendar: 'Filling content calendar',
   write_blog: 'Writing blog article',
   write_ads: 'Writing ad copy',

@@ -116,12 +116,11 @@ npm run dev    # http://localhost:3000
 │  │  │ TikTok (sandbox, pending app review)                 │    │  │
 │  │  └─────────────────────────────────────────────────────┘    │  │
 │  │  Fallback: Ayrshare API                                      │  │
-│  │  Webhooks: HeyGen + Mixpost → real-time status updates       │  │
+│  │  Webhooks: Mixpost → real-time publishing status updates     │  │
 │  └─────────────────────────────────────────────────────────┘  │
 │                                                                    │
 │  ┌──────────────── Integrations ─────────────────────────────┐  │
-│  │  HeyGen: 18 tools (video agent, translation, templates,     │  │
-│  │          photo avatar, TTS, talking photo, assets, webhooks) │  │
+│  │  Video toolkit: owned voiceover, image and music assets      │  │
 │  │  Canva:  29 tools (generate, edit, resize, comment, folder, │  │
 │  │          upload, export, brand kits, structured generation)  │  │
 │  │  Mixpost: 9 tools (analytics, posts, tags, media, templates)│  │
@@ -181,7 +180,7 @@ Each department is a genuinely independent agent with its own model, memory name
 ### Create Tab — Conversation-First
 
 Intent cards send context-rich messages to the Director instead of opening forms:
-- **Create a Video** — Director suggests video types based on strategy, generates via HeyGen
+- **Create a Video** — Director suggests video types based on strategy and builds a production brief
 - **Design in Canva** — Director suggests concepts, generates via Canva MCP
 - **Write a Post** — Director identifies the underserved platform, writes, shows preview
 - **Run a Campaign** — Director plans multi-platform campaign step by step
@@ -229,8 +228,8 @@ Three-layer memory architecture following Anthropic's Claude Code patterns:
 
 ## Integrations
 
-### HeyGen (18 tools, 11 API routes, 1 webhook)
-Video Agent (one prompt = full video), multi-scene, translation (175 languages), templates, photo avatar, TTS, talking photo, assets, brand glossary, voice locales, webhook receiver.
+### Video Toolkit
+Owned voiceover, image and music endpoints support production briefs and future programmatic rendering without a named video vendor dependency.
 
 ### Canva (29 tools, OAuth 2.0 + PKCE)
 Generate, edit (start/perform/commit/cancel transactions), resize, upload assets, import designs, comments, folders, export, brand kits, structured generation, design content reading.
@@ -254,7 +253,7 @@ Self-hosted on BinaryLane VPS (`mixpost.notrealsmart.com.au`). Analytics/reports
 - **Multi-agent meetings** — Director convenes 2-6 departments in parallel
 - **Content Automation Machine** — upload video, transcribe, generate captions, schedule, auto-publish
 - **Self-hosted publishing** — Mixpost on VPS at $0/month
-- **Video generation** — HeyGen with AHPRA/TGA compliance check
+- **Video planning** — scripts, shot lists, captions and AHPRA/TGA compliance checks
 - **Brand ecosystem** — cross-promotion across sibling brands
 - **Inline rich cards** — post previews, calendar views, analytics, video previews in chat
 - **10-action report bar** — save, email, send, baseline, re-analyse, todo, copy, remember, full view, PDF

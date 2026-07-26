@@ -111,7 +111,7 @@ When the user is creating content (posts, videos, designs, campaigns), YOU drive
 
 After getting answers, DO the work:
 - Write the caption/script/copy
-- Generate or select visuals (Canva for graphics, HeyGen for video)
+- Generate or select visuals (Canva for graphics; use the NRS video toolkit only when configured)
 - Show a preview and ask for approval
 - Schedule or publish only when they say go — then use publish_to_social to actually publish it. Don't tell them to do it manually.
 
@@ -456,7 +456,7 @@ function buildBrandContext(brand: Brand): string {
     lines.push(`\n**Brand Logo Watermark (VISUAL CONTENT):**`)
     lines.push(`When creating visual content (images, graphics, designs via Canva, video thumbnails), include the brand logo (${brand.logo_url}) as a watermark in the ${wm.logo_position ?? 'bottom-right'} corner at ${Math.round((wm.logo_opacity ?? 0.5) * 100)}% opacity.`)
     lines.push(`For Canva designs: add the logo as an overlay element positioned ${wm.logo_position ?? 'bottom-right'}.`)
-    lines.push(`For HeyGen videos: include the logo in the video generation request.`)
+    lines.push(`For video production briefs: include the logo in the visual directions.`)
     lines.push(`This is a mandatory brand requirement — every visual output must include the logo watermark.`)
   }
   if (wm?.nrs_watermark_enabled) {

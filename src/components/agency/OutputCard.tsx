@@ -1,6 +1,4 @@
 'use client'
-
-import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,46 +11,11 @@ interface OutputCardProps {
 
 export function OutputCard({ output }: OutputCardProps) {
   const label = OUTPUT_LABELS[output.output_type] ?? output.output_type
-  const [generating, setGenerating] = useState(false)
-  const [checking, setChecking] = useState(false)
 
   // Safe type casting for metadata since JSONB could be anything
   const metadata = (output.metadata || {}) as Record<string, unknown>
-  const [videoUrl, setVideoUrl] = useState<string | undefined>(metadata.video_url as string | undefined)
-  const [status, setStatus] = useState<string | undefined>(metadata.status as string | undefined)
-
-  const handleGenerate = async () => {
-    setGenerating(true)
-    const res = await fetch('/api/video/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ output_id: output.id, provider: 'heygen' }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      alert('Video generation started! Refresh the Output Library for the new video.')
-    } else {
-      alert('Error: ' + data.error)
-    }
-    setGenerating(false)
-  }
-
-  const handleCheckStatus = async () => {
-    setChecking(true)
-    const res = await fetch('/api/video/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ video_output_id: output.id }),
-    })
-    const data = await res.json()
-    if (res.ok) {
-      setStatus(data.status)
-      if (data.output?.metadata?.video_url) {
-        setVideoUrl(data.output.metadata.video_url)
-      }
-    }
-    setChecking(false)
-  }
+  const videoUrl = metadata.video_url as string | undefined
+  const status = metadata.status as string | undefined
 
   // Compliance metadata
   const compliance = metadata.compliance as { flags?: string[]; warnings?: string[] } | undefined
@@ -85,28 +48,13 @@ export function OutputCard({ output }: OutputCardProps) {
         </p>
       )}
 
-      {output.output_type === 'video_script' && (
-        <Button
-          variant="secondary"
-          size="sm"
-          className="w-full mt-2"
-          onClick={handleGenerate}
-          disabled={generating}
-        >
-          {generating ? 'Generating...' : 'Generate Video (HeyGen)'}
-        </Button>
-      )}
-
       {output.output_type === 'video' && (
         <div className="mt-2 space-y-2">
           {videoUrl ? (
             <video src={videoUrl} controls className="w-full rounded-md bg-black" />
           ) : (
             <div className="p-4 bg-muted/50 rounded-md text-center">
-              <p className="text-xs mb-2">Status: {status || 'processing'}</p>
-              <Button size="sm" variant="outline" onClick={handleCheckStatus} disabled={checking}>
-                {checking ? 'Checking...' : 'Check Status'}
-              </Button>
+              <p className="text-xs">Status: {status || 'processing'}</p>
             </div>
           )}
         </div>

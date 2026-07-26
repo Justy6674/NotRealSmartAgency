@@ -4,7 +4,7 @@
 
 The Creative Studio Create tab currently shows 6 dead intent cards that don't work. The buttons either don't fire (broken Zustand effect chain) or navigate away from the Studio. The cards send generic messages ("Write a post for TeleScribe") with no brand context, strategy awareness, or integration with the agent system.
 
-This spec redesigns the Create tab as a **launchpad into 6 full-screen creation workspaces** (rooms), each connected to the full agent system, memory, strategy, and all integrations (Mixpost, Canva, HeyGen, OpenClaw Video Toolkit).
+This spec redesigns the Create tab as a **launchpad into 6 full-screen creation workspaces** (rooms), each connected to the full agent system, memory, strategy, and all integrations (Mixpost, Canva and the NRS Video Toolkit).
 
 ## Founding Principles
 
@@ -95,15 +95,13 @@ User creates content → Specialist agent does work → Director reviews:
 **Path A: "AI does everything"**
 - User picks topic or lets agent choose from content pillars + strategy needs
 - Video agent writes script → compliance check
-- Production path choice:
-  - HeyGen: avatar presenter (premium, fast, 1-50 scenes, text overlays, emotions)
-  - OpenClaw/Remotion: template-based (cheap, cloud GPU — Qwen3-TTS voiceover, FLUX.2 images, ACE-Step music)
+- Production path: NRS toolkit with Remotion templates, Qwen3-TTS voiceover, FLUX.2 images and ACE-Step music when configured; otherwise a production-ready brief for recording or editing.
 - Auto-formatted for target platform dimensions
 - Director reviews → save to outputs + optionally schedule
 
 **Path B: "I want to edit"**
 - Timeline editor (Twick — React SDK, MIT, modular, AI captions, serverless MP4 export)
-- Import sources: local files, media library, Canva designs, HeyGen clips, OpenClaw renders
+- Import sources: local files, media library, Canva designs and NRS toolkit renders
 - Tracks: video, audio, text overlays, music
 - AI assist on demand: auto-cut silence, add captions (Deepgram), suggest splits, improve quality
 - Export to multiple formats simultaneously (9:16, 16:9, 1:1)
@@ -126,7 +124,7 @@ User creates content → Specialist agent does work → Director reviews:
 
 - `/api/video/render` — triggers OpenClaw/Remotion rendering on cloud GPU
 - `/api/video/process` — ffmpeg operations (trim, concat, captions)
-- Existing: `/api/video/generate` (HeyGen), `/api/video/status`, `/api/media/transcribe`
+- Existing: `/api/video-toolkit/*`, `/api/media/transcribe`
 
 ### Agent Integration
 
@@ -384,5 +382,5 @@ window.addEventListener('nrs-send-chat', (e) => {
 5. Design Room (Canva integration already working)
 6. Content Repurposer (reuses Post Composer patterns)
 7. Campaign Planner (convene_meeting already working)
-8. Video Room (most complex — Twick + HeyGen + OpenClaw integration)
+8. Video Room (most complex — Twick + NRS video toolkit integration)
 9. Calendar enhancement (FullCalendar + drag-and-drop + strategy overlay)

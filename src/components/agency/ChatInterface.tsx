@@ -195,7 +195,7 @@ export function ChatInterface({ conversationId }: ChatInterfaceProps) {
       lines.push(`- **Fill your calendar** for the next 2 weeks`)
       lines.push(`- **Run a full campaign** (type /campaign)`)
       lines.push(`- **Design graphics** in Canva`)
-      lines.push(`- **Create videos** with HeyGen`)
+      lines.push(`- **Plan videos** with scripts, shot lists, captions and production briefs`)
       lines.push(`- **Scan competitors** and find gaps`)
       lines.push(`\nWhat would you like to work on?`)
     }

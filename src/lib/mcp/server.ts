@@ -176,9 +176,7 @@ Tools that are Director-only (call chat_with_director for these):
 publish_to_social, blotato_publish, manage_posts, send_email, process_media,
 write_blog, write_ads,
 write_email_campaign, marketing_audit, deep_competitor_scan, fill_calendar,
-create_video, create_multi_scene_video, analyse_voice, analyse_content_gaps,
-translate_video, generate_photo_avatar, text_to_speech, generate_slides,
-repurpose_content.
+analyse_voice, analyse_content_gaps, generate_slides, repurpose_content.
 
 Example — user says "turn this uploaded video into posts":
   RIGHT:  list_projects()

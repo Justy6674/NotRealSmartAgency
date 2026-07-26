@@ -78,7 +78,7 @@ npm run lint         # ESLint (flat config v9)
 - **Supabase**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - **AI**: `ANTHROPIC_API_KEY` (AI Gateway auto-injected on Vercel, no config needed locally either)
 - **Publishing**: `MIXPOST_API_URL`, `MIXPOST_API_TOKEN`, `AYRSHARE_API_KEY` (fallback)
-- **Media/Video**: `HEYGEN_API_KEY`, `CANVA_API_KEY`, `DEEPGRAM_API_KEY`, `OPENAI_API_KEY` (Whisper fallback)
+- **Media/Video**: `CANVA_API_KEY`, `DEEPGRAM_API_KEY`, `OPENAI_API_KEY` (Whisper fallback)
 - **Payments/Email**: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`
 - **MCP/OAuth**: `MCP_OAUTH_SECRET`, `NEXT_PUBLIC_APP_URL`
 
@@ -135,8 +135,8 @@ Chat messages can contain `json:card` code blocks that render as visual cards: P
 CalendarWeekCard, AnalyticsSummaryCard, BrandSavedCard. Parser: `src/components/agency/inline/parseInlineCards.ts`.
 
 ### Hybrid API Keys
-Canva, HeyGen, Ayrshare tools check `user_integrations` first (power users), fall back to env vars
-(CANVA_API_KEY, HEYGEN_API_KEY, AYRSHARE_API_KEY). Users get everything out of the box.
+Canva and Ayrshare tools check `user_integrations` first (power users), then fall back to env vars
+(`CANVA_API_KEY`, `AYRSHARE_API_KEY`). Users get everything out of the box.
 
 ### Brand Ecosystem
 When chatting about one brand, the Director sees all sibling brands owned by the same user.
@@ -186,7 +186,7 @@ The Superpowers skills are installed globally and **must be used** for all NotRe
 
 The `openclaw-video-toolkit` skill is installed globally. Use it when building or improving the Video & Scripting department:
 
-- **Open-source alternative to HeyGen**: Remotion (React) + cloud GPU (Modal/RunPod) for programmatic video
+- **NRS video stack**: Remotion (React) + cloud GPU (Modal/RunPod) for programmatic video
 - **AI voiceover**: Qwen3-TTS voice cloning — free, runs on your GPU, brand voice matching
 - **Image generation**: FLUX.2 for video scene frames — free on Modal's $30/mo starter
 - **AI music**: ACE-Step royalty-free music generation
@@ -195,7 +195,7 @@ The `openclaw-video-toolkit` skill is installed globally. Use it when building o
 - **Templates**: Product demos, sprint reviews — extensible for marketing content
 
 Integration points in NotRealSmart:
-- `lib/agents/tools/create-video.ts` — can be extended to use toolkit alongside HeyGen
+- `lib/video-toolkit/client.ts` — owned voiceover, image and music generation endpoints
 - `lib/agents/tools/process-media.ts` — toolkit's FFmpeg tools for post-processing
 - Video agent personality (`video` type) — add toolkit awareness to system prompt
 - Cron publisher (`/api/cron/publish-posts`) — rendered MP4s can be published via Mixpost
@@ -407,7 +407,7 @@ Every substantial assistant message (>100 chars) gets action buttons: Save, Emai
 Add Brand dialog has a scan button. `GET /api/scan-github-quick?url=...` fetches README + package.json + repo metadata. Auto-fills brand name, description, niche, extra_context.
 
 ### Video Generation Pipeline
-Video agent writes platform-specific scripts (Reels, TikTok, YouTube, LinkedIn). Scripts saved as `video_script` output type with AHPRA/TGA compliance check. OutputCard has "Generate Video (HeyGen)" button → calls `/api/video/generate` → creates `video` output with player. Status polling via `/api/video/status`. Provider API keys managed in Brand Settings → Video tab via `/api/integrations`.
+Video agent writes platform-specific scripts, shot lists, captions and production briefs (Reels, TikTok, YouTube, LinkedIn). Scripts are saved as `video_script` outputs with AHPRA/TGA compliance checking. Owned video-toolkit endpoints provide optional voiceover, image and music assets; an approved external renderer can be added later behind an explicit capability contract.
 
 ### "Review My Brand" Flow
 Brand cards have "Review Brand" button → `POST /api/brands/{brandId}/review` runs website + GitHub + social scans in parallel → builds structured message → stores in Zustand `pendingReviewMessage` → redirects to Director chat → ChatInterface auto-sends → triggers 6-department meeting (competitor, SEO, content, analytics, compliance, website).
@@ -446,7 +446,7 @@ Config: `src/lib/room-config.ts`. Components: `RoomTabs.tsx` (embedded in `Agenc
 ### Creative Studio — Intelligent Agency Dashboard
 `StudioDashboard.tsx` — live feeds from all integrations. Chat panel auto-opens on Studio pages.
 
-**Dashboard sections** (in order): Director's Brief, Social Connections (Mixpost), Week-at-a-Glance, Drafts Awaiting Action, Strategy & Pillars, Canva Designs, Videos (HeyGen), Competitor Intel, Agent Activity Ticker, Recent Content Feed.
+**Dashboard sections** (in order): Director's Brief, Social Connections (Mixpost), Week-at-a-Glance, Drafts Awaiting Action, Strategy & Pillars, Canva Designs, Video Plans, Competitor Intel, Agent Activity Ticker, Recent Content Feed.
 
 **Data flow**: `useStudioData()` hook fetches from `GET /api/studio/overview?brandId=X` + `GET /api/canva/designs?brandId=X` in parallel.
 
@@ -500,8 +500,6 @@ First-time users get a conversational onboarding flow. Instead of showing missin
 /api/heartbeat                 → Cron endpoint
 /api/agents, tasks, goals, approvals, audit, conversations, outputs, brands → CRUD routes
 /api/brands/[brandId]/review         → One-click brand audit (scans + Director chat)
-/api/video/generate                  → Submit video generation job (HeyGen)
-/api/video/status                    → Poll video generation status
 /api/integrations                    → GET/POST provider API keys
 /api/github/sync                     → Sync GitHub context to brand
 /api/media/upload                    → Upload video/audio to Supabase Storage
@@ -529,7 +527,6 @@ First-time users get a conversational onboarding flow. Instead of showing missin
 /api/keys                            → API key CRUD (create, list, revoke)
 /api/webhooks                        → Webhook endpoints
 /api/video-toolkit                   → Video toolkit integration
-/api/heygen                          → HeyGen proxy endpoints
 /api/memories                        → Memory CRUD endpoints
 /api/email-report                    → Email report to user
 /api/extract-todos                   → Extract action items from messages

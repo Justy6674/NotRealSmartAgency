@@ -60,7 +60,7 @@ const FAQ_DATA: FaqCategory[] = [
       {
         question: 'What tools are built in?',
         answer:
-          'Canva graphic design, HeyGen AI video generation, social publishing (Facebook, Instagram, LinkedIn, TikTok, YouTube), web search, Deepgram and Whisper transcription, email campaigns, and Stripe payments. All tools work out of the box — power users can connect their own accounts for video generation and transcription.',
+          'Canva graphic design, video scripts and production briefs, social publishing (Facebook, Instagram, LinkedIn, TikTok, YouTube), web search, Deepgram and Whisper transcription, email campaigns, and Stripe payments. All tools work out of the box — power users can connect their own accounts for approved video rendering and transcription.',
       },
       {
         question: 'Can I upload images and videos?',

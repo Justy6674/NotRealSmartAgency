@@ -353,7 +353,6 @@ export function BrandProfileForm({ brand }: BrandProfileFormProps) {
         <VideoPreferencesEditor
           preferences={formData.video_preferences as VideoPreferences}
           onChange={(prefs) => setFormData({ ...formData, video_preferences: prefs as any })}
-          showAvatarId={false}
         />
 
         <div className="flex gap-6">

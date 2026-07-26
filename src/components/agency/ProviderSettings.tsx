@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 const VIDEO_PROVIDERS = [
-  { id: 'heygen', name: 'HeyGen', description: 'AI avatar presenter videos, lip-synced, multiple accents' },
   { id: 'runway', name: 'Runway', description: 'Cinematic text-to-video, no avatar, creative shots' },
   { id: 'synthesia', name: 'Synthesia', description: 'Corporate avatar videos, SCORM export' },
   { id: 'kling', name: 'Kling AI', description: 'Affordable text-to-video for social clips' },
@@ -62,7 +61,7 @@ export function ProviderSettings() {
       <div>
         <h2 className="text-lg font-semibold mb-2">Video Generation Providers</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Add your own API keys to enable AI video generation. HeyGen is the default provider for avatar videos.
+          Add an approved video-provider API key when you need an external rendering service.
         </p>
       </div>
 

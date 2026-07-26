@@ -39,7 +39,7 @@ export const videoAndDesignArticles: HelpArticle[] = [
         warning: 'AI-generated avatars should not be presented as real doctors or patients. Always disclose when content is AI-generated if required by your industry regulations.',
       },
     ],
-    tags: ['video', 'ai', 'avatar', 'heygen', 'tiktok', 'reels', 'youtube', 'create', 'generate', 'script'],
+    tags: ['video', 'ai', 'tiktok', 'reels', 'youtube', 'create', 'script', 'storyboard'],
     relatedSlugs: ['video-and-design/talking-photos', 'video-and-design/multi-scene-videos', 'video-and-design/upload-and-repurpose'],
     lastUpdated: '2026-04-07',
   },

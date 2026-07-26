@@ -3,7 +3,7 @@
  *
  * Two entry points:
  * - extractFirstFrame(buffer)    — used when we already have the file in memory
- *                                  (e.g. HeyGen webhook rehost after downloading the CDN file)
+ *                                  (e.g. a completed render after downloading its CDN file)
  * - extractFirstFrameFromUrl(url) — used by the background media processor to
  *                                   grab a thumb from any video already in Supabase Storage
  *                                   WITHOUT downloading the whole file. ffmpeg streams over

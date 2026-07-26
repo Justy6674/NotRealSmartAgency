@@ -170,7 +170,7 @@ export async function POST(request: Request) {
     <ul style="font-size:13px;color:#555;line-height:1.8;margin:8px 0 0;padding-left:20px;">
       <li><strong>Social media publishing</strong> — Facebook, Instagram, LinkedIn, YouTube (auto-publish on schedule)</li>
       <li><strong>Canva</strong> — design graphics, social posts, stories, presentations</li>
-      <li><strong>HeyGen</strong> — create AI avatar videos from a script</li>
+      <li><strong>Video planning</strong> — scripts, shot lists, captions, and production briefs</li>
       <li><strong>Transcription</strong> — upload video/audio, get captions for every platform</li>
       <li><strong>AHPRA/TGA compliance</strong> — every output checked against health advertising rules</li>
       <li><strong>65+ shortcuts</strong> — type / in the chat to see them all</li>

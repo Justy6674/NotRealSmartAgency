@@ -371,7 +371,7 @@ export function MediaSelector({
                 <Film className="h-6 w-6 text-muted-foreground/30 mb-2" />
                 <p className="text-xs text-muted-foreground">No videos in your library yet</p>
                 <p className="text-[10px] text-muted-foreground/50 mt-1">
-                  Upload one in the Media tab, or generate with HeyGen
+                  Upload one in the Media tab, or build a video plan in the Creator
                 </p>
               </>
             ) : (

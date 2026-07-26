@@ -4,7 +4,7 @@ import { z } from 'zod/v3'
 import type { IntegrationProvider } from '@/types/database'
 
 const SaveIntegrationSchema = z.object({
-  provider: z.enum(['heygen', 'runway', 'synthesia', 'kling', 'google_veo']),
+  provider: z.enum(['runway', 'synthesia', 'kling', 'google_veo']),
   api_key: z.string().min(1),
 })
 

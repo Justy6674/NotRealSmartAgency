@@ -5,17 +5,16 @@ import type { VideoPreferences } from '@/types/database'
 interface VideoPreferencesEditorProps {
   preferences: VideoPreferences
   onChange: (preferences: VideoPreferences) => void
-  showAvatarId?: boolean
 }
 
-export function VideoPreferencesEditor({ preferences, onChange, showAvatarId }: VideoPreferencesEditorProps) {
+export function VideoPreferencesEditor({ preferences, onChange }: VideoPreferencesEditorProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Video Preferences
       </p>
       <p className="text-[11px] text-muted-foreground">
-        Controls how AI-generated videos look: accent, presenter style, and background.
+        Controls video briefs: narration accent, presentation style, and background.
       </p>
 
       <div className="grid grid-cols-2 gap-3">
@@ -64,21 +63,6 @@ export function VideoPreferencesEditor({ preferences, onChange, showAvatarId }: 
           <option value="minimal">Minimal</option>
         </select>
       </div>
-
-      {showAvatarId && (
-        <div>
-          <label className="text-[10px] font-medium text-muted-foreground">HeyGen Avatar ID</label>
-          <input
-            value={preferences.avatar_id ?? ''}
-            onChange={e => onChange({ ...preferences, avatar_id: e.target.value })}
-            placeholder="e.g., avatar_abc123"
-            className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs mt-0.5"
-          />
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            Find this in your HeyGen dashboard under Avatars
-          </p>
-        </div>
-      )}
     </div>
   )
 }

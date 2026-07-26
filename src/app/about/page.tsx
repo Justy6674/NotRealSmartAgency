@@ -275,7 +275,7 @@ export default function AboutPage() {
                   'Email campaigns (Spam Act compliant)',
                   'Video scripting (Reels, TikTok, YouTube)',
                   'Graphic design via Canva',
-                  'AI video generation via HeyGen',
+                  'Video scripts, storyboards and production briefs',
                   'Web search and competitor research',
                 ].map((item) => (
                   <li

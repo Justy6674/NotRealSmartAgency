@@ -6,7 +6,7 @@
 
 **Architecture:** Video Room has 3 paths (AI generates, manual edit via Twick, bulk import via C.A.M.). Design Room has 3 paths (AI designs via Canva API, browse/edit in Canva, upload own). Both use RoomLayout, sendToDirector for AI, strategy context.
 
-**Tech Stack:** Next.js 15, React 19, Twick (video editor), Canva Connect API, HeyGen API, OpenClaw Video Toolkit, ffmpeg.wasm, TypeScript
+**Tech Stack:** Next.js 15, React 19, Twick (video editor), Canva Connect API, NRS Video Toolkit, ffmpeg.wasm, TypeScript
 
 **Dependencies:** Foundation plan must be complete (it is). Twick and ffmpeg.wasm need npm install.
 
@@ -24,14 +24,13 @@
 | `CreateHub` | `src/components/agency/studio/CreateHub.tsx` | Launchpad cards linking to room routes |
 | Video route stub | `src/app/agency/studio/video/page.tsx` | `'use client'` + `force-dynamic` + `RoomLayout` shell |
 | Design route stub | `src/app/agency/studio/design/page.tsx` | Same as above |
-| `/api/video/generate` | `src/app/api/video/generate/route.ts` | HeyGen video generation from output script |
-| `/api/video/status` | `src/app/api/video/status/route.ts` | Poll HeyGen job status |
+| `/api/video-toolkit/*` | `src/app/api/video-toolkit/*` | Owned voiceover, image and music endpoints |
 | `/api/canva/designs` | `src/app/api/canva/designs/route.ts` | Fetch user's Canva designs with auto token refresh |
 | `/api/canva/auth` | `src/app/api/canva/auth/route.ts` | Canva OAuth initiation |
 | `/api/canva/callback` | `src/app/api/canva/callback/route.ts` | Canva OAuth callback |
 | `/api/media/upload` | `src/app/api/media/upload/route.ts` | Direct upload to Supabase Storage `media` bucket |
 | `/api/media/transcribe` | `src/app/api/media/transcribe/route.ts` | Deepgram + Whisper fallback transcription |
-| `create_video` tool | `src/lib/agents/tools/create-video.ts` | HeyGen video generation via agent tool |
+| Video planning | `src/components/agency/studio/video/VideoCreatePanel.tsx` | Director-ready script, shot list, captions and asset checklist |
 | Canva tools | `src/lib/agents/tools/canva.ts` | `design_graphic`, `export_design`, `search_designs`, `list_brand_kits`, `get_design`, `list_folder_items`, `search_folders` |
 | `process_media` tool | `src/lib/agents/tools/process-media.ts` | Full pipeline: transcribe -> generate captions -> create draft posts |
 | OpenClaw toolkit | `~/.claude/video-toolkit-tools/` | AI video production (Remotion + cloud GPU) |
@@ -208,7 +207,7 @@ git commit -m "feat: VideoModeSelector component with 3 tabs"
 **Files:**
 - Create: `src/components/agency/studio/video/VideoCreatePanel.tsx`
 
-This panel lets the user describe a video topic, pick a provider (HeyGen avatar or OpenClaw template), select platform format, and hit "Generate". It sends the full request to the Director via `sendToDirector` with strategy context embedded.
+This panel lets the user describe a video topic, select a platform format, and build a production brief. It sends the full request to the Director via `sendToDirector` with strategy context embedded.
 
 - [ ] **Step 1: Create the component**
 
@@ -226,12 +225,11 @@ interface VideoCreatePanelProps {
   strategyContext: StrategyContext | null
 }
 
-type Provider = 'heygen' | 'openclaw'
+type Provider = 'nrs_toolkit'
 type AspectRatio = '9:16' | '16:9' | '1:1'
 
 const PROVIDERS: { id: Provider; label: string; description: string }[] = [
-  { id: 'heygen', label: 'HeyGen Avatar', description: 'AI presenter speaks your script' },
-  { id: 'openclaw', label: 'OpenClaw / Remotion', description: 'Template-based with AI voiceover' },
+  { id: 'nrs_toolkit', label: 'NRS Video Toolkit', description: 'Owned voiceover, image and music assets when configured' },
 ]
 
 const FORMATS: { id: AspectRatio; label: string; platforms: string }[] = [
@@ -242,7 +240,7 @@ const FORMATS: { id: AspectRatio; label: string; platforms: string }[] = [
 
 export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelProps) {
   const [topic, setTopic] = useState('')
-  const [provider, setProvider] = useState<Provider>('heygen')
+  const [provider, setProvider] = useState<Provider>('nrs_toolkit')
   const [format, setFormat] = useState<AspectRatio>('9:16')
   const [sending, setSending] = useState(false)
 
@@ -255,11 +253,11 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
       : 'Choose the best topic based on the strategy context below.'
 
     const message = [
-      `Create a ${format} video for ${brand.name} using ${provider === 'heygen' ? 'HeyGen (AI avatar presenter)' : 'OpenClaw/Remotion (template-based)'}.`,
+      `Prepare a ${format} video production brief for ${brand.name} using the NRS video toolkit where configured.`,
       topicLine,
       `Platform format: ${FORMATS.find(f => f.id === format)?.platforms ?? format}.`,
       '',
-      'Write the script, check compliance, then generate the video.',
+      'Write the script, check compliance, then return the timed shot list, captions and asset checklist.',
       '',
       strategyContext?.agentContext ?? '',
     ].filter(Boolean).join('\n')
@@ -277,7 +275,7 @@ export function VideoCreatePanel({ brand, strategyContext }: VideoCreatePanelPro
     const message = [
       `Suggest the best video topic for ${brand.name} right now based on the strategy.`,
       'Consider what content type is needed, which platform is underserved, and what pillar to rotate to.',
-      'Write the script and generate the video using HeyGen.',
+      'Write the script and return a production-ready brief using the NRS video toolkit where configured.',
       '',
       strategyContext?.agentContext ?? '',
     ].filter(Boolean).join('\n')
@@ -419,7 +417,7 @@ interface VideoEditPanelProps {
   strategyContext: StrategyContext | null
 }
 
-type ImportSource = 'file' | 'library' | 'canva' | 'heygen'
+type ImportSource = 'file' | 'library' | 'canva'
 
 const IMPORT_SOURCES: { id: ImportSource; label: string; icon: typeof Upload }[] = [
   { id: 'file', label: 'Upload file', icon: Upload },

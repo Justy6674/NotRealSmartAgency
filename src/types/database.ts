@@ -15,7 +15,7 @@ export type SubscriptionTier = 'free' | 'starter' | 'professional' | 'practice'
 export type SubscriptionStatus = 'active' | 'cancelled' | 'past_due' | 'trialing' | 'incomplete'
 export type PhaseStatus = 'not_started' | 'in_progress' | 'completed' | 'skipped'
 export type ScanType = 'website' | 'social_media' | 'google_business'
-export type IntegrationProvider = 'halaxy' | 'xero' | 'stripe' | 'google_analytics' | 'heygen' | 'runway' | 'synthesia' | 'kling' | 'google_veo' | 'github' | 'deepgram' | 'instagram_business' | 'facebook_page' | 'linkedin_company' | 'twitter_app' | 'tiktok_business' | 'youtube_channel' | 'ayrshare'
+export type IntegrationProvider = 'halaxy' | 'xero' | 'stripe' | 'google_analytics' | 'runway' | 'synthesia' | 'kling' | 'google_veo' | 'github' | 'deepgram' | 'instagram_business' | 'facebook_page' | 'linkedin_company' | 'twitter_app' | 'tiktok_business' | 'youtube_channel' | 'ayrshare'
 
 export interface User {
   id: string

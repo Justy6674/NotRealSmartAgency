@@ -164,7 +164,7 @@ export async function GET(request: Request) {
         }
         if (post.platform === 'youtube') {
           platformOptions.privacy_status = 'public'
-          // AI-generated content disclosure (HeyGen videos, etc.)
+          // AI-generated content disclosure
           platformOptions.contains_synthetic_media = true
         }
 

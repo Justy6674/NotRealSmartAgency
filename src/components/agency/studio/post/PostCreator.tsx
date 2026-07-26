@@ -225,8 +225,8 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: P
   // the post the user is composing. It must NEVER trigger content generation
   // (videos, images) — the user already picked the media slot above. The
   // earlier version of this prompt said "Write a long video for Facebook"
-  // which the Director correctly interpreted as "make me a video", spawning
-  // research_industry → Convening team meeting → create_video. This wasted
+  // which the Director correctly interpreted as a request to produce media,
+  // spawning unnecessary work. This wasted
   // tokens and produced the wrong output. The prompt is now explicit about
   // wanting text only and forbids the media generation tools.
   const handleAiGenerate = () => {
@@ -235,8 +235,8 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: P
     const message = [
       `Write a CAPTION (text only) for a ${contentType.replace('_', ' ')} post on ${platformNames || 'social media'} for ${brandName}.`,
       hasMedia
-        ? `IMPORTANT: I have already selected ${selectedMedia.length} media item${selectedMedia.length === 1 ? '' : 's'} for this post. DO NOT generate any new media. DO NOT call create_video, multi_scene_video, generate_image, or any media generation tool. Just write the caption that pairs with what I have selected.`
-        : `IMPORTANT: I am writing the caption first; I will pick media after. DO NOT call create_video, multi_scene_video, generate_image, or any media generation tool. Text only.`,
+        ? `IMPORTANT: I have already selected ${selectedMedia.length} media item${selectedMedia.length === 1 ? '' : 's'} for this post. DO NOT generate any new media. Just write the caption that pairs with what I have selected.`
+        : 'IMPORTANT: I am writing the caption first; I will pick media after. Text only — do not generate media.',
       aiPrompt.trim() ? `Topic / brief: ${aiPrompt.trim()}` : '',
       strategyContext?.agentContext ?? '',
       'Use Content & Copy. Return ONLY the caption text + 5-8 lowercase hashtags. I will paste it into the composer.',
@@ -496,20 +496,20 @@ If any items have no AI description or transcription yet, name them and offer to
               AI Generate
             </button>
           )}
-          {/* HeyGen video generation — shown for any content type that accepts video */}
+          {/* Video planning — shown for any content type that accepts video */}
           {['short_video', 'long_video', 'story', 'ad'].includes(contentType) && (
             <button
               type="button"
               onClick={() => {
                 const aspectHint = contentType === 'short_video' ? '9:16 for Reels/TikTok/Shorts' : contentType === 'long_video' ? '16:9 long-form' : '9:16'
                 sendToDirector(
-                  `Generate a ${contentType.replace('_', ' ')} for ${brandName} using HeyGen. Format: ${aspectHint}. Delegate to Video & Scripting — they write the script and call create_video. When the webhook fires, the video will land in my media library automatically (don't ask me to download anything).`,
+                  `Prepare a ${contentType.replace('_', ' ')} production brief for ${brandName}. Format: ${aspectHint}. Use Video & Scripting to write the script, timed shot list, captions, asset checklist, and compliance review. Use NRS-owned video tooling only where it is configured; otherwise return the brief ready for recording or editing.`,
                 )
               }}
               className="inline-flex items-center gap-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-all"
             >
               <Film className="h-3.5 w-3.5" />
-              Generate Video (HeyGen)
+              Build Video Plan
             </button>
           )}
           {/* Blotato visual generation — alternative AI image source.
@@ -579,7 +579,7 @@ If any items have no AI description or transcription yet, name them and offer to
       <StudioCard
         title="Caption"
         directorAssist={{
-          prompt: `Write a CAPTION (text only) for a ${contentType.replace('_', ' ')} post for ${brandName} on ${selectedPlatforms.join(', ') || 'social media'}.${aiPrompt ? ` Topic: ${aiPrompt}` : ''}${selectedMedia.length > 0 ? ` I already have ${selectedMedia.length} media item${selectedMedia.length === 1 ? '' : 's'} selected — write the caption that pairs with them. DO NOT generate new media. DO NOT call create_video, multi_scene_video, or generate_image.` : ' DO NOT call create_video, multi_scene_video, or generate_image — text only.'} Use Content & Copy and Brand if needed. Return only the caption + 5-8 lowercase hashtags.`,
+          prompt: `Write a CAPTION (text only) for a ${contentType.replace('_', ' ')} post for ${brandName} on ${selectedPlatforms.join(', ') || 'social media'}.${aiPrompt ? ` Topic: ${aiPrompt}` : ''}${selectedMedia.length > 0 ? ` I already have ${selectedMedia.length} media item${selectedMedia.length === 1 ? '' : 's'} selected — write the caption that pairs with them. Do not generate new media.` : ' Text only — do not generate media.'} Use Content & Copy and Brand if needed. Return only the caption + 5-8 lowercase hashtags.`,
           label: 'Write my caption',
         }}
       >

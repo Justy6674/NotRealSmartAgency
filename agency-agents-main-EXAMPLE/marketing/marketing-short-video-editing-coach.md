@@ -313,7 +313,7 @@ vibe: Turns raw footage into scroll-stopping short videos with professional poli
   - Quality assessment: AI music is sufficient for simple scoring; complex arrangements and vocal performances still fall short of human creation
 
 - **Digital avatar narration**
-  - Tools: CapCut digital avatar, HeyGen, D-ID, Tencent Zhi Ying
+  - Tools: digital-avatar and narrated-video software
   - Use cases: Batch-producing educational / news content, substitute when on-camera talent isn't available
   - Current state: Lip sync and facial expressions are fairly natural now, but the "clearly a digital avatar" feeling persists
   - Usage recommendation: Use as a supplement to real on-camera talent, not a replacement - audiences trust real people far more

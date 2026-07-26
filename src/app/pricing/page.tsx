@@ -15,7 +15,7 @@ const FEATURES = [
   { label: '65+ slash commands for instant actions' },
   { label: 'Content calendar with auto-scheduling + Google Calendar / Apple Calendar sync' },
   { label: 'Social publishing across Instagram, Facebook, LinkedIn, YouTube, TikTok, X' },
-  { label: 'HeyGen AI video generation' },
+  { label: 'Video scripts, storyboards and production briefs' },
   { label: 'Canva graphic design' },
   { label: 'AHPRA/TGA compliance checking' },
   { label: 'Brand DNA voice enforcement' },
