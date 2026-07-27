@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/superpowers/specs/2026-04-08-nrs-complete-architecture-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "NotRealSmart Agency — Complete Architecture Spec",
+  "summary": "Master architecture spec for NRS: Director's Office, Creative Studio content pipeline, and Command Centre, with mandatory human approval before publishing.",
+  "scope": ["NotRealSmart Agency", "Director", "Director's Office", "Creative Studio", "Command Centre", "content pipeline", "brand proforma", "MCP clients", "compliance (AHPRA/TGA)"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 10,
+  "notes": ""
+}

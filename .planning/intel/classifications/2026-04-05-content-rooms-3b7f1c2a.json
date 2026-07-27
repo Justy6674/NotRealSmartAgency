@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/superpowers/plans/2026-04-05-content-rooms.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Content Rooms Implementation Plan (Post Composer + Content Repurposer)",
+  "summary": "Implementation plan for the Post Composer and Content Repurposer studio rooms, with component files, Tiptap editor setup, and platform character limits.",
+  "scope": ["Post Composer room", "Content Repurposer room", "RoomLayout", "useStrategyContext", "sendToDirector", "Tiptap editor", "platform character limits", "scheduled-posts API", "outputs API"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 20,
+  "notes": ""
+}

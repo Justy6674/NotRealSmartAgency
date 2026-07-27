@@ -1,0 +1,23 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/superpowers/specs/2026-07-24-publishing-and-verification-hardening-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Publishing and Verification Hardening Design",
+  "summary": "Design for a direct MCP tool allowlist, stricter Mixpost webhook signature verification, and CI-run test, lint, and build gates.",
+  "scope": [
+    "MCP adapter direct-tool allowlist",
+    "publish_to_social",
+    "blotato_publish",
+    "send_email",
+    "manage_posts",
+    "chat_with_director",
+    "Mixpost webhook HMAC verification",
+    "npm test / node:test",
+    "GitHub Actions CI"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 10,
+  "notes": ""
+}

@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/README.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "NotRealSmart Agency",
+  "summary": "Project README describing the NotRealSmart Agency AI marketing platform, design principles, stack, getting started commands, and architecture.",
+  "scope": ["NotRealSmart Agency", "NRS Director", "department agents", "Next.js", "Supabase", "Vercel AI SDK", "Creative Studio", "Command Centre"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 40,
+  "notes": "MANIFEST_TYPE=DOC applied as authoritative; MANIFEST_PRECEDENCE=40 recorded. Filename hash suffix generated without shell access."
+}

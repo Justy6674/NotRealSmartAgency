@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/2026-04-12-interactive-demo-product-research.md",
+  "type": "PRD",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Interactive Product Demo + Brand Voice Showcase — Product Research",
+  "summary": "Research and proposed build-first architecture for auto-scanning a subscriber website into a brand kit and animated interactive product demo.",
+  "scope": ["interactive product demo", "brand voice showcase", "website scan", "brand kit generation", "animated showcase video", "Director integration", "scan_website", "browse_page", "analyse_voice", "generate_image", "video toolkit"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 30,
+  "notes": "Type set by manifest (PRD). Document self-describes as 'Status: Research Phase' with vision + proposed architecture rather than user stories or acceptance criteria."
+}

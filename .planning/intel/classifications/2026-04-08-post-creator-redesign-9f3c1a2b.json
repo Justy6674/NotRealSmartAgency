@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/2026-04-08-post-creator-redesign.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Post Creator Redesign — Scent Sell Pattern for Social Media",
+  "summary": "Section-by-section redesign spec for the NRS Post Composer covering media slots, platform selection, caption editing, compliance, preview and actions.",
+  "scope": ["Post Composer", "/agency/studio/post", "media slots", "platform selector", "content types", "caption editor", "hashtag groups", "post templates", "scheduling", "AHPRA/TGA compliance check", "live platform preview", "sticky action bar", "Mixpost publishing"],
+  "cross_refs": ["src/pages/Sell.tsx", "src/components/agency/MediaUploader.tsx"],
+  "locked": false,
+  "precedence": 10,
+  "notes": ""
+}

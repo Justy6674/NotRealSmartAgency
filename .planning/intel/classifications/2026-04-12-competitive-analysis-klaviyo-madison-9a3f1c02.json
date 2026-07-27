@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/2026-04-12-competitive-analysis-klaviyo-madison.md",
+  "type": "PRD",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Competitive Analysis: Klaviyo K:AI + Madison Framework",
+  "summary": "Competitive analysis of Klaviyo K:AI and MIT Madison framework identifying six feature gaps for the NRS build.",
+  "scope": ["Klaviyo K:AI", "Madison Framework", "A/B content testing", "auto-monitors", "Reviews AI", "Multi-Armed Bandit content optimisation", "synthetic persona simulation", "image remix"],
+  "cross_refs": ["github.com/Humanitariansai/Madison"],
+  "locked": false,
+  "precedence": 30,
+  "notes": ""
+}

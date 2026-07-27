@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/superpowers/plans/2026-04-05-planning-rooms.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Planning Rooms Implementation Plan (Campaign Planner + Calendar Enhancement)",
+  "summary": "Implementation plan for the Campaign Planner room and FullCalendar-based Calendar enhancements in Creative Studio.",
+  "scope": ["Campaign Planner", "Calendar tab", "CampaignBrief component", "convene_meeting", "FullCalendar", "Creative Studio"],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 20,
+  "notes": "Type taken from MANIFEST_TYPE=SPEC; content is task-by-task implementation contracts with TypeScript interfaces, consistent with SPEC."
+}
