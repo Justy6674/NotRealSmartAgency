@@ -26,4 +26,15 @@ test('caption and hashtag asks are execution requests with a caption contract', 
   assert.match(contract, /TELEGRAM CAPTION CONTRACT/)
   assert.match(contract, /Write the finished caption NOW/i)
   assert.match(contract, /Do not ask "sales, engagement, or awareness/i)
+  assert.match(contract, /Never ask "What result would make the next 90 days a win/i)
+})
+
+test('try again is an execution request that completes the resolved prior ask', () => {
+  assert.equal(isTelegramExecutionRequest('try again'), true)
+  const contract = buildTelegramExecutionContract(
+    'try again',
+    'Need a caption and hashtags for this video',
+  )
+  assert.match(contract, /Need a caption and hashtags for this video/)
+  assert.match(contract, /TELEGRAM CAPTION CONTRACT/)
 })

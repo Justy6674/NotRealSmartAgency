@@ -95,6 +95,23 @@ test('Telegram prompts ask for clean text rather than raw Markdown', () => {
   assert.doesNotMatch(prompt, /Use markdown formatting for all outputs/)
 })
 
+test('Telegram skips goal-discovery when there is no active outcome', () => {
+  const prompt = buildSystemPrompt(brand, director, {
+    deliveryChannel: 'telegram',
+    activeGoal: null,
+  })
+
+  assert.doesNotMatch(prompt, /NO ACTIVE END-USER OUTCOME/)
+  assert.doesNotMatch(prompt, /What result would make the next 90 days a win/)
+})
+
+test('web still discovers an outcome when there is no active goal', () => {
+  const prompt = buildSystemPrompt(brand, director, { activeGoal: null })
+
+  assert.match(prompt, /NO ACTIVE END-USER OUTCOME/)
+  assert.match(prompt, /What result would make the next 90 days a win/)
+})
+
 test('prompts turn source-grounded build opportunities into approval-only developer handoffs', () => {
   const prompt = buildSystemPrompt(brand, director)
 

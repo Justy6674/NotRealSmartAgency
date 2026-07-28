@@ -50,6 +50,12 @@ import {
   needsTelegramResponseRepair,
 } from '@/lib/telegram/telegram-response-quality'
 import {
+  buildTelegramModelMessages,
+  buildTelegramThreadContract,
+  loadTelegramThreadHistory,
+  resolveTelegramWorkMessage,
+} from '@/lib/telegram/telegram-thread'
+import {
   matchesDirectorJobScope,
   type DirectorExecutionScope,
 } from '@/lib/agents/director-execution'
@@ -203,19 +209,49 @@ export async function runDirectorJob(
       proformaSummary = lines.join('\n')
     }
 
+    // Telegram reconstructs short-term thread from recent completed jobs for
+    // this exact project grant so follow-ups ("try again", "what did I ask")
+    // resolve against prior turns instead of a blank slate.
+    let telegramWorkMessage = message
+    let modelMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+      { role: 'user', content: message },
+    ]
+    let telegramThreadContract = ''
+    if (execution.channel === 'telegram') {
+      const thread = await loadTelegramThreadHistory(supabase, {
+        userId,
+        brandId: brand_id,
+        grantId: execution.projectAccessGrantId,
+        excludeJobId: jobId,
+      })
+      telegramWorkMessage = resolveTelegramWorkMessage(
+        message,
+        thread.map((turn) => turn.userMessage),
+      )
+      modelMessages = buildTelegramModelMessages(thread, message)
+      telegramThreadContract = buildTelegramThreadContract(
+        message,
+        telegramWorkMessage,
+        thread.length > 0,
+      )
+    }
+
     // Build system prompt with memory
     const activeGoal = await getActiveGoal(supabase, userId, brand_id)
     let { prompt: systemPrompt } = await buildSystemPromptWithMemory(
       brand as Brand,
       agentConfig as AgentConfig,
-      message,
+      telegramWorkMessage,
       { proformaSummary, deliveryChannel: execution.channel, activeGoal },
       userId,
     )
 
     // ── Injection 1: routing hints ──
-    const routing = classifyIntent(message)
-    const multiRouting = classifyIntentMulti(message)
+    // On Telegram follow-ups, route against the resolved prior ask so Intent
+    // still points at the real marketing work.
+    const routingMessage = execution.channel === 'telegram' ? telegramWorkMessage : message
+    const routing = classifyIntent(routingMessage)
+    const multiRouting = classifyIntentMulti(routingMessage)
     const routingContext = websiteScanDirective ? null : buildRoutingContext(routing, multiRouting)
     if (routingContext) {
       systemPrompt += '\n\n---\n\n' + routingContext
@@ -444,7 +480,10 @@ That's the difference between a marketing director and a tech support agent. Def
     }
 
     if (execution.channel === 'telegram') {
-      const telegramExecutionContract = buildTelegramExecutionContract(message)
+      if (telegramThreadContract) {
+        systemPrompt += `\n\n${telegramThreadContract}`
+      }
+      const telegramExecutionContract = buildTelegramExecutionContract(message, telegramWorkMessage)
       if (telegramExecutionContract) {
         systemPrompt += `\n\n${telegramExecutionContract}`
       }
@@ -489,15 +528,16 @@ That's the difference between a marketing director and a tech support agent. Def
 
     // Run the Director — full power, 8 tool steps, delegation allowed.
     // No timeout fight: this runs in after() so the MCP route already returned.
+    // Telegram passes reconstructed thread turns; other channels stay single-turn.
     const result = await generateText({
       model: gateway(modelRoute.model),
       system: systemPrompt,
-      messages: [{ role: 'user', content: message }],
+      messages: modelMessages,
       tools,
       stopWhen: stepCountIs(8),
       providerOptions: getGatewayRouteProviderOptions(modelRoute, {
         user: userId,
-        tags: ['overall', typedBrand.slug, 'mcp'],
+        tags: ['overall', typedBrand.slug, execution.channel === 'telegram' ? 'telegram' : 'mcp'],
         zeroDataRetention: isHealthBrand,
       }),
     })
@@ -518,7 +558,13 @@ That's the difference between a marketing director and a tech support agent. Def
       const repaired = await generateText({
         model: gateway(modelRoute.model),
         system: systemPrompt,
-        prompt: buildTelegramResponseRepairPrompt(message, response),
+        messages: [
+          ...modelMessages,
+          {
+            role: 'user' as const,
+            content: buildTelegramResponseRepairPrompt(message, response, telegramWorkMessage),
+          },
+        ],
         stopWhen: stepCountIs(1),
         providerOptions: getGatewayRouteProviderOptions(modelRoute, {
           user: userId,

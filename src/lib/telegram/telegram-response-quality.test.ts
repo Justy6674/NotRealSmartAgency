@@ -45,3 +45,23 @@ What result matters most here — sales, engagement, or brand awareness?`
 
   assert.equal(needsTelegramResponseRepair('Need a caption and hashtags for this video', form), true)
 })
+
+test('repairs 90-day goal discovery spam on follow-ups', () => {
+  const spam = `You asked: "What did i ask you"
+
+Standing instructions for Scent Sell still apply.
+
+Also, before we turn this into ongoing work, what result would make the next 90 days a win for Scent Sell?`
+
+  assert.equal(needsTelegramResponseRepair('What did i ask you', spam), true)
+})
+
+test('repairs try-again retry menus', () => {
+  const menu = `What exactly do you want me to retry?
+• the media review
+• the caption
+• the publish step
+• or the fragrance carousel copy.`
+
+  assert.equal(needsTelegramResponseRepair('try again', menu), true)
+})

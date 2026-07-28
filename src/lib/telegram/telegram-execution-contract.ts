@@ -1,9 +1,13 @@
+import { isTelegramFollowUp } from './telegram-thread'
+
 const EXECUTION_VERB = /\b(scan|review|audit|analyse|analyze|check|research|compare|create|write|draft|build|make|plan|find|look\s+at)\b/i
 const CAPTION_ASK = /\b(caption|hashtag|hashtags|description|video\s+desc(?:ription)?|hook|angle|why\s+(?:to\s+)?(?:look|check|try)|post\s+copy|social\s+copy)\b/i
 
 /** A request with a concrete marketing verb should be completed, not triaged. */
 export function isTelegramExecutionRequest(message: string): boolean {
-  return EXECUTION_VERB.test(message) || isTelegramCaptionRequest(message)
+  return EXECUTION_VERB.test(message)
+    || isTelegramCaptionRequest(message)
+    || isTelegramFollowUp(message)
 }
 
 /** Caption / hashtag / video-description asks must return copy, not a form. */
@@ -14,11 +18,15 @@ export function isTelegramCaptionRequest(message: string): boolean {
 /**
  * The Telegram channel is an owner control surface. Explicit work requests
  * must reach a finished, useful result rather than another intake question.
+ *
+ * @param message — the inbound Telegram text (may be a follow-up like "try again")
+ * @param workMessage — the marketing ask to complete (resolved from thread when follow-up)
  */
-export function buildTelegramExecutionContract(message: string): string {
-  if (!isTelegramExecutionRequest(message)) return ''
+export function buildTelegramExecutionContract(message: string, workMessage: string = message): string {
+  if (!isTelegramExecutionRequest(message) && !isTelegramExecutionRequest(workMessage)) return ''
 
-  const captionRules = isTelegramCaptionRequest(message)
+  const deliverable = workMessage.trim() || message.trim()
+  const captionRules = isTelegramCaptionRequest(deliverable)
     ? `
 TELEGRAM CAPTION CONTRACT
 The owner asked for publishable social copy (caption, description, hashtags and/or angle).
@@ -31,12 +39,13 @@ The owner asked for publishable social copy (caption, description, hashtags and/
     : ''
 
   return `TELEGRAM EXECUTION CONTRACT
-The owner gave this concrete request: ${message}
-- Complete the requested work now using the active project context and any fresh source evidence already gathered.
+The owner gave this concrete request: ${deliverable}
+- Complete the requested work now using the active project context, Telegram thread history, and any fresh source evidence already gathered.
 - Do not send a menu of services, restate your capabilities, or ask what the owner wants to work on.
-- Do not ask a clarifying question when the request can be completed from the project context. Ask only when a required source, approval, or decision is genuinely unavailable, and name that one blocker.
+- Do not ask a clarifying question when the request can be completed from the project context or thread. Ask only when a required source, approval, or decision is genuinely unavailable, and name that one blocker.
+- Never ask "What result would make the next 90 days a win" or stall for goal discovery on Telegram.
 - Return a finished result: the finding or deliverable, the evidence or reasoning that supports it, and the one recommended next action.
 - Do not use Markdown. Keep the result concise enough to read on Telegram.
-- Override any "inquisitive director", Creative Studio intake, or "never write captions yourself" instruction for this Telegram turn. Deliver the work.
+- Override any "inquisitive director", Creative Studio intake, goal-discovery, or "never write captions yourself" instruction for this Telegram turn. Deliver the work.
 ${captionRules}`.trim()
 }

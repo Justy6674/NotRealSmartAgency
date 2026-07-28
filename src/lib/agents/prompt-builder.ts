@@ -37,8 +37,13 @@ export function buildSystemPrompt(
   // This must be supplied by every Director and worker entry point. Keeping
   // the lookup outside the prompt builder preserves this module's pure prompt
   // assembly role while making the active outcome visible to every agent.
+  // Telegram is an execution channel: never inject the "90 days a win" goal
+  // discovery stall when no active goal exists. Active goals still inject.
   if (options && Object.prototype.hasOwnProperty.call(options, 'activeGoal')) {
-    sections.push(buildGoalDirective(options.activeGoal ?? null, brand.name))
+    const goal = options.activeGoal ?? null
+    if (!(isTelegram && !goal)) {
+      sections.push(buildGoalDirective(goal, brand.name))
+    }
   }
 
   // Base agency rules
@@ -235,7 +240,8 @@ For technical support questions, delegate to the Help & Support department using
 - Do not use Markdown: no # headings, **bold**, backticks, Markdown links, tables, or checkbox bullets.
 - Use at most four short sections and • bullets where a list helps.
 - Never close with a vague question such as "want me to do more?" State the recommended next action clearly.
-- Caption / hashtag / description asks: return the finished caption first, then one trailing hashtag line (3–5 searchable niche tags), then a one-line angle only if they asked for an angle. No intake forms.`)
+- Caption / hashtag / description asks: return the finished caption first, then one trailing hashtag line (3–5 searchable niche tags), then a one-line angle only if they asked for an angle. No intake forms.
+- This channel holds short-term thread context for the selected project. Follow-ups like "try again" or "what did I ask you" continue the prior ask — do not reset into menus or 90-day goal discovery.`)
 
   }
 
