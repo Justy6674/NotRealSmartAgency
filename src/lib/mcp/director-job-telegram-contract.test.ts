@@ -7,6 +7,8 @@ test('Telegram Director work appends the execution contract after the general pr
   const source = readFileSync(resolve(process.cwd(), 'src/lib/mcp/director-job.ts'), 'utf8')
 
   assert.match(source, /buildTelegramExecutionContract/)
+  assert.match(source, /needsTelegramResearchBeforeDeliver/)
   assert.match(source, /execution\.channel === 'telegram'/)
-  assert.ok(source.indexOf('INQUISITIVE BEHAVIOUR') < source.indexOf('buildTelegramExecutionContract(message)'))
+  assert.ok(source.indexOf('INQUISITIVE BEHAVIOUR') < source.indexOf('buildTelegramExecutionContract(message'))
+  assert.match(source, /repairNeedsResearch \? \{ tools \}/)
 })

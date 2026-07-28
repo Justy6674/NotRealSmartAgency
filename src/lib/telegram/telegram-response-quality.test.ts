@@ -65,3 +65,11 @@ test('repairs try-again retry menus', () => {
 
   assert.equal(needsTelegramResponseRepair('try again', menu), true)
 })
+
+test('repairs ungrounded stalls that ask the owner for product details', () => {
+  const stall = `I don't have enough information about the product.
+
+Tell me more about the product and I'll write the caption.`
+
+  assert.equal(needsTelegramResponseRepair('research what I am doing', stall), true)
+})

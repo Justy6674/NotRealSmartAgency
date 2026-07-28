@@ -39,6 +39,7 @@ import {
 import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { buildTelegramExecutionContract } from '@/lib/telegram/telegram-execution-contract'
+import { needsTelegramResearchBeforeDeliver } from '@/lib/telegram/telegram-research-contract'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
 import {
   estimateGatewayCost,
@@ -292,9 +293,15 @@ export async function runDirectorJob(
 - A mention of another brand NEVER changes this job's project scope. Explain that this request remains scoped to the current project; the user must start a separately scoped request through the project picker or by selecting that project in MCP.`
 
     // ── Injection 4: product-mention search-first ──
+    // Telegram also triggers on scent/product asks even when the verb is
+    // implicit ("research what I'm doing", "caption for the new bottle").
     const mentionsProducts =
       /(?:write|create|post|caption|describe|carousel|about)\s+.*(?:product|fragrance|perfume|service|item|scent|cologne)/i.test(
         message,
+      )
+      || (
+        execution.channel === 'telegram'
+        && /\b(?:product|fragrance|perfume|scent|cologne|bottle|notes)\b/i.test(telegramWorkMessage)
       )
     if (mentionsProducts) {
       systemPrompt +=
@@ -555,6 +562,9 @@ That's the difference between a marketing director and a tech support agent. Def
     let repairModel: string | undefined
 
     if (execution.channel === 'telegram' && needsTelegramResponseRepair(message, response)) {
+      // Research-needed repairs must keep tools — a tool-less one-shot just
+      // invents another ungrounded answer. Plain delivery repairs stay short.
+      const repairNeedsResearch = needsTelegramResearchBeforeDeliver(message, telegramWorkMessage)
       const repaired = await generateText({
         model: gateway(modelRoute.model),
         system: systemPrompt,
@@ -565,7 +575,8 @@ That's the difference between a marketing director and a tech support agent. Def
             content: buildTelegramResponseRepairPrompt(message, response, telegramWorkMessage),
           },
         ],
-        stopWhen: stepCountIs(1),
+        ...(repairNeedsResearch ? { tools } : {}),
+        stopWhen: stepCountIs(repairNeedsResearch ? 6 : 1),
         providerOptions: getGatewayRouteProviderOptions(modelRoute, {
           user: userId,
           tags: ['overall', typedBrand.slug, 'telegram-repair'],

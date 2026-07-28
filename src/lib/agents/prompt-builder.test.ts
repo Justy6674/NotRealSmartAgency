@@ -95,6 +95,14 @@ test('Telegram prompts ask for clean text rather than raw Markdown', () => {
   assert.doesNotMatch(prompt, /Use markdown formatting for all outputs/)
 })
 
+test('Telegram prompts require research-before-deliver instead of invent-then-ask', () => {
+  const prompt = buildSystemPrompt(brand, director, { deliveryChannel: 'telegram' })
+
+  assert.match(prompt, /RESEARCH the active project with tools first/i)
+  assert.match(prompt, /query_media analysis/i)
+  assert.doesNotMatch(prompt, /write the finished copy NOW using brand voice/i)
+})
+
 test('Telegram skips goal-discovery when there is no active outcome', () => {
   const prompt = buildSystemPrompt(brand, director, {
     deliveryChannel: 'telegram',

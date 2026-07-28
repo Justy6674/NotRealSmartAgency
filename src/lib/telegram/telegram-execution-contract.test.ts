@@ -12,9 +12,11 @@ test('an explicit Telegram task requires completed work rather than a service me
   assert.equal(isTelegramExecutionRequest('Hello'), false)
 
   const contract = buildTelegramExecutionContract('Scan the site')
-  assert.match(contract, /complete the requested work now/i)
+  assert.match(contract, /complete the requested work/i)
+  assert.match(contract, /fresh source evidence you gather with tools/i)
   assert.match(contract, /do not send a menu of services/i)
   assert.match(contract, /do not ask a clarifying question/i)
+  assert.match(contract, /TELEGRAM RESEARCH-BEFORE-DELIVER CONTRACT/)
 })
 
 test('caption and hashtag asks are execution requests with a caption contract', () => {
@@ -24,9 +26,10 @@ test('caption and hashtag asks are execution requests with a caption contract', 
 
   const contract = buildTelegramExecutionContract('Need a caption and hashtags for this video')
   assert.match(contract, /TELEGRAM CAPTION CONTRACT/)
-  assert.match(contract, /Write the finished caption NOW/i)
+  assert.match(contract, /After the research step above, write the finished caption/i)
   assert.match(contract, /Do not ask "sales, engagement, or awareness/i)
   assert.match(contract, /Never ask "What result would make the next 90 days a win/i)
+  assert.match(contract, /query_media/)
 })
 
 test('try again is an execution request that completes the resolved prior ask', () => {
@@ -37,4 +40,12 @@ test('try again is an execution request that completes the resolved prior ask', 
   )
   assert.match(contract, /Need a caption and hashtags for this video/)
   assert.match(contract, /TELEGRAM CAPTION CONTRACT/)
+  assert.match(contract, /TELEGRAM RESEARCH-BEFORE-DELIVER CONTRACT/)
+})
+
+test('what am I doing is an execution request that forces project inspection research', () => {
+  assert.equal(isTelegramExecutionRequest('research what I am doing'), true)
+  const contract = buildTelegramExecutionContract('research what I am doing')
+  assert.match(contract, /TELEGRAM PROJECT INSPECTION/)
+  assert.match(contract, /query_media/)
 })
