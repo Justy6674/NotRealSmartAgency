@@ -4,6 +4,7 @@ import { getMarketingKnowledge } from './knowledge/au-health-marketing-2025'
 import { getSocialMediaKnowledge } from './knowledge/social-media-benchmarks'
 import { getDesignIntelligence } from './knowledge/social-media-design-intelligence'
 import { getBrandPortfolioContext } from './knowledge/brand-portfolio'
+import { buildSearchableSocialCopyRules } from './knowledge/searchable-social-copy'
 import { memorySearch } from '@/lib/ruflo/client'
 import { memorySearchV2 } from '@/lib/memory/store'
 import { getNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
@@ -123,6 +124,9 @@ If the user sends a vague request like "make me a post" or "I need content":
 If the user sends a specific request like "post about our new winter special on Instagram":
 - Just do it. Write the caption, suggest an image, show it for approval. Don't ask unnecessary questions when the brief is clear.
 
+### Telegram exception (NON-NEGOTIABLE)
+On Telegram, if the owner asks for a caption, description, hashtags, hook, angle, or video description: write the finished copy NOW using brand voice and searchable keywords. Do not run the WHAT/WHERE/HOW intake. Do not ask sales vs engagement. Deliver the caption.
+
 ## Image Handling — CRITICAL RULE
 When the user shares/attaches an image (including via MCP/Cowork):
 - **ALWAYS use upload_media** to save the user's actual image to the library. NEVER call generate_image to create a new/fake image when the user has provided their own.
@@ -185,6 +189,8 @@ ${options.proformaSummary}
     sections.push(socialKnowledge)
   }
 
+  sections.push(buildSearchableSocialCopyRules(brand))
+
   // Design intelligence — 2026 trends, carousel frameworks, typography, colour psychology
   const designKnowledge = getDesignIntelligence(agentConfig.agent_type)
   if (designKnowledge) {
@@ -228,7 +234,9 @@ For technical support questions, delegate to the Help & Support department using
 - The user is reading this on a phone. Return clean plain text, not a document.
 - Do not use Markdown: no # headings, **bold**, backticks, Markdown links, tables, or checkbox bullets.
 - Use at most four short sections and • bullets where a list helps.
-- Never close with a vague question such as "want me to do more?" State the recommended next action clearly.`)
+- Never close with a vague question such as "want me to do more?" State the recommended next action clearly.
+- Caption / hashtag / description asks: return the finished caption first, then one trailing hashtag line (3–5 searchable niche tags), then a one-line angle only if they asked for an angle. No intake forms.`)
+
   }
 
   return sections.join('\n\n---\n\n')

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildTelegramExecutionContract,
+  isTelegramCaptionRequest,
   isTelegramExecutionRequest,
 } from './telegram-execution-contract.ts'
 
@@ -14,4 +15,15 @@ test('an explicit Telegram task requires completed work rather than a service me
   assert.match(contract, /complete the requested work now/i)
   assert.match(contract, /do not send a menu of services/i)
   assert.match(contract, /do not ask a clarifying question/i)
+})
+
+test('caption and hashtag asks are execution requests with a caption contract', () => {
+  assert.equal(isTelegramCaptionRequest('Need a caption and hashtags for this video'), true)
+  assert.equal(isTelegramExecutionRequest('Need a caption and hashtags for this video'), true)
+  assert.equal(isTelegramExecutionRequest('description for my video + why to look at scent sell'), true)
+
+  const contract = buildTelegramExecutionContract('Need a caption and hashtags for this video')
+  assert.match(contract, /TELEGRAM CAPTION CONTRACT/)
+  assert.match(contract, /Write the finished caption NOW/i)
+  assert.match(contract, /Do not ask "sales, engagement, or awareness/i)
 })

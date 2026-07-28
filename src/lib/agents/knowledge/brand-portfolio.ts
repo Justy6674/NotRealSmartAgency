@@ -5,7 +5,7 @@
  * what's stored in the brands table. Agents use this to understand
  * the full product ecosystem.
  *
- * Last scanned: 2026-03-25
+ * Last scanned: 2026-07-28
  */
 
 export const BRAND_PORTFOLIO: Record<string, string> = {
@@ -93,13 +93,25 @@ export const BRAND_PORTFOLIO: Record<string, string> = {
 
   'scent-sell': `
 ## Scent Sell — Deep Context
-- **Product**: seggs.life — privacy-first AI intimacy & connection app for couples
-- **Features**: Erotic Blueprint quiz (5 types), couples compatibility, AI intimacy coach (Seggsy), 20+ intimacy categories, partner account linking, curated marketplace
-- **Tech**: Next.js 15, Firebase Auth + Firestore, xAI Grok 4.1 Fast via Vercel AI Gateway, Framer Motion
-- **Payments**: CCBill/Segpay ONLY (Stripe bans adult content). 5-10% processing fees.
-- **Pricing**: Free tier (3 AI suggestions/week). Premium $25/month per couple (unlimited AI, all heat levels, voice chat, fantasy builder)
-- **Assessment frameworks**: Erotic Blueprints (Jaiya), Yes/No/Maybe lists, Dual Control Model, PAIR Questionnaire, Kink Assessment, ISS, GRISS, SAI
-- **IMPORTANT**: Adult content brand. Different compliance requirements from health brands. No AHPRA/TGA — but adult content platform policies apply.
+- **Product**: Australian second-hand fragrance marketplace — buy, sell and swap authentic perfume, cologne, niche fragrance and decants (scentsell.com.au). NOT an intimacy app. NOT seggs.life.
+- **Audience**: AU fragrance enthusiasts 18–45 — collectors, hobbyists, people hunting affordable niche bottles without full-bottle risk.
+- **Voice**: Casual, community-first, fragrance-literate. Keywords: fragrance, perfume, niche, decant, authentic, community. Never say fake/replica/knockoff about legitimate listings.
+- **Content pillars**: Fragrance reviews, collection showcases, marketplace tips, niche discoveries, community features.
+- **Angle for "why look at Scent Sell"**: trusted AU marketplace for real bottles and decants; try/own niche without RRP pain; community of enthusiasts, not department-store fluff.
+- **Social focus (searchable + brand-aware)**: Instagram + Facebook + YouTube are the primary surfaces. Captions must be fragrance-specific and searchable (notes, house, bottle format, AU marketplace intent) — not generic "check us out". Hashtags: 3–5 niche tags max (#nichefragrance #perfumecommunity #scenttok etc.), never a 30-tag dump.
+- **Sibling house**: Underground Parfums is a separate indie perfume house brand — do not mix Scent Sell marketplace copy with Underground house authorship unless the owner explicitly asks for a cross-promo.
+- **Compliance**: Not AHPRA/TGA. Still no invented scent notes for a specific bottle unless the owner or listing evidence supplies them.
+`,
+
+  'underground-parfums': `
+## Underground Parfums — Deep Context
+- **Product**: Australian small-batch independent perfume house — scent as memory, quiet craft and restraint (undergroundparfums.com).
+- **Audience**: Art-house fragrance buyers in AU and internationally who reject mainstream perfume sameness and generic note-pyramid marketing.
+- **Voice (IMMUTABLE)**: Memory before note. One quiet declarative idea per sentence. Never invent a scent profile, accord, or notes. Avoid: exclusive, best, luxury, must-have.
+- **Founder voice**: small-batch house authorship. Signature: "Memories turned into Perfumes….Fragrances to make new Memories".
+- **Content pillars**: memory and place, quiet craft, behind the bench, the house.
+- **Social / searchable copy**: Captions should read as authored sensory writing, not marketplace hype. Put searchable place/memory language in the caption body (Instagram/YouTube search indexes captions). Hashtags sparse and specific — never luxury-hype tags.
+- **Sibling**: Scent Sell is the marketplace brand — keep Underground house voice separate unless the owner asks for a deliberate cross-link.
 `,
 
   'endorseme': `
@@ -130,10 +142,8 @@ export const BRAND_PORTFOLIO: Record<string, string> = {
  * Falls back to null if not found.
  */
 export function getBrandPortfolioContext(brandSlug: string): string | null {
-  // Try exact match first
   if (BRAND_PORTFOLIO[brandSlug]) return BRAND_PORTFOLIO[brandSlug]
 
-  // Try partial match (brand slug might be slightly different)
   for (const [key, value] of Object.entries(BRAND_PORTFOLIO)) {
     if (brandSlug.includes(key) || key.includes(brandSlug)) return value
   }

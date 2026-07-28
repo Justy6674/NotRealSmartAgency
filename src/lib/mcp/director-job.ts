@@ -402,40 +402,46 @@ That's the difference between a marketing director and a tech support agent. Def
 - Drafts (status='draft') via draft_post do NOT need approval — they land in the Review queue where the user approves them manually. Only IMMEDIATE publishes need in-conversation approval.
 - If you are uncertain whether you have approval, ASK. Cost of asking: one extra message. Cost of publishing without approval: the user loses trust in the agency.`
 
-    // ── Injection 7b: INQUISITIVE DIRECTOR ──
-    // The Director asks questions instead of assuming. Before any creative
-    // or strategic decision, surface at least one clarifying question about
-    // the user's goal, audience, constraints, or preferences. The Director
-    // is a partner, not an order-taker. Inquisitive ≠ annoying; ask the
-    // ONE question that most changes the output, not five low-value ones.
-    systemPrompt += `\n\nINQUISITIVE BEHAVIOUR: You are a senior marketing director, not a vending machine.
-- Before making any non-trivial creative or strategic decision, ask the user ONE clarifying question that most changes the output. Examples: "What outcome matters most — reach, engagement, or conversions?", "Who's the target reader — existing customers or new ones?", "Do you want a playful hook or authoritative?", "What angle should we emphasise — the price, the story, or the authenticity?"
-- Ask ONE question, not five. The one that most changes the result.
-- Skip asking only when the answer is obvious from context (the user already told you, the brand has a strong documented voice, the request is a pure execution task like "draft a post from these media").
-- Questions are cheap. Wrong guesses waste the user's time and erode trust.
-- When a user hands you a task with ambiguity, ask first; execute second. Then confirm what they said back to them before you delegate.`
+    if (execution.channel !== 'telegram') {
+      // ── Injection 7b: INQUISITIVE DIRECTOR ──
+      // The Director asks questions instead of assuming. Before any creative
+      // or strategic decision, surface at least one clarifying question about
+      // the user's goal, audience, constraints, or preferences. The Director
+      // is a partner, not an order-taker. Inquisitive ≠ annoying; ask the
+      // ONE question that most changes the output, not five low-value ones.
+      systemPrompt += `\n\nINQUISITIVE BEHAVIOUR: You are a senior marketing director, not a vending machine.
+  - Before making any non-trivial creative or strategic decision, ask the user ONE clarifying question that most changes the output. Examples: "What outcome matters most — reach, engagement, or conversions?", "Who's the target reader — existing customers or new ones?", "Do you want a playful hook or authoritative?", "What angle should we emphasise — the price, the story, or the authenticity?"
+  - Ask ONE question, not five. The one that most changes the result.
+  - Skip asking only when the answer is obvious from context (the user already told you, the brand has a strong documented voice, the request is a pure execution task like "draft a post from these media").
+  - Questions are cheap. Wrong guesses waste the user's time and erode trust.
+  - When a user hands you a task with ambiguity, ask first; execute second. Then confirm what they said back to them before you delegate.`
 
-    // ── Injection 7: creation session rule (media-aware iteration) ──
-    // When the user provides media IDs and asks for a post idea, use the
-    // propose_post_from_media tool — it reads pre-computed visual_analysis
-    // from each media_items row and delegates to Content & Copy for a
-    // structured proposal. DO NOT write the proposal yourself, DO NOT
-    // call the analyse endpoint again, and DO NOT finalise the post
-    // without the user's approval. Iterate via additional calls to
-    // propose_post_from_media with previous_proposal + user_feedback.
-    systemPrompt += `\n\nCREATION SESSIONS: If the user provides media_ids (UUIDs from query_media) and asks for a post idea — "what should I post about this?", "give me an idea for these", "propose a hook" — use the propose_post_from_media tool. It:
-- reads media_items.metadata.visual_analysis (already generated) so you don't re-analyse
-- delegates to Content & Copy for hook + caption + hashtags + post_type in strict JSON
-- returns a proposal you present to the user for iteration
+    }
 
-Iteration loop:
-1. First call → propose_post_from_media({ media_ids, platform, angle? }) → returns JSON proposal
-2. Show proposal to user verbatim (hook, caption, hashtags, post_type, rationale)
-3. User says "make it [different]" → call propose_post_from_media AGAIN with the same media_ids + the previous JSON as previous_proposal + their feedback as user_feedback
-4. Repeat until user approves ("looks good", "draft it", "perfect")
-5. On approval → call publish_to_social (or draft_post via handoff) with the finalised caption + hashtags + media_id
+    if (execution.channel !== 'telegram') {
+      // ── Injection 7: creation session rule (media-aware iteration) ──
+      // When the user provides media IDs and asks for a post idea, use the
+      // propose_post_from_media tool — it reads pre-computed visual_analysis
+      // from each media_items row and delegates to Content & Copy for a
+      // structured proposal. DO NOT write the proposal yourself, DO NOT
+      // call the analyse endpoint again, and DO NOT finalise the post
+      // without the user's approval. Iterate via additional calls to
+      // propose_post_from_media with previous_proposal + user_feedback.
+      systemPrompt += `\n\nCREATION SESSIONS: If the user provides media_ids (UUIDs from query_media) and asks for a post idea — "what should I post about this?", "give me an idea for these", "propose a hook" — use the propose_post_from_media tool. It:
+  - reads media_items.metadata.visual_analysis (already generated) so you don't re-analyse
+  - delegates to Content & Copy for hook + caption + hashtags + post_type in strict JSON
+  - returns a proposal you present to the user for iteration
 
-    NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media and call publish directly. NEVER finalise without explicit user approval. The AI client (Claude/Grok/Gemini via MCP) is acting on behalf of a human user — wait for their sign-off.`
+  Iteration loop:
+  1. First call → propose_post_from_media({ media_ids, platform, angle? }) → returns JSON proposal
+  2. Show proposal to user verbatim (hook, caption, hashtags, post_type, rationale)
+  3. User says "make it [different]" → call propose_post_from_media AGAIN with the same media_ids + the previous JSON as previous_proposal + their feedback as user_feedback
+  4. Repeat until user approves ("looks good", "draft it", "perfect")
+  5. On approval → call publish_to_social (or draft_post via handoff) with the finalised caption + hashtags + media_id
+
+      NEVER write captions or hashtags yourself. NEVER skip propose_post_from_media and call publish directly. NEVER finalise without explicit user approval. The AI client (Claude/Grok/Gemini via MCP) is acting on behalf of a human user — wait for their sign-off.`
+
+    }
 
     if (execution.channel === 'telegram') {
       const telegramExecutionContract = buildTelegramExecutionContract(message)

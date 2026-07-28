@@ -29,3 +29,19 @@ One question first: what result matters most from this review — signups, messa
 
   assert.equal(needsTelegramResponseRepair('Scan the site', handBack), true)
 })
+
+test('repairs paste-the-product intake forms on caption asks', () => {
+  const form = `Got it.
+
+Paste the product, angle, and platform, and I’ll write the caption only.
+
+If you want, use this format:
+• Product:
+• Platform:
+• Angle:
+
+Also, one quick thing so I don’t miss the mark:
+What result matters most here — sales, engagement, or brand awareness?`
+
+  assert.equal(needsTelegramResponseRepair('Need a caption and hashtags for this video', form), true)
+})
