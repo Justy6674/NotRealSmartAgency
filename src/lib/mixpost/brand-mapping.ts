@@ -117,6 +117,13 @@ export function mapMixpostAccountsToBrands(
 
     if (aliasTarget) {
       matchedBrand = brandLookup.find(b => b.norm === aliasTarget || b.normSlug === aliasTarget)
+      // An alias names the one brand that owns this account. If that brand is
+      // absent — retired, or not yet added — the account belongs to nobody.
+      // Falling through to fuzzy matching would hand it to whichever active
+      // brand shares a name prefix: retiring DownscaleDerm otherwise moved its
+      // Instagram and Facebook page onto Downscale Weight Loss, so a weight
+      // loss post could publish to the skincare accounts.
+      if (!matchedBrand) continue
     }
 
     // Substring match on brand name/slug within account name or username
@@ -202,6 +209,13 @@ export function mapAccountsToBrandsRaw(
 
     if (aliasTarget) {
       matchedBrand = brandLookup.find(b => b.norm === aliasTarget || b.normSlug === aliasTarget)
+      // An alias names the one brand that owns this account. If that brand is
+      // absent — retired, or not yet added — the account belongs to nobody.
+      // Falling through to fuzzy matching would hand it to whichever active
+      // brand shares a name prefix: retiring DownscaleDerm otherwise moved its
+      // Instagram and Facebook page onto Downscale Weight Loss, so a weight
+      // loss post could publish to the skincare accounts.
+      if (!matchedBrand) continue
     }
 
     if (!matchedBrand) {
