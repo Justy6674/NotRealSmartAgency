@@ -12,6 +12,35 @@ interface CanvaBrandKit {
   is_default?: boolean
 }
 
+/** "DownscaleDerm" and "Downscale Derm" name the same brand. */
+function normaliseBrandName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Find the Canva brand kit belonging to a brand, or null. Matching is
+ * bidirectional because a kit is often named slightly longer than the project
+ * ("Downscale Weight Loss Clinic" for "Downscale Weight Loss"), and returns
+ * null rather than a near-miss — the cost of a wrong kit is off-brand output.
+ */
+export function findBrandKitForBrand(
+  kits: readonly CanvaBrandKit[],
+  brandName: string,
+): CanvaBrandKit | null {
+  const target = normaliseBrandName(brandName)
+  if (!target) return null
+
+  const exact = kits.find((kit) => normaliseBrandName(kit.name) === target)
+  if (exact) return exact
+
+  return (
+    kits.find((kit) => {
+      const candidate = normaliseBrandName(kit.name)
+      return candidate.includes(target) || target.includes(candidate)
+    }) ?? null
+  )
+}
+
 interface DesignCreatePanelProps {
   brand: Brand | null
   strategyContext: StrategyContext | null
@@ -59,13 +88,13 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
         if (cancelled || !data.brand_kits?.length) return
         const kits: CanvaBrandKit[] = data.brand_kits
         setBrandKits(kits)
-        // Auto-select: match by brand name if possible, otherwise pick the default or first
-        const brandName = brand?.name?.toLowerCase() ?? ''
-        const matched =
-          kits.find((k) => k.name.toLowerCase().includes(brandName)) ??
-          kits.find((k) => k.is_default) ??
-          kits[0]
-        if (matched) setSelectedBrandKit(matched)
+        // Auto-select only this brand's own kit. There is deliberately no
+        // fallback to a default or first kit: applying another brand's kit
+        // would put its colours and logo on this brand's designs, which is
+        // worse than generating from the brand's own colours. When nothing
+        // matches, the user picks a kit explicitly.
+        const matched = brand?.name ? findBrandKitForBrand(kits, brand.name) : null
+        setSelectedBrandKit(matched)
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -80,7 +109,7 @@ export function DesignCreatePanel({ brand, strategyContext }: DesignCreatePanelP
     const selectedFormat = FORMATS.find(f => f.id === format)
     const brandKitLine = selectedBrandKit
       ? `Use Canva brand kit ID "${selectedBrandKit.id}" for consistent brand colours and fonts.`
-      : 'Use the brand kit if available.'
+      : `${brand.name} has no Canva brand kit. Use its saved brand colours — never another brand's kit.`
 
     const message = [
       `I'd like to create a ${selectedFormat?.label ?? format} design for ${brand.name}.`,
