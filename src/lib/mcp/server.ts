@@ -6,6 +6,11 @@ import { registerDirectorChatTool } from './director-chat'
 import { registerGetDirectorResponseTool } from './director-job-tool'
 import { registerDraftPostTool } from './draft-post-tool'
 import { listGrantedProjectIds, type McpPrincipal } from '@/lib/security/project-access'
+import { buildMacroBoard, type BoardAccountInput } from '@/lib/macro/board'
+import { fetchMixpostAccounts } from '@/lib/mixpost/client'
+import { mapMixpostAccountsToBrands } from '@/lib/mixpost/brand-mapping'
+import { describeProjectState, loadProjectBrief } from '@/lib/projects/load-brief'
+import { z } from 'zod/v3'
 
 /**
  * Register ALL tools upfront. Tool list must never change after launch —
@@ -49,6 +54,50 @@ export function createNRSMcpServer(principal: McpPrincipal): McpServer {
     return data ?? []
   }
 
+  /**
+   * A one-line state per project for the list. Built from the same board the
+   * owner sees, so the two never disagree about how a project is doing.
+   */
+  async function loadProjectStates(
+    projects: Array<{ id: string; name: string; slug: string }>,
+  ): Promise<Map<string, string>> {
+    const states = new Map<string, string>()
+    if (projects.length === 0) return states
+
+    const supabase = createAdminClient()
+    const since = new Date()
+    since.setDate(since.getDate() - 30)
+
+    const [postsResult, mixpostAccounts] = await Promise.all([
+      supabase
+        .from('scheduled_posts')
+        .select('id, brand_id, status, scheduled_at, published_at, metadata')
+        .in('brand_id', projects.map((p) => p.id))
+        .gte('created_at', since.toISOString())
+        .limit(1000),
+      fetchMixpostAccounts(),
+    ])
+
+    let accounts: BoardAccountInput[] | null = null
+    if (mixpostAccounts) {
+      const mapped = mapMixpostAccountsToBrands(mixpostAccounts, projects)
+      accounts = Object.entries(mapped).flatMap(([brandId, list]) =>
+        list.map((a) => ({ brandId, accountName: a.accountName, authorized: a.authorized })),
+      )
+    }
+
+    const board = buildMacroBoard({
+      projects,
+      posts: postsResult.data ?? [],
+      accounts,
+      approvals: [],
+      now: new Date(),
+    })
+
+    for (const row of board.projects) states.set(row.id, describeProjectState(row))
+    return states
+  }
+
   // Register the compatible resource name. Its contents are strictly scoped.
   server.registerResource('brands_list', 'brands://list', {
     description: 'List only the project workspaces granted to this connection.',
@@ -82,11 +131,19 @@ export function createNRSMcpServer(principal: McpPrincipal): McpServer {
     }, async (_args: any) => {
       try {
         const projects = await loadGrantedProjects()
-        const formatted = projects.map((project) =>
-          `- **${project.name}** (${project.slug})\n  ID: ${project.id}\n  ${project.description || 'No description'}\n  ${project.website_url || ''}`,
-        ).join('\n\n')
+        // The list said what each project was called and nothing about how it
+        // was doing, so a client had to call three more tools per project
+        // before it knew where to start — and usually did not bother.
+        const states = await loadProjectStates(projects)
+        const formatted = projects.map((project) => {
+          const state = states.get(project.id)
+          return `- **${project.name}** (${project.slug})\n  ID: ${project.id}\n  ${project.description || 'No description'}\n  ${project.website_url || ''}${state ? `\n  Status: ${state}` : ''}`
+        }).join('\n\n')
         return {
-          content: [{ type: 'text' as const, text: `Your permitted projects:\n\n${formatted || 'No project workspaces are granted to this connection.'}` }],
+          content: [{
+            type: 'text' as const,
+            text: `Your permitted projects:\n\n${formatted || 'No project workspaces are granted to this connection.'}\n\nCall project_brief with a project ID for its brand rules, what is at risk, what is out of date, and what to do next.`,
+          }],
         }
       } catch {
         return {
@@ -99,6 +156,37 @@ export function createNRSMcpServer(principal: McpPrincipal): McpServer {
 
   registerProjectListTool('list_projects')
   registerProjectListTool('list_brands', true)
+
+  // One call for everything needed to work on a project. A client previously
+  // had to know which of ninety tools to call, in what order, to learn the
+  // brand rules — so it guessed, and guessed work came back off-brand.
+  server.registerTool('project_brief', {
+    description:
+      'Everything you need before doing any work on a project: its exact brand colours, logo, voice and banned words; whether advertising rules apply; what is at risk right now; what is out of date; and three suggested next actions. Call this first, before writing anything for a project.',
+    inputSchema: { project_id: z.string().describe('The project ID from list_projects.') },
+  }, async ({ project_id }: { project_id: string }) => {
+    if (!grantedProjectIds.includes(project_id)) {
+      return {
+        content: [{ type: 'text' as const, text: 'That project is not available on this connection. Call list_projects for the ones that are.' }],
+        isError: true,
+      }
+    }
+    try {
+      const result = await loadProjectBrief(createAdminClient(), project_id, principal.userId)
+      if (!result) {
+        return {
+          content: [{ type: 'text' as const, text: 'That project could not be found.' }],
+          isError: true,
+        }
+      }
+      return { content: [{ type: 'text' as const, text: result.text }] }
+    } catch {
+      return {
+        content: [{ type: 'text' as const, text: 'The brief could not be built just now. Try again shortly.' }],
+        isError: true,
+      }
+    }
+  })
 
   // Register chat_with_director — async pattern, returns job_id immediately
   registerDirectorChatTool(server, principal)

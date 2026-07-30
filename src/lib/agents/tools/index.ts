@@ -8,6 +8,7 @@ import { createScanSocialTool } from './scan-social'
 import { createMarketingAuditTool } from './marketing-audit'
 import { createCreateTaskTool } from './create-task'
 import { createRequestApprovalTool } from './request-approval'
+import { createProjectBriefTool } from './project-brief'
 import { createHandoffTool } from './handoff'
 import { createSendEmailTool } from './send-email'
 import { createGenerateImageTool } from './generate-image'
@@ -176,6 +177,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const manageMediaTags = createManageMediaTagsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const researchIndustry = createResearchIndustryTool(ctx.supabase, ctx.userId, ctx.brandId)
   const extractBrandKit = createExtractBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const projectBrief = createProjectBriefTool(ctx.supabase, ctx.userId, ctx.brandId)
   const getBrandKit = createGetBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
   const reviewContent = createReviewContentTool(ctx.supabase, ctx.userId, ctx.brandId)
   const inspectProjectMarketingBackend = createInspectProjectMarketingBackendTool(ctx.supabase, ctx.brandId)
@@ -214,6 +216,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     // department that cannot see the palette or the never-do list produces work
     // that has to be corrected after the fact.
     get_brand_kit: getBrandKit,
+    project_brief: projectBrief,
   }
 
   // Tool sets per agent type
