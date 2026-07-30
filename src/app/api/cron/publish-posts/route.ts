@@ -8,9 +8,24 @@ import {
   createMixpostPost,
   resolveAccountIdsForPlatform,
   type MixpostVersion,
+  fetchMixpostPost,
 } from '@/lib/mixpost/client'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
+
+
+/**
+ * Normalise a Mixpost post status.
+ *
+ * The MixpostPost type declares `status: number` with codes 0-3, but the live
+ * API returns the string "published". Rather than trust either, accept both —
+ * an unrecognised value returns null so the caller waits instead of guessing.
+ */
+function mixpostPostState(status: unknown): 'published' | 'failed' | null {
+  if (status === 'published' || status === 2) return 'published'
+  if (status === 'failed' || status === 3) return 'failed'
+  return null
+}
 
 export async function GET(request: Request) {
   // Verify cron secret
@@ -21,16 +36,57 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient()
 
-  // Safety check: time out posts stuck in 'publishing' for more than 10 minutes
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  await supabase
+  // Confirm what actually happened to anything mid-flight, by asking Mixpost.
+  //
+  // This previously assumed a webhook would report back, and marked every
+  // unconfirmed post failed after ten minutes. The webhook was never registered,
+  // so posts that published perfectly were recorded as failures — seven were
+  // live on Facebook and Instagram while NRS said they had not gone out.
+  // Asking is strictly better than being told: it needs no shared secret, no
+  // one-off admin step, and no inbound route, and it still works when a webhook
+  // is dropped.
+  const inFlightSince = new Date(Date.now() - 2 * 60 * 1000).toISOString()
+  const { data: inFlight } = await supabase
     .from('scheduled_posts')
-    .update({
-      status: 'failed',
-      error: 'Publishing timed out — no webhook confirmation received',
-    })
+    .select('id, external_post_id, updated_at')
     .eq('status', 'publishing')
-    .lt('updated_at', tenMinutesAgo)
+    .lt('updated_at', inFlightSince)
+
+  for (const post of inFlight ?? []) {
+    const externalId = post.external_post_id as string | null
+
+    // Only a post uuid can be looked up; legacy numeric ids cannot.
+    if (externalId && /^[0-9a-f-]{36}$/i.test(externalId)) {
+      const remote = await fetchMixpostPost(externalId)
+      const state = remote ? mixpostPostState(remote.status) : null
+      if (state === 'published') {
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'published', published_at: new Date().toISOString(), error: null })
+          .eq('id', post.id)
+        continue
+      }
+      if (state === 'failed') {
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'failed', error: 'The publisher reported this post as failed.' })
+          .eq('id', post.id)
+        continue
+      }
+      // Still working, or unreachable — leave it alone and ask again next tick
+      // rather than inventing a verdict.
+      if (remote) continue
+    }
+
+    // No usable id after twenty minutes means it never reached the publisher.
+    const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString()
+    if ((post.updated_at as string) < twentyMinutesAgo) {
+      await supabase
+        .from('scheduled_posts')
+        .update({ status: 'failed', error: 'Never reached the publisher — no post was created.' })
+        .eq('id', post.id)
+    }
+  }
 
   // Find posts due for publishing
   const { data: duePosts, error } = await supabase
