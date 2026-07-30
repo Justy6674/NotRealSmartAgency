@@ -96,8 +96,10 @@ export async function renderSlide(
 
   const pad = Math.round(size * 0.11)
 
-  const svg = await satori(
-    {
+  // satori accepts a plain virtual-DOM object. Its published type is
+  // ReactNode, which does not describe that shape, so the tree is cast once
+  // here rather than pretending to build real React elements.
+  const tree = {
       type: 'div',
       props: {
         style: {
@@ -175,7 +177,10 @@ export async function renderSlide(
           },
         ],
       },
-    },
+  }
+
+  const svg = await satori(
+    tree as unknown as Parameters<typeof satori>[0],
     {
       width: size,
       height: size,
