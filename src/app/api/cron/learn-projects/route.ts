@@ -109,12 +109,15 @@ export async function GET(request: Request) {
           brand: project,
           conversationId: null,
         },
-        // Ninety seconds was chosen when these ran one after another and the
-        // total had to fit in five minutes. Running in parallel, wall-clock is
-        // one section rather than four, so a slow one can have the time it
-        // needs — a regulated project reads its regulatory sources first and
-        // consistently wanted longer than ninety seconds.
-        { maxSteps: 2, timeoutMs: 200_000 },
+        // Two hundred seconds, not ninety: ninety was chosen when these ran
+        // one after another and four had to fit inside five minutes. Running
+        // in parallel, wall-clock is one section, and a regulated project
+        // reads its regulatory sources first and wanted longer.
+        // Four steps, not two. A department that looks something up — the
+        // search and competitor ones read the live site first — spent both of
+        // its two steps on tool calls and had none left to write with, so it
+        // returned nothing at all. Four leaves room to look and then answer.
+        { maxSteps: 4, timeoutMs: 200_000 },
       )
 
       const content = result.error ? null : result.result?.trim()
