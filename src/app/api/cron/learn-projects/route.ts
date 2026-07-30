@@ -109,7 +109,12 @@ export async function GET(request: Request) {
           brand: project,
           conversationId: null,
         },
-        { maxSteps: 2, timeoutMs: 90_000 },
+        // Ninety seconds was chosen when these ran one after another and the
+        // total had to fit in five minutes. Running in parallel, wall-clock is
+        // one section rather than four, so a slow one can have the time it
+        // needs — a regulated project reads its regulatory sources first and
+        // consistently wanted longer than ninety seconds.
+        { maxSteps: 2, timeoutMs: 200_000 },
       )
 
       const content = result.error ? null : result.result?.trim()
