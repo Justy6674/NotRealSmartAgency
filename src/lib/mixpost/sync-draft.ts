@@ -30,6 +30,7 @@ import {
   type MixpostVersion,
 } from './client'
 import { ensureBrandTagInMixpost, ensureHashtagGroupTagInMixpost } from './sync-tags'
+import { mapAccountsToBrandsRaw } from './brand-mapping'
 
 const POLL_MAX_SECONDS = 1800 // 30 min — covers worst-case 2 GB video transcode with 2-pass ffmpeg on the VPS
 
@@ -217,17 +218,39 @@ export async function syncDraftToMixpost(
     }
   }
 
-  // Resolve Mixpost accounts for this brand's platform
-  const accounts = await fetchMixpostAccounts()
-  if (!accounts || accounts.length === 0) {
+  // Resolve Mixpost accounts for this brand's platform.
+  //
+  // Every account in the workspace used to be passed here. The resolver then
+  // filtered only by platform, so a draft was attached to every account on
+  // that platform across every project: an Underground Parfums post was
+  // queued to publish on Scent Sell, Do Today, TeleScribe AND the Downscale
+  // weight loss clinic's Instagram. One approval would have put fragrance
+  // copy on a regulated health account.
+  const allAccounts = await fetchMixpostAccounts()
+  if (!allAccounts || allAccounts.length === 0) {
     return { ok: false, error: 'No Mixpost accounts found' }
   }
 
-  const accountIds = resolveAccountIdsForPlatform(post.platform as string, accounts)
+  const { data: ownerBrands } = await supabase
+    .from('brands')
+    .select('id, name, slug, social_urls')
+    .eq('user_id', post.user_id as string)
+
+  const byBrand = mapAccountsToBrandsRaw(allAccounts, ownerBrands ?? [])
+  const brandAccounts = byBrand.get(post.brand_id as string) ?? []
+
+  if (brandAccounts.length === 0) {
+    return {
+      ok: false,
+      error: `No Mixpost account is mapped to this project. Connect its accounts in Mixpost first — a draft is never sent to another project's accounts.`,
+    }
+  }
+
+  const accountIds = resolveAccountIdsForPlatform(post.platform as string, brandAccounts)
   if (accountIds.length === 0) {
     return {
       ok: false,
-      error: `No Mixpost account connected for platform "${post.platform}". Connect it in Mixpost first.`,
+      error: `No ${post.platform} account is connected for this project. Connect it in Mixpost first.`,
     }
   }
 
