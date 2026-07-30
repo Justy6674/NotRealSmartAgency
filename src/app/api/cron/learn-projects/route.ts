@@ -73,11 +73,16 @@ export async function GET(request: Request) {
   const written: string[] = []
   const failed: string[] = []
 
-  for (const job of plan.sections) {
+  // Run together rather than one after another. Sequentially, four sections at
+  // up to ninety seconds each is three hundred and sixty — past the five
+  // minutes this function is given, so the last one was killed mid-run and
+  // reported as returning nothing. In parallel the run takes about as long as
+  // its slowest section.
+  const outcomes = await Promise.allSettled(plan.sections.map(async (job) => {
     const project = projectById.get(job.brandId)
-    if (!project) continue
+    if (!project) return
 
-    try {
+    {
       // The department writes against the same brief a plugged-in client
       // receives, so a section is written knowing the brand rules and what is
       // already at risk — not from the project name alone.
@@ -109,8 +114,8 @@ export async function GET(request: Request) {
 
       const content = result.error ? null : result.result?.trim()
       if (!content) {
-        failed.push(`${project.name}/${job.sectionKey}: nothing returned`)
-        continue
+        failed.push(`${project.name}/${job.sectionKey}: ${result.error ?? 'nothing returned'}`)
+        return
       }
 
       const { error } = await supabase
@@ -125,13 +130,20 @@ export async function GET(request: Request) {
 
       if (error) {
         failed.push(`${project.name}/${job.sectionKey}: ${error.message}`)
-        continue
+        return
       }
 
       written.push(`${project.name}/${job.sectionKey}`)
-    } catch (err) {
+    }
+  }))
+
+  for (const [i, outcome] of outcomes.entries()) {
+    if (outcome.status === 'rejected') {
+      const job = plan.sections[i]
       failed.push(
-        `${project.name}/${job.sectionKey}: ${err instanceof Error ? err.message : 'unknown error'}`,
+        `${job.projectName}/${job.sectionKey}: ${
+          outcome.reason instanceof Error ? outcome.reason.message : 'unknown error'
+        }`,
       )
     }
   }
