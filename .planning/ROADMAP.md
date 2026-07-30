@@ -31,7 +31,7 @@ no technical dependency on Phase 1.
 
 - [ ] **Phase 2: Publishing off the withdrawn host** - Same accounts, same content, a host he has not refused *(runs first)*
 - [x] **Phase 1: The Macro Board** - One screen showing all eleven projects, ranked by what needs him today *(shipped e92b2ae)*
-- [ ] **Phase 3: Closing the regulatory gaps** - No route to a live account escapes the review, and tests prove it
+- [x] **Phase 3: Closing the regulatory gaps** - No route to a live account escapes the review, and tests prove it *(shipped 1df233c)*
 - [ ] **Phase 4: Proactive project intelligence** - NRS learns each project on a schedule and briefs any AI that connects
 - [ ] **Phase 5: Publishing direct to the platforms** - Each account bound to its own project, middleware retired
 - [ ] **Phase 6: The Studio workspace** - Left-sidebar navigation and one Creator from idea to scheduled
@@ -74,6 +74,7 @@ Plans:
 **Goal**: There is no longer any way for content to reach a live social account, or to enter the library agents learn from, without passing the one regulatory review — including the routes a language model can choose on its own.
 **Depends on**: Phase 2
 **Requirements**: GUARD-01, GUARD-02, GUARD-03, GUARD-04, GUARD-05, GUARD-06, GUARD-07
+**Depends on**: nothing — Phase 2 is a hosting decision the owner has not made, and none of this needed it.
 **Success Criteria** (what must be TRUE):
   1. No publishing tool the Director can select is able to post without knowing which project it is posting for; the tool that could is either fixed or gone.
   2. Content that fails a review for a regulated project is not saved into the outputs library, and does not come back later as an example of prior work.
@@ -128,7 +129,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 |-------|----------------|--------|-----------|
 | 1. The Macro Board | 1/1 | Complete | 2026-07-30 |
 | 2. Publishing off the withdrawn host | 0/1 | Planned | - |
-| 3. Closing the regulatory gaps | 0/TBD | Not started | - |
+| 3. Closing the regulatory gaps | 1/1 | Complete | 2026-07-30 |
 | 4. Proactive project intelligence | 0/TBD | Not started | - |
 | 5. Publishing direct to the platforms | 0/TBD | Not started | - |
 | 6. The Studio workspace | 0/TBD | Not started | - |
