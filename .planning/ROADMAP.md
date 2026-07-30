@@ -25,8 +25,12 @@ Each phase ships on its own. Nothing here needs the phase after it to be worth h
 
 Decimal phases appear between their surrounding integers in numeric order.
 
+**Execution order: Phase 2 first**, then Phase 1, then 3-6. Phase 2 was moved
+ahead because the withdrawn host is still the only thing publishing, and it has
+no technical dependency on Phase 1.
+
+- [ ] **Phase 2: Publishing off the withdrawn host** - Same accounts, same content, a host he has not refused *(runs first)*
 - [ ] **Phase 1: The Macro Board** - One screen showing all eleven projects, ranked by what needs him today
-- [ ] **Phase 2: Publishing off the withdrawn host** - Same accounts, same content, a host he has not refused
 - [ ] **Phase 3: Closing the regulatory gaps** - No route to a live account escapes the review, and tests prove it
 - [ ] **Phase 4: Proactive project intelligence** - NRS learns each project on a schedule and briefs any AI that connects
 - [ ] **Phase 5: Publishing direct to the platforms** - Each account bound to its own project, middleware retired
@@ -50,7 +54,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 2: Publishing off the withdrawn host
 **Goal**: Everything the owner publishes today keeps publishing, from a host he has not refused, with the two faults that broke his video upload fixed on the way across — and none of the seventeen authorised accounts has to be signed in again.
-**Depends on**: Phase 1
+**Depends on**: Nothing — runs first.
+
+> Originally sequenced after Phase 1 to put something visible in front of the
+> owner early. PUB-01 and PUB-02 have no technical dependency on the Macro Board,
+> and the withdrawn host is the live problem: it is still the only thing
+> publishing, and work kept being drawn back onto a machine the owner has ruled
+> out. Executing this first ends that. Phase 1 follows.
 **Requirements**: PUB-01, PUB-02
 **Success Criteria** (what must be TRUE):
   1. A post scheduled through NRS publishes to Facebook, Instagram and LinkedIn from the new host, with no account re-authorised and no content re-created.
