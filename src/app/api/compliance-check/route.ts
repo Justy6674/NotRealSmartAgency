@@ -35,16 +35,29 @@ export async function POST(request: Request) {
   let brandDNA: BrandDNAConstraints | undefined
 
   if (brandId) {
-    const { data: brand } = await supabase
+    // The column is brand_dna_constraints. Asking for `brand_dna` failed the
+    // whole select, so `brand` came back null and the check ran with the flags
+    // off — for every regulated project. The Creator showed a green tick that
+    // meant nothing had been checked.
+    const { data: brand, error } = await supabase
       .from('brands')
-      .select('compliance_flags, brand_dna')
+      .select('compliance_flags, brand_dna_constraints')
       .eq('id', brandId)
       .single()
 
-    if (brand) {
-      complianceFlags = (brand.compliance_flags as ComplianceFlags) ?? complianceFlags
-      brandDNA = (brand.brand_dna as BrandDNAConstraints) ?? undefined
+    if (error || !brand) {
+      // Silently falling back to "no rules apply" is what hid the original
+      // fault. A check that could not read its own rules is not a pass.
+      return NextResponse.json(
+        {
+          error: 'Could not read this project’s rules, so nothing was checked. Try again shortly.',
+        },
+        { status: 503 },
+      )
     }
+
+    complianceFlags = (brand.compliance_flags as ComplianceFlags) ?? complianceFlags
+    brandDNA = (brand.brand_dna_constraints as BrandDNAConstraints) ?? undefined
   }
 
   try {
@@ -53,6 +66,11 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ...result,
       checked_at: new Date().toISOString(),
+      // Whether this review is worth recording against a post. The board
+      // treats a regulated post with no recorded review as needing sign-off,
+      // and nothing was stamping it, so everything scheduled read as
+      // unreviewed regardless of whether it had been checked here.
+      recordable: result.isValid && result.checkCompleted,
     })
   } catch (error) {
     return NextResponse.json(

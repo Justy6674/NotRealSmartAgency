@@ -87,6 +87,11 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: P
   const [aiPrompt, setAiPrompt] = useState('')
   const [saving, setSaving] = useState(false)
   const [compliancePassed, setCompliancePassed] = useState<boolean | null>(null)
+  // The review is recorded on the post, not just shown. The board treats a
+  // regulated post with no recorded review as needing sign-off, and nothing
+  // was stamping it, so everything scheduled read as unreviewed even after
+  // it had been checked here.
+  const [reviewStamp, setReviewStamp] = useState<Record<string, unknown> | null>(null)
   const [creatorMode, setCreatorMode] = useState<CreatorMode>('fresh')
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
@@ -305,6 +310,9 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: P
             media_item_ids: selectedMediaIds,
             content_type: strategyContext?.suggestedContentType ?? undefined,
             content_pillar: strategyContext?.suggestedPillar ?? undefined,
+            ...(reviewStamp && reviewStamp.reviewed_caption === caption
+              ? { metadata: reviewStamp }
+              : {}),
           }),
         })
         // Return to Review tab
@@ -334,6 +342,10 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: P
             metadata: {
               source: 'post_creator',
               created_by: 'You',
+              // Only stamped when the review both ran and passed on this exact
+              // caption — editing after a check clears it, so the stamp can
+              // never outlive the words it was about.
+              ...(reviewStamp && reviewStamp.reviewed_caption === caption ? reviewStamp : {}),
               ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
                 ? { platform_options: platformOptions[platform] }
                 : {}),
@@ -701,7 +713,14 @@ If any items have no AI description or transcription yet, name them and offer to
             caption={caption}
             brandName={brandName}
             isHealthBrand={isHealthBrand}
-            onResult={result => setCompliancePassed(result === null ? null : result.isValid)}
+            onResult={result => {
+              setCompliancePassed(result === null ? null : result.isValid)
+              setReviewStamp(
+                result && (result as { recordable?: boolean }).recordable
+                  ? { compliance_reviewed: true, approved_at: new Date().toISOString(), reviewed_caption: caption }
+                  : null,
+              )
+            }}
           />
         </StudioCard>
       )}
