@@ -33,7 +33,7 @@ no technical dependency on Phase 1.
 - [x] **Phase 1: The Macro Board** - One screen showing all eleven projects, ranked by what needs him today *(shipped e92b2ae)*
 - [x] **Phase 3: Closing the regulatory gaps** - No route to a live account escapes the review, and tests prove it *(shipped 1df233c)*
 - [x] **Phase 4: Proactive project intelligence** - NRS learns each project on a schedule and briefs any AI that connects *(brief 5d51ae8, nightly learning 15e8014)*
-- [ ] **Phase 5: Publishing direct to the platforms** - Each account bound to its own project, middleware retired
+- [~] **Phase 5: Publishing direct to the platforms** - Each account bound to its own project, middleware retired *(all code-side work done: per-project account binding, renewal warning edee220, retry on transient failure. Criteria 2 and 5 need the owner to sign in to Meta/YouTube/LinkedIn — nobody else can, and `social_oauth_tokens` has zero rows until he does.)*
 - [x] **Phase 6: The Studio workspace** - Left-sidebar navigation and one Creator from idea to scheduled *(already built; verified 2026-07-30, and the Creator's review fixed in 1b7b9e9)*
 
 ## Phase Details
