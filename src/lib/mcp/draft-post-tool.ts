@@ -235,8 +235,21 @@ After this tool returns, tell the user the draft is in Review and they can appro
               isError: true,
             }
           }
+          // Same unreachable-catch problem as publish_to_social: the filter
+          // swallows its own failures, so a skipped review only shows here.
+          if (!check.checkCompleted) {
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: 'COMPLIANCE CHECK DID NOT RUN — draft NOT saved. This project is regulated and its content is unverified. Try again shortly.',
+                },
+              ],
+              isError: true,
+            }
+          }
         } catch (err) {
-          if (complianceFlags.ahpra) {
+          if (complianceFlags.ahpra || complianceFlags.tga) {
             return {
               content: [
                 {

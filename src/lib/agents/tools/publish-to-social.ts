@@ -92,15 +92,27 @@ export function createPublishToSocialTool(
               ].join('\n')
               return `COMPLIANCE CHECK FAILED — post NOT published.\n\n${issues}\n\nFix the content and try again. AHPRA/TGA penalties: up to $60,000 per offence.`
             }
+            // A regulated brand may not publish on a review that did not run.
+            // The filter catches its own failures and returns a default-valid
+            // result, so the outer catch below never fires for that case — this
+            // flag is the only signal that the check was skipped, and it covers
+            // TGA as well as AHPRA (DownscaleDerm is TGA-only).
+            if (!check.checkCompleted && (complianceFlags.ahpra || complianceFlags.tga)) {
+              const regime = [complianceFlags.ahpra ? 'AHPRA' : null, complianceFlags.tga ? 'TGA' : null]
+                .filter(Boolean)
+                .join('/')
+              return `COMPLIANCE CHECK DID NOT RUN — post NOT published.\n\nThe ${regime} review could not be completed, so this content is unverified. Regulated content is never published without a completed review. Try again shortly; if it keeps failing, the compliance model is unreachable.`
+            }
             if (check.warnings.length > 0) {
               // Warnings are non-blocking but logged
               console.log(`[publish_to_social] Compliance warnings for ${brandSlug}:`, check.warnings)
             }
           } catch (err) {
+            // Reached only if the filter itself throws — importing it, or a
+            // caller-side fault. Regulated brands still fail closed.
             console.error('[publish_to_social] Compliance check error:', err)
-            // Fail open for non-health brands, fail closed for health brands
-            if (complianceFlags.ahpra) {
-              return 'COMPLIANCE CHECK ERROR — post NOT published. The AHPRA compliance check failed to run. Cannot publish health content without compliance verification.'
+            if (complianceFlags.ahpra || complianceFlags.tga) {
+              return 'COMPLIANCE CHECK ERROR — post NOT published. The compliance check failed to run, and regulated content cannot be published without verification.'
             }
           }
         }

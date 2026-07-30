@@ -15,6 +15,15 @@ import { buildAbeRegulatoryContext, searchAbeRegulatoryCorpus } from '@/lib/abea
 
 export interface GuardianResult {
   isValid: boolean
+  /**
+   * False when the regulatory review did not actually run — an LLM timeout,
+   * rate limit or schema failure. `isValid` is initialised true so that a clean
+   * pass needs no assignment, which means a swallowed error is indistinguishable
+   * from a pass unless callers read this flag. Any caller publishing for a brand
+   * with `ahpra` or `tga` set must treat `false` as a block: an unreviewed
+   * health claim carries a penalty of up to $60,000 per offence.
+   */
+  checkCompleted: boolean
   flags: string[]        // critical violations (block content)
   warnings: string[]     // potential risks (flag but allow)
   brandVoiceIssues: string[]  // brand DNA drift detected
@@ -39,6 +48,7 @@ export async function runComplianceFilter(
 ): Promise<GuardianResult> {
   const result: GuardianResult = {
     isValid: true,
+    checkCompleted: false,
     flags: [],
     warnings: [],
     brandVoiceIssues: [],
@@ -93,6 +103,10 @@ export async function runComplianceFilter(
   // ── LLM compliance check (only for regulated brands) ──────────────────────
 
   if (!flags.ahpra && !flags.tga) {
+    // No regulatory review is required for this brand, so the check is complete
+    // by definition. Leaving the flag false here would block unregulated brands
+    // for a review they never needed.
+    result.checkCompleted = true
     return result
   }
 
@@ -170,10 +184,16 @@ Analyse the text and return JSON indicating if it is compliant with regulations 
     result.flags.push(...object.flags)
     result.warnings.push(...object.warnings)
     result.brandVoiceIssues.push(...object.voiceIssues)
+    result.checkCompleted = true
 
     return result
   } catch (error) {
+    // Deliberately not marking the result valid or invalid here. The local
+    // checks already applied still stand, but the regulatory review did not
+    // run, and only the caller knows whether this brand may publish without
+    // one. `checkCompleted` stays false so that decision is explicit.
     console.error('Guardian check error:', error)
-    return result // Return local check results even if LLM fails
+    result.warnings.push('Regulatory review did not complete — the compliance model could not be reached.')
+    return result
   }
 }
