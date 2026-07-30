@@ -1,0 +1,35 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-video-pipeline-architecture.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "NRS Video Pipeline Architecture",
+  "summary": "Five-layer video publishing chain from media upload through Director delegation to Mixpost platform publishing, with timeouts, schema and VPS infra contracts.",
+  "scope": [
+    "video publishing pipeline",
+    "media upload and thumbnail extraction",
+    "runMediaProcessingPipeline",
+    "MediaSelector / PostCreator",
+    "draft_post MCP tool",
+    "publish_to_social",
+    "Mixpost Pro remote media API",
+    "Horizon supervisor limits",
+    "media_items mixpost cache columns",
+    "mcp_jobs table",
+    "HeyGen webhook rehost",
+    "BinaryLane VPS"
+  ],
+  "cross_refs": [
+    "nrs-media-processing-pipeline",
+    "nrs-mcp-architecture",
+    "Reference/wiki/entities/tele360",
+    "Reference/wiki/entities/telescribe",
+    "Reference/wiki/entities/notrealsmart",
+    "Reference/wiki/entities/downdiary",
+    "Reference/wiki/entities/scentsell",
+    "Reference/wiki/entities/binarylane-vps"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=SPEC applied; heuristics agree (path docs/specs/, endpoint/API body schemas, timeout table, DB column definitions). Frontmatter status is 'partial — 8/10 verified live' — document carries explicit 'Still unverified live' section that the synthesizer should treat as open constraints, not settled facts. Filename hash suffix replaced with path-derived segment: no shell available to compute SHA-256."
+}

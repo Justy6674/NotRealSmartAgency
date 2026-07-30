@@ -1,0 +1,29 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-creative-studio-definitive-architecture.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "NRS Creative Studio — Definitive Architecture",
+  "summary": "Definitive architecture for NRS Creative Studio: Creator-centred 10-card composer, three entry points, Review/Schedule/Media tabs, Director chat integration.",
+  "scope": [
+    "Creative Studio",
+    "Creator (10-card composer)",
+    "Media Library",
+    "Review / Drafts tab",
+    "Schedule tab",
+    "Director chat panel",
+    "MCP client integration",
+    "compliance check (AHPRA/TGA)",
+    "platform previews",
+    "hashtag groups",
+    "post templates",
+    "scheduled_posts API"
+  ],
+  "cross_refs": [
+    "2026-04-08-post-creator-redesign.md",
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=SPEC applied as authoritative; content signals agree (implementation contracts, component/API/library inventories, per-card field requirements, navigation and build order). Output filename suffix is path-derived rather than a SHA-256 prefix — no shell tool available in this agent to compute the hash."
+}

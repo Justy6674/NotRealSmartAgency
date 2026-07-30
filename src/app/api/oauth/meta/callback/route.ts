@@ -9,6 +9,7 @@
  *  5. Save tokens to social_oauth_tokens for both facebook + instagram
  */
 
+import { createAdminClient } from '@/lib/supabase/admin'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { saveToken } from '@/lib/publishers/token-store'
@@ -16,6 +17,28 @@ import { saveToken } from '@/lib/publishers/token-store'
 export const dynamic = 'force-dynamic'
 
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0'
+
+
+/** "DownscaleDerm" and "Downscale-Derm (Brisbane)" name the same brand. */
+function normaliseName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * Whether a Facebook Page belongs to the project the owner is connecting.
+ *
+ * Meta returns every Page the signed-in user administers. Filing all of them
+ * under the connecting project let a Downscale weight-loss post publish to the
+ * Man Clinic or Downscale-Derm Page, because the publisher then picked among
+ * them by whichever row was touched last. Matching is bidirectional because a
+ * Page is usually named slightly longer than the project.
+ */
+function pageBelongsToBrand(pageName: string, brandName: string): boolean {
+  const page = normaliseName(pageName)
+  const brand = normaliseName(brandName)
+  if (!page || !brand) return false
+  return page === brand || page.includes(brand) || brand.includes(page)
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -110,8 +133,25 @@ export async function GET(request: Request) {
     }
 
     const savedAccounts: string[] = []
+    const skippedAccounts: string[] = []
+
+    // Resolve the connecting project so each Page can be checked against it.
+    const admin = createAdminClient()
+    const { data: connectingBrand } = await admin
+      .from('brands')
+      .select('name')
+      .eq('id', brandId)
+      .maybeSingle()
+    const brandName = (connectingBrand?.name as string | undefined) ?? ''
 
     for (const page of pages) {
+      // A Page that is not this project's is left unconnected rather than
+      // filed here. Connect it from its own project instead.
+      if (!brandName || !pageBelongsToBrand(page.name, brandName)) {
+        skippedAccounts.push(page.name)
+        continue
+      }
+
       // Save Facebook Page token (each page has its own long-lived token)
       const fbExpiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
 
@@ -165,10 +205,18 @@ export async function GET(request: Request) {
       }
     }
 
+    // Say plainly what was skipped. Silently connecting nothing looks identical
+    // to a broken sign-in, and the owner needs to know the other Pages are
+    // connected from their own projects rather than here.
+    const message = savedAccounts.length
+      ? `Connected: ${savedAccounts.join(', ')}` +
+        (skippedAccounts.length
+          ? `. Not connected here (belongs to another project): ${skippedAccounts.join(', ')}`
+          : '')
+      : `No account matched this project. Skipped: ${skippedAccounts.join(', ')}. Connect each Page from its own project.`
+
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?success=${encodeURIComponent(
-        `Connected: ${savedAccounts.join(', ')}`,
-      )}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?${savedAccounts.length ? 'success' : 'error'}=${encodeURIComponent(message)}`,
     )
   } catch (error) {
     console.error('[meta/callback] Error:', error)

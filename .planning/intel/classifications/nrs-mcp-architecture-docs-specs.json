@@ -1,0 +1,33 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-mcp-architecture.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "NotRealSmart Agency — MCP Architecture Reference",
+  "summary": "MCP server contract for NRS: endpoint, auth methods, exposed tool surface, and the HIDDEN_FROM_MCP allowlist that routes orchestration through the Director.",
+  "scope": [
+    "MCP server",
+    "/api/mcp endpoint",
+    "HIDDEN_FROM_MCP allowlist",
+    "adaptToolsForMCP",
+    "chat_with_director",
+    "get_director_response",
+    "draft_post",
+    "API key auth (nrs_sk_)",
+    "OAuth 2.0 connector",
+    "quick_start MCP prompt",
+    "api_keys table",
+    "mcp_jobs table",
+    "audit_log table",
+    "plug-in AI clients (Claude Desktop, Mobile, Cowork, Claude Code)"
+  ],
+  "cross_refs": [
+    "nrs-media-processing-pipeline",
+    "nrs-video-pipeline-architecture",
+    "nrs-creative-studio-definitive-architecture",
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=SPEC treated as authoritative; content agrees (endpoint/protocol/auth definitions, tool exposure contract, code-level allowlist, table list). Filename hash suffix is path-derived rather than SHA-256 — no shell tool available in this agent's toolset; suffix 'docs-specs' encodes the source directory to avoid sibling collisions."
+}

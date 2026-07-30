@@ -1,0 +1,24 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-mixpost-webhook-setup.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Mixpost Webhook Setup — One-off Admin Steps",
+  "summary": "Runbook for registering the Mixpost webhook once in the admin UI, storing its secret, and smoke-testing the NRS receiver.",
+  "scope": [
+    "Mixpost webhooks",
+    "MIXPOST_WEBHOOK_SECRET",
+    "/api/webhooks/mixpost receiver",
+    "scheduled_posts status flow",
+    "post and account webhook events"
+  ],
+  "cross_refs": [
+    "~/Obsidian/Reference/nrs-mixpost-webhooks.md",
+    "src/app/api/webhooks/mixpost/route.ts",
+    "/var/www/html/vendor/inovector/mixpost-pro-team/src/Actions/Webhook/TriggerWebhook.php",
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Type taken from MANIFEST_TYPE. Content signals agree: procedural runbook (admin steps, smoke test, failure modes), no decision or requirement sections. Filename suffix uses the source directory rather than a SHA-256 prefix — no shell available to hash, matching sibling classification files."
+}

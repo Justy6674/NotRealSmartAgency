@@ -1,0 +1,31 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-mixpost-visual-parity-inventory.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Mixpost Visual Parity — Full Sub-Page Inventory",
+  "summary": "Component-level inventory of Mixpost Pro's workspace UI mapped against NRS Studio's current state, with a 10-item visual parity priority order.",
+  "scope": [
+    "Mixpost Pro workspace UI",
+    "NRS Creative Studio",
+    "Dashboard",
+    "Posts list",
+    "Post composer (Posts/CreateEdit)",
+    "Calendar",
+    "Media Library",
+    "Templates",
+    "Social Accounts",
+    "Posting Schedule",
+    "Webhooks",
+    "PostPreview providers",
+    "PostActivity",
+    "ProviderVersionOptions",
+    "shared UI primitives"
+  ],
+  "cross_refs": [
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=SPEC applied as authoritative; content agrees (per-page component contracts, LOC counts, per-platform metadata field lists, explicit gap/parity requirements). Frontmatter tags include 'reference' but no type field. Filename uses a path-suffix disambiguator instead of a SHA-256 slice — no shell tool available to compute the hash; matches sibling classifier naming in this directory."
+}

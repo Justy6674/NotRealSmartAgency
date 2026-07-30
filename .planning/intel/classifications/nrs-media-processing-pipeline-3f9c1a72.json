@@ -1,0 +1,27 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-media-processing-pipeline.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "NRS Media Processing Pipeline — Single Source of Truth",
+  "summary": "Technical contract for the single canonical media_items processing function covering thumbnail, transcription and AI tagging stages, callers, persistence and error handling.",
+  "scope": [
+    "runMediaProcessingPipeline",
+    "media_items",
+    "thumbnail extraction",
+    "ffmpeg URL streaming",
+    "transcription",
+    "Deepgram nova-2",
+    "OpenAI Whisper fallback",
+    "AI tagging",
+    "metadata.processing report",
+    "process_media Director tool",
+    "MediaUploader upload path"
+  ],
+  "cross_refs": [
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

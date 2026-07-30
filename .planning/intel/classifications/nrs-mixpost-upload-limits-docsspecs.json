@@ -1,0 +1,29 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-mixpost-upload-limits.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Mixpost Upload Limits — 2 GB config",
+  "summary": "Runbook for the 2 GB Mixpost video upload limit across nginx, PHP-FPM, the Laravel validator and Horizon, plus persistence, rollback and change steps.",
+  "scope": [
+    "Mixpost",
+    "VPS infrastructure",
+    "video upload limits",
+    "host nginx",
+    "container nginx",
+    "PHP-FPM",
+    "Mixpost Laravel validator",
+    "Horizon queue timeout",
+    "docker-compose overrides",
+    "chunked uploads",
+    "backups and rollback"
+  ],
+  "cross_refs": [
+    "src/lib/mixpost/sync-draft.ts",
+    "Reference/wiki/entities/notrealsmart",
+    "Reference/wiki/entities/scentsell"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

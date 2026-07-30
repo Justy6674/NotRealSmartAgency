@@ -1,0 +1,19 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-mixpost-webhooks.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Mixpost Pro — Webhook Events & Signing",
+  "summary": "Canonical list of Mixpost Pro webhook event names, wire format, and HMAC SHA-256 signature verification method used by the NRS receiver.",
+  "scope": ["Mixpost Pro webhooks", "post events", "account events", "webhook wire format", "HMAC SHA-256 signature verification", "NRS webhook receiver"],
+  "cross_refs": [
+    "~/Obsidian/Reference/nrs-mixpost-webhook-setup.md",
+    "src/app/api/webhooks/mixpost/route.ts",
+    "https://docs.mixpost.app/webhooks/create/",
+    "/var/www/html/vendor/inovector/mixpost-pro-team/src/Actions/Webhook/TriggerWebhook.php",
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=DOC applied as authoritative; heuristic+content classification skipped. Content carries strong SPEC signals (event tables, exact wire format, signature verification contract) that would otherwise argue for SPEC — recorded here for the synthesizer. Output filename uses a path-derived suffix ('docs-specs') matching sibling files in this directory, as no hashing tool was available in this agent's toolset."
+}

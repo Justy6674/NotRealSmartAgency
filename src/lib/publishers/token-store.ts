@@ -21,21 +21,38 @@ const REFRESH_BUFFER_MS = 5 * 60 * 1000 // 5 minutes before expiry
 export async function getToken(
   brandId: string,
   platform: PublisherPlatform,
+  accountId?: string,
 ): Promise<OAuthToken | null> {
   const supabase = createAdminClient()
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('social_oauth_tokens')
     .select('*')
     .eq('brand_id', brandId)
     .eq('platform', platform)
     .eq('status', 'active')
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .single()
 
-  if (error || !data) return null
-  return data as OAuthToken
+  if (accountId) query = query.eq('account_id', accountId)
+
+  const { data, error } = await query.order('updated_at', { ascending: false })
+
+  if (error || !data?.length) return null
+
+  // Previously this took the most recently updated row. With several accounts
+  // on one platform for one project that is an arbitrary choice of destination,
+  // and for a regulated health brand publishing to the wrong account is the
+  // expensive kind of wrong. Ambiguity is refused rather than guessed; the
+  // caller passes accountId to say which.
+  if (data.length > 1 && !accountId) {
+    console.error(
+      `[token-store] ${data.length} active ${platform} accounts for project ${brandId} ` +
+      `(${data.map((t) => (t as OAuthToken).account_name).join(', ')}). ` +
+      'Refusing to choose — pass accountId.',
+    )
+    return null
+  }
+
+  return data[0] as OAuthToken
 }
 
 /**

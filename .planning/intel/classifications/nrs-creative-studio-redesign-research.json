@@ -1,0 +1,33 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-creative-studio-redesign-research.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Creative Studio Redesign — Research Findings",
+  "summary": "Competitor research and package selection for the Creative Studio redesign, with a current-vs-needed feature matrix and a build-our-own-components decision.",
+  "scope": [
+    "Creative Studio",
+    "composer panel",
+    "platform preview mockups",
+    "image editor",
+    "carousel builder",
+    "calendar",
+    "Instagram grid planner",
+    "post versions",
+    "hashtag groups",
+    "post templates",
+    "approval workflow",
+    "react-filerobot-image-editor",
+    "@dnd-kit",
+    "Postiz",
+    "Planable",
+    "Later",
+    "Mixpost"
+  ],
+  "cross_refs": [
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=SPEC applied as authoritative. Content is research/reference prose plus package and feature-gap tables, ending in an explicit build-our-own-components architecture decision; heuristics alone would have leaned DOC (path is docs/specs/, frontmatter tag is 'reference'). Filename omits the required path SHA-256 suffix because no hashing tool was available in this agent's toolset; slug is unique within OUTPUT_DIR."
+}

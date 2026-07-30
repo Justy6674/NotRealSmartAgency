@@ -1,0 +1,36 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-social-publishing-build-plan.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "NRS Direct Social Publishing — Build Plan",
+  "summary": "Per-platform OAuth scopes, quotas, publishing flows and file-level build plan for direct Meta, YouTube, TikTok and LinkedIn publishing.",
+  "scope": [
+    "direct social publishing",
+    "OAuth 2.0 token management",
+    "Meta Graph API (Instagram, Facebook)",
+    "YouTube Data API",
+    "TikTok Content Posting API",
+    "LinkedIn Community Management API",
+    "user_integrations token storage",
+    "agent publish tools",
+    "cron publisher"
+  ],
+  "cross_refs": [
+    "[[Reference/wiki/entities/notrealsmart|notrealsmart]]",
+    "src/app/api/auth/[platform]/redirect/route.ts",
+    "src/app/api/auth/[platform]/callback/route.ts",
+    "src/lib/social/token-manager.ts",
+    "src/lib/social/platforms.ts",
+    "src/components/agency/ConnectSocialsCard.tsx",
+    "src/lib/agents/tools/publish-to-meta.ts",
+    "src/lib/agents/tools/publish-to-youtube.ts",
+    "src/lib/agents/tools/publish-to-tiktok.ts",
+    "src/lib/agents/tools/publish-to-linkedin.ts",
+    "src/lib/agents/tools/index.ts",
+    "src/app/api/cron/publish-posts/route.ts"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

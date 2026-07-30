@@ -1,0 +1,24 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/nrs-creator-build-checklist.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Creator Build Checklist — What Actually Needs Building",
+  "summary": "Build checklist for PostCreator: edit mode, media entry point, Zustand navigation wiring, schedule card, Review/Media entry buttons, plus explicit do-not-build list.",
+  "scope": [
+    "PostCreator.tsx",
+    "Creative Studio",
+    "edit mode (draftId)",
+    "media entry point (mediaId)",
+    "agency-store Zustand navigation",
+    "schedule card",
+    "ReviewRoom Alter action",
+    "MediaLibraryCard Create Post"
+  ],
+  "cross_refs": [
+    "Reference/wiki/entities/notrealsmart"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=SPEC applied; content is an implementation checklist with file-level build contracts, consistent with SPEC. Filename suffix 'docsspec' is a path-derived unique token, not a SHA-256 prefix (no hashing tool available in this agent's toolset)."
+}

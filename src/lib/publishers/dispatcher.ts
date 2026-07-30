@@ -9,6 +9,7 @@
  * Every attempt is logged to the publisher_runs table for audit.
  */
 
+import { checkPublishAllowed } from '@/lib/agents/publish-gate'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   createMixpostPost,
@@ -99,6 +100,42 @@ export async function publishToPlatform(
   const start = Date.now()
   const useNative = isNativeEnabled(req.platform)
   const backend: PublisherBackend = useNative ? 'native' : 'mixpost'
+
+  // Regulatory review first — before rate limits, before media validation, and
+  // before any platform call. This path had no compliance check at all, so
+  // enabling direct publishing would have removed the only working AHPRA/TGA
+  // gate rather than adding one. It runs on the first attempt only; a retry is
+  // re-sending content that already passed.
+  if (attempt === 1) {
+    const admin = createAdminClient()
+    const { data: brand } = await admin
+      .from('brands')
+      .select('name, compliance_flags, brand_dna_constraints')
+      .eq('id', req.brand_id)
+      .maybeSingle()
+
+    const gate = await checkPublishAllowed({
+      content: [req.caption, ...(req.hashtags ?? [])].join(' ').trim(),
+      complianceFlags: brand?.compliance_flags as never,
+      brandDNA: brand?.brand_dna_constraints as never,
+      label: `${brand?.name ?? req.brand_id} → ${req.platform}`,
+    })
+
+    if (!gate.allowed) {
+      await logRun({
+        scheduledPostId: req.scheduled_post_id,
+        platform: req.platform,
+        publisher: backend,
+        status: 'failed',
+        attempt,
+        error: gate.reason ?? 'Blocked by the regulatory review',
+        durationMs: Date.now() - start,
+      })
+      // Deliberately not queued for retry: a compliance block is a decision
+      // about the content, and re-sending the same words will block again.
+      return { ok: false, publisher: backend, error: gate.reason ?? 'Blocked by the regulatory review' }
+    }
+  }
 
   // Rate-limit check
   if (!canPublish(req.platform, req.brand_id)) {

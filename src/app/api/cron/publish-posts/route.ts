@@ -10,6 +10,7 @@ import {
   type MixpostVersion,
 } from '@/lib/mixpost/client'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
+import { checkPublishAllowed } from '@/lib/agents/publish-gate'
 
 export async function GET(request: Request) {
   // Verify cron secret
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   // Find posts due for publishing
   const { data: duePosts, error } = await supabase
     .from('scheduled_posts')
-    .select('*, brands(id, name, slug, social_urls, post_signature), media_items(file_url, file_name)')
+    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(file_url, file_name)')
     .eq('status', 'scheduled')
     .lte('scheduled_at', new Date().toISOString())
     .limit(20)
@@ -83,6 +84,30 @@ export async function GET(request: Request) {
       .eq('id', post.id)
 
     try {
+      // The review runs here, immediately before the platform call, rather than
+      // at draft time: content can be edited in the Review UI after a draft-time
+      // check passed, so an earlier verdict does not describe what is about to
+      // be published.
+      const postBrand = post.brands as Record<string, unknown> | null
+      const gate = await checkPublishAllowed({
+        content: String(post.content ?? ''),
+        complianceFlags: postBrand?.compliance_flags as never,
+        brandDNA: postBrand?.brand_dna_constraints as never,
+        label: `scheduled post ${post.id}`,
+      })
+      if (!gate.allowed) {
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'failed', error: gate.reason })
+          .eq('id', post.id)
+        console.error(`[cron/publish-posts] blocked: ${gate.reason}`)
+        failed++
+        continue
+      }
+      if (gate.warnings.length > 0) {
+        console.log(`[cron/publish-posts] compliance warnings for post ${post.id}:`, gate.warnings)
+      }
+
       // Build post signature suffix
       const sig = (post.brands as Record<string, unknown>)?.post_signature as
         | { enabled?: boolean; text?: string; format?: string; mention?: string; hashtag?: string }
