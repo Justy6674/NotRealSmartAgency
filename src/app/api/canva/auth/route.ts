@@ -44,6 +44,13 @@ export async function GET() {
     'comment:read',
     'comment:write',
     'profile:read',
+    // Brand templates were never requested, so a token minted here could not
+    // read or publish one — the same permission gap that blocked publishing a
+    // carousel template. Asking for them at consent is the only way to get
+    // them; a token cannot gain a scope afterwards.
+    'brandtemplate:meta:read',
+    'brandtemplate:content:read',
+    'brandtemplate:content:write',
   ].join(' ')
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'https://notrealsmart.com.au'}/api/canva/callback`
