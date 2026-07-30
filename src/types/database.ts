@@ -501,6 +501,12 @@ export interface BrandDNAConstraints {
     signature_phrases?: string[]
   }
   content_philosophy?: 'storytelling_first' | 'product_first' | 'educational_first' | 'community_first'
+  /** Read off the live site's CSS by extract_brand_kit, not chosen by an agent. */
+  typography?: {
+    display?: string
+    body?: string
+    notes?: string
+  }
   never_do?: string[]              // hard constraints: "before_after_images", "testimonials_in_ads", etc.
   narrative_world?: string         // the brand's story universe
 }

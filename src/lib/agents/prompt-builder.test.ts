@@ -149,3 +149,35 @@ test('gives the Director the full Abe bridge for regulated healthcare brands onl
   assert.doesNotMatch(nonRegulatedPrompt, /Abe Healthcare Intelligence/)
   assert.doesNotMatch(nonRegulatedPrompt, /PICO Clinical Evidence/)
 })
+
+test('every agent is told the brand palette and logo, not just its voice rules', () => {
+  // Voice rules always reached the prompt, so copy came out on-brand while
+  // designs did not: the palette and logo reached no agent at all, and a logo
+  // only appeared if the optional watermark block happened to be enabled.
+  // Visual identity has to be a default, not something an agent asks for.
+  const branded: Brand = {
+    ...brand,
+    logo_url: 'https://www.scentsell.com.au/scentsell-logo.png',
+    brand_colours: { primary: '#e4a968', accent: '#c28237', background: '#fff9f1' },
+    brand_dna_constraints: {
+      ...brand.brand_dna_constraints,
+      typography: { display: 'Fraunces', body: 'Manrope' },
+    },
+    watermark: {},
+  }
+
+  const prompt = buildSystemPrompt(branded, director)
+
+  assert.match(prompt, /#e4a968/)
+  assert.match(prompt, /#c28237/)
+  assert.match(prompt, /#fff9f1/)
+  assert.match(prompt, /scentsell-logo\.png/)
+  assert.match(prompt, /Fraunces/)
+  assert.match(prompt, /Manrope/)
+})
+
+test('a project with no palette gets no invented one', () => {
+  const prompt = buildSystemPrompt(brand, director)
+
+  assert.doesNotMatch(prompt, /Brand colours \(use these exact values\)/)
+})

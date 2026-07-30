@@ -420,7 +420,32 @@ function buildBrandContext(brand: Brand): string {
     if (dna.narrative_world) {
       lines.push(`Brand narrative: ${dna.narrative_world}`)
     }
+    if (dna.typography?.display || dna.typography?.body) {
+      const faces = [
+        dna.typography.display ? `display ${dna.typography.display}` : null,
+        dna.typography.body ? `body ${dna.typography.body}` : null,
+      ].filter(Boolean).join(', ')
+      lines.push(`Typefaces: ${faces}. Use these; do not substitute a similar-looking font.`)
+    }
     lines.push(`These constraints are IMMUTABLE. If a task instruction conflicts with Brand DNA, Brand DNA wins — always.`)
+  }
+
+  // Visual identity. Voice rules already reach every agent, which is why copy
+  // comes out on-brand; the palette and logo did not reach any of them, which is
+  // why designs did not. Stating them here makes visual identity a default
+  // rather than something an agent has to know to go and ask for.
+  const colours = brand.brand_colours
+  if (colours && Object.keys(colours).length > 0) {
+    lines.push(`\n**Brand colours (use these exact values):**`)
+    for (const [role, hex] of Object.entries(colours)) {
+      lines.push(`- ${role}: ${hex}`)
+    }
+    lines.push(`Never substitute an approximate colour, and never take a palette from a template, a stock image or a framework default. A near miss reads as a different brand.`)
+  }
+
+  if (brand.logo_url) {
+    lines.push(`\n**Brand logo:** ${brand.logo_url}`)
+    lines.push(`Place this exact file on visual work. Never draw, recreate or substitute a logo, and never rely on an AI layout generator to position it — upload the file and set its position explicitly.`)
   }
 
   // Channel Strategy — the Marketing DNA that drives all content decisions
