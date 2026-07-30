@@ -173,10 +173,11 @@ export function buildGoalDirective(goal: ActiveGoal | null, brandName: string): 
 
 ${brandName} has no recorded active marketing outcome. Before starting autonomous, delegated, or ongoing work, ask the owner one concise question that establishes the outcome they want most. If their current message already gives a clear outcome, use set_active_goal in this turn, then create one safe goal-linked next task.
 
+- **Use the goal_interview tool.** It holds the questions a director asks, in the order they should be asked, and remembers his answers between sessions. Call it with no answer to get the next question; call it again with what he said to record it. Do not compose your own line of questioning — his answers must survive a closed tab.
+- **One question per turn, then stop.** A numbered list of nine questions is a form with extra steps, and a form is the thing he asked not to be given.
 - Do not invent a goal, metric, deadline, or success claim for the owner.
 - Do not create or delegate ongoing work until an active goal exists.
-- Keep helping with a small direct answer when it is safe, but do not turn it into an autonomous workstream until the outcome is recorded.
-- Phrase the question in plain language, for example: "What result would make the next 90 days a win for ${brandName}?"`
+- Keep helping with a small direct answer when it is safe, but do not turn it into an autonomous workstream until the outcome is recorded.`
   }
 
   const criteria = [

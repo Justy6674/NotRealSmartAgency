@@ -95,3 +95,12 @@ test('a stored goal with no targets still maps cleanly', () => {
   assert.ok(active)
   assert.equal(active!.success_criteria.social_targets, undefined)
 })
+
+test('a project with no goal sends the Director to the interview, not to a form', () => {
+  // He asked for a director who asks questions. A model composing its own
+  // nine-question list is the form again, and its answers die with the tab.
+  const directive = buildGoalDirective(null, 'Scent Sell')
+  assert.match(directive, /goal_interview tool/)
+  assert.match(directive, /One question per turn/i)
+  assert.match(directive, /form with extra steps/i)
+})

@@ -117,7 +117,13 @@ test('web still discovers an outcome when there is no active goal', () => {
   const prompt = buildSystemPrompt(brand, director, { activeGoal: null })
 
   assert.match(prompt, /NO ACTIVE END-USER OUTCOME/)
-  assert.match(prompt, /What result would make the next 90 days a win/)
+  // Discovery is now conducted through the goal_interview tool rather than a
+  // single hard-coded question. The tool holds the director's line of
+  // questioning and remembers the answers between sessions, which a question
+  // composed in the prompt could not do.
+  assert.match(prompt, /goal_interview tool/)
+  assert.match(prompt, /One question per turn/i)
+  assert.match(prompt, /Do not invent a goal/)
 })
 
 test('prompts turn source-grounded build opportunities into approval-only developer handoffs', () => {

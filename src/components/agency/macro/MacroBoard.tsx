@@ -194,11 +194,28 @@ export function MacroBoard() {
                       </button>
                     )}
                   </span>
+                  {/* Starts the interview rather than opening a form. He
+                      asked for a director who asks questions; the form is
+                      still there behind "edit" for when he just wants to
+                      change a number. */}
                   <button
-                    onClick={() => setOpenGoalFor(p.id)}
+                    onClick={() =>
+                      openDirector(
+                        p.id,
+                        goal
+                          ? `I want to change the goal for ${p.name}. Ask me what's changed, one question at a time, the way a marketing director would.`
+                          : `Let's set the marketing goal for ${p.name}. Ask me your questions one at a time and write it down as we go.`,
+                      )
+                    }
                     className="shrink-0 rounded-md border px-2.5 py-1 text-xs hover:bg-accent"
                   >
-                    {goal ? 'Change' : 'Set'}
+                    {goal ? 'Talk it through' : 'Set with the Director'}
+                  </button>
+                  <button
+                    onClick={() => setOpenGoalFor(p.id)}
+                    className="shrink-0 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    edit
                   </button>
                 </li>
               )

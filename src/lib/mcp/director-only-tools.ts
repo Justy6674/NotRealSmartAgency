@@ -13,6 +13,13 @@ export const DIRECT_MCP_TOOLS: ReadonlySet<string> = new Set([
   // Director was brand-aware and every design was a guess.
   'get_brand_kit',
 
+  // The goal interview. This is the one thing that must work from whichever
+  // surface he happens to be using — he sets goals when he thinks of them,
+  // not when he is sitting in front of the web app. It asks one question and
+  // records one answer per call, so a plug-in client cannot use it to write a
+  // goal he never agreed to.
+  'goal_interview',
+
   // Read-only agency state
   'query_media',
   'query_calendar',
