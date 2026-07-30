@@ -38,6 +38,41 @@ const PLATFORM_GUIDANCE: Record<Platform, string> = {
   twitter: 'X/Twitter post — 280 character limit. One sharp idea. Optional thread hint at end.',
 }
 
+/**
+ * Pull the caption out of a JSON envelope that would not parse.
+ *
+ * Truncation mid-object is the common cause: the text plainly starts as the
+ * envelope but ends before its closing brace. Returning null means it was not
+ * an envelope at all, and the caller should keep the raw text.
+ */
+export function salvageCaptionFromEnvelope(
+  text: string,
+): { caption: string; hashtags: string[] } | null {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  if (!trimmed.startsWith('{')) return null
+
+  const match = /"caption"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(trimmed)
+  if (!match) return null
+
+  let caption: string
+  try {
+    caption = JSON.parse(`"${match[1]}"`) as string
+  } catch {
+    return null
+  }
+  if (!caption.trim()) return null
+
+  const hashtags: string[] = []
+  const tagBlock = /"hashtags"\s*:\s*\[([^\]]*)/.exec(trimmed)
+  if (tagBlock) {
+    for (const m of tagBlock[1].matchAll(/"([^"]+)"/g)) {
+      hashtags.push(m[1].replace(/^#/, '').replace(/\s+/g, '').toLowerCase())
+    }
+  }
+
+  return { caption: caption.trim(), hashtags: hashtags.slice(0, 10) }
+}
+
 export function registerDraftPostTool(mcpServer: McpServer, principal: McpPrincipal) {
   mcpServer.registerTool(
     'draft_post',
@@ -210,9 +245,17 @@ After this tool returns, tell the user the draft is in Review and they can appro
             .slice(0, 10)
         }
       } catch {
-        // Not JSON — Content & Copy ignored the envelope. Use the raw text as
-        // the caption with no hashtags. Worker memory extraction will still
-        // learn this happened and future runs should comply.
+        // Not parseable as JSON. It may still BE an envelope — a response cut
+        // short mid-object parses as nothing, and the fallback then wrote the
+        // raw `{"caption":"…` into the post. A draft that reads as code is
+        // one the owner has to notice before approving, and one he might not.
+        const salvaged = salvageCaptionFromEnvelope(caption)
+        if (salvaged) {
+          caption = salvaged.caption
+          parsedHashtags = salvaged.hashtags
+        }
+        // Otherwise Content & Copy ignored the envelope entirely and the raw
+        // text is the caption, which is the intended fallback.
       }
 
       // AHPRA/TGA compliance gate for health brands (mirrors publish_to_social)
