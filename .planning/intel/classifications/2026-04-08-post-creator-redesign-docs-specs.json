@@ -1,0 +1,43 @@
+{
+  "source_path": "/Users/jb-downscale/NotRealSmartAgency/docs/specs/2026-04-08-post-creator-redesign.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "Post Creator Redesign — Scent Sell Pattern for Social Media",
+  "summary": "Specifies a 10-section card-based Post Creator for all platforms and content types, with AI assistance at each section.",
+  "scope": [
+    "Post Creator",
+    "Post Composer (/agency/studio/post)",
+    "media slots",
+    "platform selector",
+    "content type presets",
+    "caption editor",
+    "hashtags",
+    "post templates",
+    "scheduling",
+    "AHPRA/TGA compliance check",
+    "live platform preview",
+    "sticky action bar",
+    "TikTok, Instagram, Facebook, LinkedIn, YouTube, X"
+  ],
+  "cross_refs": [
+    "src/pages/Sell.tsx",
+    "src/components/agency/studio/post/PostEditor.tsx",
+    "src/components/agency/studio/post/PlatformPreview.tsx",
+    "src/components/agency/studio/post/PostScheduler.tsx",
+    "src/components/agency/studio/post/PostTypeSelector.tsx",
+    "src/components/agency/studio/post/MediaSelector.tsx",
+    "src/components/agency/studio/post/CarouselPreview.tsx",
+    "src/components/agency/studio/post/PlatformVersionEditor.tsx",
+    "src/components/agency/studio/hashtags/HashtagGroupPicker.tsx",
+    "src/components/agency/studio/templates/PostTemplatePicker.tsx",
+    "src/components/agency/studio/preview/*.tsx",
+    "src/components/agency/studio/editor/ImageEditorModal.tsx",
+    "src/components/agency/MediaUploader.tsx",
+    "src/lib/post-versions.ts",
+    "src/lib/template-variables.ts"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "MANIFEST_TYPE=SPEC applied as authoritative; content signals agree (numbered section-by-section build contract, per-platform char limits and aspect ratios, named component/endpoint reuse list). No frontmatter type or status field. Drift flagged by orchestrator: PostCreator.tsx currently renders 7 StudioCards, not the 10 sections specified here — spec is the authority, implementation is behind."
+}

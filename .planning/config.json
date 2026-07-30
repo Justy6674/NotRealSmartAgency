@@ -1,0 +1,10 @@
+{
+  "granularity": "standard",
+  "commit_docs": true,
+  "use_agents": true,
+  "yolo": false,
+  "research": "skipped",
+  "research_skip_reason": "A codebase map (7 documents), 12 ingested specs, a conflict report and a publishing/interface options analysis already exist. A fresh research pass would produce less than what is on disk.",
+  "owner_is_non_developer": true,
+  "response_language": ""
+}
