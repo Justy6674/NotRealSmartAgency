@@ -42,11 +42,23 @@ export interface SlideContent {
   step?: string | null
 }
 
+/**
+ * The faces the brands' own sites actually load, read off their stylesheets.
+ *
+ * Bundled rather than fetched so a slide renders identically on a laptop and
+ * on a serverless function, and so a font CDN being slow never costs a post.
+ */
 const FONT_FILES: Record<string, string> = {
   Fraunces: 'fraunces/files/fraunces-latin-400-normal.woff',
   Manrope: 'manrope/files/manrope-latin-400-normal.woff',
   'Instrument Serif': 'instrument-serif/files/instrument-serif-latin-400-normal.woff',
   'DM Sans': 'dm-sans/files/dm-sans-latin-400-normal.woff',
+  'Chakra Petch': 'chakra-petch/files/chakra-petch-latin-400-normal.woff',
+  Inter: 'inter/files/inter-latin-400-normal.woff',
+  'Bricolage Grotesque': 'bricolage-grotesque/files/bricolage-grotesque-latin-400-normal.woff',
+  Geist: 'geist-sans/files/geist-sans-latin-400-normal.woff',
+  'JetBrains Mono': 'jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff',
+  'IBM Plex Sans': 'ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff',
 }
 
 /** Faces we ship. A brand asking for anything else falls back rather than failing. */
