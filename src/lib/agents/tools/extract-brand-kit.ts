@@ -172,12 +172,8 @@ export function assignPaletteRoles(candidates: readonly string[]): Record<string
  * Network failures are non-fatal — a partial palette still beats none, and an
  * empty result is handled honestly by the caller rather than guessed at.
  */
-async function collectCssColours(html: string, pageUrl: string): Promise<string[]> {
-  const counts = new Map<string, number>()
-
-  for (const block of html.match(/<style[\s\S]*?<\/style>/gi) ?? []) {
-    tallyColours(block, counts)
-  }
+async function fetchSiteCss(html: string, pageUrl: string): Promise<string> {
+  const inline = (html.match(/<style[\s\S]*?<\/style>/gi) ?? []).join('\n')
 
   const hrefs: string[] = []
   const linkRegex = /<link\b[^>]*>/gi
@@ -211,14 +207,64 @@ async function collectCssColours(html: string, pageUrl: string): Promise<string[
     }
   }))
 
-  for (const sheet of sheets) {
-    if (sheet) tallyColours(sheet, counts)
-  }
+  return [inline, ...sheets.filter(Boolean)].join('\n')
+}
 
+function collectCssColours(css: string): string[] {
+  const counts = new Map<string, number>()
+  tallyColours(css, counts)
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 20)
     .map(([colour]) => colour)
+}
+
+/**
+ * Generic stacks and OS fallbacks say nothing about a brand. A face is only
+ * interesting here if someone chose to load it.
+ */
+const GENERIC_FONTS = new Set([
+  'inherit', 'initial', 'unset', 'sans-serif', 'serif', 'monospace', 'cursive', 'fantasy',
+  'system-ui', 'ui-sans-serif', 'ui-serif', 'ui-monospace', 'ui-rounded', 'math', 'emoji', 'fangsong',
+  '-apple-system', 'blinkmacsystemfont', 'segoe ui', 'roboto', 'helvetica neue', 'helvetica', 'arial',
+  'apple color emoji', 'segoe ui emoji', 'segoe ui symbol', 'noto color emoji', 'noto sans',
+  'liberation sans', 'sfmono-regular', 'menlo', 'monaco', 'consolas', 'courier new', 'courier',
+  'cambria', 'times new roman', 'times', 'georgia', 'verdana', 'tahoma',
+])
+
+/**
+ * Read the brand's typefaces off the site's own CSS, ranked by how often each
+ * is declared. Framework builds hash the family name (`__Inter_f367f3`), so the
+ * hash is stripped back to the real family.
+ *
+ * Returns null when nothing but generic stacks was found — a site whose only
+ * declared family is a monospace fallback has told us about a code block, not
+ * about its brand, and guessing from that is how a wrong font gets locked in.
+ */
+export function extractBrandFonts(css: string): { display?: string; body?: string } | null {
+  const counts = new Map<string, number>()
+
+  for (const declaration of css.match(/font-family:\s*([^;}"']+)/gi) ?? []) {
+    const families = declaration.replace(/font-family:\s*/i, '').split(',')
+    for (const raw of families) {
+      let name = raw.trim().replace(/^["']|["']$/g, '')
+      if (!name || name.startsWith('var(')) continue
+      // Next.js and similar emit `__Fraunces_1a2b3c` / `Fraunces Fallback`.
+      name = name.replace(/^__/, '').replace(/_[0-9a-f]{6}$/i, '').replace(/\s+Fallback$/i, '').trim()
+      if (!name || GENERIC_FONTS.has(name.toLowerCase())) continue
+      if (!/^[A-Za-z][A-Za-z0-9 .'-]{1,40}$/.test(name)) continue
+      counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+  }
+
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name)
+  if (!ranked.length) return null
+
+  // Most-declared family carries the body; the next distinct one is usually the
+  // display face. With only one family, the brand simply uses one.
+  const body = ranked[0]
+  const display = ranked.find((name) => name !== body)
+  return display ? { display, body } : { body }
 }
 
 /**
@@ -313,7 +359,9 @@ export async function extractBrandKitCore(
       // Vite) emit almost nothing inline — the palette lives in a linked
       // stylesheet — so inline-only scanning returns nothing and the model is
       // left to invent a palette. Read the linked stylesheets too.
-      const cssColours = await collectCssColours(html, targetUrl)
+      const siteCss = await fetchSiteCss(html, targetUrl)
+      const cssColours = collectCssColours(siteCss)
+      const cssFonts = extractBrandFonts(siteCss)
 
       // 3. Send to Claude for analysis
       const systemPrompt = `You are a brand identity analyst. Given a website's content and metadata, extract the brand's voice and messaging.
@@ -395,6 +443,18 @@ ${bodyText}`
           updatePayload.brand_colours = { ...existingColours, ...palette }
         }
 
+        // Typography read off the site's own CSS. Like colours, it is only
+        // written when the site actually told us — a brand whose stylesheet
+        // yielded nothing but generic stacks keeps an empty field rather than a
+        // guessed typeface.
+        if (cssFonts) {
+          const existingTypography = (existingDna as { typography?: unknown }).typography
+          updatePayload.brand_dna_constraints = {
+            ...(updatePayload.brand_dna_constraints as Record<string, unknown> ?? existingDna),
+            typography: { ...(existingTypography as Record<string, unknown> ?? {}), ...cssFonts },
+          }
+        }
+
         // Only suggest content_philosophy if brand doesn't already have one
         let philosophySuggestion: string | null = null
         if (kit.content_philosophy && !existingDna.content_philosophy) {
@@ -437,6 +497,11 @@ ${bodyText}`
           summary += `Guessing a palette here would be wrong in a way that quietly spreads to every design brief. `
           summary += `Add the brand colours manually in Brand Settings.\n\n`
         }
+
+        summary += `### Typography\n`
+        summary += cssFonts
+          ? `- Display: ${cssFonts.display ?? cssFonts.body}\n- Body: ${cssFonts.body}\n\n`
+          : `No brand typeface could be read from the site's CSS, so none was saved.\n\n`
 
         summary += `### Voice\n`
         summary += `- **Formality:** ${kit.voice.formality}\n`

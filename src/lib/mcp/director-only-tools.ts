@@ -8,6 +8,11 @@
  * they are explicitly reviewed for direct MCP use.
  */
 export const DIRECT_MCP_TOOLS: ReadonlySet<string> = new Set([
+  // The brand contract. This is the whole reason a plugged-in assistant can be
+  // trusted to build anything: without it, only copy routed through the
+  // Director was brand-aware and every design was a guess.
+  'get_brand_kit',
+
   // Read-only agency state
   'query_media',
   'query_calendar',

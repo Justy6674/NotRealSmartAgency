@@ -44,6 +44,7 @@ import { createManageMediaTagsTool } from './manage-media-tags'
 import { createResearchIndustryTool } from './research-industry'
 import { createBlotatoListAccountsTool, createBlotatoPublishTool, createBlotatoExtractContentTool, createBlotatoSourceStatusTool, createBlotatoListTemplatesTool, createBlotatoCreateVisualTool, createBlotatoVisualStatusTool, createBlotatoPostStatusTool } from './blotato'
 import { createExtractBrandKitTool } from './extract-brand-kit'
+import { createGetBrandKitTool } from './get-brand-kit'
 import { createReviewContentTool } from './review-content'
 import { createInspectProjectMarketingBackendTool } from './project-backend-marketing'
 import { createSetActiveGoalTool, createUpdateGoalProgressTool } from './manage-goal'
@@ -174,6 +175,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const manageMediaTags = createManageMediaTagsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const researchIndustry = createResearchIndustryTool(ctx.supabase, ctx.userId, ctx.brandId)
   const extractBrandKit = createExtractBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const getBrandKit = createGetBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
   const reviewContent = createReviewContentTool(ctx.supabase, ctx.userId, ctx.brandId)
   const inspectProjectMarketingBackend = createInspectProjectMarketingBackendTool(ctx.supabase, ctx.brandId)
   const abeAi = createAbeAiTool({
@@ -207,6 +209,10 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     handoff_to_department: handoff,
     query_outputs: queryOutputs,
     read_proforma: readProforma,
+    // Every department needs the brand contract, not just the Director. A
+    // department that cannot see the palette or the never-do list produces work
+    // that has to be corrected after the fact.
+    get_brand_kit: getBrandKit,
   }
 
   // Tool sets per agent type
