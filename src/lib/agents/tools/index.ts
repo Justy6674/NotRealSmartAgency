@@ -10,6 +10,7 @@ import { createCreateTaskTool } from './create-task'
 import { createRequestApprovalTool } from './request-approval'
 import { createProjectBriefTool } from './project-brief'
 import { createGoalInterviewTool } from './goal-interview'
+import { createSyncBrandToCanvaTool } from './sync-brand-canva'
 import { createHandoffTool } from './handoff'
 import { createSendEmailTool } from './send-email'
 import { createGenerateImageTool } from './generate-image'
@@ -180,6 +181,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const extractBrandKit = createExtractBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
   const projectBrief = createProjectBriefTool(ctx.supabase, ctx.userId, ctx.brandId)
   const goalInterview = createGoalInterviewTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const syncBrandToCanva = createSyncBrandToCanvaTool(ctx.supabase, ctx.userId, ctx.brandId)
   const getBrandKit = createGetBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
   const reviewContent = createReviewContentTool(ctx.supabase, ctx.userId, ctx.brandId)
   const inspectProjectMarketingBackend = createInspectProjectMarketingBackendTool(ctx.supabase, ctx.brandId)
@@ -220,6 +222,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     get_brand_kit: getBrandKit,
     project_brief: projectBrief,
     goal_interview: goalInterview,
+    sync_brand_to_canva: syncBrandToCanva,
   }
 
   // Tool sets per agent type

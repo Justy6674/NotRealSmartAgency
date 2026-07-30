@@ -20,6 +20,11 @@ export const DIRECT_MCP_TOOLS: ReadonlySet<string> = new Set([
   // goal he never agreed to.
   'goal_interview',
 
+  // Setting a project up in Canva. Bounded and idempotent — it writes the
+  // owner's own recorded brand into his own Canva account and nothing else —
+  // and he does this when he thinks of it, which is rarely at a desk.
+  'sync_brand_to_canva',
+
   // Read-only agency state
   'query_media',
   'query_calendar',
