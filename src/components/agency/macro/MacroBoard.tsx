@@ -17,6 +17,13 @@ import {
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import type { BoardDecision, BoardProject, MacroBoard as MacroBoardData } from '@/lib/macro/board'
+import { GoalCard } from './GoalCard'
+import {
+  attentionAction,
+  goalAttention,
+  summariseGoal,
+  type MarketingGoal,
+} from '@/lib/goals/marketing-goals'
 
 const STATE_STYLES: Record<BoardProject['state'], { dot: string; label: string }> = {
   attention: { dot: 'bg-red-500', label: 'Needs you' },
@@ -53,15 +60,23 @@ export function MacroBoard() {
   const setConversation = useAgencyStore((s) => s.setConversation)
 
   const [data, setData] = useState<MacroBoardData | null>(null)
+  const [goals, setGoals] = useState<Record<string, MarketingGoal>>({})
+  const [openGoalFor, setOpenGoalFor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = async () => {
     setError(null)
     try {
-      const res = await fetch('/api/macro/board', { cache: 'no-store' })
-      if (!res.ok) throw new Error('unavailable')
-      setData(await res.json())
+      const [boardRes, goalsRes] = await Promise.all([
+        fetch('/api/macro/board', { cache: 'no-store' }),
+        fetch('/api/goals/marketing', { cache: 'no-store' }),
+      ])
+      if (!boardRes.ok) throw new Error('unavailable')
+      setData(await boardRes.json())
+      // A goal that cannot be read is left absent rather than shown as none —
+      // "no goal set" is a claim, and a wrong one prompts him to set a second.
+      if (goalsRes.ok) setGoals((await goalsRes.json()).goals ?? {})
     } catch {
       setError('Could not load your projects just now. Try again in a moment.')
     } finally {
@@ -131,6 +146,66 @@ export function MacroBoard() {
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </button>
       </div>
+
+      {/* ── What each project is aiming at ─────────────────────────────────
+          Above everything else. A project with no goal has nothing written
+          for it aimed anywhere, which is the most consequential empty field
+          on the screen and previously appeared nowhere at all. */}
+      <section className="mb-8">
+        <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Goals
+        </h2>
+        {openGoalFor ? (
+          <GoalCard
+            projectId={openGoalFor}
+            projectName={projects.find((p) => p.id === openGoalFor)?.name ?? 'this project'}
+            goal={goals[openGoalFor] ?? null}
+            onSaved={() => { setOpenGoalFor(null); void load() }}
+            onAskDirector={(text) => openDirector(openGoalFor, text)}
+          />
+        ) : (
+          <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+            {projects.map((p) => {
+              const goal = goals[p.id] ?? null
+              const attention = goalAttention(goal, new Date())
+              return (
+                <li key={p.id} className="flex items-center gap-3 p-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-foreground">
+                      <span className="text-muted-foreground">{p.name}</span>
+                      {' — '}
+                      {summariseGoal(goal)}
+                    </span>
+                    {attention.kind !== 'none' && (
+                      <button
+                        onClick={() => {
+                          const action = attentionAction(attention, p.name, goal)
+                          if (action) openDirector(p.id, action)
+                        }}
+                        className="mt-0.5 text-xs text-amber-600 underline-offset-2 hover:underline dark:text-amber-400"
+                      >
+                        {attention.kind === 'not_set'
+                          ? 'Nothing written for this is aimed anywhere'
+                          : attention.kind === 'never_measured'
+                            ? 'Never measured'
+                            : attention.kind === 'deadline_passed'
+                              ? `Date passed ${attention.daysPast} days ago`
+                              : 'Not looked at in over a month'}
+                      </button>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => setOpenGoalFor(p.id)}
+                    className="shrink-0 rounded-md border px-2.5 py-1 text-xs hover:bg-accent"
+                  >
+                    {goal ? 'Change' : 'Set'}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
       {/* ── What needs you ────────────────────────────────────────────────── */}
       <section className="mb-8">

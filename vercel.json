@@ -11,10 +11,6 @@
     {
       "path": "/api/cron/publish-posts",
       "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/learn-projects",
-      "schedule": "30 18 * * *"
     }
   ]
 }

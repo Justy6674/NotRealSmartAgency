@@ -8,6 +8,8 @@ export interface GoalSuccessCriteria {
   target?: string
   baseline?: string
   review_cadence?: string
+  /** Per-platform numbers the owner set. Shape validated in @/lib/goals. */
+  social_targets?: unknown[]
 }
 
 export interface GoalProgress {
@@ -100,6 +102,54 @@ export async function getActiveGoal(
   return data ? toActiveGoal(data as Record<string, unknown>) : null
 }
 
+/**
+ * Read the owner's stored social targets defensively.
+ *
+ * Kept here rather than importing the goals module so the prompt layer has no
+ * dependency on it — a malformed target is dropped, because a half-read one
+ * renders as a confident number that was never set.
+ */
+function readSocialTargets(raw: unknown): Array<{
+  platform: string
+  metric: string
+  current: number | null
+  target: number
+  by?: string | null
+}> {
+  if (!Array.isArray(raw)) return []
+  const out: Array<{ platform: string; metric: string; current: number | null; target: number; by?: string | null }> = []
+  for (const item of raw) {
+    const t = item as Record<string, unknown>
+    if (typeof t?.platform !== 'string' || typeof t?.metric !== 'string') continue
+    if (typeof t.target !== 'number' || !Number.isFinite(t.target)) continue
+    out.push({
+      platform: t.platform,
+      metric: t.metric,
+      target: t.target,
+      current: typeof t.current === 'number' && Number.isFinite(t.current) ? t.current : null,
+      by: typeof t.by === 'string' ? t.by : null,
+    })
+  }
+  return out
+}
+
+const METRIC_WORDS: Record<string, string> = {
+  followers: 'followers',
+  posts_per_week: 'posts a week',
+  engagement_rate: 'engagement rate',
+  reach: 'people reached',
+  leads: 'enquiries',
+}
+
+function describeTarget(t: { platform: string; metric: string; current: number | null; target: number; by?: string | null }): string {
+  const where = t.platform.charAt(0).toUpperCase() + t.platform.slice(1)
+  const metric = METRIC_WORDS[t.metric] ?? t.metric
+  const by = t.by ? ` by ${new Date(t.by).toLocaleDateString('en-AU')}` : ''
+  return t.current === null
+    ? `${where}: reach ${t.target} ${metric}${by} — not measured yet`
+    : `${where}: ${t.current} now, aiming for ${t.target} ${metric}${by}`
+}
+
 export function buildGoalDirective(goal: ActiveGoal | null, brandName: string): string {
   if (!goal) {
     return `## NO ACTIVE END-USER OUTCOME — REQUIRED DISCOVERY
@@ -120,6 +170,14 @@ ${brandName} has no recorded active marketing outcome. Before starting autonomou
     goal.deadline && `Target date: ${new Date(goal.deadline).toLocaleDateString('en-AU')}`,
   ].filter(Boolean)
 
+  // The owner's per-platform numbers, named platform by platform. A goal that
+  // says only "grow social" gives an agent writing an Instagram post nothing
+  // to aim at; the numbers are the direction, and they are his, not invented.
+  const socialTargets = readSocialTargets(goal.success_criteria.social_targets)
+  const socialBlock = socialTargets.length > 0
+    ? `\n**What each channel is aiming at — set by the owner:**\n${socialTargets.map((t) => `- ${describeTarget(t)}`).join('\n')}\n\nWhen writing for one of these channels, write towards its number. Say which target a piece of work serves. Where a target has never been measured, find where it stands before claiming movement towards it.`
+    : ''
+
   const progressEvidence = goal.progress.evidence.length > 0
     ? `Evidence: ${goal.progress.evidence.join('; ')}`
     : 'Evidence: none recorded yet.'
@@ -128,6 +186,7 @@ ${brandName} has no recorded active marketing outcome. Before starting autonomou
 
 **${goal.title}**
 ${goal.description ? `${goal.description}\n` : ''}${criteria.join('\n')}
+${socialBlock}
 
 Current verified progress: ${goal.progress.percent}% — ${goal.progress.summary}
 ${progressEvidence}
