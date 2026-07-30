@@ -32,7 +32,7 @@ no technical dependency on Phase 1.
 - [ ] **Phase 2: Publishing off the withdrawn host** - Same accounts, same content, a host he has not refused *(runs first)*
 - [x] **Phase 1: The Macro Board** - One screen showing all eleven projects, ranked by what needs him today *(shipped e92b2ae)*
 - [x] **Phase 3: Closing the regulatory gaps** - No route to a live account escapes the review, and tests prove it *(shipped 1df233c)*
-- [~] **Phase 4: Proactive project intelligence** - NRS learns each project on a schedule and briefs any AI that connects *(brief shipped 5d51ae8; the scheduled learning is the remaining half and needs the owner's yes — it spends on every run across eleven projects)*
+- [x] **Phase 4: Proactive project intelligence** - NRS learns each project on a schedule and briefs any AI that connects *(brief 5d51ae8, nightly learning 15e8014)*
 - [ ] **Phase 5: Publishing direct to the platforms** - Each account bound to its own project, middleware retired
 - [x] **Phase 6: The Studio workspace** - Left-sidebar navigation and one Creator from idea to scheduled *(already built; verified 2026-07-30, and the Creator's review fixed in 1b7b9e9)*
 
@@ -130,7 +130,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. The Macro Board | 1/1 | Complete | 2026-07-30 |
 | 2. Publishing off the withdrawn host | 0/1 | Planned | - |
 | 3. Closing the regulatory gaps | 1/1 | Complete | 2026-07-30 |
-| 4. Proactive project intelligence | 1/2 | Brief done, scheduled learning pending owner | - |
+| 4. Proactive project intelligence | 2/2 | Complete | 2026-07-30 |
 | 5. Publishing direct to the platforms | 0/TBD | Not started | - |
 | 6. The Studio workspace | 1/1 | Complete (was already built) | 2026-07-30 |
 
