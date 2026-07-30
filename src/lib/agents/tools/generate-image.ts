@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { stampLogo } from '@/lib/media/brand-stamp'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import { experimental_generateImage as generateImage } from 'ai'
@@ -38,6 +39,32 @@ export function createGenerateImageTool(
             buffer = Buffer.from(imageData.base64, 'base64')
           } else {
             return { generated: true, message: 'Image generated but could not be saved — no image data available.' }
+          }
+
+          // Put the brand's real logo on it. The prompt tells the model not to
+          // draw one — an invented logo on a live account is worse than none —
+          // so the actual file is composited here instead. Every image made
+          // before this went out unbranded.
+          let branded = false
+          const { data: brandRow } = await supabase
+            .from('brands')
+            .select('logo_url')
+            .eq('id', brandId)
+            .maybeSingle()
+
+          if (brandRow?.logo_url) {
+            try {
+              const logoRes = await fetch(brandRow.logo_url as string)
+              if (logoRes.ok) {
+                const stamped = await stampLogo(buffer, Buffer.from(await logoRes.arrayBuffer()))
+                if (stamped.length !== buffer.length) {
+                  buffer = stamped
+                  branded = true
+                }
+              }
+            } catch {
+              // An unreachable logo costs the branding, never the image.
+            }
           }
 
           const sizeBytes = buffer.length
@@ -83,6 +110,7 @@ export function createGenerateImageTool(
                 generated_by: 'generate_image',
                 prompt,
                 aspect_ratio: aspectRatio,
+                branded,
               },
             })
             .select('id')
