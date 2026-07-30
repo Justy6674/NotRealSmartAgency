@@ -195,3 +195,17 @@ test('the goal it replaced is remembered', () => {
   })
   assert.equal(read.supersedes, 'g1')
 })
+
+test('a target of one does not read as "1 posts a week"', () => {
+  // Read aloud, that is the kind of slip that makes a system look careless.
+  assert.match(describeTarget(target({ platform: 'youtube', metric: 'posts_per_week', target: 1, current: 0 })),
+    /YouTube: 0 of 1 post a week/)
+  assert.match(describeTarget(target({ metric: 'posts_per_week', target: 4, current: 0 })),
+    /4 posts a week/)
+})
+
+test('platform names are spelled the way the platforms spell them', () => {
+  assert.match(describeTarget(target({ platform: 'youtube' })), /YouTube/)
+  assert.match(describeTarget(target({ platform: 'tiktok' })), /TikTok/)
+  assert.match(describeTarget(target({ platform: 'linkedin' })), /LinkedIn/)
+})

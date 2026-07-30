@@ -160,9 +160,24 @@ export function summariseGoal(goal: MarketingGoal | null): string {
 }
 
 /** A social target as a sentence, for the tile and for an AI reading the brief. */
+const PLATFORM_LABELS_INTERNAL: Record<string, string> = {
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  x: 'X',
+}
+
+/** Read aloud, "1 posts a week" is the kind of slip that makes a system look careless. */
+const METRIC_SINGULAR: Partial<Record<SocialMetric, string>> = {
+  posts_per_week: 'post a week',
+  leads: 'enquiry',
+}
+
 export function describeTarget(target: SocialTarget): string {
-  const metric = METRIC_LABELS[target.metric]
-  const where = target.platform.charAt(0).toUpperCase() + target.platform.slice(1)
+  const metric = (target.target === 1 && METRIC_SINGULAR[target.metric]) || METRIC_LABELS[target.metric]
+  const where =
+    PLATFORM_LABELS_INTERNAL[target.platform] ??
+    target.platform.charAt(0).toUpperCase() + target.platform.slice(1)
   const by = target.by ? ` by ${new Date(target.by).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''
 
   return target.current === null

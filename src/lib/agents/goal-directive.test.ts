@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildGoalDirective, type ActiveGoal } from './goal-loop.ts'
+import { buildGoalDirective, toActiveGoal, type ActiveGoal } from './goal-loop.ts'
 
 function goal(over: Partial<ActiveGoal> = {}): ActiveGoal {
   return {
@@ -61,4 +61,37 @@ test('a malformed stored target is dropped, not rendered as a number', () => {
 
 test('a project with no goal is still told to ask rather than invent one', () => {
   assert.match(buildGoalDirective(null, 'Downscale'), /Do not invent a goal/)
+})
+
+test('targets survive the trip from a stored row to the prompt', () => {
+  // The previous test built the goal object by hand and so never exercised
+  // toActiveGoal, which was silently dropping social_targets — the numbers
+  // could not have reached an agent no matter what was stored.
+  const active = toActiveGoal({
+    id: 'g1',
+    title: 'Get people swapping',
+    description: null,
+    success_criteria: {
+      outcome: 'Get people swapping',
+      social_targets: [{ platform: 'instagram', metric: 'posts_per_week', target: 4, current: 0 }],
+    },
+    progress: { percent: 0, summary: 'Set.', evidence: [] },
+    deadline: null,
+    next_review_at: null,
+  })
+
+  assert.ok(active, 'the row must map')
+  const directive = buildGoalDirective(active!, 'Scent Sell')
+  assert.match(directive, /Instagram: 0 now, aiming for 4 posts a week/)
+})
+
+test('a stored goal with no targets still maps cleanly', () => {
+  const active = toActiveGoal({
+    id: 'g1', title: 'x', description: null,
+    success_criteria: { outcome: 'x' },
+    progress: { percent: 0, summary: 'Set.', evidence: [] },
+    deadline: null, next_review_at: null,
+  })
+  assert.ok(active)
+  assert.equal(active!.success_criteria.social_targets, undefined)
 })

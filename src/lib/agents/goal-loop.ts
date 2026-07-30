@@ -68,6 +68,9 @@ export function toActiveGoal(row: Record<string, unknown>): ActiveGoal | null {
       target: typeof criteria.target === 'string' ? criteria.target : undefined,
       baseline: typeof criteria.baseline === 'string' ? criteria.baseline : undefined,
       review_cadence: typeof criteria.review_cadence === 'string' ? criteria.review_cadence : undefined,
+      // The owner's per-platform numbers. Dropped here, they could never
+      // reach the agent writing the post no matter what was stored.
+      social_targets: Array.isArray(criteria.social_targets) ? criteria.social_targets : undefined,
     },
     progress: {
       percent: asFinitePercent(progress.percent),
@@ -133,6 +136,20 @@ function readSocialTargets(raw: unknown): Array<{
   return out
 }
 
+/** Platforms whose names are not simply capitalised. */
+const PLATFORM_WORDS: Record<string, string> = {
+  youtube: 'YouTube',
+  tiktok: 'TikTok',
+  linkedin: 'LinkedIn',
+  x: 'X',
+}
+
+/** Read aloud, "1 posts a week" is the kind of slip that makes a system look careless. */
+const METRIC_SINGULAR: Record<string, string> = {
+  posts_per_week: 'post a week',
+  leads: 'enquiry',
+}
+
 const METRIC_WORDS: Record<string, string> = {
   followers: 'followers',
   posts_per_week: 'posts a week',
@@ -142,8 +159,8 @@ const METRIC_WORDS: Record<string, string> = {
 }
 
 function describeTarget(t: { platform: string; metric: string; current: number | null; target: number; by?: string | null }): string {
-  const where = t.platform.charAt(0).toUpperCase() + t.platform.slice(1)
-  const metric = METRIC_WORDS[t.metric] ?? t.metric
+  const where = PLATFORM_WORDS[t.platform] ?? t.platform.charAt(0).toUpperCase() + t.platform.slice(1)
+  const metric = t.target === 1 && METRIC_SINGULAR[t.metric] ? METRIC_SINGULAR[t.metric] : (METRIC_WORDS[t.metric] ?? t.metric)
   const by = t.by ? ` by ${new Date(t.by).toLocaleDateString('en-AU')}` : ''
   return t.current === null
     ? `${where}: reach ${t.target} ${metric}${by} — not measured yet`

@@ -36,7 +36,15 @@ export function createSetActiveGoalTool(ctx: ManageGoalContext) {
       const updates = {
         title,
         description,
-        success_criteria: successCriteria,
+        // Merge, never replace. A refinement supplies the fields the model was
+        // asked for; replacing wholesale silently discarded the owner's
+        // per-platform targets, which he set by hand and no model knows to
+        // restate. The heartbeat's goal review did exactly that within
+        // fifteen minutes of them being set.
+        success_criteria: {
+          ...(existing?.success_criteria ?? {}),
+          ...successCriteria,
+        },
         // A refinement without a new date must not silently discard a deadline
         // the owner previously supplied.
         deadline: deadline ?? existing?.deadline ?? null,
