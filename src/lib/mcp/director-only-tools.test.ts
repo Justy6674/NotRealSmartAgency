@@ -56,3 +56,18 @@ test('registers only explicit direct-MCP tool names', () => {
 test('keeps read-only calendar queries available to MCP clients', () => {
   assert.equal(isDirectorOnlyMcpTool('query_calendar'), false)
 })
+
+test('lets a client move finished artwork into the library without the Director', () => {
+  // Uploading to the owner's own library and exporting a design produce no
+  // public effect and no marketing copy, so the Director round trip was pure
+  // latency on the one step every carousel needs.
+  for (const name of ['upload_media', 'export_design', 'get_export_formats', 'search_designs', 'list_brand_kits']) {
+    assert.equal(isDirectorOnlyMcpTool(name), false)
+  }
+})
+
+test('still routes anything that writes copy or publishes through the Director', () => {
+  for (const name of ['write_blog', 'draft_post_copy', 'publish_to_social', 'repurpose_content', 'create_video']) {
+    assert.equal(isDirectorOnlyMcpTool(name), true)
+  }
+})
