@@ -14,6 +14,15 @@ import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
 
 
+
+/**
+ * Raised when the publisher could not be reached at all — not when it rejected
+ * the content. The distinction decides whether a post is retried or written off.
+ */
+class PublisherUnreachableError extends Error {
+  readonly retryable = true
+}
+
 /**
  * Normalise a Mixpost post status.
  *
@@ -319,7 +328,7 @@ export async function GET(request: Request) {
         externalPostId = result.id ?? result.postId ?? null
       } else {
         // Mixpost configured but accounts fetch failed — retry next cron tick
-        throw new Error('Mixpost configured but could not fetch accounts. Will retry.')
+        throw new PublisherUnreachableError('Could not reach the publisher to list accounts.')
       }
 
       // Mark as publishing — webhook will confirm final 'published' status
@@ -334,6 +343,22 @@ export async function GET(request: Request) {
       published++
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error'
+
+      // A publisher we could not reach says nothing about the content. The
+      // previous code threw an error promising a retry and then wrote failed
+      // anyway, so a momentary outage — a restart, a DNS change, a network
+      // blip — permanently discarded real scheduled content and nothing ever
+      // picked it up again. It goes back in the queue for the next tick.
+      if (err instanceof PublisherUnreachableError) {
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'scheduled', error: null })
+          .eq('id', post.id)
+
+        console.warn(`[cron/publish-posts] publisher unreachable, requeued post ${post.id}`)
+        failed++
+        continue
+      }
 
       await supabase
         .from('scheduled_posts')
