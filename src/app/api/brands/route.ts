@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
+import { applyHealthFlags } from '@/lib/agents/health-signal'
 
 const CreateBrandSchema = z.object({
   name: z.string().min(1),
@@ -64,9 +65,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
   }
 
+  // Regulatory flags were optional, and they are invisible in the interface,
+  // so a clinic could be added with no review on anything it published and
+  // nothing would say so. Read the project's own words and settle them here.
+  const { compliance_flags, notice } = applyHealthFlags(
+    parsed.data,
+    parsed.data.compliance_flags as { ahpra?: boolean; tga?: boolean; tga_categories?: string[] } | undefined,
+  )
+
   const { data, error } = await supabase
     .from('brands')
-    .insert({ user_id: user.id, ...parsed.data })
+    .insert({ user_id: user.id, ...parsed.data, compliance_flags })
     .select()
     .single()
 
@@ -74,7 +83,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json(data)
+  return NextResponse.json(notice ? { ...data, notice } : data)
 }
 
 export async function PATCH(request: Request) {

@@ -8,10 +8,15 @@
  */
 
 import { generateObject } from 'ai'
-import { anthropic } from '@ai-sdk/anthropic'
+import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import type { ComplianceFlags, BrandDNAConstraints } from '@/types/database'
 import { buildAbeRegulatoryContext, searchAbeRegulatoryCorpus } from '@/lib/abeai/regulatory-corpus'
+import {
+  estimateGatewayCost,
+  getGatewayModel,
+  getGatewayProviderOptions,
+} from '@/lib/ai/model-routing'
 
 export interface GuardianResult {
   isValid: boolean
@@ -36,6 +41,17 @@ export interface GuardianResult {
     section: string | null
   }>
   regulatoryCorpusVersion: string | null
+  /**
+   * What the review cost, present only when it actually ran. Every other model
+   * call in NRS is attributed; this one was invisible, so the cost of checking
+   * regulated content never appeared against the work that required it.
+   */
+  spend?: {
+    model: string
+    inputTokens: number
+    outputTokens: number
+    costUsd: number
+  }
 }
 
 /**
@@ -166,9 +182,21 @@ Evaluate the provided marketing content against the following regulations:`
   systemPrompt += `
 Analyse the text and return JSON indicating if it is compliant with regulations AND brand voice rules.`
 
+  const regulated = Boolean(flags.ahpra || flags.tga)
+  const model = getGatewayModel('fast')
+
   try {
-    const { object } = await generateObject({
-      model: anthropic('claude-3-5-haiku-latest'),
+    const { object, usage } = await generateObject({
+      model: gateway(model),
+      // The review reached a provider directly while every other model call in
+      // NRS went through the Gateway. That made it the one call with no
+      // fallback when a provider was down — for regulated work, an outage
+      // stops publishing entirely — and, worse, the only health call sent
+      // without the no-training and zero-retention controls the rest carry.
+      providerOptions: getGatewayProviderOptions('fast', {
+        tags: ['compliance-review', regulated ? 'regulated' : 'unregulated'],
+        zeroDataRetention: regulated,
+      }),
       system: systemPrompt,
       prompt: `Content to evaluate:\n\n${content}`,
       schema: z.object({
@@ -185,6 +213,14 @@ Analyse the text and return JSON indicating if it is compliant with regulations 
     result.warnings.push(...object.warnings)
     result.brandVoiceIssues.push(...object.voiceIssues)
     result.checkCompleted = true
+
+    const cost = estimateGatewayCost(model, usage ?? {})
+    result.spend = {
+      model,
+      inputTokens: usage?.inputTokens ?? 0,
+      outputTokens: usage?.outputTokens ?? 0,
+      costUsd: cost.usd,
+    }
 
     return result
   } catch (error) {

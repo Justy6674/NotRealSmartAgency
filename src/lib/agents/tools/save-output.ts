@@ -2,6 +2,7 @@ import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { runComplianceFilter } from '../compliance-filter'
+import { complianceGateForSave } from '../save-gate'
 
 export function createSaveOutputTool(
   supabase: SupabaseClient,
@@ -38,6 +39,7 @@ export function createSaveOutputTool(
     execute: async ({ title, content, output_type, platform }) => {
       // Run compliance filter if brand has AHPRA/TGA flags
       let complianceResult = null
+      let regulated = false
       try {
         const { data: brand } = await supabase
           .from('brands')
@@ -45,11 +47,24 @@ export function createSaveOutputTool(
           .eq('id', brandId)
           .single()
 
+        regulated = Boolean(brand?.compliance_flags?.ahpra || brand?.compliance_flags?.tga)
+
         if (brand?.compliance_flags || brand?.brand_dna_constraints) {
           complianceResult = await runComplianceFilter(content, brand.compliance_flags ?? { ahpra: false, tga: false, tga_categories: [] }, brand.brand_dna_constraints)
         }
       } catch {
-        // Non-blocking — save proceeds even if compliance check fails
+        // Non-blocking for an unregulated project — see the gate below, which
+        // is what decides for a regulated one.
+      }
+
+      // The library is not just storage: `query_outputs` lets every department
+      // read it back as an example of prior work, so content that failed a
+      // regulatory review would come back later as a model to copy. For a
+      // regulated project the review must have both run and passed before
+      // anything is written down.
+      if (regulated) {
+        const gate = complianceGateForSave(complianceResult)
+        if (!gate.allowed) return { saved: false, error: gate.reason }
       }
 
       const { data, error } = await supabase
