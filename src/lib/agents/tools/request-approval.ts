@@ -5,6 +5,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 interface ApprovalContext {
   supabase: SupabaseClient
   userId: string
+  /** The project this approval belongs to, so the board can place it. */
+  brandId: string
   agentRegistryId: string | null
   /** Present only for a heartbeat task, so its owner decision is auditable. */
   taskId?: string | null
@@ -29,6 +31,10 @@ export function createRequestApprovalTool(ctx: ApprovalContext) {
           action_type: actionType,
           payload: {
             description,
+            // Which project this belongs to. Without it an approval cannot be
+            // shown alongside its project on the board, and the owner is left
+            // deciding on work he cannot place.
+            brand_id: ctx.brandId,
             ...(payload ?? {}),
           },
           status: 'pending',

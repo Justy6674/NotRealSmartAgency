@@ -55,3 +55,38 @@ test('a personal account is never claimed by a brand', () => {
 
   assert.deepEqual(mapped, {})
 })
+
+const TELESCRIBE = { id: 'brand-scribe', name: 'TeleScribe', slug: 'telescribe' }
+
+function lapsed(id: number, name: string): MixpostAccount {
+  return { ...account(id, name, 'facebook_page'), authorized: false }
+}
+
+test('a lapsed connection survives the pinned-account shortcut', () => {
+  // Pinned accounts skip fuzzy matching entirely. The state of the connection
+  // has to survive that shortcut, or a project whose accounts are pinned can
+  // stop publishing without the board ever saying so.
+  const brands = [{ ...TELESCRIBE, social_urls: { mixpost_account_ids: '[3]' } }]
+
+  const mapped = mapMixpostAccountsToBrands([lapsed(3, 'TeleScribe Page')], brands)
+
+  assert.equal(mapped[TELESCRIBE.id]?.length, 1)
+  assert.equal(mapped[TELESCRIBE.id][0].authorized, false)
+})
+
+test('a lapsed connection survives fuzzy matching', () => {
+  const mapped = mapMixpostAccountsToBrands([lapsed(3, 'TeleScribe Australia')], [TELESCRIBE])
+
+  assert.equal(mapped[TELESCRIBE.id][0].authorized, false)
+})
+
+test('an account that does not report its state is treated as working', () => {
+  // Older responses omit the field. Reading absence as "broken" would put
+  // every project on the board asking to reconnect something that is fine.
+  const mapped = mapMixpostAccountsToBrands(
+    [account(7, 'TeleScribe Australia', 'facebook_page')],
+    [TELESCRIBE],
+  )
+
+  assert.equal(mapped[TELESCRIBE.id][0].authorized, true)
+})

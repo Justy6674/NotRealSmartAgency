@@ -85,6 +85,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const requestApproval = createRequestApprovalTool({
     supabase: ctx.supabase,
     userId: ctx.userId,
+    brandId: ctx.brandId,
     agentRegistryId: ctx.agentRegistryId ?? null,
     taskId: ctx.taskId ?? null,
   })

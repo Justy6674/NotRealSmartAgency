@@ -1,4 +1,4 @@
-export type RoomId = 'director' | 'studio' | 'command'
+export type RoomId = 'board' | 'director' | 'studio' | 'command'
 
 export interface SubTabConfig {
   label: string
@@ -19,6 +19,14 @@ export interface RoomConfig {
 }
 
 export const ROOMS: RoomConfig[] = [
+  {
+    id: 'board',
+    label: 'Today',
+    shortLabel: 'Today',
+    iconName: 'LayoutDashboard',
+    href: '/agency/board',
+    matchPrefixes: ['/agency/board'],
+  },
   {
     id: 'director',
     label: "Director's Office",

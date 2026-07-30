@@ -13,6 +13,10 @@ interface AgencyState {
   chatPanelOpen: boolean
   chatPanelMinimised: boolean
   pendingReviewMessage: string | null
+  /** Text placed in the Director's box, ready to send but not sent. Distinct
+   *  from pendingReviewMessage, which fires immediately — a board row is a
+   *  suggestion he should be able to read and change first. */
+  pendingComposerText: string | null
   pendingDraftId: string | null
   pendingMediaId: string | null
   setBrand: (brandId: string) => void
@@ -26,6 +30,7 @@ interface AgencyState {
   setChatPanelOpen: (open: boolean) => void
   setChatPanelMinimised: (minimised: boolean) => void
   setPendingReviewMessage: (message: string | null) => void
+  setPendingComposerText: (text: string | null) => void
   setPendingDraftId: (id: string | null) => void
   setPendingMediaId: (id: string | null) => void
 }
@@ -41,6 +46,7 @@ export const useAgencyStore = create<AgencyState>()(
       chatPanelOpen: false,
       chatPanelMinimised: false,
       pendingReviewMessage: null,
+      pendingComposerText: null,
       pendingDraftId: null,
       pendingMediaId: null,
       setBrand: (brandId) =>
@@ -65,6 +71,8 @@ export const useAgencyStore = create<AgencyState>()(
         set({ chatPanelMinimised: minimised }),
       setPendingReviewMessage: (message) =>
         set({ pendingReviewMessage: message }),
+      setPendingComposerText: (text) =>
+        set({ pendingComposerText: text }),
       setPendingDraftId: (id) =>
         set({ pendingDraftId: id }),
       setPendingMediaId: (id) =>

@@ -9,6 +9,9 @@ export interface MixpostAccount {
   username: string | null
   provider: string          // facebook_page, instagram, linkedin, tiktok, youtube, x
   media_url: string | null  // avatar / profile image
+  /** False once a connection has lapsed. Such an account is still listed but
+   *  will not publish, which reads as silence unless it is surfaced. */
+  authorized?: boolean
 }
 
 /** Normalise Mixpost provider names to friendly platform names */

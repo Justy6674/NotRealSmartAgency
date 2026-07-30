@@ -34,6 +34,9 @@ export interface BrandSocialMapping {
   platform: string      // friendly name: "Instagram", "Facebook", etc.
   accountName: string   // Mixpost account display name
   provider: string      // raw provider key
+  /** False when the connection has lapsed. Absent means it was not reported,
+   *  which is treated as working rather than as broken. */
+  authorized: boolean
 }
 
 /**
@@ -88,6 +91,7 @@ export function mapMixpostAccountsToBrands(
         platform: friendlyProvider(account.provider),
         accountName: account.name,
         provider: account.provider,
+        authorized: account.authorized !== false,
       })
     }
   }
@@ -150,6 +154,7 @@ export function mapMixpostAccountsToBrands(
         platform: friendlyProvider(account.provider),
         accountName: account.name,
         provider: account.provider,
+        authorized: account.authorized !== false,
       })
     }
   }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   Plus,
   MessageSquare,
@@ -65,6 +65,7 @@ interface ProjectSidebarProps {
 
 export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const {
     activeBrandId,
     activeConversationId,
@@ -136,7 +137,12 @@ export function ProjectSidebar({ onClose }: ProjectSidebarProps) {
   const handleSelectBrand = (brandId: string) => {
     setBrand(brandId)
     setConversation(null)
-    router.push('/agency/chat')
+    // Switching project used to jump to a new chat from wherever he was, so
+    // comparing two projects on the board threw him out of the board. Every
+    // screen reads the active project from the store and re-renders on its
+    // own, so the only place that genuinely cannot stay is an open
+    // conversation, which belongs to the project being left.
+    if (pathname?.startsWith('/agency/chat/')) router.push('/agency/chat')
     onClose?.()
   }
 

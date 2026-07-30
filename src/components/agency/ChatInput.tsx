@@ -139,6 +139,22 @@ export function ChatInput({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const { activeBrandId } = useAgencyStore()
 
+  // A row on the board arrives here as text he can read and change before it
+  // is sent. Sending it for him would take the decision away at the moment he
+  // asked to look at it.
+  useEffect(() => {
+    const pending = useAgencyStore.getState().pendingComposerText
+    if (!pending) return
+    useAgencyStore.getState().setPendingComposerText(null)
+    setInput(pending)
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(pending.length, pending.length)
+    })
+  }, [])
+
   // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current
