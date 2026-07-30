@@ -66,7 +66,9 @@ no technical dependency on Phase 1.
   1. A post scheduled through NRS publishes to Facebook, Instagram and LinkedIn from the new host, with no account re-authorised and no content re-created.
   2. The video that previously failed uploads and publishes, and the owner can watch its progress instead of seeing an error.
   3. Nothing in NRS had to change to point at the new host beyond configuration — no publishing code was rewritten for the move.
-**Plans**: TBD
+**Plans**: 1 plan, 19 tasks in 6 waves
+Plans:
+- [ ] `phase-2/PLAN.md` — Migrate Mixpost Pro to a managed Sydney host with the 17 OAuth grants intact and both upload faults carried across as day-one configuration
 
 ### Phase 3: Closing the regulatory gaps
 **Goal**: There is no longer any way for content to reach a live social account, or to enter the library agents learn from, without passing the one regulatory review — including the routes a language model can choose on its own.
@@ -125,7 +127,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. The Macro Board | 0/TBD | Not started | - |
-| 2. Publishing off the withdrawn host | 0/TBD | Not started | - |
+| 2. Publishing off the withdrawn host | 0/1 | Planned | - |
 | 3. Closing the regulatory gaps | 0/TBD | Not started | - |
 | 4. Proactive project intelligence | 0/TBD | Not started | - |
 | 5. Publishing direct to the platforms | 0/TBD | Not started | - |
