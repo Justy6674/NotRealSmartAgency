@@ -30,7 +30,7 @@ ahead because the withdrawn host is still the only thing publishing, and it has
 no technical dependency on Phase 1.
 
 - [ ] **Phase 2: Publishing off the withdrawn host** - Same accounts, same content, a host he has not refused *(runs first)*
-- [ ] **Phase 1: The Macro Board** - One screen showing all eleven projects, ranked by what needs him today
+- [x] **Phase 1: The Macro Board** - One screen showing all eleven projects, ranked by what needs him today *(shipped e92b2ae)*
 - [ ] **Phase 3: Closing the regulatory gaps** - No route to a live account escapes the review, and tests prove it
 - [ ] **Phase 4: Proactive project intelligence** - NRS learns each project on a schedule and briefs any AI that connects
 - [ ] **Phase 5: Publishing direct to the platforms** - Each account bound to its own project, middleware retired
@@ -49,7 +49,7 @@ no technical dependency on Phase 1.
   4. A source that cannot be reached shows as unknown, never as zero — the accounts pip renders `?` rather than "no accounts connected".
   5. Changing the active project keeps the owner where he is, and clicking a project tile opens the Director with the suggested action already written.
   6. Nothing rendered names a department, an agent, Mixpost, a server, OAuth or an HTTP code.
-**Plans**: TBD
+**Plans**: shipped directly — `src/lib/macro/board.ts` (logic, 20 tests), `/api/macro/board`, `/agency/board`
 **UI hint**: yes
 
 ### Phase 2: Publishing off the withdrawn host
@@ -126,7 +126,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. The Macro Board | 0/TBD | Not started | - |
+| 1. The Macro Board | 1/1 | Complete | 2026-07-30 |
 | 2. Publishing off the withdrawn host | 0/1 | Planned | - |
 | 3. Closing the regulatory gaps | 0/TBD | Not started | - |
 | 4. Proactive project intelligence | 0/TBD | Not started | - |
