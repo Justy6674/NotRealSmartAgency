@@ -32,6 +32,7 @@ export type DecisionKind =
   | 'unreviewed_regulated'
   | 'publishing_stopped'
   | 'needs_reconnecting'
+  | 'expiring_soon'
   | 'awaiting_approval'
   | 'draft_waiting'
   | 'nothing_planned'
@@ -62,6 +63,8 @@ export interface BoardProject {
   accountCount: number | null
   /** Names of connected accounts that have stopped working. */
   needsReconnecting: string[]
+  /** Names of connected accounts that are about to stop working. */
+  expiringSoon: string[]
   scheduledThisWeek: number
   publishedThisWeek: number
   failed: number
@@ -109,6 +112,8 @@ export interface BoardAccountInput {
   accountName: string
   /** false means the connection has lapsed and will not publish. */
   authorized: boolean
+  /** When the connection stops working, if that is known. */
+  expiresAt?: string | null
 }
 
 export interface BoardApprovalInput {
@@ -161,6 +166,16 @@ function withinLastWeek(iso: string | null | undefined, now: Date): boolean {
   if (Number.isNaN(at)) return false
   const week = now.getTime() - 7 * 24 * 60 * 60 * 1000
   return at <= now.getTime() && at >= week
+}
+
+/** How much notice a connection about to stop working should give. */
+export const EXPIRY_WARNING_DAYS = 7
+
+function isExpiringSoon(iso: string | null | undefined, now: Date): boolean {
+  if (!iso) return false
+  const at = new Date(iso).getTime()
+  if (Number.isNaN(at)) return false
+  return at <= now.getTime() + EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -220,6 +235,12 @@ export function buildMacroBoard(input: BuildBoardInput): MacroBoard {
     const drafts = own.filter((p) => p.status === 'draft')
     const unreviewed = regulated ? scheduled.filter((p) => !hasRecordedReview(p)) : []
     const lapsed = (projectAccounts ?? []).filter((a) => !a.authorized)
+    // A connection that renews itself needs no warning. One that cannot is
+    // going to stop publishing on a known date, and saying so only after it
+    // has stopped is saying so too late.
+    const expiring = (projectAccounts ?? []).filter(
+      (a) => a.authorized && isExpiringSoon(a.expiresAt, now),
+    )
 
     // --- regulated band ---------------------------------------------------
     if (unreviewed.length > 0) {
@@ -249,6 +270,21 @@ export function buildMacroBoard(input: BuildBoardInput): MacroBoard {
         detail: `Nothing can go out to ${lapsed.length === 1 ? 'this account' : 'these accounts'} until the connection is renewed.`,
         suggestedAction: `The ${names} connection for ${project.name} has stopped working. Walk me through reconnecting it, one step at a time.`,
         weight: 100 + lapsed.length,
+      })
+    }
+
+    if (expiring.length > 0) {
+      const names = expiring.map((a) => a.accountName).join(', ')
+      decisions.push({
+        id: `${project.id}:expiring`,
+        projectId: project.id,
+        projectName: project.name,
+        kind: 'expiring_soon',
+        urgency: 'blocked',
+        headline: `${names} will stop working within ${EXPIRY_WARNING_DAYS} days`,
+        detail: `Renew ${expiring.length === 1 ? 'it' : 'them'} now and nothing is interrupted.`,
+        suggestedAction: `The ${names} connection for ${project.name} is about to expire. Walk me through renewing it, one step at a time, before anything stops going out.`,
+        weight: 80 + expiring.length,
       })
     }
 
@@ -310,7 +346,7 @@ export function buildMacroBoard(input: BuildBoardInput): MacroBoard {
     }
 
     const state: BoardProject['state'] =
-      unreviewed.length > 0 || failed.length > 0 || lapsed.length > 0
+      unreviewed.length > 0 || failed.length > 0 || lapsed.length > 0 || expiring.length > 0
         ? 'attention'
         : pendingApprovals.length > 0 || drafts.length > 0
           ? 'waiting'
@@ -339,6 +375,7 @@ export function buildMacroBoard(input: BuildBoardInput): MacroBoard {
       regulated,
       accountCount: projectAccounts === null ? null : projectAccounts.length,
       needsReconnecting: lapsed.map((a) => a.accountName),
+      expiringSoon: expiring.map((a) => a.accountName),
       scheduledThisWeek: scheduled.length,
       publishedThisWeek,
       failed: failed.length,

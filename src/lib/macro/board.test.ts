@@ -281,3 +281,53 @@ test('nothing shown to the owner names internal plumbing', () => {
     )
   }
 })
+
+test('a connection about to expire is raised before it stops working', () => {
+  // Saying so only after it has stopped is saying so too late — content just
+  // silently stops going out.
+  const soon = new Date(NOW.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString()
+  const board = build({
+    projects: [project({ id: 'p1', name: 'Downscale' })],
+    accounts: [{ brandId: 'p1', accountName: 'Downscale Page', authorized: true, expiresAt: soon }],
+  })
+
+  const row = board.decisions.find((d) => d.kind === 'expiring_soon')
+  assert.ok(row, 'an expiring connection must be raised')
+  assert.equal(row!.urgency, 'blocked')
+  assert.deepEqual(board.projects[0].expiringSoon, ['Downscale Page'])
+  assert.equal(board.projects[0].state, 'attention')
+})
+
+test('a connection with plenty of time left is left alone', () => {
+  const later = new Date(NOW.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString()
+  const board = build({
+    projects: [project({ id: 'p1', name: 'Downscale' })],
+    accounts: [{ brandId: 'p1', accountName: 'Downscale Page', authorized: true, expiresAt: later }],
+  })
+  assert.equal(board.decisions.some((d) => d.kind === 'expiring_soon'), false)
+  assert.deepEqual(board.projects[0].expiringSoon, [])
+})
+
+test('a connection with no known expiry is not reported as expiring', () => {
+  // Most connections do not report one. Treating unknown as imminent would put
+  // every project on the board asking to renew something that is fine.
+  const board = build({
+    projects: [project({ id: 'p1', name: 'Downscale' })],
+    accounts: [{ brandId: 'p1', accountName: 'Downscale Page', authorized: true }],
+  })
+  assert.equal(board.decisions.some((d) => d.kind === 'expiring_soon'), false)
+})
+
+test('an already-lapsed connection outranks one merely expiring', () => {
+  const soon = new Date(NOW.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString()
+  const board = build({
+    projects: [project({ id: 'p1', name: 'Downscale' })],
+    accounts: [
+      { brandId: 'p1', accountName: 'Dead Page', authorized: false },
+      { brandId: 'p1', accountName: 'Dying Page', authorized: true, expiresAt: soon },
+    ],
+  })
+  const lapsedAt = board.decisions.findIndex((d) => d.kind === 'needs_reconnecting')
+  const expiringAt = board.decisions.findIndex((d) => d.kind === 'expiring_soon')
+  assert.ok(lapsedAt < expiringAt, 'something already stopped matters more than something about to')
+})

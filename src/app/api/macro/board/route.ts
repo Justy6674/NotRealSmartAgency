@@ -28,7 +28,7 @@ export async function GET() {
   since.setDate(since.getDate() - 30)
 
   try {
-    const [projectsResult, postsResult, approvalsResult, mixpostAccounts] = await Promise.all([
+    const [projectsResult, postsResult, approvalsResult, mixpostAccounts, tokensResult] = await Promise.all([
       supabase
         .from('brands')
         .select('id, name, slug, logo_url, compliance_flags, social_urls')
@@ -52,6 +52,15 @@ export async function GET() {
         .limit(200),
 
       fetchMixpostAccounts(),
+
+      // Connections published to directly report when they stop working.
+      // Without this the board can only say an account has already lapsed,
+      // which is a week too late to do anything about.
+      supabase
+        .from('social_oauth_tokens')
+        .select('brand_id, account_name, platform, expires_at, status')
+        .eq('user_id', user.id)
+        .eq('status', 'active'),
     ])
 
     const projects = projectsResult.data ?? []
@@ -99,6 +108,18 @@ export async function GET() {
           authorized: account.authorized,
         })),
       )
+    }
+
+    // Directly-connected accounts sit alongside the ones reached through the
+    // publisher; both can stop working, and the owner does not distinguish.
+    for (const token of tokensResult.data ?? []) {
+      accounts = accounts ?? []
+      accounts.push({
+        brandId: token.brand_id,
+        accountName: token.account_name ?? token.platform,
+        authorized: true,
+        expiresAt: token.expires_at,
+      })
     }
 
     const board = buildMacroBoard({

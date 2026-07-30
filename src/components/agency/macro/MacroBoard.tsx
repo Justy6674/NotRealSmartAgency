@@ -249,13 +249,18 @@ export function MacroBoard() {
                 />
               </dl>
 
-              {(p.needsReconnecting.length > 0 || p.failed > 0 || p.unreviewedRegulated > 0) && (
+              {(p.needsReconnecting.length > 0 ||
+                p.expiringSoon.length > 0 ||
+                p.failed > 0 ||
+                p.unreviewedRegulated > 0) && (
                 <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
                   {p.unreviewedRegulated > 0
                     ? `${p.unreviewedRegulated} scheduled without your sign-off`
                     : p.needsReconnecting.length > 0
                       ? `${p.needsReconnecting.join(', ')} needs reconnecting`
-                      : `${p.failed} did not go out`}
+                      : p.expiringSoon.length > 0
+                        ? `${p.expiringSoon.join(', ')} expires soon`
+                        : `${p.failed} did not go out`}
                 </p>
               )}
             </button>

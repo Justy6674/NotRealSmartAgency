@@ -37,7 +37,7 @@ function risk(over: Partial<BoardDecision> & { urgency: BoardDecision['urgency']
 function boardRow(over: Partial<BoardProject> = {}): BoardProject {
   return {
     id: 'p1', name: 'Downscale', slug: 'downscale', logoUrl: null, regulated: true,
-    accountCount: 3, needsReconnecting: [], scheduledThisWeek: 0, publishedThisWeek: 0,
+    accountCount: 3, needsReconnecting: [], expiringSoon: [], scheduledThisWeek: 0, publishedThisWeek: 0,
     failed: 0, unreviewedRegulated: 0, draftsWaiting: 0, awaitingApproval: 0,
     state: 'quiet', suggestedAction: 'x', ...over,
   }
