@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { Brand, PostPlatform } from '@/types/database'
 import { getComplianceRules } from '../compliance-rules'
+import { createDraftPosts } from '@/lib/posts/create-draft'
 import { loadState, selectBestArms, hasEnoughData, type BanditArm } from '@/lib/content-optimisation/bandit'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -384,33 +385,39 @@ ${isRegulated ? '- AHPRA/TGA brand: NO testimonials, NO guaranteed results, NO b
         }
       }
 
-      // 7. Insert all posts as drafts
-      const insertRows = allGeneratedPosts.map((post) => ({
-        user_id: userId,
-        brand_id: brandId,
-        platform: post.platform,
-        caption: post.caption,
-        hashtags: post.hashtags,
-        scheduled_at: post.scheduled_at,
-        status: 'draft' as const,
-        metadata: {
-          source: 'fill_calendar',
-          created_by: 'Director',
-          content_type: post.content_type,
-          conversation_id: conversationId,
-        },
-      }))
+      // 7. Insert all posts as drafts — through createDraftPosts so each one
+      // also lands in Mixpost. Bounded concurrency keeps a month-long calendar
+      // from opening dozens of simultaneous Mixpost uploads on the VPS.
+      const draftResults = await createDraftPosts(
+        allGeneratedPosts.map((post) => ({
+          supabase,
+          userId,
+          brandId,
+          platform: post.platform as PostPlatform,
+          caption: post.caption,
+          hashtags: post.hashtags,
+          scheduledAt: post.scheduled_at,
+          contentType: post.content_type,
+          metadata: {
+            source: 'fill_calendar',
+            created_by: 'Director',
+            content_type: post.content_type,
+            conversation_id: conversationId,
+          },
+        })),
+      )
 
-      const { error: insertError } = await supabase
-        .from('scheduled_posts')
-        .insert(insertRows)
-
-      if (insertError) {
-        return { success: false, error: `Failed to save posts: ${insertError.message}` }
+      const failedDrafts = draftResults.filter((r): r is { error: string } => 'error' in r)
+      if (failedDrafts.length === draftResults.length) {
+        return { success: false, error: `Failed to save posts: ${failedDrafts[0]?.error ?? 'unknown error'}` }
       }
 
-      // 8. Build summary
-      const totalPosts = allGeneratedPosts.length
+      const notInMixpost = draftResults.filter(
+        (r) => !('error' in r) && r.mixpost !== 'synced',
+      ).length
+
+      // 8. Build summary — count what was actually saved, not what was written.
+      const totalPosts = draftResults.length - failedDrafts.length
 
       // Group by week
       const weekGroups: Record<number, typeof allGeneratedPosts> = {}
@@ -456,8 +463,14 @@ ${contentMix}
 ${platformList}
 
 All ${totalPosts} posts saved as drafts. View them in **Calendar** → /agency/calendar
-Say **"schedule all"** to make them live, or edit individual posts in the calendar.`,
+Say **"schedule all"** to make them live, or edit individual posts in the calendar.${
+          failedDrafts.length > 0 ? `\n\n⚠️ ${failedDrafts.length} post(s) could not be saved: ${failedDrafts[0].error}` : ''
+        }${
+          notInMixpost > 0 ? `\n\nNote: ${notInMixpost} post(s) are still syncing to Mixpost and will appear in Review shortly.` : ''
+        }`,
         total_posts: totalPosts,
+        failed_posts: failedDrafts.length,
+        not_yet_in_mixpost: notInMixpost,
         weeks,
         platforms: [...new Set(allGeneratedPosts.map((p) => p.platform))],
       }

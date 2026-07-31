@@ -3,6 +3,8 @@ import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { memoryStore } from '@/lib/ruflo/client'
 import { getNamespace } from '@/lib/ruflo/namespaces'
+import { createDraftPost } from '@/lib/posts/create-draft'
+import type { PostPlatform, PostType, ScheduledPostStatus } from '@/types/database'
 
 // ─── A/B Content Testing Tool ────────────────────────────────────────────────
 //
@@ -119,26 +121,31 @@ async function createAbTest(
     ab_dimension: dimension,
   }
 
-  const { data: variant, error: insertErr } = await supabase
-    .from('scheduled_posts')
-    .insert({
-      user_id: userId,
-      brand_id: brandId,
-      media_item_id: original.media_item_id,
-      media_item_ids: original.media_item_ids ?? [],
-      post_type: original.post_type,
-      output_id: original.output_id,
-      platform: original.platform,
+  // Route through createDraftPost so the variant reaches Mixpost too — a
+  // variant the user can't preview alongside the control is untestable.
+  let variant: { id: string } | null = null
+  let insertErr: { message: string } | null = null
+  try {
+    const created = await createDraftPost({
+      supabase,
+      userId,
+      brandId,
+      platform: original.platform as PostPlatform,
       caption: variantCaptionText,
       hashtags: variantHashtags,
-      scheduled_at: variantScheduledAt.toISOString(),
-      status: original.status,
+      mediaItemIds: original.media_item_ids ?? (original.media_item_id ? [original.media_item_id] : []),
+      postType: original.post_type as PostType,
+      outputId: original.output_id,
+      scheduledAt: variantScheduledAt.toISOString(),
+      status: original.status as ScheduledPostStatus,
       metadata: variantMeta,
-      content_type: original.content_type ?? null,
-      content_pillar: original.content_pillar ?? null,
+      contentType: original.content_type ?? null,
+      contentPillar: original.content_pillar ?? null,
     })
-    .select('id')
-    .single()
+    variant = { id: created.id }
+  } catch (err) {
+    insertErr = { message: err instanceof Error ? err.message : String(err) }
+  }
 
   if (insertErr) {
     return { success: false, error: `Failed to create variant: ${insertErr.message}` }

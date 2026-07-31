@@ -22,6 +22,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runAgentWorker } from '@/lib/agents/worker'
 import { runComplianceFilter } from '@/lib/agents/compliance-filter'
 import type { Brand, DraftSourceMeta } from '@/types/database'
+import {
+  createDraftPost,
+  describeMixpostOutcome,
+  type CreateDraftResult,
+} from '@/lib/posts/create-draft'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { assertProjectCapability, type McpPrincipal } from '@/lib/security/project-access'
 import { getActiveGoal, markGoalReadyForReview } from '@/lib/agents/goal-loop'
@@ -320,12 +325,9 @@ After this tool returns, tell the user the draft is in Review and they can appro
         }
       }
 
-      const isVideoMedia = mediaItemRow?.file_type?.startsWith('video/') ?? false
-      const postType: 'single' | 'reel' | 'video' = isVideoMedia
-        ? (platform === 'instagram' || platform === 'facebook' || platform === 'tiktok' ? 'reel' : 'video')
-        : 'single'
-
-      // Insert the draft into scheduled_posts with mcp_external source
+      // Insert the draft into scheduled_posts with mcp_external source.
+      // createDraftPost also pushes it to Mixpost — without that the draft is
+      // invisible on the surface the user actually reviews from.
       const metadata: DraftSourceMeta = {
         source: 'mcp_external',
         created_by: 'Content & Copy (via MCP)',
@@ -333,35 +335,31 @@ After this tool returns, tell the user the draft is in Review and they can appro
         department: 'content',
       }
 
-      const { data: draft, error: insertError } = await supabase
-        .from('scheduled_posts')
-        .insert({
-          user_id: principal.userId,
-          brand_id,
+      let draft: CreateDraftResult
+      try {
+        draft = await createDraftPost({
+          supabase,
+          userId: principal.userId,
+          brandId: brand_id,
           platform,
           caption,
           hashtags: parsedHashtags,
-          status: 'draft',
-          scheduled_at: new Date().toISOString(),
-          post_type: postType,
-          ...(mediaItemRow ? { media_item_ids: [mediaItemRow.id] } : {}),
-          ...(mediaItemRow && !isVideoMedia ? { image_url: mediaItemRow.file_url } : {}),
+          mediaItemIds: mediaItemRow ? [mediaItemRow.id] : [],
           metadata: metadata as unknown as Record<string, unknown>,
         })
-        .select('id')
-        .single()
-
-      if (insertError || !draft) {
+      } catch (err) {
         return {
           content: [
             {
               type: 'text' as const,
-              text: `Caption was written but failed to save as draft: ${insertError?.message ?? 'unknown error'}\n\nCaption (so it isn't lost):\n${caption}`,
+              text: `Caption was written but failed to save as draft: ${err instanceof Error ? err.message : String(err)}\n\nCaption (so it isn't lost):\n${caption}`,
             },
           ],
           isError: true,
         }
       }
+
+      const postType = draft.postType
 
       await markGoalReadyForReview(supabase, principal.userId, activeGoal.id)
 
@@ -381,8 +379,12 @@ After this tool returns, tell the user the draft is in Review and they can appro
         hashtags: parsedHashtags,
         hashtag_count: parsedHashtags.length,
         review_url: reviewUrl,
-        next_step:
-          'Tell the user their draft is in the Review queue and they can approve, edit, or reject it from the Studio Review tab.',
+        // Say what actually happened. A draft that never reached Mixpost is not
+        // "ready to review" — reporting it as such is the bug this replaced.
+        mixpost: draft.mixpost,
+        ...(draft.mixpostPostUuid ? { mixpost_post_uuid: draft.mixpostPostUuid } : {}),
+        ...(draft.mixpostError ? { mixpost_error: draft.mixpostError } : {}),
+        next_step: `Tell the user: ${describeMixpostOutcome(draft)} They can approve, edit, or reject it from the Studio Review tab.`,
       }
 
       return {

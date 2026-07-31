@@ -27,8 +27,9 @@ import { gateway } from '@ai-sdk/gateway'
 import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Brand } from '@/types/database'
+import type { Brand, PostPlatform } from '@/types/database'
 import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
+import { createDraftPost, type MixpostSyncOutcome } from '@/lib/posts/create-draft'
 
 const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube'] as const
 type Platform = (typeof PLATFORMS)[number]
@@ -268,7 +269,7 @@ File: ${mediaItem?.file_name ?? 'video'}`,
       }
 
       // ── Stage D: create scheduled_posts drafts ────────────────────────────
-      const createdPosts: Array<{ platform: string; id: string }> = []
+      const createdPosts: Array<{ platform: string; id: string; mixpost: MixpostSyncOutcome }> = []
       const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
       for (const platform of targetPlatforms) {
@@ -276,23 +277,21 @@ File: ${mediaItem?.file_name ?? 'video'}`,
         const hashtags = getHashtags(content, platform)
 
         if (shouldSchedule) {
-          const { data: post, error: postError } = await supabase
-            .from('scheduled_posts')
-            .insert({
-              user_id: userId,
-              brand_id: brandId,
-              media_item_id: media_item_id,
-              platform,
+          try {
+            const post = await createDraftPost({
+              supabase,
+              userId,
+              brandId,
+              platform: platform as PostPlatform,
               caption,
               hashtags,
-              scheduled_at: scheduledAt,
-              status: 'draft',
+              mediaItemIds: [media_item_id],
+              scheduledAt,
+              metadata: { source: 'process_media', source_media_id: media_item_id },
             })
-            .select('id')
-            .single()
-
-          if (!postError && post) {
-            createdPosts.push({ platform, id: post.id })
+            createdPosts.push({ platform, id: post.id, mixpost: post.mixpost })
+          } catch (err) {
+            console.warn(`[process-media] draft failed for ${platform}:`, err)
           }
         }
       }

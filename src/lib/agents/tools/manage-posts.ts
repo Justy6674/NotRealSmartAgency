@@ -8,6 +8,7 @@ import {
   addMixpostPostToQueue,
   approveMixpostPost,
 } from '@/lib/mixpost/client'
+import { createDraftPost, describeMixpostOutcome } from '@/lib/posts/create-draft'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,16 +66,32 @@ export function createManagePostsTool(
 ) {
   return tool({
     description:
-      'Manage scheduled social media posts — schedule, edit, delete, queue, approve, verify status, or cancel posts. Always confirm with the user before making changes.',
+      'Create and manage social media posts. USE create_draft TO MAKE A NEW DRAFT POST — that is the only way to put a post in the user\'s Review queue, and it also pushes the post to Mixpost so the user can preview it. Then schedule, edit, delete, queue, approve, verify status, or cancel existing posts. Always confirm with the user before scheduling or publishing; drafts do not need confirmation because the user approves them in Review.',
     inputSchema: z.object({
-      action: z.enum(['schedule', 'approve_all', 'cancel', 'edit', 'delete', 'queue', 'verify_status', 'approve']).describe(
-        'schedule = set a draft to scheduled. approve_all = move all drafts to scheduled. cancel = cancel a post. edit = update caption/schedule on Mixpost. delete = remove from Mixpost + cancel in NRS. queue = add to Mixpost publishing queue. verify_status = check Mixpost status vs NRS. approve = approve a single post in Mixpost.',
+      action: z.enum(['create_draft', 'schedule', 'approve_all', 'cancel', 'edit', 'delete', 'queue', 'verify_status', 'approve']).describe(
+        'create_draft = write a NEW draft post into the Review queue (requires platform + caption; attach media with media_item_ids). schedule = set a draft to scheduled. approve_all = move all drafts to scheduled. cancel = cancel a post. edit = update caption/schedule on Mixpost. delete = remove from Mixpost + cancel in NRS. queue = add to Mixpost publishing queue. verify_status = check Mixpost status vs NRS. approve = approve a single post in Mixpost.',
       ),
       post_id: z
         .string()
         .uuid()
         .optional()
         .describe('Specific post ID (required for schedule, cancel, edit, delete, queue, verify_status, approve)'),
+      platform: z
+        .enum(['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube', 'bluesky', 'mastodon', 'pinterest', 'threads', 'google_business'])
+        .optional()
+        .describe('Target platform (required for create_draft). One draft per platform — call create_draft once per platform.'),
+      caption: z
+        .string()
+        .optional()
+        .describe('The full caption for the new draft (required for create_draft). Write it for this specific platform.'),
+      hashtags: z
+        .array(z.string())
+        .optional()
+        .describe('Hashtags for the new draft, without the # symbol'),
+      media_item_ids: z
+        .array(z.string().uuid())
+        .optional()
+        .describe('Media library item IDs to attach to the new draft (video or images)'),
       scheduled_at: z
         .string()
         .optional()
@@ -88,7 +105,53 @@ export function createManagePostsTool(
         .optional()
         .describe('Updated caption text (for edit action)'),
     }),
-    execute: async ({ action, post_id, scheduled_at, approve_scope, new_caption }) => {
+    execute: async ({ action, post_id, platform, caption, hashtags, media_item_ids, scheduled_at, approve_scope, new_caption }) => {
+      // ── CREATE DRAFT ─────────────────────────────────────────────────────
+      // The Director had no way to create a post at all before this: every
+      // other action here mutates an existing row, so asked to "draft a post"
+      // it could only decline. Routed through createDraftPost so the draft
+      // reaches Mixpost rather than sitting invisible in NRS.
+      if (action === 'create_draft') {
+        if (!platform) {
+          return { success: false, error: 'platform is required for create_draft. Ask the user which platform, or pick the one they described.' }
+        }
+        if (!caption?.trim()) {
+          return { success: false, error: 'caption is required for create_draft. Write the caption before calling this.' }
+        }
+
+        try {
+          const draft = await createDraftPost({
+            supabase,
+            userId,
+            brandId,
+            platform,
+            caption,
+            hashtags: hashtags ?? [],
+            mediaItemIds: media_item_ids ?? [],
+            scheduledAt: scheduled_at,
+            metadata: { source: 'director', created_by: 'NRS Director' },
+          })
+
+          return {
+            success: true,
+            post_id: draft.id,
+            platform,
+            post_type: draft.postType,
+            media_attached: draft.mediaItemIds.length,
+            mixpost: draft.mixpost,
+            ...(draft.mixpostError ? { mixpost_error: draft.mixpostError } : {}),
+            // Relay this verbatim — do not upgrade 'pending' to 'ready'.
+            message: describeMixpostOutcome(draft),
+          }
+        } catch (err) {
+          return {
+            success: false,
+            error: err instanceof Error ? err.message : String(err),
+            caption_preserved: caption,
+          }
+        }
+      }
+
       // ── SCHEDULE ─────────────────────────────────────────────────────────
       if (action === 'schedule') {
         if (!post_id) {

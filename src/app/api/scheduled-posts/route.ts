@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { syncDraftToMixpost } from '@/lib/mixpost/sync-draft'
+import { createDraftPost } from '@/lib/posts/create-draft'
 
 // Mixpost sync can take ~6 minutes per video transcode. Run on Node runtime
 // (not edge) and bump maxDuration so the request doesn't time out before the
@@ -166,54 +166,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Brand not found or access denied' }, { status: 403 })
   }
 
-  const insertData: Record<string, unknown> = {
-    user_id: user.id,
-    brand_id: brandId,
-    platform,
-    caption,
-    hashtags,
-    scheduled_at,
-    status,
-    post_type,
-    media_item_ids,
-    metadata: {
-      ...metadata,
-      // Ensure source is stamped if not provided
-      source: (metadata as Record<string, unknown>)?.source ?? 'unknown',
-    },
+  // createDraftPost owns the insert AND the Mixpost push, so the browser and
+  // every AI path create drafts the same way. awaitMixpost:false keeps this
+  // route's reply instant — the Review tab already polls for the Mixpost pill.
+  let created
+  try {
+    created = await createDraftPost({
+      supabase,
+      userId: user.id,
+      brandId,
+      platform,
+      caption,
+      hashtags,
+      mediaItemIds: media_item_ids ?? (media_item_id ? [media_item_id] : []),
+      postType: post_type,
+      status,
+      scheduledAt: scheduled_at,
+      metadata: metadata as Record<string, unknown> | undefined,
+      contentType: content_type,
+      contentPillar: content_pillar,
+      awaitMixpost: false,
+    })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
   }
-  if (media_item_id) insertData.media_item_id = media_item_id
-  if (content_type) insertData.content_type = content_type
-  if (content_pillar) insertData.content_pillar = content_pillar
 
   const { data, error } = await supabase
     .from('scheduled_posts')
-    .insert(insertData)
     .select()
+    .eq('id', created.id)
     .single()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  // Fire-and-forget Mixpost draft sync. This pushes the post (and its media)
-  // to Mixpost as a draft so the Review tab can render the actual Mixpost
-  // preview / video player. Uses an admin client for the background task so
-  // RLS doesn't block the cross-row writes (media_items.mixpost_media_id +
-  // scheduled_posts.metadata.mixpost). All errors are swallowed and logged —
-  // the user's POST already succeeded; the sync is non-blocking enrichment.
-  if (data.status === 'draft' || data.status === 'scheduled') {
-    void (async () => {
-      try {
-        const admin = createAdminClient()
-        const result = await syncDraftToMixpost(admin, data.id)
-        if (!result.ok) {
-          console.warn(`[scheduled-posts] Mixpost sync warning for ${data.id}:`, result.error)
-        }
-      } catch (err) {
-        console.error(`[scheduled-posts] Mixpost sync threw for ${data.id}:`, err)
-      }
-    })()
+  if (error || !data) {
+    return NextResponse.json({ error: error?.message ?? 'Draft saved but could not be read back' }, { status: 500 })
   }
 
   return NextResponse.json(data, { status: 201 })

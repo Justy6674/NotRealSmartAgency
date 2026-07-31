@@ -4,7 +4,8 @@ import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Brand } from '@/types/database'
+import type { Brand, PostPlatform } from '@/types/database'
+import { createDraftPost, type MixpostSyncOutcome } from '@/lib/posts/create-draft'
 
 const CONTENT_TYPES = ['clips', 'quotes', 'blog', 'newsletter', 'social_posts'] as const
 type ContentType = (typeof CONTENT_TYPES)[number]
@@ -200,7 +201,7 @@ export function createRepurposeContentTool(
 ) {
   return tool({
     description:
-      'Repurpose a transcribed video or audio into a full content tree: short-form clips, quote graphics, blog post, email newsletter, and social media posts. Takes one piece of media and generates 20+ pieces of content from it.',
+      'Repurpose a transcribed video or audio into a full content tree: short-form clips, quote graphics, blog post, email newsletter, and social media posts. Takes one piece of media and generates 20+ pieces of content from it. This CREATES REAL DRAFT POSTS in the user\'s Review queue (attached to the media and pushed to Mixpost), so use it when the user wants drafts made from a video they uploaded. For a single specific post on one platform, use manage_posts with action=create_draft instead.',
     inputSchema: z.object({
       media_item_id: z.string().uuid().describe('The transcribed media item to repurpose'),
       types: z
@@ -253,7 +254,7 @@ export function createRepurposeContentTool(
       // 4. Generate each content type
       const results: Record<string, unknown> = {}
       const savedOutputs: Array<{ type: string; id: string; title: string }> = []
-      const draftPosts: Array<{ type: string; platform: string; id: string }> = []
+      const draftPosts: Array<{ type: string; platform: string; id: string; mixpost: MixpostSyncOutcome }> = []
       const errors: string[] = []
 
       for (const contentType of targetTypes) {
@@ -295,22 +296,22 @@ export function createRepurposeContentTool(
                   youtube_shorts: 'youtube',
                   linkedin: 'linkedin',
                 }
-                const postPlatform = platformMap[clip.platform] ?? 'instagram'
-                const { data: post } = await supabase
-                  .from('scheduled_posts')
-                  .insert({
-                    user_id: userId,
-                    brand_id: brandId,
-                    media_item_id: media_item_id,
+                const postPlatform = (platformMap[clip.platform] ?? 'instagram') as PostPlatform
+                try {
+                  const post = await createDraftPost({
+                    supabase,
+                    userId,
+                    brandId,
                     platform: postPlatform,
                     caption: `${clip.hook}\n\n${clip.transcript_excerpt}`,
-                    hashtags: [],
-                    scheduled_at: scheduledAt,
-                    status: 'draft',
+                    mediaItemIds: [media_item_id],
+                    scheduledAt,
+                    metadata: { source: 'repurpose', repurpose_type: 'clip', source_media_id: media_item_id },
                   })
-                  .select('id')
-                  .single()
-                if (post) draftPosts.push({ type: 'clip', platform: postPlatform, id: post.id })
+                  draftPosts.push({ type: 'clip', platform: postPlatform, id: post.id, mixpost: post.mixpost })
+                } catch (err) {
+                  console.warn('[repurpose] clip draft failed:', err)
+                }
               }
               break
             }
@@ -344,21 +345,21 @@ export function createRepurposeContentTool(
               // Create draft posts for each quote
               const scheduledAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString()
               for (const quote of quoteData.quotes) {
-                const { data: post } = await supabase
-                  .from('scheduled_posts')
-                  .insert({
-                    user_id: userId,
-                    brand_id: brandId,
-                    media_item_id: media_item_id,
-                    platform: quote.platform,
+                try {
+                  const post = await createDraftPost({
+                    supabase,
+                    userId,
+                    brandId,
+                    platform: quote.platform as PostPlatform,
                     caption: `"${quote.text}"`,
-                    hashtags: [],
-                    scheduled_at: scheduledAt,
-                    status: 'draft',
+                    mediaItemIds: [media_item_id],
+                    scheduledAt,
+                    metadata: { source: 'repurpose', repurpose_type: 'quote', source_media_id: media_item_id },
                   })
-                  .select('id')
-                  .single()
-                if (post) draftPosts.push({ type: 'quote', platform: quote.platform, id: post.id })
+                  draftPosts.push({ type: 'quote', platform: quote.platform, id: post.id, mixpost: post.mixpost })
+                } catch (err) {
+                  console.warn('[repurpose] quote draft failed:', err)
+                }
               }
               break
             }
@@ -449,21 +450,22 @@ export function createRepurposeContentTool(
               // Create draft posts
               const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
               for (const post of socialData.posts) {
-                const { data: scheduled } = await supabase
-                  .from('scheduled_posts')
-                  .insert({
-                    user_id: userId,
-                    brand_id: brandId,
-                    media_item_id: media_item_id,
-                    platform: post.platform,
+                try {
+                  const scheduled = await createDraftPost({
+                    supabase,
+                    userId,
+                    brandId,
+                    platform: post.platform as PostPlatform,
                     caption: post.caption,
                     hashtags: post.hashtags,
-                    scheduled_at: scheduledAt,
-                    status: 'draft',
+                    mediaItemIds: [media_item_id],
+                    scheduledAt,
+                    metadata: { source: 'repurpose', repurpose_type: 'social', source_media_id: media_item_id },
                   })
-                  .select('id')
-                  .single()
-                if (scheduled) draftPosts.push({ type: 'social', platform: post.platform, id: scheduled.id })
+                  draftPosts.push({ type: 'social', platform: post.platform, id: scheduled.id, mixpost: scheduled.mixpost })
+                } catch (err) {
+                  console.warn('[repurpose] social draft failed:', err)
+                }
               }
               break
             }
