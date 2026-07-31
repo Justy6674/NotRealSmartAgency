@@ -106,6 +106,10 @@ export async function fetchMixpostAccounts(): Promise<MixpostAccount[] | null> {
  * Upload media to Mixpost from a public URL (e.g. Supabase Storage).
  * Returns the Mixpost media ID (integer).
  */
+/** How long to wait for Mixpost to fetch a large remote file, and how often to ask. */
+const REMOTE_UPLOAD_POLL_MS = 3_000
+const REMOTE_UPLOAD_MAX_POLLS = 60 // 3 minutes — a 240MB fetch takes well under this
+
 export async function uploadMediaFromUrl(
   mediaUrl: string,
   altText?: string
@@ -140,9 +144,29 @@ export async function uploadMediaFromUrl(
     if (data.status === 'completed' && data.media?.id) {
       return { id: data.media.id }
     }
-    // For pending (large files), poll — but for now return null and log
-    if (data.status === 'pending') {
-      console.warn('[mixpost] Large file upload pending, download_id:', data.download_id)
+    // Large files come back as `pending` with a download id, and Mixpost fetches
+    // them in the background. This used to log a warning and give up, so every
+    // video big enough to matter — a three-minute phone clip is ~240MB — reached
+    // Mixpost with no media attached and the draft was useless. The polling
+    // helper to finish the job was already sitting in this same file, unused.
+    if (data.status === 'pending' && data.download_id) {
+      const downloadId = String(data.download_id)
+      for (let attempt = 0; attempt < REMOTE_UPLOAD_MAX_POLLS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, REMOTE_UPLOAD_POLL_MS))
+        const poll = await pollRemoteUploadStatus(downloadId)
+
+        if (poll.status === 'completed' && poll.media?.id) {
+          return { id: poll.media.id }
+        }
+        if (poll.status === 'failed' || poll.status === 'error') {
+          console.error('[mixpost] remote upload failed for', mediaUrl, '— status:', poll.status)
+          return null
+        }
+      }
+      console.error(
+        `[mixpost] remote upload still pending after ${(REMOTE_UPLOAD_MAX_POLLS * REMOTE_UPLOAD_POLL_MS) / 1000}s —`,
+        'the file may be too large for Mixpost to fetch:', mediaUrl,
+      )
       return null
     }
     // Some versions return media directly
