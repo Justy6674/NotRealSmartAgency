@@ -88,9 +88,13 @@ CRITICAL: NEVER write the caption yourself. Pass the user's intent verbatim into
 
 USE THIS TOOL when the user wants a single social post drafted. The result lands in the Review queue where the user approves, edits, or rejects it before publishing.
 
+MIXPOST IS BUILT IN — DO NOT LOOK FOR A SEPARATE MIXPOST TOOL OR ASK THE USER FOR MIXPOST CREDENTIALS. NRS publishes through its own self-hosted Mixpost, and this tool pushes the draft (with its media) there automatically so the user can preview and approve it. If the user says "send it to Mixpost", "put it in Mixpost as a draft", or "get it ready to review", THIS TOOL IS THAT ACTION. The response's 'mixpost' field says what actually happened — 'synced' means Mixpost has it, 'pending' means it is still uploading, 'failed' means it did not get there. Report that field honestly; never tell the user it is ready to review when it is 'pending' or 'failed'.
+
+Do NOT use save_output for a post the user wants to publish — save_output only files text in the library and reaches no publishing surface at all.
+
 For complex multi-step requests (campaigns, calendars, multi-platform launches), use chat_with_director instead.
 
-After this tool returns, tell the user the draft is in Review and they can approve it from the Studio Review tab.`,
+After this tool returns, tell the user what the 'mixpost' field actually says, and that they can approve it from the Studio Review tab.`,
       inputSchema: {
         brand_id: z.string().describe('Brand ID — call list_brands first to get IDs'),
         intent: z
