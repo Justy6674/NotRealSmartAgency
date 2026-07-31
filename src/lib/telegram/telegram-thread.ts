@@ -130,11 +130,23 @@ export interface TelegramThreadLoadScope {
   grantId: string
   excludeJobId: string
   limit?: number
+  /**
+   * Which channel's jobs to read. Defaults to 'telegram' for existing callers.
+   * MCP passes 'mcp' so Claude, Codex and Hermes get the same continuity —
+   * before this, every chat_with_director call started from a blank slate and
+   * the Director could not remember work it had just done.
+   */
+  channel?: string
+  /** Pin to one explicit thread. Omitted = the most recent thread on this grant. */
+  conversationId?: string
 }
 
 /**
- * Load recent completed Telegram Director jobs for this exact project grant.
+ * Load recent completed Director jobs for this exact project grant.
  * Returns turns oldest-first for model message assembly.
+ *
+ * Despite living in telegram/, this is channel-agnostic — Telegram was simply
+ * the first channel to need it.
  */
 export async function loadTelegramThreadHistory(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- admin client query builder
@@ -143,15 +155,21 @@ export async function loadTelegramThreadHistory(
 ): Promise<TelegramThreadTurn[]> {
   const limit = scope.limit ?? TELEGRAM_THREAD_TURN_LIMIT
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('mcp_jobs')
     .select('id, input, result, completed_at, status')
     .eq('user_id', scope.userId)
     .eq('brand_id', scope.brandId)
-    .eq('channel', 'telegram')
+    .eq('channel', scope.channel ?? 'telegram')
     .eq('project_access_grant_id', scope.grantId)
     .eq('status', 'done')
     .neq('id', scope.excludeJobId)
+
+  if (scope.conversationId) {
+    query = query.eq('input->>conversation_id', scope.conversationId)
+  }
+
+  const { data, error } = await query
     .order('completed_at', { ascending: false })
     .limit(limit)
 

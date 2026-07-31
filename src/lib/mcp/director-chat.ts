@@ -33,6 +33,9 @@ This tool returns a job_id immediately (in <1s). The Director runs in the backgr
 
 ALWAYS call list_brands first to get brand IDs before using this tool.
 
+CONVERSATION CONTINUITY:
+The Director remembers the recent thread for this brand, so follow-ups work naturally ("now draft those as posts", "make the TikTok one shorter"). Every response includes a conversation_id — pass it back on the next call to stay pinned to that exact thread. Omit it and the Director continues the most recent thread for the brand.
+
 NEVER write the user's marketing copy yourself. Pass their request verbatim to the Director — the Director and its specialist departments write the content. You are the messenger, not the marketer.
 
 Example messages:
@@ -48,9 +51,23 @@ Example messages:
           .describe(
             'The user\'s plain-language request. Pass it verbatim — never pre-write captions, ad copy, or marketing content yourself.',
           ),
+        conversation_id: z
+          .string()
+          .optional()
+          .describe(
+            'Thread to continue. Pass the conversation_id from a previous response to keep the Director on that exact thread. Omit to continue the most recent thread for this brand.',
+          ),
       },
     },
-    async ({ brand_id, message }: { brand_id: string; message: string }) => {
+    async ({
+      brand_id,
+      message,
+      conversation_id,
+    }: {
+      brand_id: string
+      message: string
+      conversation_id?: string
+    }) => {
       let execution
       try {
         execution = createMcpDirectorExecution(principal, brand_id)
@@ -86,6 +103,11 @@ Example messages:
         }
       }
 
+      // A thread key so follow-ups land on the same conversation. Minted when
+      // the client doesn't supply one — the client can pin it from here on.
+      // Stored on input (JSONB) so no schema change is needed.
+      const conversationId = conversation_id ?? crypto.randomUUID()
+
       // Insert the job row → status='queued'
       const { data: job, error: jobError } = await supabase
         .from('mcp_jobs')
@@ -98,7 +120,7 @@ Example messages:
           policy_version: execution.policyVersion,
           job_type: 'director_chat',
           status: 'queued',
-          input: { brand_id, message },
+          input: { brand_id, message, conversation_id: conversationId },
         })
         .select('id, created_at')
         .single()
@@ -121,7 +143,13 @@ Example messages:
       // job_id immediately and starts polling.
       after(async () => {
         try {
-          await runDirectorJob(job.id, execution, { brand_id, message })
+          await runDirectorJob(job.id, execution, {
+            brand_id,
+            message,
+            // Pin the run to this thread only when the client asked for it;
+            // otherwise the Director continues the brand's latest thread.
+            conversation_id,
+          })
         } catch (err) {
           console.error('[chat_with_director] background runner threw:', err)
         }
@@ -129,10 +157,11 @@ Example messages:
 
       const response = {
         job_id: job.id,
+        conversation_id: conversationId,
         status: 'running' as const,
         poll_in_seconds: 10,
         message:
-          'The Director is working on your request in the background. Call get_director_response with this job_id in 10 seconds. Most jobs complete in 15-90 seconds.',
+          'The Director is working on your request in the background. Call get_director_response with this job_id in 10 seconds. Most jobs complete in 15-90 seconds. Pass conversation_id back on your next chat_with_director call to stay on this thread.',
         created_at: job.created_at,
       }
 

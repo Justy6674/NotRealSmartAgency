@@ -64,6 +64,11 @@ import {
 export interface DirectorJobInput {
   brand_id: string
   message: string
+  /**
+   * Optional thread key so a client can pin follow-ups to one conversation.
+   * Omitted = continue the most recent thread on this project grant.
+   */
+  conversation_id?: string
 }
 
 export interface DirectorJobResult {
@@ -224,6 +229,7 @@ export async function runDirectorJob(
         brandId: brand_id,
         grantId: execution.projectAccessGrantId,
         excludeJobId: jobId,
+        channel: 'telegram',
       })
       telegramWorkMessage = resolveTelegramWorkMessage(
         message,
@@ -235,6 +241,22 @@ export async function runDirectorJob(
         telegramWorkMessage,
         thread.length > 0,
       )
+    } else {
+      // Every other channel — Claude, Codex, Hermes via MCP — used to arrive
+      // with no history at all, so the Director could write captions in one
+      // call and have no idea they existed in the next. Same grant-scoped
+      // thread reconstruction Telegram already had.
+      const thread = await loadTelegramThreadHistory(supabase, {
+        userId,
+        brandId: brand_id,
+        grantId: execution.projectAccessGrantId,
+        excludeJobId: jobId,
+        channel: execution.channel,
+        conversationId: input.conversation_id,
+      })
+      if (thread.length > 0) {
+        modelMessages = buildTelegramModelMessages(thread, message)
+      }
     }
 
     // Build system prompt with memory
