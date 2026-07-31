@@ -103,9 +103,27 @@ export async function transcribeFile(
   }
 
   // Layer 2: OpenAI Whisper (requires download, only for files under 25MB)
+  //
+  // A video that is too big to hand Whisper is almost never too big once the
+  // pixels are removed — the 241MB clip that exposed this carries 2.2MB of
+  // audio, extracted in about four seconds. Refusing outright meant that when
+  // Deepgram was unavailable there was no fallback at all for real footage,
+  // which is precisely when a fallback earns its keep.
   const tooLargeForWhisper = fileSizeBytes != null && fileSizeBytes > WHISPER_MAX_SIZE
   if (tooLargeForWhisper) {
-    errors.push(`Whisper: skipped — file too large (${Math.round((fileSizeBytes ?? 0) / 1024 / 1024)}MB > 25MB limit)`)
+    try {
+      const { extractAudioFromUrl } = await import('@/lib/video/extract-audio')
+      const audio = await extractAudioFromUrl(fileUrl)
+      if (audio.bytes > WHISPER_MAX_SIZE) {
+        throw new Error(`audio alone is still ${Math.round(audio.bytes / 1024 / 1024)}MB`)
+      }
+      return await transcribeWithWhisper(
+        audio.buffer.buffer.slice(audio.buffer.byteOffset, audio.buffer.byteOffset + audio.buffer.byteLength) as ArrayBuffer,
+        audio.fileName,
+      )
+    } catch (err) {
+      errors.push(`Whisper via audio extraction: ${err instanceof Error ? err.message : 'unknown'}`)
+    }
   } else {
     try {
       const fileRes = await fetch(fileUrl)

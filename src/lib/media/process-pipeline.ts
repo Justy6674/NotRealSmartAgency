@@ -33,7 +33,6 @@ import {
   guessTagCategory,
 } from '@/lib/media/auto-tagger'
 
-const AUTO_TRANSCRIBE_MAX_SIZE = 100 * 1024 * 1024 // 100MB — auto-transcribe threshold
 const THUMBNAIL_MAX_SIZE = 500 * 1024 * 1024 // 500MB — skip thumb on absurdly large files
 
 export type StageStatus = 'ok' | 'failed' | 'skipped'
@@ -198,7 +197,17 @@ export async function runMediaProcessingPipeline({
   }
 
   // ── Step 2: Transcription ────────────────────────────────────────────────
-  if (stages.has('transcription') && isVideoOrAudio && !mediaItem.transcription && fileSize < AUTO_TRANSCRIBE_MAX_SIZE) {
+  //
+  // There is deliberately no size gate here any more.
+  //
+  // This used to refuse anything over 100MB as "manual transcription only",
+  // which turned away every real video the owner shot — a three-minute phone
+  // clip is about 240MB. The refusal was based on nothing: `transcribeFile`
+  // tries Deepgram in URL mode first, which never downloads the file and has
+  // no size limit at all. Measured on the 241MB clip that exposed this: 11
+  // seconds, full transcript. The only layer that cares about size is the
+  // Whisper fallback, and it enforces its own 25MB limit internally.
+  if (stages.has('transcription') && isVideoOrAudio && !mediaItem.transcription) {
     updates.transcription_status = 'transcribing'
     await supabase.from('media_items').update({ transcription_status: 'transcribing' }).eq('id', mediaItemId)
 
@@ -227,9 +236,6 @@ export async function runMediaProcessingPipeline({
     }
   } else if (stages.has('transcription') && isVideoOrAudio && mediaItem.transcription) {
     report.transcription = { status: 'skipped', error: 'already transcribed' }
-  } else if (stages.has('transcription') && isVideoOrAudio && fileSize >= AUTO_TRANSCRIBE_MAX_SIZE) {
-    updates.transcription_status = 'pending'
-    report.transcription = { status: 'skipped', error: 'file too large (>100MB) — manual transcription only' }
   }
 
   // ── Step 3: AI analysis (images) or transcript analysis (videos) ────────

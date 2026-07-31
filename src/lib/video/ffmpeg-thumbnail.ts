@@ -80,11 +80,18 @@ export async function extractFirstFrameFromUrl(videoUrl: string): Promise<Buffer
 
   try {
     await new Promise<void>((resolve, reject) => {
-      const command = ffmpeg()
-        // Fast-seek: move to 1s BEFORE decoding. Order matters — this is the
-        // input-side -ss, which streams only the bytes needed around that point.
+      // The URL goes in the constructor, not a later .input() call.
+      //
+      // fluent-ffmpeg attaches inputOptions to the most recently added input,
+      // and throws "No input specified" synchronously when there isn't one yet.
+      // Built the other way round, this failed in about a millisecond — before
+      // ffmpeg was ever invoked — so every video thumbnail silently came back
+      // empty and the library filled up with videos that had no preview frame.
+      //
+      // Fast-seek still applies: -ss ahead of decoding streams only the bytes
+      // around that timestamp. Measured on a 241MB remote file: 4.6s, 89KB out.
+      const command = ffmpeg(videoUrl)
         .inputOptions(['-ss', '1', '-rw_timeout', '15000000']) // rw_timeout = 15s in microseconds
-        .input(videoUrl)
         .outputOptions([
           '-frames:v', '1',
           '-vf', 'scale=720:-1', // cap width at 720, maintain aspect
