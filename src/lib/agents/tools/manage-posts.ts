@@ -386,21 +386,55 @@ export function createManagePostsTool(
           return { success: false, error: 'Nothing to edit. Provide new_caption or scheduled_at.' }
         }
 
-        // Update Mixpost if we have a UUID
+        // Update Mixpost if we have a UUID.
+        //
+        // This PUT replaces the post, so anything omitted is lost. Two things
+        // were being omitted, and both did real damage:
+        //
+        //  - No schedule flags. Mixpost re-evaluated the post on update and
+        //    PUBLISHED it. A caption edit put a ScentSell post live on
+        //    Instagram that the owner had never approved.
+        //  - `media: []`, which stripped the attached video or images off the
+        //    post every time a caption was corrected.
+        //
+        // The existing post is read first so its media and accounts survive,
+        // and the draft state is stated explicitly rather than left to default.
         if (post.external_post_id) {
-          const mixpostParams: Record<string, unknown> = {}
+          const existing = await fetchMixpostPost(post.external_post_id)
+          const existingVersion = existing?.versions?.[0]
+          const existingContent = existingVersion?.content?.[0]
+          const existingMedia = (existingContent?.media ?? []) as unknown[]
+          const mediaIds = existingMedia
+            .map((item) => (typeof item === 'object' && item ? Number((item as { id?: unknown }).id) : Number(item)))
+            .filter((id) => Number.isFinite(id)) as number[]
+
+          const mixpostParams: Record<string, unknown> = {
+            // Never let an edit publish. A draft stays a draft unless the
+            // owner approves it somewhere that asks them.
+            schedule: false,
+            schedule_now: false,
+          }
+
           if (new_caption) {
             mixpostParams.versions = [{
-              account_id: 0,
+              account_id: existingVersion?.account_id ?? 0,
               is_original: true,
-              content: [{ body: new_caption, media: [], url: null, video_thumbs: [] }],
+              content: [{
+                body: new_caption,
+                media: mediaIds,
+                url: null,
+                video_thumbs: [],
+              }],
+              ...(existingVersion?.options ? { options: existingVersion.options } : {}),
             }]
           }
+
           if (scheduled_at) {
             const d = new Date(scheduled_at as string)
             mixpostParams.date = d.toISOString().split('T')[0]
             mixpostParams.time = d.toTimeString().slice(0, 5)
           }
+
           const mixpostOk = await updateMixpostPost(post.external_post_id, mixpostParams as never)
           if (!mixpostOk) {
             // Log warning but still update NRS side
