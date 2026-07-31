@@ -68,7 +68,7 @@ export async function ensureMediaInMixpost(
   // Fetch media item
   const { data: item, error: fetchErr } = await supabase
     .from('media_items')
-    .select('id, file_url, file_type, file_name, mixpost_media_id, thumbnail_url')
+    .select('id, file_url, file_type, file_name, mixpost_media_id, thumbnail_url, metadata')
     .eq('id', mediaItemId)
     .single()
 
@@ -79,6 +79,33 @@ export async function ensureMediaInMixpost(
   // Cache hit — already in Mixpost
   if (item.mixpost_media_id) {
     return { id: item.mixpost_media_id as number }
+  }
+
+  // Exactly one caller may upload a given media item.
+  //
+  // The cache above is only written when an upload FINISHES. Without this,
+  // every draft created while the first upload is still transcoding starts its
+  // own — the Director creates its drafts CONCURRENTLY, so three drafts of one
+  // video put four copies of it in the Mixpost library, each costing a full
+  // transcode of a 240MB file.
+  //
+  // The claim is a compare-and-set: the UPDATE only matches while no claim
+  // exists, so Postgres row locking settles the race and the losers wait for
+  // the winner instead of duplicating its work.
+  const claimed = await claimUpload(supabase, mediaItemId)
+  if (!claimed) {
+    const waited = await waitForUploadedMedia(supabase, mediaItemId)
+    if (waited) return { id: waited }
+    // The holder died without finishing. Clear the dead claim so this media
+    // isn't stuck forever, then upload it ourselves.
+    console.warn(`[sync-draft] stale upload claim on ${mediaItemId}; taking it over`)
+    await clearUploadClaim(supabase, mediaItemId)
+    const retaken = await claimUpload(supabase, mediaItemId)
+    if (!retaken) {
+      const second = await waitForUploadedMedia(supabase, mediaItemId)
+      if (second) return { id: second }
+      return { id: null, error: 'Another upload of this media is in progress and did not complete' }
+    }
   }
 
   // Remote initiate
@@ -93,6 +120,7 @@ export async function ensureMediaInMixpost(
 
   if (!initiateRes.ok) {
     const txt = await initiateRes.text().catch(() => '')
+    await clearUploadClaim(supabase, mediaItemId)
     return { id: null, error: `Mixpost remote/initiate ${initiateRes.status}: ${txt.slice(0, 200)}` }
   }
 
@@ -106,19 +134,25 @@ export async function ensureMediaInMixpost(
     uploadedId = Number.isFinite(id) ? id : null
     uploadedUuid = initiateData.media?.uuid ?? initiateData.uuid ?? initiateData.data?.uuid ?? null
   } else if (initiateData.status === 'pending' && initiateData.download_id) {
-    // Slow path — video. Poll the status endpoint until done.
+    // Slow path — video. We already hold the claim, so anyone else wanting
+    // this media waits for us rather than starting a second transcode.
     const result = await pollRemoteUpload(workspaceBase, token, String(initiateData.download_id))
     if (result.id) {
       uploadedId = result.id
       uploadedUuid = result.uuid
     } else {
+      // Release so this media can be retried instead of being stuck behind a
+      // claim that will never complete.
+      await clearUploadClaim(supabase, mediaItemId)
       return { id: null, error: result.error ?? 'Mixpost remote upload polling failed' }
     }
   } else if (initiateData.status === 'failed') {
+    await clearUploadClaim(supabase, mediaItemId)
     return { id: null, error: `Mixpost remote/initiate returned failed: ${initiateData.error ?? 'unknown'}` }
   }
 
   if (uploadedId == null) {
+    await clearUploadClaim(supabase, mediaItemId)
     return { id: null, error: 'Mixpost remote/initiate returned an unexpected shape' }
   }
 
@@ -128,21 +162,213 @@ export async function ensureMediaInMixpost(
   // the same video and trigger a fresh ~6 minute ffmpeg transcode for
   // every draft referencing it. Bug discovered 2026-04-10 during the
   // drafts backfill when post 1 hung for 10+ min.
-  const { error: cacheErr } = await supabase
+  await cacheMixpostMedia(supabase, mediaItemId, uploadedId, uploadedUuid)
+
+  return { id: uploadedId }
+}
+
+/**
+ * Per-platform publishing options Mixpost expects on a version.
+ *
+ * These were never sent, and the defaults are wrong for what NRS creates:
+ *   - Instagram/Facebook default to type 'post', so a vertical 9:16 video was
+ *     published as a feed video and rendered pillarboxed with black bars down
+ *     both sides instead of as a Reel.
+ *   - YouTube defaults to an EMPTY title, which is why YouTube drafts arrived
+ *     broken — a YouTube video with no title is not a valid post.
+ *
+ * Shapes taken from Mixpost Pro's own *PostOptions classes on the VPS
+ * (InstagramPostOptions, FacebookPagePostOptions, YoutubePostOptions).
+ */
+export function buildPlatformOptions(
+  platform: string,
+  postType: string | null,
+  caption: string,
+  metadata: Record<string, unknown> | null,
+): Record<string, unknown> | undefined {
+  const isReel = postType === 'reel'
+
+  switch (platform) {
+    case 'instagram':
+    case 'facebook':
+      // 'post' | 'reel' | 'story'
+      return { type: isReel ? 'reel' : 'post' }
+
+    case 'youtube':
+      return {
+        title: deriveYoutubeTitle(caption, metadata),
+        // Mixpost defaults this to 'public'. A draft the owner has not
+        // approved must never default to publishing publicly, so say
+        // 'private' unless the post explicitly asks otherwise.
+        status: (metadata?.youtube_status as string) ?? 'private',
+        made_for_kids: Boolean(metadata?.made_for_kids ?? false),
+      }
+
+    default:
+      return undefined
+  }
+}
+
+/** YouTube titles are capped at 100 characters and must not be empty. */
+const YOUTUBE_TITLE_MAX = 100
+
+/**
+ * A YouTube video needs a title, and the Director writes a caption. Prefer an
+ * explicit title if one was set, otherwise take the first real line of the
+ * caption — hashtags stripped, trimmed to YouTube's limit on a word boundary.
+ */
+export function deriveYoutubeTitle(
+  caption: string,
+  metadata: Record<string, unknown> | null,
+): string {
+  const explicit = (metadata?.youtube_title as string | undefined)?.trim()
+  if (explicit) return explicit.slice(0, YOUTUBE_TITLE_MAX)
+
+  const firstLine =
+    (caption ?? '')
+      .split('\n')
+      .map((line) => line.replace(/#[\w-]+/g, '').trim())
+      .find((line) => line.length > 0) ?? ''
+
+  if (!firstLine) return 'Untitled video'
+  if (firstLine.length <= YOUTUBE_TITLE_MAX) return firstLine
+
+  // Cut on a word boundary so the title doesn't end mid-word.
+  const clipped = firstLine.slice(0, YOUTUBE_TITLE_MAX)
+  const lastSpace = clipped.lastIndexOf(' ')
+  return (lastSpace > 40 ? clipped.slice(0, lastSpace) : clipped).trim()
+}
+
+/** How long a recorded upload claim is trusted before it's treated as dead. */
+const UPLOAD_CLAIM_TTL_MS = (POLL_MAX_SECONDS + 300) * 1000
+
+/**
+ * Take exclusive ownership of uploading this media, or report that someone
+ * else already has it.
+ *
+ * The `.is(metadata->mixpost_upload, null)` filter makes this a compare-and-set:
+ * Postgres serialises the concurrent UPDATEs on the row, so of N simultaneous
+ * callers exactly one gets a row back and the rest get none. Verified against
+ * the live database — two concurrent attempts, one winner.
+ */
+async function claimUpload(supabase: SupabaseClient, mediaItemId: string): Promise<boolean> {
+  const { data: row } = await supabase
+    .from('media_items')
+    .select('metadata')
+    .eq('id', mediaItemId)
+    .single()
+
+  const metadata = (row?.metadata as Record<string, unknown> | null) ?? {}
+
+  // A claim already visible here means someone beat us — no need to attempt.
+  if (isLiveClaim(metadata.mixpost_upload)) return false
+
+  const { data, error } = await supabase
+    .from('media_items')
+    .update({
+      metadata: {
+        ...metadata,
+        mixpost_upload: { started_at: new Date().toISOString() },
+      },
+    })
+    .eq('id', mediaItemId)
+    .is('metadata->mixpost_upload', null)
+    .select('id')
+
+  if (error) {
+    // Never block the upload on claim bookkeeping — worst case is the old
+    // duplicate-upload behaviour, which is better than no draft at all.
+    console.warn(`[sync-draft] claim attempt failed for ${mediaItemId}: ${error.message}`)
+    return true
+  }
+
+  return (data?.length ?? 0) > 0
+}
+
+/** True when a claim exists and is recent enough to still be trusted. */
+function isLiveClaim(claim: unknown): boolean {
+  const startedAt = (claim as { started_at?: string } | undefined)?.started_at
+  if (!startedAt) return false
+  const t = new Date(startedAt).getTime()
+  if (Number.isNaN(t)) return false
+  return Date.now() - t <= UPLOAD_CLAIM_TTL_MS
+}
+
+/** Clear a claim so the media can be retried. */
+async function clearUploadClaim(supabase: SupabaseClient, mediaItemId: string): Promise<void> {
+  const { data: row } = await supabase
+    .from('media_items')
+    .select('metadata')
+    .eq('id', mediaItemId)
+    .single()
+  const metadata = { ...((row?.metadata as Record<string, unknown> | null) ?? {}) }
+  delete metadata.mixpost_upload
+  await supabase.from('media_items').update({ metadata }).eq('id', mediaItemId)
+}
+
+/**
+ * Wait for whoever holds the claim to finish, returning their uploaded media id.
+ * Returns null if they never finish inside the claim's lifetime.
+ */
+async function waitForUploadedMedia(
+  supabase: SupabaseClient,
+  mediaItemId: string,
+): Promise<number | null> {
+  const started = Date.now()
+  while (Date.now() - started < UPLOAD_CLAIM_TTL_MS) {
+    await new Promise((r) => setTimeout(r, 3000))
+    const { data } = await supabase
+      .from('media_items')
+      .select('mixpost_media_id, metadata')
+      .eq('id', mediaItemId)
+      .single()
+
+    if (data?.mixpost_media_id) return data.mixpost_media_id as number
+
+    // Holder released the claim without producing a media id — it failed.
+    const claim = (data?.metadata as Record<string, unknown> | null)?.mixpost_upload
+    if (!claim) return null
+  }
+  return null
+}
+
+/**
+ * Cache the Mixpost media id and clear the in-flight claim.
+ *
+ * MUST be awaited — the original fire-and-forget version silently dropped the
+ * writeback, causing every draft referencing a video to trigger a fresh
+ * multi-minute transcode (2026-04-10).
+ */
+async function cacheMixpostMedia(
+  supabase: SupabaseClient,
+  mediaItemId: string,
+  uploadedId: number,
+  uploadedUuid: string | null,
+): Promise<void> {
+  const { data: row } = await supabase
+    .from('media_items')
+    .select('metadata')
+    .eq('id', mediaItemId)
+    .single()
+
+  const metadata = { ...((row?.metadata as Record<string, unknown> | null) ?? {}) }
+  delete metadata.mixpost_upload
+
+  const { error } = await supabase
     .from('media_items')
     .update({
       mixpost_media_id: uploadedId,
       mixpost_media_uuid: uploadedUuid,
       mixpost_cached_at: new Date().toISOString(),
+      metadata,
     })
     .eq('id', mediaItemId)
-  if (cacheErr) {
+
+  if (error) {
     console.warn(
-      `[sync-draft] Failed to cache mixpost_media_id on ${mediaItemId}: ${cacheErr.message}`,
+      `[sync-draft] Failed to cache mixpost_media_id on ${mediaItemId}: ${error.message}`,
     )
   }
-
-  return { id: uploadedId }
 }
 
 async function pollRemoteUpload(
@@ -290,18 +516,26 @@ export async function syncDraftToMixpost(
         (post.hashtags as string[]).map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' ')
       : ''
 
+  const body = (post.caption as string) + hashtagLine
+
   const versions: MixpostVersion[] = [
     {
       account_id: accountIds[0]!,
       is_original: true,
       content: [
         {
-          body: (post.caption as string) + hashtagLine,
+          body,
           media: mediaIds,
           url: null,
           video_thumbs: [],
         },
       ],
+      options: buildPlatformOptions(
+        post.platform as string,
+        post.post_type as string | null,
+        post.caption as string,
+        post.metadata as Record<string, unknown> | null,
+      ),
     },
   ]
 
