@@ -20,6 +20,7 @@ import { z } from 'zod/v3'
 import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { groundedSearch, groundedSearchAvailable } from '@/lib/ai/grounded-search'
+import { verifyFragrance, catalogueAvailable } from '@/lib/products/fragrance-catalogue'
 
 /**
  * A brand under AHPRA or TGA rules never touches a tier that may train on its
@@ -79,6 +80,39 @@ export function createVerifyProductTool(supabase?: SupabaseClient, brandId?: str
         ]
           .filter(Boolean)
           .join('\n')
+
+        // The owner's own catalogue answers first: free, authoritative, and
+        // right where everything else was wrong. A web search could not confirm
+        // "Bijou Zafran" and reasoning invented "Bijou Saffron"; 75,000 entries
+        // resolved it in one query, because the catalogue knows Zafran and
+        // Saffron are the same word.
+        if (catalogueAvailable()) {
+          const cat = await verifyFragrance(heard_as ? `${product_name} ${heard_as}` : product_name)
+          if (cat.verdict === 'exists') {
+            return {
+              verdict: 'exists' as const,
+              canonical_name: cat.canonical,
+              closest_real_alternative: null,
+              reasoning: `Found in the fragrance catalogue: ${cat.canonical}${cat.match.perfumer?.length ? ` (perfumer ${cat.match.perfumer.join(', ')})` : ''}.`,
+              searched_with: 'own-catalogue' as const,
+              safe_to_publish: true,
+              next_step: `Use exactly "${cat.canonical}".`,
+            }
+          }
+          if (cat.verdict === 'not_found' && cat.near.length > 0) {
+            return {
+              verdict: 'not_found' as const,
+              canonical_name: null,
+              closest_real_alternative: `${cat.near[0].brand} ${cat.near[0].name}`,
+              reasoning: `Not in the 75,000-entry fragrance catalogue. Nearest real products: ${cat.near.slice(0, 3).map((n) => `${n.brand} ${n.name}`).join('; ')}.`,
+              searched_with: 'own-catalogue' as const,
+              safe_to_publish: false,
+              next_step: 'Do NOT put this name in the copy. Ask the owner which product it was.',
+            }
+          }
+          // Nothing at all matched — fall through and search the web rather
+          // than declaring a product fake on a single empty lookup.
+        }
 
         // Prefer the free tier. Google's free tier may train on what is sent,
         // so a regulated brand never goes near it — that is a hard line, not a
