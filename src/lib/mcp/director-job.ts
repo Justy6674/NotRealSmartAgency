@@ -696,10 +696,57 @@ That's the difference between a marketing director and a tech support agent. Def
         completed_at: new Date().toISOString(),
       })
       .eq('id', jobId)
+
+    // Deliver here rather than in the caller.
+    //
+    // A Telegram answer used to be sent from a continuation that ran after the
+    // webhook had already replied. When the platform reclaimed that function
+    // the answer was written to the database and never sent: the owner saw
+    // "working on it" and then silence, with no error anywhere because
+    // neither branch of the caller's try/catch ever ran.
+    //
+    // Sending it from inside the job means the thing that produced the answer
+    // is the thing that hands it over, in an execution already proven to have
+    // survived long enough to finish the work.
+    if (execution.channel === 'telegram' && execution.telegramChatId) {
+      await deliverTelegramResult(execution.telegramChatId, response)
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[director-job] Failed:', message)
     await markJobError(supabase, jobId, message, startTime)
+
+    if (execution.channel === 'telegram' && execution.telegramChatId) {
+      await deliverTelegramResult(
+        execution.telegramChatId,
+        'That did not complete. Your project selection is unchanged — try again.',
+      ).catch(() => { /* the owner already has the acknowledgement */ })
+    }
+  }
+}
+
+/**
+ * Send a finished answer back to Telegram.
+ *
+ * Failures are logged and swallowed: the work is already stored, and throwing
+ * here would mark a completed job as failed.
+ */
+async function deliverTelegramResult(chatId: string, text: string): Promise<void> {
+  try {
+    const { getNRSTelegramConfig } = await import('@/lib/telegram/nrs-telegram-config')
+    const { sendTelegramText } = await import('@/lib/telegram/telegram-api')
+    const { formatTelegramMarketingCopy } = await import('@/lib/telegram/telegram-marketing-copy')
+
+    const config = getNRSTelegramConfig()
+    if (!config) return
+
+    await sendTelegramText({
+      botToken: config.botToken,
+      chatId,
+      text: formatTelegramMarketingCopy(text),
+    })
+  } catch (err) {
+    console.error('[director-job] Telegram delivery failed:', err instanceof Error ? err.message : err)
   }
 }
 

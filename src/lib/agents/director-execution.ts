@@ -18,6 +18,16 @@ export interface DirectorExecutionScope {
   readonly projectAccessGrantId: string
   readonly apiKeyId?: string
   readonly policyVersion: 1
+  /**
+   * Where a Telegram answer is sent back to.
+   *
+   * Carried on the scope so the job that produces the answer can deliver it
+   * itself. Delivery previously lived in a continuation after the webhook had
+   * already replied, and when the platform reclaimed that function the answer
+   * was written to the database and never sent — the owner saw "working on
+   * it" and then silence.
+   */
+  readonly telegramChatId?: string
 }
 
 export interface ScopedDirectorJob {
@@ -47,9 +57,11 @@ export function createMcpDirectorExecution(
 export function createTelegramDirectorExecution({
   userId,
   grant,
+  chatId,
 }: {
   userId: string
   grant: ProjectAccessGrant
+  chatId?: string
 }): DirectorExecutionScope {
   if (!grant.capabilities.includes('director:chat')) {
     throw new Error('This Telegram project grant does not allow director:chat.')
@@ -61,6 +73,7 @@ export function createTelegramDirectorExecution({
     projectId: grant.projectId,
     projectAccessGrantId: grant.grantId,
     policyVersion: 1,
+    ...(chatId !== undefined ? { telegramChatId: chatId } : {}),
   })
 }
 

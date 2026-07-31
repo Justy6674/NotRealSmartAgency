@@ -337,6 +337,7 @@ async function queueTelegramDirectorWork({
         projectId: grant.projectId,
         capabilities: grant.capabilities.filter((capability): capability is 'director:chat' => capability === 'director:chat'),
       },
+      chatId,
     })
   } catch {
     await logExecution(admin, {
