@@ -66,3 +66,23 @@ test('an empty caption still yields a usable title', () => {
 test('a caption of only hashtags still yields a usable title', () => {
   assert.equal(deriveYoutubeTitle('#one #two', null), 'Untitled video')
 })
+
+/**
+ * TikTok will add a recommended track to a PHOTO post on request. Choosing a
+ * specific trending sound is impossible through any API — TikTok does not
+ * expose its music library to third parties — but a silent photo carousel is
+ * not what anyone wanted either.
+ */
+test('a TikTok photo carousel asks TikTok to add music', () => {
+  const options = buildPlatformOptions('tiktok', 'carousel', 'caption', null)
+  const tiktok = options?.tiktok as Record<string, Record<string, boolean>>
+  assert.equal(tiktok.auto_add_music['account-0'], true)
+})
+
+test('a TikTok video is left alone — it already has its own audio', () => {
+  for (const type of ['reel', 'video']) {
+    const options = buildPlatformOptions('tiktok', type, 'caption', null)
+    const tiktok = options?.tiktok as Record<string, Record<string, boolean>>
+    assert.equal(tiktok.auto_add_music['account-0'], false, `${type} should not request music`)
+  }
+})

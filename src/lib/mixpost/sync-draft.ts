@@ -197,6 +197,21 @@ export function buildPlatformOptions(
       // only a vertical video should become a Reel.
       return { [provider]: { type: isReel ? 'reel' : 'post' } }
 
+    case 'tiktok':
+      // TikTok will add a recommended track to a PHOTO post by itself, and the
+      // owner can swap it in the app afterwards. Choosing a specific trending
+      // sound is not possible through any API — TikTok does not expose its
+      // music library to third parties, for licensing reasons — but silence on
+      // a photo carousel is a choice nobody wanted, and this avoids it.
+      //
+      // Video is deliberately left alone: its audio is already in the file, and
+      // TikTok will not add music over an existing soundtrack.
+      return {
+        tiktok: {
+          auto_add_music: { 'account-0': !isReel && postType !== 'video' },
+        },
+      }
+
     case 'youtube':
       return {
         youtube: {
