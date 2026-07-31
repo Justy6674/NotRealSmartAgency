@@ -76,6 +76,37 @@ export interface CreateDraftResult {
 }
 
 /**
+ * Platforms that will only accept video. Handing them a photo carousel makes a
+ * draft that cannot ever publish.
+ *
+ * Seen in practice: a three-photo Telegram album produced an Instagram
+ * carousel, a Facebook carousel AND a YouTube carousel. The first two are
+ * fine; the third is impossible — YouTube has no concept of an image post, so
+ * that draft was destined to fail at publish time having looked fine in review.
+ */
+const VIDEO_ONLY_PLATFORMS = new Set<PostPlatform>(['youtube', 'tiktok'])
+
+/**
+ * Reject a draft the platform could never publish, with a reason the agent can
+ * act on. Returns null when the combination is fine.
+ */
+export function checkPlatformSupportsMedia(
+  platform: PostPlatform,
+  hasVideo: boolean,
+  mediaCount: number,
+): string | null {
+  if (VIDEO_ONLY_PLATFORMS.has(platform)) {
+    if (mediaCount === 0) {
+      return `${platform} requires a video — it cannot publish a text-only post. Attach the video, or drop ${platform} from this set.`
+    }
+    if (!hasVideo) {
+      return `${platform} only publishes video and cannot post images. Use Instagram or Facebook for a photo carousel, and keep ${platform} for the video.`
+    }
+  }
+  return null
+}
+
+/**
  * Coerce whatever a caller sent for a schedule time into something Postgres
  * will accept, falling back to now.
  *
@@ -153,6 +184,11 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
       firstMediaUrl = first.file_url as string
     }
   }
+
+  // Refuse now, with a reason, rather than producing a draft that looks right
+  // in review and fails the moment it is published.
+  const unsupported = checkPlatformSupportsMedia(platform, isVideo, mediaItemIds.length)
+  if (unsupported) throw new Error(unsupported)
 
   const postType = postTypeOverride ?? derivePostType(platform, isVideo, mediaItemIds.length)
 
