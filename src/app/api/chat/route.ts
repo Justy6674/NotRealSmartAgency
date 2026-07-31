@@ -411,8 +411,18 @@ That's the difference between a marketing director and a tech support agent. Def
         await recordAgentSpend(supabase, registry.id, costCents)
       }
 
-      // Log usage
-      await supabase.from('ai_usage').insert({
+      // Log usage.
+      //
+      // This insert silently failed for the entire life of the app: it carries
+      // a `metadata` key, the column did not exist, and PostgREST rejects the
+      // whole row when one key has no column (PGRST204). Nothing checked the
+      // result, so `ai_usage` stayed empty and every cost went unrecorded —
+      // the Costs dashboard was reading a table that had never had a row in it.
+      //
+      // The column exists now (migration 043). The error check is the part that
+      // matters: a spend record that cannot be written must say so, because a
+      // cost you cannot see is worse than one you can.
+      const { error: usageError } = await supabase.from('ai_usage').insert({
         user_id: user.id,
         query_type: `agency_${agentType}`,
         tokens_input: inputTokens,
@@ -431,6 +441,14 @@ That's the difference between a marketing director and a tech support agent. Def
           },
         },
       })
+
+      if (usageError) {
+        console.error(
+          `[ai_usage] spend NOT recorded — ${costCents}c on ${actualModel} is now invisible:`,
+          usageError.code,
+          usageError.message,
+        )
+      }
 
       // Audit log
       await logAudit({

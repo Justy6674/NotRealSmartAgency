@@ -74,6 +74,23 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
 
   const showActions = !isUser && textContent.length > 100
 
+  // Drop a text part that repeats the one before it.
+  //
+  // A message can carry several text parts, and when a step boundary lands
+  // mid-answer the model sometimes restates the sentence it just finished. Both
+  // parts render, so the user reads the same question twice in one bubble and
+  // reasonably concludes the agent is broken.
+  //
+  // Only exact repeats of the immediately preceding text are dropped — a message
+  // that legitimately says the same short thing twice with anything in between
+  // still renders in full.
+  const parts = message.parts?.filter((part, i, all) => {
+    if (part.type !== 'text') return true
+    const previous = all[i - 1]
+    if (!previous || previous.type !== 'text') return true
+    return (previous as { text: string }).text.trim() !== (part as { text: string }).text.trim()
+  })
+
   return (
     <div className={cn('flex gap-3 py-4', isUser ? 'justify-end' : 'justify-start')}>
       {!isUser && (
@@ -97,7 +114,7 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
               : 'rounded-2xl rounded-bl-md bg-muted px-4 py-2.5'
           )}
         >
-          {message.parts?.map((part, i) => {
+          {parts?.map((part, i) => {
             if (part.type === 'text') {
               return <RichTextContent key={i} text={part.text} />
             }
@@ -107,7 +124,7 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
               const toolName = part.type.replace(/^tool-/, '')
               // If there's any text part AFTER this tool call, the tool has finished
               // (the AI continued speaking, meaning the tool completed)
-              const hasTextAfter = message.parts?.slice(i + 1).some(p => p.type === 'text' && (p as { text: string }).text.trim().length > 0)
+              const hasTextAfter = parts?.slice(i + 1).some(p => p.type === 'text' && (p as { text: string }).text.trim().length > 0)
               const effectiveState = hasTextAfter ? 'result' : toolPart.state
               return (
                 <ToolCallDisplay
