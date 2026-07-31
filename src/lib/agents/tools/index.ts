@@ -165,7 +165,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const deepCompetitorScan = createDeepCompetitorScanTool(ctx.supabase, ctx.userId, ctx.brandId)
   const managePosts = createManagePostsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const createCollage = createCollageTool(ctx.supabase, ctx.userId, ctx.brandId)
-  const verifyProduct = createVerifyProductTool()
+  const verifyProduct = createVerifyProductTool(ctx.supabase, ctx.brandId)
   const analyseVoice = createAnalyseVoiceTool(ctx.supabase, ctx.userId, ctx.brandId)
   const writeAds = createWriteAdsTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const addInspiration = createAddInspirationTool(ctx.supabase, ctx.userId)

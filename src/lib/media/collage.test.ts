@@ -71,3 +71,10 @@ test('a collage of one, or of too many, is refused with a reason', () => {
   assert.throws(() => planCollage(1), /at least 2/)
   assert.throws(() => planCollage(10), /at most 9/)
 })
+
+test('an unverified product is never safe to publish', async () => {
+  const { UNVERIFIED_RESULT } = await import('../agents/tools/verify-product')
+  assert.equal(UNVERIFIED_RESULT.safe_to_publish, false)
+  assert.equal(UNVERIFIED_RESULT.verdict, 'uncertain')
+  assert.equal(UNVERIFIED_RESULT.canonical_name, null)
+})
