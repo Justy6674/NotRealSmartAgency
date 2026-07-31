@@ -14,6 +14,12 @@ import { sendTelegramText } from '@/lib/telegram/telegram-api'
 import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-copy'
 import { getTelegramJobAcknowledgement } from '@/lib/telegram/telegram-job-status'
 import {
+  acknowledgeAttachment,
+  readAttachment,
+  storeTelegramMedia,
+  type TelegramAttachment,
+} from '@/lib/telegram/telegram-media'
+import {
   addMiniAppButton,
   buildScopedProjectKeyboard,
   parseScopedTelegramIntent,
@@ -34,6 +40,8 @@ interface TelegramInbound {
   telegramUserId: string
   text?: string
   callbackData?: string
+  /** A video, photo or recording sent instead of, or alongside, text. */
+  attachment?: TelegramAttachment
 }
 
 interface TelegramGrant {
@@ -70,12 +78,17 @@ function parseInbound(update: unknown): TelegramInbound | null {
   const chat = message?.chat as Record<string, unknown> | undefined
   const from = message?.from as Record<string, unknown> | undefined
   if (chat?.type !== 'private' || from?.is_bot === true || chat?.id === undefined || from?.id === undefined) return null
-  if (typeof message?.text !== 'string') return null
+
+  // A message with a file but no text used to be dropped silently, so footage
+  // filmed on a phone never reached the agency at all.
+  const attachment = message ? readAttachment(message) : null
+  if (typeof message?.text !== 'string' && !attachment) return null
 
   return {
     chatId: String(chat.id),
     telegramUserId: String(from.id),
-    text: message.text,
+    ...(typeof message?.text === 'string' ? { text: message.text } : {}),
+    ...(attachment ? { attachment } : {}),
   }
 }
 
@@ -570,11 +583,59 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, status: 'project_required' })
   }
 
+  // A file gets stored and processed before the Director is asked anything,
+  // so the transcript exists by the time it writes. Sending a video used to
+  // do nothing at all.
+  let mediaNote = ''
+  if (inbound.attachment) {
+    await sendTelegramText({
+      botToken: config.botToken,
+      chatId: inbound.chatId,
+      text: acknowledgeAttachment(inbound.attachment, grant.projectName),
+    })
+
+    const stored = await storeTelegramMedia({
+      supabase: admin,
+      botToken: config.botToken,
+      userId: account.actor_user_id,
+      brandId: grant.projectId,
+      attachment: inbound.attachment,
+    })
+
+    if ('error' in stored) {
+      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: stored.error })
+      return NextResponse.json({ received: true, status: 'media_rejected' })
+    }
+
+    // Transcription and description happen through the one pipeline that owns
+    // every media_items write, rather than a second path that could drift.
+    const { runMediaProcessingPipeline } = await import('@/lib/media/process-pipeline')
+    await runMediaProcessingPipeline({ supabase: admin, mediaItemId: stored.media.mediaItemId })
+      .catch(() => { /* the Director is told below what is and is not available */ })
+
+    const { data: processed } = await admin
+      .from('media_items')
+      .select('transcription, ai_description')
+      .eq('id', stored.media.mediaItemId)
+      .maybeSingle()
+
+    const transcript = typeof processed?.transcription === 'string' ? processed.transcription.trim() : ''
+    const described = typeof processed?.ai_description === 'string' ? processed.ai_description.trim() : ''
+
+    mediaNote = [
+      `\n\n[The owner sent a ${inbound.attachment.kind}. It is in the media library as ${stored.media.mediaItemId}.`,
+      transcript ? `What he says in it: "${transcript.slice(0, 2000)}"` : null,
+      described ? `What it shows: ${described.slice(0, 600)}` : null,
+      !transcript && !described ? 'It could not be transcribed or described — ask him what is in it rather than guessing.' : null,
+      'Write from what is actually in it. Never invent something that was not said or shown.]',
+    ].filter(Boolean).join('\n')
+  }
+
   await queueTelegramDirectorWork({
     admin,
     account,
     grant,
-    message: intent.message,
+    message: (intent.message || 'Write captions for what I just sent.') + mediaNote,
     botToken: config.botToken,
     chatId: inbound.chatId,
   })
