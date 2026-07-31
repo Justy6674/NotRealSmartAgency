@@ -1662,7 +1662,11 @@ export function createExportDesignTool(
         })
         const exportData = await exportRes.json()
 
-        const exportId = exportData.export?.id
+        // Canva's export endpoints answer with `job`, not `export`. Reading the
+        // wrong key meant export_design NEVER worked: Canva returned HTTP 200
+        // having happily created the job, and this read undefined and gave up.
+        // `export` is kept as a fallback in case an older shape is ever served.
+        const exportId = exportData.job?.id ?? exportData.export?.id
 
         if (!exportId) {
           // Canva says WHY it refused — a missing scope, an unrenderable
@@ -1697,12 +1701,19 @@ export function createExportDesignTool(
               `/exports/${exportId}`
             )
             const statusData = await statusRes.json()
-            const status = statusData.export?.status
+            const job = statusData.job ?? statusData.export
+            // Canva's terminal state is 'success'. This checked for
+            // 'completed', which Canva never sends — so even a finished export
+            // would have polled out and reported a timeout.
+            const status = job?.status
 
-            if (status === 'completed') {
+            if (status === 'success' || status === 'completed') {
+              // urls is an array of download links — one per page. Canva sends
+              // plain strings; tolerate the {url} object shape too.
+              const firstUrl = job?.urls?.[0]
               const downloadUrl =
-                statusData.export?.urls?.[0]?.url ??
-                statusData.export?.download_url
+                (typeof firstUrl === 'string' ? firstUrl : firstUrl?.url) ??
+                job?.download_url
 
               return {
                 success: true,
@@ -1710,16 +1721,23 @@ export function createExportDesignTool(
                 design_id,
                 format,
                 download_url: downloadUrl,
+                // Canva's download URLs expire, so say so rather than let the
+                // user save a link that quietly dies.
+                url_expires_in: '24 hours',
                 message: downloadUrl
-                  ? `Your design has been exported as ${format.toUpperCase()}. Download it here: ${downloadUrl}`
+                  ? `Your design has been exported as ${format.toUpperCase()}. Download it here (link valid 24 hours): ${downloadUrl}`
                   : `Export completed but no download URL was returned. Export ID: ${exportId}`,
               }
             }
 
             if (status === 'failed') {
+              const reason =
+                job?.error?.message ?? job?.error?.code ?? job?.error ?? null
               return {
                 success: false,
-                error: 'Canva export failed. The design may be empty or corrupted.',
+                error: reason
+                  ? `Canva export failed: ${typeof reason === 'string' ? reason : JSON.stringify(reason)}`
+                  : 'Canva export failed. The design may be empty or corrupted.',
               }
             }
           } catch {
