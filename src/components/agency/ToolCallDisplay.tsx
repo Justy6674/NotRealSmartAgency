@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { Wrench, ChevronDown, ChevronRight, Loader2, Check, Users } from 'lucide-react'
+import { Wrench, ChevronDown, ChevronRight, Loader2, Check, Users, AlertCircle } from 'lucide-react'
 import { AGENT_LABELS } from '@/types/database'
 import type { AgentType } from '@/types/database'
 
@@ -367,7 +367,22 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
   const [timedOut, setTimedOut] = useState(false)
   const isDelegation = toolName === 'delegate_to_agent'
   const isMeeting = toolName === 'convene_meeting'
-  const isComplete = state === 'result' || result !== undefined || timedOut
+  const isComplete = state === 'result' || state === 'error' || result !== undefined || timedOut
+
+  // A tool that reported a failure must not wear a green tick.
+  //
+  // Completion was the only thing this component distinguished, so a rejected
+  // save rendered identically to a successful one and the user had no way to
+  // tell. The agent's own words are not a reliable signal here — it narrated
+  // "Saved to your outputs library" over a database rejection.
+  const failed =
+    state === 'error' ||
+    Boolean(
+      result && typeof result === 'object' &&
+        ((result as { saved?: boolean }).saved === false ||
+          (result as { success?: boolean }).success === false ||
+          (result as { error?: unknown }).error !== undefined),
+    )
 
   // For simple tools (not delegation/meeting), auto-complete after 15s
   // These tools rarely take more than a few seconds
@@ -385,13 +400,15 @@ export function ToolCallDisplay({ toolName, args, result, state }: ToolCallDispl
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-muted-foreground hover:text-foreground"
       >
-        {isComplete ? (
+        {failed ? (
+          <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+        ) : isComplete ? (
           <Check className="h-3.5 w-3.5 text-green-600" />
         ) : (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         )}
         <Wrench className="h-3.5 w-3.5" />
-        <span className="flex-1 text-xs">{label}</span>
+        <span className={cn('flex-1 text-xs', failed && 'text-amber-600')}>{failed ? `${label} — failed` : label}</span>
         <ChevronDown
           className={cn(
             'h-3 w-3 transition-transform',

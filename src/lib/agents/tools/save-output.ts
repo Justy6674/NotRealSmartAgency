@@ -67,12 +67,32 @@ export function createSaveOutputTool(
         if (!gate.allowed) return { saved: false, error: gate.reason }
       }
 
+      // Only attach the conversation if it has actually been written down.
+      //
+      // `outputs.conversation_id` is a foreign key, and a brand-new chat has no
+      // row in `conversations` yet — the id exists client-side before it is
+      // persisted. Passing it produced a 23503 foreign key violation, so every
+      // save from a fresh chat was rejected. The agent reported success anyway
+      // and the work was gone: the exact case that started this investigation.
+      //
+      // The conversation link is a nicety; the content is the point. Losing the
+      // link is a footnote, losing a finished carousel is the user's afternoon.
+      let linkedConversationId: string | null = conversationId ?? null
+      if (linkedConversationId) {
+        const { data: conversationRow } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('id', linkedConversationId)
+          .maybeSingle()
+        if (!conversationRow) linkedConversationId = null
+      }
+
       const { data, error } = await supabase
         .from('outputs')
         .insert({
           user_id: userId,
           brand_id: brandId,
-          conversation_id: conversationId,
+          conversation_id: linkedConversationId,
           output_type,
           title,
           content,
@@ -86,7 +106,13 @@ export function createSaveOutputTool(
         .single()
 
       if (error) {
-        return { saved: false, error: error.message }
+        // Say it plainly enough that the agent repeats it rather than glossing
+        // over it — a save that failed must not be reported as a save.
+        console.error('[save_output] insert failed:', error.code, error.message)
+        return {
+          saved: false,
+          error: `NOT SAVED — ${error.message}. Tell the user their content was not stored and offer to try again. Do not claim it was saved.`,
+        }
       }
 
       return {

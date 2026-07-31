@@ -125,13 +125,32 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
               // If there's any text part AFTER this tool call, the tool has finished
               // (the AI continued speaking, meaning the tool completed)
               const hasTextAfter = parts?.slice(i + 1).some(p => p.type === 'text' && (p as { text: string }).text.trim().length > 0)
-              const effectiveState = hasTextAfter ? 'result' : toolPart.state
+
+              // "Finished" is not "worked". This inferred-completion rule was
+              // painting a green tick on every tool the agent spoke after —
+              // including a save that had just been rejected by the database.
+              // The interface asserted success the agent had not earned, which
+              // is how a failed save reached the user as "Saved to your outputs
+              // library". A tool that reported a failure must look like one.
+              const output = toolPart.output as { saved?: boolean; error?: unknown; success?: boolean } | undefined
+              const reportedFailure = Boolean(
+                output && typeof output === 'object' &&
+                (output.error !== undefined || output.saved === false || output.success === false),
+              )
+
+              const effectiveState = reportedFailure ? 'error' : hasTextAfter ? 'result' : toolPart.state
               return (
                 <ToolCallDisplay
                   key={i}
                   toolName={toolName}
                   args={(toolPart.input as Record<string, unknown>) ?? {}}
-                  result={effectiveState === 'result' ? (toolPart.output ?? true) : undefined}
+                  result={
+                    effectiveState === 'error'
+                      ? toolPart.output          // pass the failure through so it can be read
+                      : effectiveState === 'result'
+                        ? (toolPart.output ?? true)
+                        : undefined
+                  }
                   state={effectiveState}
                 />
               )
