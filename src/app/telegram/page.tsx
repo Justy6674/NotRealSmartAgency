@@ -30,6 +30,31 @@ async function wait(ms: number) {
   await new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+
+/**
+ * PUT the file to the signed storage URL, reporting progress.
+ *
+ * XMLHttpRequest rather than fetch because fetch cannot report upload
+ * progress, and a 224 MB video over phone data needs to show it is moving.
+ */
+function uploadWithProgress(
+  signedUrl: string,
+  file: File,
+  onProgress: (percent: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('PUT', signedUrl, true)
+    request.setRequestHeader('content-type', file.type || 'application/octet-stream')
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100))
+    }
+    request.onload = () => (request.status >= 200 && request.status < 300 ? resolve() : reject(new Error(String(request.status))))
+    request.onerror = () => reject(new Error('network'))
+    request.send(file)
+  })
+}
+
 export default function TelegramMiniAppPage() {
   const [initData, setInitData] = useState('')
   const [firstName, setFirstName] = useState('')
@@ -40,6 +65,7 @@ export default function TelegramMiniAppPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null)
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedId) ?? null, [projects, selectedId])
 
@@ -143,6 +169,107 @@ export default function TelegramMiniAppPage() {
     setSending(false)
   }
 
+  /**
+   * Send a video, photo or recording from the phone.
+   *
+   * The bytes go straight from here to storage using a signed URL. They do not
+   * pass through the bot, which Telegram will not let fetch anything over
+   * 20 MB — the reason no real footage had ever reached NRS — and they do not
+   * pass through a serverless function either, whose request body limit a
+   * 224 MB video would blow just as surely.
+   */
+  const sendFile = async (file: File) => {
+    if (!selectedProject || sending) return
+    setSending(true)
+    setError(null)
+    setUploadPercent(0)
+    setMessages((current) => [...current, { role: 'user', text: `Sent ${file.name}` }])
+
+    const started = await fetch('/api/telegram/mini-app/upload', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        init_data: initData,
+        action: 'start',
+        file_name: file.name,
+        file_type: file.type,
+        file_size: file.size,
+      }),
+    })
+    const startData = (await started.json().catch(() => ({}))) as {
+      error?: string
+      signed_url?: string
+      storage_path?: string
+    }
+    if (!started.ok || !startData.signed_url || !startData.storage_path) {
+      setError(startData.error ?? 'Could not start the upload.')
+      setSending(false)
+      return
+    }
+
+    try {
+      await uploadWithProgress(startData.signed_url, file, setUploadPercent)
+    } catch {
+      setError('The upload did not finish. Check your connection and try again.')
+      setSending(false)
+      return
+    }
+    setUploadPercent(100)
+
+    const finished = await fetch('/api/telegram/mini-app/upload', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        init_data: initData,
+        action: 'complete',
+        storage_path: startData.storage_path,
+        file_name: file.name,
+        file_type: file.type,
+        ...(draft.trim() ? { instruction: draft.trim() } : {}),
+      }),
+    })
+    const finishData = (await finished.json().catch(() => ({}))) as { error?: string; job_id?: string }
+    if (!finished.ok || !finishData.job_id) {
+      setError(finishData.error ?? 'The file uploaded but NRS could not start work on it.')
+      setSending(false)
+      return
+    }
+    setDraft('')
+    setUploadPercent(null)
+    await pollJob(finishData.job_id)
+  }
+
+  /** Shared by the message and upload flows. */
+  const pollJob = async (jobId: string) => {
+    // A video is transcribed before the Director writes, so this waits longer
+    // than a text request would.
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await wait(2_500)
+      const poll = await fetch(`/api/telegram/mini-app/jobs/${jobId}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ init_data: initData }),
+      })
+      const result = (await poll.json().catch(() => ({}))) as {
+        status?: string
+        response?: string
+        error?: string
+      }
+      if (result.status === 'done') {
+        setMessages((current) => [...current, { role: 'director', text: result.response ?? '' }])
+        setSending(false)
+        return
+      }
+      if (result.status === 'error') {
+        setError(result.error ?? 'The Director could not complete that request.')
+        setSending(false)
+        return
+      }
+    }
+    setError('The Director is still working. Reopen the Mini App shortly to check the result.')
+    setSending(false)
+  }
+
   return (
     <main className="min-h-screen bg-[var(--tg-theme-bg-color,#0e151c)] text-[var(--tg-theme-text-color,#f2f4f6)]">
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
@@ -191,12 +318,32 @@ export default function TelegramMiniAppPage() {
                   {message.text}
                 </div>
               ))}
-              {sending && <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">The Director is working…</div>}
+              {uploadPercent !== null && (
+                <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">
+                  Uploading… {uploadPercent}%
+                </div>
+              )}
+              {sending && uploadPercent === null && <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">The Director is working…</div>}
             </section>
 
             <form onSubmit={sendMessage} className="sticky bottom-0 mt-5 flex items-end gap-2 bg-[var(--tg-theme-bg-color,#0e151c)] py-2">
               <label className="sr-only" htmlFor="telegram-message">Message the NRS Director</label>
               <textarea id="telegram-message" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!selectedProject || sending} rows={2} placeholder={selectedProject ? `Ask about ${selectedProject.name}…` : 'Choose a project first'} className="min-h-12 flex-1 resize-none rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm outline-none placeholder:text-[var(--tg-theme-hint-color,#82909f)] focus:border-[var(--tg-theme-button-color,#2aabee)]" />
+              <label className={`flex cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm ${!selectedProject || sending ? 'opacity-40' : ''}`} title="Send a video, photo or recording">
+                <span aria-hidden>+</span>
+                <span className="sr-only">Attach a video, photo or recording</span>
+                <input
+                  type="file"
+                  accept="video/*,image/*,audio/*"
+                  disabled={!selectedProject || sending}
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    event.target.value = ''
+                    if (file) void sendFile(file)
+                  }}
+                />
+              </label>
               <button type="submit" disabled={!draft.trim() || !selectedProject || sending} className="rounded-2xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-3 text-sm font-semibold text-[var(--tg-theme-button-text-color,#fff)] disabled:opacity-40">Send</button>
             </form>
           </>
