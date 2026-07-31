@@ -1665,7 +1665,23 @@ export function createExportDesignTool(
         const exportId = exportData.export?.id
 
         if (!exportId) {
-          return { success: false, error: 'No export ID returned from Canva' }
+          // Canva says WHY it refused — a missing scope, an unrenderable
+          // design, a bad token. Reporting only "no export ID" threw that away
+          // and left an un-debuggable failure in front of the user.
+          const canvaMessage =
+            exportData?.message ??
+            exportData?.error?.message ??
+            exportData?.error ??
+            null
+          const detail = canvaMessage
+            ? `${typeof canvaMessage === 'string' ? canvaMessage : JSON.stringify(canvaMessage)}`
+            : JSON.stringify(exportData).slice(0, 300)
+          return {
+            success: false,
+            error: `Canva refused the export (HTTP ${exportRes.status}): ${detail}`,
+            design_id,
+            format,
+          }
         }
 
         // Step 2: Poll for completion (max 30 seconds)
