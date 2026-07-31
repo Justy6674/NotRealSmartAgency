@@ -99,8 +99,45 @@ export function readAttachment(message: Record<string, unknown>): TelegramAttach
   return null
 }
 
-/** Telegram's bot API will not serve a file larger than this. */
-export const TELEGRAM_FILE_LIMIT_BYTES = 20 * 1024 * 1024
+/**
+ * Telegram's CLOUD bot API refuses to serve a bot any file over 20 MB.
+ *
+ * This is the reason no file had ever arrived through the bot: a phone video is
+ * 200 MB or more, so every real clip the owner sent was refused before any NRS
+ * code ran. It is a limit of api.telegram.org, not something that can be
+ * worked around in a request.
+ *
+ * A self-hosted Bot API server (tdlib/telegram-bot-api) lifts it — that server
+ * will serve files up to 2 GB. Point TELEGRAM_API_BASE at it and the ceiling
+ * rises accordingly.
+ */
+export const TELEGRAM_CLOUD_FILE_LIMIT_BYTES = 20 * 1024 * 1024
+
+/** What a self-hosted Bot API server will serve. */
+export const TELEGRAM_LOCAL_FILE_LIMIT_BYTES = 2000 * 1024 * 1024
+
+/** Kept for existing imports. */
+export const TELEGRAM_FILE_LIMIT_BYTES = TELEGRAM_CLOUD_FILE_LIMIT_BYTES
+
+/**
+ * Where the Bot API lives. Defaults to Telegram's cloud; set TELEGRAM_API_BASE
+ * to a self-hosted server to accept the owner's actual footage.
+ */
+export function telegramApiBase(env: Record<string, string | undefined> = process.env): string {
+  return (env.TELEGRAM_API_BASE ?? 'https://api.telegram.org').replace(/\/+$/, '')
+}
+
+/** True when pointed at a self-hosted server rather than Telegram's cloud. */
+export function usingSelfHostedBotApi(env: Record<string, string | undefined> = process.env): boolean {
+  return telegramApiBase(env) !== 'https://api.telegram.org'
+}
+
+/** The largest file that can actually be fetched, given where the API lives. */
+export function telegramFileLimitBytes(env: Record<string, string | undefined> = process.env): number {
+  return usingSelfHostedBotApi(env)
+    ? TELEGRAM_LOCAL_FILE_LIMIT_BYTES
+    : TELEGRAM_CLOUD_FILE_LIMIT_BYTES
+}
 
 export interface StoredMedia {
   mediaItemId: string
@@ -127,13 +164,19 @@ export async function storeTelegramMedia({
   brandId: string
   attachment: TelegramAttachment
 }): Promise<{ media: StoredMedia } | { error: string }> {
-  if (attachment.fileSize && attachment.fileSize > TELEGRAM_FILE_LIMIT_BYTES) {
+  const apiBase = telegramApiBase()
+  const limit = telegramFileLimitBytes()
+
+  if (attachment.fileSize && attachment.fileSize > limit) {
+    const sizeMb = Math.round(attachment.fileSize / 1024 / 1024)
     return {
-      error: `That file is ${Math.round(attachment.fileSize / 1024 / 1024)} MB. Telegram only lets a bot fetch files up to 20 MB — send a shorter clip, or upload it on the web.`,
+      error: usingSelfHostedBotApi()
+        ? `That file is ${sizeMb} MB, over the ${Math.round(limit / 1024 / 1024)} MB the Bot API will serve. Send a shorter clip, or upload it on the web.`
+        : `That file is ${sizeMb} MB. Telegram's own bot API refuses anything over 20 MB, so I cannot fetch it — this is their limit, not a fault here. Upload it on the web instead, or point NRS at a self-hosted Bot API server to lift the cap.`,
     }
   }
 
-  const lookup = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${attachment.fileId}`)
+  const lookup = await fetch(`${apiBase}/bot${botToken}/getFile?file_id=${attachment.fileId}`)
   if (!lookup.ok) return { error: 'That file could not be read from Telegram. Try sending it again.' }
 
   const info = (await lookup.json()) as { ok?: boolean; result?: { file_path?: string } }
@@ -142,7 +185,7 @@ export async function storeTelegramMedia({
     return { error: 'Telegram would not hand over that file. It may be too large for a bot to fetch.' }
   }
 
-  const download = await fetch(`https://api.telegram.org/file/bot${botToken}/${remotePath}`)
+  const download = await fetch(`${apiBase}/file/bot${botToken}/${remotePath}`)
   if (!download.ok) return { error: 'That file could not be downloaded. Try again shortly.' }
 
   const bytes = Buffer.from(await download.arrayBuffer())
