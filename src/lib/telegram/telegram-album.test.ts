@@ -57,3 +57,25 @@ test('the caption is written from what is actually in the media', () => {
   })
   assert.match(directive, /Never invent something that was not said or shown/)
 })
+
+/**
+ * The same video produced "Ormonde Jayne Bijou Saffron" once and "Ormonde Jayne
+ * Bijou Zafran" the next time — two confident inventions from one garbled
+ * transcript, neither a real product. Having a verify_product tool available
+ * was not enough; the instruction has to demand it.
+ */
+test('the directive demands product names be verified, not guessed', () => {
+  const directive = buildMediaDirective({
+    kind: 'video',
+    mediaItemIds: ['x'],
+    transcript: 'Ormond Janes, Bijous, Saffron, it is worth the hype',
+  })
+  assert.match(directive, /CHECK, DO NOT GUESS/)
+  assert.match(directive, /call verify_product BEFORE writing it/)
+})
+
+test('an unverified name must not be printed at all', () => {
+  const directive = buildMediaDirective({ kind: 'video', mediaItemIds: ['x'] })
+  assert.match(directive, /Only write a name whose verdict came back "exists"/)
+  assert.match(directive, /do NOT print the name/)
+})

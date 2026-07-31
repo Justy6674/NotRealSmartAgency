@@ -113,6 +113,16 @@ export function buildMediaDirective({
       : null,
     'Write from what is actually in it. Never invent something that was not said or shown.',
     '',
+    // Speech-to-text mangles brand names, and tidying a mangled name into a
+    // plausible one is how a product that does not exist gets published. It has
+    // happened twice on the same video: "Bijous Saffron" became "Bijou Saffron"
+    // once and "Bijou Zafran" the next time — two different inventions, both
+    // confident, neither real.
+    'PRODUCT NAMES — CHECK, DO NOT GUESS.',
+    'Speech-to-text mangles brand and product names. If a product name in the transcript is at all uncertain, call verify_product BEFORE writing it anywhere — caption, title or hashtag.',
+    'Only write a name whose verdict came back "exists". If it comes back not_found or uncertain, do NOT print the name: refer to it naturally ("today\'s scent of the day", "this one") and tell the owner you need him to confirm which product it was.',
+    'Tidying a garbled name into one that merely sounds right is the exact failure this prevents. A missing name is recoverable; a fabricated one published to customers is not.',
+    '',
     'THEN CREATE THE DRAFTS — do not stop at writing captions in chat.',
     `Use manage_posts with action=create_draft, once per connected platform, passing media_item_ids ${isAlbum ? `[${idList}]` : `[${mediaItemIds[0]}]`}.`,
     'Write each caption for that specific platform, and include the brand hashtags.',
