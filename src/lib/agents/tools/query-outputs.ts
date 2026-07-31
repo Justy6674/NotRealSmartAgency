@@ -57,6 +57,15 @@ export function createQueryOutputsTool(
         return `## Recent Content\n\nNo outputs found${filterNote}${searchNote}. Want me to create something?`
       }
 
+      // Include the actual content, not just a bibliography. This tool exists
+      // so an agent can BUILD ON past work — a title list can't do that. The
+      // Director once found its own saved captions here and still had to ask
+      // the user to paste them back, because content was fetched and dropped.
+      //
+      // Budget the text so a wide search can't blow the context window: the
+      // fewer the results, the more of each one is worth carrying.
+      const perOutputBudget = data.length <= 2 ? 6000 : data.length <= 5 ? 3000 : 1200
+
       const lines: string[] = [`## Recent Content (${data.length} result${data.length === 1 ? '' : 's'})\n`]
 
       data.forEach((output, idx) => {
@@ -68,10 +77,25 @@ export function createQueryOutputsTool(
           timeZone: 'Australia/Sydney',
         })
 
-        lines.push(`${idx + 1}. **${title}** — ${typeLabel}, ${date}`)
+        lines.push(`### ${idx + 1}. ${title}`)
+        lines.push(`_${typeLabel} · ${date} · id: ${output.id}_`)
+        lines.push('')
+
+        const content = typeof output.content === 'string' ? output.content : ''
+        if (!content.trim()) {
+          lines.push('_(no content saved on this output)_')
+        } else if (content.length <= perOutputBudget) {
+          lines.push(content)
+        } else {
+          lines.push(content.slice(0, perOutputBudget))
+          lines.push('')
+          lines.push(
+            `_… truncated (${content.length} chars total). Search with a narrower term, or a smaller limit, to get the full text._`,
+          )
+        }
+        lines.push('')
       })
 
-      lines.push('')
       lines.push('Want me to repurpose any of these, or create something new?')
 
       return lines.join('\n')
