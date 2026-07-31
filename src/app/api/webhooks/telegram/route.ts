@@ -21,6 +21,12 @@ import {
 } from '@/lib/telegram/telegram-media'
 import { resolveAlbum, buildMediaDirective } from '@/lib/telegram/telegram-album'
 import {
+  readThreadId,
+  routeByTopic,
+  createTopicsForProjects,
+  describeTopicSetup,
+} from '@/lib/telegram/forum-topics'
+import {
   addMiniAppButton,
   buildScopedProjectKeyboard,
   parseScopedTelegramIntent,
@@ -43,6 +49,10 @@ interface TelegramInbound {
   callbackData?: string
   /** A video, photo or recording sent instead of, or alongside, text. */
   attachment?: TelegramAttachment
+  /** Forum topic this arrived in, when the chat is a forum group. */
+  threadId?: number
+  /** True when this came from a forum group rather than the private chat. */
+  fromForum?: boolean
 }
 
 interface TelegramGrant {
@@ -78,18 +88,30 @@ function parseInbound(update: unknown): TelegramInbound | null {
   const message = candidate.message as Record<string, unknown> | undefined
   const chat = message?.chat as Record<string, unknown> | undefined
   const from = message?.from as Record<string, unknown> | undefined
-  if (chat?.type !== 'private' || from?.is_bot === true || chat?.id === undefined || from?.id === undefined) return null
+  if (from?.is_bot === true || chat?.id === undefined || from?.id === undefined) return null
+
+  // A forum group is allowed as well as the private chat, because a topic per
+  // project is the whole point — the thread says which project without anyone
+  // picking one. Group membership grants nothing on its own: the sender still
+  // has to be a paired NRS account, checked below.
+  const isForum = chat?.is_forum === true || message?.is_topic_message === true
+  const isPrivate = chat?.type === 'private'
+  if (!isPrivate && !isForum) return null
 
   // A message with a file but no text used to be dropped silently, so footage
   // filmed on a phone never reached the agency at all.
   const attachment = message ? readAttachment(message) : null
   if (typeof message?.text !== 'string' && !attachment) return null
 
+  const threadId = message ? readThreadId(message) : null
+
   return {
     chatId: String(chat.id),
     telegramUserId: String(from.id),
     ...(typeof message?.text === 'string' ? { text: message.text } : {}),
     ...(attachment ? { attachment } : {}),
+    ...(threadId !== null ? { threadId } : {}),
+    ...(isPrivate ? {} : { fromForum: true }),
   }
 }
 
@@ -97,13 +119,18 @@ async function getTelegramAccount(
   admin: ReturnType<typeof createAdminClient>,
   inbound: TelegramInbound,
 ) {
-  const { data } = await admin
+  // A forum group has its own chat id, not the paired private one. The PERSON
+  // is what was paired, so match on them there — a group member who was never
+  // paired still resolves to nothing and gets no access.
+  let query = admin
     .from('telegram_accounts')
     .select('id, actor_user_id')
     .eq('telegram_user_id', inbound.telegramUserId)
-    .eq('telegram_chat_id', inbound.chatId)
     .is('revoked_at', null)
-    .maybeSingle()
+
+  if (!inbound.fromForum) query = query.eq('telegram_chat_id', inbound.chatId)
+
+  const { data } = await query.maybeSingle()
   return data as { id: string; actor_user_id: string } | null
 }
 
@@ -575,10 +602,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, status: 'github_connect_started' })
   }
 
+  // "set up topics" — give every project its own forum topic, once.
+  if (/\b(set ?up|create|make)\b.*\btopics?\b/i.test(inbound.text ?? '')) {
+    const result = await createTopicsForProjects({
+      supabase: admin,
+      botToken: config.botToken,
+      chatId: inbound.chatId,
+      telegramAccountId: account.id,
+      projects: grants.map((candidate) => ({
+        grantId: candidate.grantId,
+        projectId: candidate.projectId,
+        projectName: candidate.projectName,
+      })),
+    })
+    await sendTelegramText({
+      botToken: config.botToken,
+      chatId: inbound.chatId,
+      text: describeTopicSetup(result),
+    })
+    return NextResponse.json({ received: true, status: 'topics_setup' })
+  }
+
   if (intent.kind !== 'marketing_request') return NextResponse.json({ received: true, status: 'ignored' })
 
-  const session = await getActiveSession(admin, account.id)
-  const grant = session ? grants.find((candidate) => candidate.grantId === session.grantId && candidate.projectId === session.projectId) : undefined
+  // A forum topic says which project this is about, so there is nothing to
+  // pick. Falling back to the selected project only when the thread is
+  // unmapped — posting a ScentSell caption to Underground Parfums because a
+  // stale selection was left over is worse than asking.
+  const topicRoute = await routeByTopic(admin, account.id, inbound.threadId ?? null)
+  const grant = topicRoute
+    ? grants.find(
+        (candidate) =>
+          candidate.grantId === topicRoute.grantId && candidate.projectId === topicRoute.projectId,
+      )
+    : await (async () => {
+        const session = await getActiveSession(admin, account.id)
+        return session
+          ? grants.find(
+              (candidate) =>
+                candidate.grantId === session.grantId && candidate.projectId === session.projectId,
+            )
+          : undefined
+      })()
+
   if (!grant) {
     await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants })
     return NextResponse.json({ received: true, status: 'project_required' })
