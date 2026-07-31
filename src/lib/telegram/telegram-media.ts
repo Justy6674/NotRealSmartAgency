@@ -21,6 +21,18 @@ export interface TelegramAttachment {
   /** Caption typed alongside the file, which is usually the instruction. */
   caption?: string
   mimeType?: string
+  /**
+   * Telegram's album id. Selecting several photos and sending them together
+   * arrives as N SEPARATE messages that share this value — there is no single
+   * "album" update. Ignoring it turned an eight-image carousel into eight
+   * unrelated single-image posts.
+   */
+  mediaGroupId?: string
+}
+
+/** Read Telegram's album id, present only when several files were sent together. */
+function readMediaGroupId(message: Record<string, unknown>): string | undefined {
+  return typeof message.media_group_id === 'string' ? message.media_group_id : undefined
 }
 
 /**
@@ -31,6 +43,7 @@ export interface TelegramAttachment {
  */
 export function readAttachment(message: Record<string, unknown>): TelegramAttachment | null {
   const caption = typeof message.caption === 'string' ? message.caption : undefined
+  const mediaGroupId = readMediaGroupId(message)
 
   const video = message.video as Record<string, unknown> | undefined
   if (video?.file_id) {
@@ -40,6 +53,7 @@ export function readAttachment(message: Record<string, unknown>): TelegramAttach
       kind: 'video',
       mimeType: typeof video.mime_type === 'string' ? video.mime_type : 'video/mp4',
       caption,
+      mediaGroupId,
     }
   }
 
@@ -53,6 +67,7 @@ export function readAttachment(message: Record<string, unknown>): TelegramAttach
       kind: mime.startsWith('video/') ? 'video' : mime.startsWith('image/') ? 'photo' : 'document',
       mimeType: mime,
       caption,
+      mediaGroupId,
     }
   }
 
@@ -64,6 +79,7 @@ export function readAttachment(message: Record<string, unknown>): TelegramAttach
       kind: 'audio',
       mimeType: typeof audio.mime_type === 'string' ? audio.mime_type : 'audio/ogg',
       caption,
+      mediaGroupId,
     }
   }
 
@@ -76,6 +92,7 @@ export function readAttachment(message: Record<string, unknown>): TelegramAttach
       kind: 'photo',
       mimeType: 'image/jpeg',
       caption,
+      mediaGroupId,
     }
   }
 
@@ -154,6 +171,9 @@ export async function storeTelegramMedia({
         source: 'telegram',
         caption: attachment.caption ?? null,
         kind: attachment.kind,
+        // Recorded so the separate messages of an album can be reassembled
+        // into one carousel instead of becoming N unrelated posts.
+        ...(attachment.mediaGroupId ? { telegram_media_group_id: attachment.mediaGroupId } : {}),
       },
     })
     .select('id')

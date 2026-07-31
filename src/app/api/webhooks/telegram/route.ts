@@ -19,6 +19,7 @@ import {
   storeTelegramMedia,
   type TelegramAttachment,
 } from '@/lib/telegram/telegram-media'
+import { resolveAlbum, buildMediaDirective } from '@/lib/telegram/telegram-album'
 import {
   addMiniAppButton,
   buildScopedProjectKeyboard,
@@ -613,6 +614,21 @@ export async function POST(request: NextRequest) {
     await runMediaProcessingPipeline({ supabase: admin, mediaItemId: stored.media.mediaItemId })
       .catch(() => { /* the Director is told below what is and is not available */ })
 
+    // Several photos sent together arrive as separate messages sharing an
+    // album id. Wait for the rest, then let exactly one of them speak for the
+    // whole album — otherwise a carousel becomes N separate posts.
+    const album = await resolveAlbum({
+      supabase: admin,
+      brandId: grant.projectId,
+      mediaGroupId: inbound.attachment.mediaGroupId,
+      myMediaItemId: stored.media.mediaItemId,
+    })
+
+    if (!album.isLeader) {
+      // A sibling of this album is running the Director for all of them.
+      return NextResponse.json({ received: true, status: 'album_member' })
+    }
+
     const { data: processed } = await admin
       .from('media_items')
       .select('transcription, ai_description')
@@ -622,13 +638,12 @@ export async function POST(request: NextRequest) {
     const transcript = typeof processed?.transcription === 'string' ? processed.transcription.trim() : ''
     const described = typeof processed?.ai_description === 'string' ? processed.ai_description.trim() : ''
 
-    mediaNote = [
-      `\n\n[The owner sent a ${inbound.attachment.kind}. It is in the media library as ${stored.media.mediaItemId}.`,
-      transcript ? `What he says in it: "${transcript.slice(0, 2000)}"` : null,
-      described ? `What it shows: ${described.slice(0, 600)}` : null,
-      !transcript && !described ? 'It could not be transcribed or described — ask him what is in it rather than guessing.' : null,
-      'Write from what is actually in it. Never invent something that was not said or shown.]',
-    ].filter(Boolean).join('\n')
+    mediaNote = buildMediaDirective({
+      kind: inbound.attachment.kind,
+      mediaItemIds: album.mediaItemIds,
+      transcript,
+      description: described,
+    })
   }
 
   await queueTelegramDirectorWork({
