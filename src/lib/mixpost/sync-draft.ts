@@ -181,27 +181,32 @@ export async function ensureMediaInMixpost(
  * (InstagramPostOptions, FacebookPagePostOptions, YoutubePostOptions).
  */
 export function buildPlatformOptions(
-  platform: string,
+  provider: string,
   postType: string | null,
   caption: string,
   metadata: Record<string, unknown> | null,
 ): Record<string, unknown> | undefined {
   const isReel = postType === 'reel'
 
-  switch (platform) {
+  switch (provider) {
     case 'instagram':
+    case 'instagram_standalone':
+    case 'facebook_page':
     case 'facebook':
-      // 'post' | 'reel' | 'story'
-      return { type: isReel ? 'reel' : 'post' }
+      // 'post' | 'reel' | 'story'. A carousel or single image stays a 'post';
+      // only a vertical video should become a Reel.
+      return { [provider]: { type: isReel ? 'reel' : 'post' } }
 
     case 'youtube':
       return {
-        title: deriveYoutubeTitle(caption, metadata),
-        // Mixpost defaults this to 'public'. A draft the owner has not
-        // approved must never default to publishing publicly, so say
-        // 'private' unless the post explicitly asks otherwise.
-        status: (metadata?.youtube_status as string) ?? 'private',
-        made_for_kids: Boolean(metadata?.made_for_kids ?? false),
+        youtube: {
+          title: deriveYoutubeTitle(caption, metadata),
+          // Mixpost defaults this to 'public'. A draft the owner has not
+          // approved must never default to publishing publicly, so say
+          // 'private' unless the post explicitly asks otherwise.
+          status: (metadata?.youtube_status as string) ?? 'private',
+          made_for_kids: Boolean(metadata?.made_for_kids ?? false),
+        },
       }
 
     default:
@@ -530,8 +535,12 @@ export async function syncDraftToMixpost(
           video_thumbs: [],
         },
       ],
+      // Keyed by the Mixpost PROVIDER of the account we're actually posting to
+      // (e.g. 'facebook_page', not 'facebook'). Mixpost runs
+      // Arr::only($options, providerKeys) and silently discards anything else,
+      // so a flat object is dropped without a word and the defaults apply.
       options: buildPlatformOptions(
-        post.platform as string,
+        brandAccounts.find((a) => a.id === accountIds[0])?.provider ?? (post.platform as string),
         post.post_type as string | null,
         post.caption as string,
         post.metadata as Record<string, unknown> | null,

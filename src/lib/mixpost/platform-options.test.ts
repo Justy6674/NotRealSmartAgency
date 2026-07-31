@@ -10,31 +10,31 @@ import { buildPlatformOptions, deriveYoutubeTitle } from './sync-draft'
  */
 
 test('a vertical video for Instagram is flagged as a Reel', () => {
-  assert.deepEqual(buildPlatformOptions('instagram', 'reel', 'caption', null), { type: 'reel' })
+  assert.deepEqual(buildPlatformOptions('instagram', 'reel', 'caption', null), { instagram: { type: 'reel' } })
 })
 
 test('a vertical video for Facebook is flagged as a Reel', () => {
-  assert.deepEqual(buildPlatformOptions('facebook', 'reel', 'caption', null), { type: 'reel' })
+  assert.deepEqual(buildPlatformOptions('facebook_page', 'reel', 'caption', null), { facebook_page: { type: 'reel' } })
 })
 
 test('a still image stays a normal feed post', () => {
-  assert.deepEqual(buildPlatformOptions('instagram', 'single', 'caption', null), { type: 'post' })
+  assert.deepEqual(buildPlatformOptions('instagram', 'single', 'caption', null), { instagram: { type: 'post' } })
 })
 
 test('YouTube always gets a non-empty title', () => {
   const options = buildPlatformOptions('youtube', 'video', 'My first bench video\n\nmore text', null)
-  assert.equal(options?.title, 'My first bench video')
+  assert.equal((options?.youtube as Record<string,unknown>)?.title, 'My first bench video')
 })
 
 test('an unapproved YouTube draft never defaults to public', () => {
   const options = buildPlatformOptions('youtube', 'video', 'anything', null)
-  assert.equal(options?.status, 'private')
-  assert.equal(options?.made_for_kids, false)
+  assert.equal((options?.youtube as Record<string,unknown>)?.status, 'private')
+  assert.equal((options?.youtube as Record<string,unknown>)?.made_for_kids, false)
 })
 
 test('an explicit YouTube status is respected', () => {
   const options = buildPlatformOptions('youtube', 'video', 'x', { youtube_status: 'public' })
-  assert.equal(options?.status, 'public')
+  assert.equal((options?.youtube as Record<string,unknown>)?.status, 'public')
 })
 
 test('platforms without options send none', () => {
