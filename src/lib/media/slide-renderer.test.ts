@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import sharp from 'sharp'
-import { AVAILABLE_FONTS, headlineSize, prepareLogo, renderSlide, resolveFont } from './slide-renderer.ts'
+import { AVAILABLE_FONTS, SLIDE_SHAPES, headlineSize, prepareLogo, renderSlide, resolveFont } from './slide-renderer.ts'
 
 const SCENT_SELL = {
   name: 'Scent Sell', displayFont: 'Fraunces', bodyFont: 'Manrope',
@@ -78,4 +78,32 @@ test('a white-backed favicon loses its tile', async () => {
   // Trimming the white leaves only the mark, so the result is far smaller
   // than the tile it arrived on.
   assert.ok((meta.width ?? 999) <= 40, 'the white tile must be trimmed away')
+})
+
+test('each platform shape renders at the size that platform wants', async () => {
+  // Rendering everything square wasted a third of the Instagram feed silently.
+  for (const [name, dims] of Object.entries(SLIDE_SHAPES)) {
+    const png = await renderSlide(SCENT_SELL, { headline: 'Shape test' }, name as keyof typeof SLIDE_SHAPES)
+    const meta = await sharp(png).metadata()
+    assert.equal(meta.width, dims.width, `${name} width`)
+    assert.equal(meta.height, dims.height, `${name} height`)
+  }
+})
+
+test('a tall canvas does not shrink the type', async () => {
+  // Type scales off the narrow edge; scaling off the long one would make a
+  // story's headline tiny.
+  const square = await renderSlide(SCENT_SELL, { headline: 'Same words here' }, 'square')
+  const story = await renderSlide(SCENT_SELL, { headline: 'Same words here' }, 'story')
+  const [a, b] = await Promise.all([sharp(square).metadata(), sharp(story).metadata()])
+  assert.equal(a.width, b.width, 'both are 1080 wide, so the type should match')
+  assert.notEqual(square.length, story.length, 'the canvas differs even though the type does not')
+})
+
+test('a bare number still works, for callers that want a custom square', () => {
+  return renderSlide(SCENT_SELL, { headline: 'x' }, 400).then(async (png) => {
+    const meta = await sharp(png).metadata()
+    assert.equal(meta.width, 400)
+    assert.equal(meta.height, 400)
+  })
 })

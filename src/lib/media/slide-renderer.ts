@@ -91,16 +91,39 @@ export function headlineSize(text: string): number {
 }
 
 /**
+ * The shapes each platform actually wants.
+ *
+ * Square is the safe default and the shape a carousel is read in, but a
+ * portrait post takes a third more of the feed and a story is full-screen.
+ * Rendering everything square wasted that space silently.
+ */
+export const SLIDE_SHAPES = {
+  square: { width: 1080, height: 1080 },       // carousels, feed posts, anywhere
+  portrait: { width: 1080, height: 1350 },     // Instagram and Facebook feed, 4:5
+  story: { width: 1080, height: 1920 },        // Stories and Reels covers, 9:16
+  landscape: { width: 1200, height: 628 },     // LinkedIn and link previews
+} as const
+
+export type SlideShape = keyof typeof SLIDE_SHAPES
+
+/**
  * Compose one slide.
  *
- * Square by default: it is the shape every platform accepts and the shape a
- * carousel is read in.
+ * Takes a shape rather than a single dimension, so the same words render for
+ * a carousel, a portrait post or a story without re-writing anything.
  */
 export async function renderSlide(
   brand: SlideBrand,
   content: SlideContent,
-  size = 1080,
+  shape: SlideShape | number = 'square',
 ): Promise<Buffer> {
+  const { width, height } = typeof shape === 'number'
+    ? { width: shape, height: shape }
+    : SLIDE_SHAPES[shape]
+
+  // Type scales off the narrow edge so text keeps its proportion on a tall
+  // canvas instead of shrinking to nothing.
+  const size = Math.min(width, height)
   const display = resolveFont(brand.displayFont, 'Fraunces')
   const body = resolveFont(brand.bodyFont, 'Manrope')
 
@@ -115,8 +138,8 @@ export async function renderSlide(
       type: 'div',
       props: {
         style: {
-          width: size,
-          height: size,
+          width,
+          height,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -194,8 +217,8 @@ export async function renderSlide(
   const svg = await satori(
     tree as unknown as Parameters<typeof satori>[0],
     {
-      width: size,
-      height: size,
+      width,
+      height,
       fonts: [
         { name: display, data: displayData, weight: 400, style: 'normal' },
         { name: body, data: bodyData, weight: 400, style: 'normal' },
@@ -214,8 +237,8 @@ export async function renderSlide(
         await image
           .composite([{
             input: logo,
-            left: size - (meta.width ?? logoWidth) - pad,
-            top: size - (meta.height ?? logoWidth) - Math.round(pad * 0.75),
+            left: width - (meta.width ?? logoWidth) - pad,
+            top: height - (meta.height ?? logoWidth) - Math.round(pad * 0.75),
           }])
           .png()
           .toBuffer(),
