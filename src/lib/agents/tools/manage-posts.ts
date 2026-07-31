@@ -57,6 +57,24 @@ function endOfThisWeek(): string {
   return endOfWeek.toISOString()
 }
 
+
+/**
+ * The identifier Mixpost's API actually takes in a path.
+ *
+ * `external_post_id` holds Mixpost's NUMERIC id, which the webhook matches on,
+ * but every REST path is keyed by UUID. Passing the number produced a flat
+ * "Post not found" 404 — so editing a caption changed it in NRS and left
+ * Mixpost showing the old text, with nothing surfaced to say the two had
+ * diverged. The UUID is on metadata.mixpost, written by syncDraftToMixpost.
+ */
+function mixpostUuid(post: { metadata?: unknown; external_post_id?: unknown }): string | null {
+  const mixpost = (post.metadata as { mixpost?: { post_uuid?: string } } | null)?.mixpost
+  if (mixpost?.post_uuid) return mixpost.post_uuid
+  // A UUID sitting in external_post_id on older rows is still usable.
+  const legacy = post.external_post_id
+  return typeof legacy === 'string' && legacy.includes('-') ? legacy : null
+}
+
 // ─── Tool Factory ────────────────────────────────────────────────────────────
 
 export function createManagePostsTool(
@@ -355,7 +373,7 @@ export function createManagePostsTool(
         // Fetch the post
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, scheduled_at, external_post_id')
+          .select('id, platform, caption, status, scheduled_at, external_post_id, metadata')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -399,8 +417,10 @@ export function createManagePostsTool(
         //
         // The existing post is read first so its media and accounts survive,
         // and the draft state is stated explicitly rather than left to default.
-        if (post.external_post_id) {
-          const existing = await fetchMixpostPost(post.external_post_id)
+        const editUuid = mixpostUuid(post)
+        let mixpostSynced = false
+        if (editUuid) {
+          const existing = await fetchMixpostPost(editUuid)
           const existingVersion = existing?.versions?.[0]
           const existingContent = existingVersion?.content?.[0]
           const existingMedia = (existingContent?.media ?? []) as unknown[]
@@ -408,11 +428,19 @@ export function createManagePostsTool(
             .map((item) => (typeof item === 'object' && item ? Number((item as { id?: unknown }).id) : Number(item)))
             .filter((id) => Number.isFinite(id)) as number[]
 
+          // The accounts have to be sent back too. Omitting them emptied the
+          // post's account list, leaving a draft with nowhere to publish — the
+          // same replace-everything trap as the media.
+          const existingAccounts = (existing?.accounts ?? [])
+            .map((account) => Number((account as { id?: unknown }).id))
+            .filter((id) => Number.isFinite(id))
+
           const mixpostParams: Record<string, unknown> = {
             // Never let an edit publish. A draft stays a draft unless the
             // owner approves it somewhere that asks them.
             schedule: false,
             schedule_now: false,
+            ...(existingAccounts.length > 0 ? { accounts: existingAccounts } : {}),
           }
 
           if (new_caption) {
@@ -435,10 +463,9 @@ export function createManagePostsTool(
             mixpostParams.time = d.toTimeString().slice(0, 5)
           }
 
-          const mixpostOk = await updateMixpostPost(post.external_post_id, mixpostParams as never)
-          if (!mixpostOk) {
-            // Log warning but still update NRS side
-            console.warn('[manage-posts] Mixpost update failed for', post.external_post_id)
+          mixpostSynced = await updateMixpostPost(editUuid, mixpostParams as never)
+          if (!mixpostSynced) {
+            console.warn('[manage-posts] Mixpost update failed for', editUuid)
           }
         }
 
@@ -452,10 +479,17 @@ export function createManagePostsTool(
           return { success: false, error: `Failed to update post: ${updateError.message}` }
         }
 
+        // Say whether Mixpost took the change. Reporting a flat success while
+        // the Mixpost copy still showed the old words is how the two silently
+        // diverged — the owner reviews in Mixpost, so that is the copy that
+        // matters.
         return {
           success: true,
-          message: `Updated post [${post_id}].${new_caption ? ' Caption changed.' : ''}${scheduled_at ? ' Schedule updated.' : ''}`,
           post_id,
+          mixpost_updated: mixpostSynced,
+          message: mixpostSynced
+            ? `Updated post [${post_id}].${new_caption ? ' Caption changed.' : ''}${scheduled_at ? ' Schedule updated.' : ''}`
+            : `Updated post [${post_id}] in NRS, but MIXPOST STILL SHOWS THE OLD VERSION. Tell the owner the change has not reached the copy he reviews.`,
         }
       }
 
@@ -467,7 +501,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, external_post_id')
+          .select('id, platform, caption, status, external_post_id, metadata')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -481,10 +515,11 @@ export function createManagePostsTool(
         }
 
         // Delete from Mixpost if UUID exists
-        if (post.external_post_id) {
-          const mixpostOk = await deleteMixpostPost(post.external_post_id)
+        const deleteUuid = mixpostUuid(post)
+        if (deleteUuid) {
+          const mixpostOk = await deleteMixpostPost(deleteUuid)
           if (!mixpostOk) {
-            console.warn('[manage-posts] Mixpost delete failed for', post.external_post_id)
+            console.warn('[manage-posts] Mixpost delete failed for', deleteUuid)
           }
         }
 
@@ -516,7 +551,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, external_post_id')
+          .select('id, platform, caption, status, external_post_id, metadata')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -533,7 +568,7 @@ export function createManagePostsTool(
           return { success: false, error: 'This post has already been published.' }
         }
 
-        const queueOk = await addMixpostPostToQueue(post.external_post_id)
+        const queueOk = await addMixpostPostToQueue(mixpostUuid(post) ?? '')
         if (!queueOk) {
           return { success: false, error: 'Failed to add post to Mixpost queue. Check if the publishing server is running.' }
         }
@@ -560,7 +595,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, scheduled_at, external_post_id')
+          .select('id, platform, caption, status, scheduled_at, external_post_id, metadata')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -578,7 +613,7 @@ export function createManagePostsTool(
           }
         }
 
-        const mixpostPost = await fetchMixpostPost(post.external_post_id)
+        const mixpostPost = await fetchMixpostPost(mixpostUuid(post) ?? '')
 
         const MIXPOST_STATUS_LABELS: Record<number, string> = {
           0: 'draft',
@@ -616,7 +651,7 @@ export function createManagePostsTool(
 
         const { data: post, error: fetchError } = await supabase
           .from('scheduled_posts')
-          .select('id, platform, caption, status, external_post_id')
+          .select('id, platform, caption, status, external_post_id, metadata')
           .eq('id', post_id)
           .eq('brand_id', brandId)
           .single()
@@ -633,7 +668,7 @@ export function createManagePostsTool(
           return { success: false, error: 'This post has already been published.' }
         }
 
-        const approveOk = await approveMixpostPost(post.external_post_id)
+        const approveOk = await approveMixpostPost(mixpostUuid(post) ?? '')
         if (!approveOk) {
           return { success: false, error: 'Failed to approve post in Mixpost.' }
         }
