@@ -76,6 +76,24 @@ export interface CreateDraftResult {
 }
 
 /**
+ * Coerce whatever a caller sent for a schedule time into something Postgres
+ * will accept, falling back to now.
+ *
+ * Callers here include language models, which send "", "null", "none" or a
+ * half-formed date when they mean "no schedule — it's a draft". None of those
+ * should cost the user the copy that was already written.
+ */
+export function normaliseTimestamp(value: string | null | undefined): string {
+  if (typeof value !== 'string') return new Date().toISOString()
+  const trimmed = value.trim()
+  if (!trimmed || ['null', 'none', 'undefined', 'n/a'].includes(trimmed.toLowerCase())) {
+    return new Date().toISOString()
+  }
+  const parsed = new Date(trimmed)
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()
+}
+
+/**
  * Derive the post type Mixpost expects from the attached media.
  *
  * Reels are the native vertical-video format on Instagram, Facebook and TikTok;
@@ -138,6 +156,13 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
 
   const postType = postTypeOverride ?? derivePostType(platform, isVideo, mediaItemIds.length)
 
+  // An agent asked for an unscheduled draft naturally sends "" (or a stray
+  // "null"/"none") for scheduled_at. `??` only catches null/undefined, so the
+  // empty string reached Postgres and the whole insert died with "invalid
+  // input syntax for type timestamp" — losing copy the Director had already
+  // written. A draft has no schedule by definition: anything unusable means now.
+  const resolvedScheduledAt = normaliseTimestamp(scheduledAt)
+
   const insertData: Record<string, unknown> = {
     user_id: userId,
     brand_id: brandId,
@@ -145,7 +170,7 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     caption,
     hashtags,
     status,
-    scheduled_at: scheduledAt ?? new Date().toISOString(),
+    scheduled_at: resolvedScheduledAt,
     post_type: postType,
     media_item_ids: mediaItemIds,
     metadata: { ...metadata, source: metadata.source ?? 'unknown' },

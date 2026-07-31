@@ -95,7 +95,7 @@ export function createManagePostsTool(
       scheduled_at: z
         .string()
         .optional()
-        .describe('ISO datetime for scheduling (e.g. 2026-04-07T09:00:00+10:00)'),
+        .describe('ISO datetime for scheduling (e.g. 2026-04-07T09:00:00+10:00). NOT needed for create_draft — omit it entirely for an unscheduled draft; do not pass an empty string.'),
       approve_scope: z
         .enum(['all_drafts', 'this_week', 'today'])
         .optional()
