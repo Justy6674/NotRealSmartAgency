@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { X, Check, Copy, Download, Calendar, Send, Loader2, Rocket } from 'lucide-react'
+import { X, Check, Copy, Download, Calendar, Send, Loader2, Rocket, Images } from 'lucide-react'
 import type { ScheduledPost, Brand } from '@/types/database'
 
 const PLATFORM_CONFIG: Record<string, { label: string; maxChars: number; colour: string }> = {
@@ -44,6 +44,8 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
   const [scheduleTimes, setScheduleTimes] = useState<Record<string, string>>({})
   const [publishingAll, setPublishingAll] = useState(false)
   const [publishProgress, setPublishProgress] = useState<string | null>(null)
+  const [zippingId, setZippingId] = useState<string | null>(null)
+  const [zipNotice, setZipNotice] = useState<{ id: string; message: string } | null>(null)
 
   const patchPost = useCallback(async (id: string, body: Record<string, unknown>) => {
     const res = await fetch('/api/scheduled-posts', {
@@ -157,6 +159,46 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
     }
   }, [])
 
+  /**
+   * Pull every slide down as one zip.
+   *
+   * The server names the archive and numbers the files, so the set stays in
+   * carousel order on disk — which is what makes it usable for a TikTok photo
+   * post, where the slides are picked back out by hand in the app.
+   */
+  const handleDownloadSlides = useCallback(async (id: string) => {
+    setZippingId(id)
+    setZipNotice(null)
+    try {
+      const res = await fetch(`/api/scheduled-posts/download-media?postId=${id}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        setZipNotice({ id, message: body?.error ?? 'Could not build the download.' })
+        return
+      }
+      const disposition = res.headers.get('content-disposition') ?? ''
+      const named = /filename="([^"]+)"/.exec(disposition)?.[1]
+      const missing = Number(res.headers.get('x-nrs-missing-files') ?? '0')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = named ?? `carousel-${id.slice(0, 8)}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+      if (missing > 0) {
+        setZipNotice({
+          id,
+          message: `${missing} file${missing === 1 ? '' : 's'} could not be included — see MISSING-FILES.txt in the zip.`,
+        })
+      }
+    } catch {
+      setZipNotice({ id, message: 'Could not build the download.' })
+    } finally {
+      setZippingId(null)
+    }
+  }, [])
+
   const handleRemoveHashtag = useCallback((id: string, tag: string) => {
     const post = posts.find(p => p.id === id)
     if (!post) return
@@ -236,6 +278,9 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
       {posts.map(post => {
         const config = PLATFORM_CONFIG[post.platform] ?? { label: post.platform, maxChars: 5000, colour: 'oklch(0.5_0.05_240)' }
         const isConnected = connectedPlatforms.includes(post.platform)
+        // A carousel carries its slides in media_item_ids; older single posts
+        // only ever set media_item_id.
+        const mediaCount = post.media_item_ids?.length || (post.media_item_id ? 1 : 0)
 
         return (
           <div
@@ -374,7 +419,34 @@ export function PostReviewPanel({ posts, brand, connectedPlatforms, onClose, onU
                   <Download className="h-3 w-3" />
                   Download Caption + Media
                 </button>
+                {mediaCount > 0 && (
+                  <button
+                    onClick={() => handleDownloadSlides(post.id)}
+                    disabled={zippingId === post.id}
+                    title={
+                      mediaCount > 1
+                        ? 'Every slide, numbered in order, as one zip'
+                        : 'The attached file, as a zip'
+                    }
+                    className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-foreground hover:bg-muted disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                  >
+                    {zippingId === post.id ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Zipping…
+                      </>
+                    ) : (
+                      <>
+                        <Images className="h-3 w-3" />
+                        {mediaCount > 1 ? `Download ${mediaCount} Slides` : 'Download File'}
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
+            )}
+            {zipNotice?.id === post.id && (
+              <p className="mt-2 text-[11px] text-amber-400">{zipNotice.message}</p>
             )}
           </div>
         )

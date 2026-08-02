@@ -10,7 +10,7 @@ import { getGitHubAppConfig } from '@/lib/github/github-app'
 import { hashGitHubConnectState } from '@/lib/github/project-connection'
 import { TELEGRAM_CHANNEL_STATUS } from '@/lib/telegram/telegram-channel-status'
 import { hashTelegramPairCode } from '@/lib/telegram/telegram-pairing'
-import { sendTelegramText } from '@/lib/telegram/telegram-api'
+import { sendTelegramText, type TelegramReplyMarkup } from '@/lib/telegram/telegram-api'
 import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-copy'
 import { getTelegramJobAcknowledgement } from '@/lib/telegram/telegram-job-status'
 import {
@@ -51,8 +51,15 @@ interface TelegramInbound {
   attachment?: TelegramAttachment
   /** Forum topic this arrived in, when the chat is a forum group. */
   threadId?: number
-  /** True when this came from a forum group rather than the private chat. */
-  fromForum?: boolean
+  /** True when this came from a group rather than the private chat. */
+  fromGroup?: boolean
+}
+
+interface TelegramAccount {
+  id: string
+  actor_user_id: string
+  /** Projects this Telegram user may work on. Null/empty means all granted. */
+  allowed_brand_ids?: string[] | null
 }
 
 interface TelegramGrant {
@@ -90,13 +97,20 @@ function parseInbound(update: unknown): TelegramInbound | null {
   const from = message?.from as Record<string, unknown> | undefined
   if (from?.is_bot === true || chat?.id === undefined || from?.id === undefined) return null
 
-  // A forum group is allowed as well as the private chat, because a topic per
-  // project is the whole point — the thread says which project without anyone
-  // picking one. Group membership grants nothing on its own: the sender still
-  // has to be a paired NRS account, checked below.
+  // Groups are allowed as well as the private chat, so two people can work in
+  // one thread. A forum group additionally carries a topic per project, which
+  // says which project without anyone picking one.
+  //
+  // Ordinary groups count too: requiring a forum meant a plain group the owner
+  // had already made — himself, a colleague and the bot — was silently
+  // ignored, with no reply to say why.
+  //
+  // Membership grants nothing on its own. The sender still has to be a paired
+  // NRS account, and that account decides which projects they can touch.
   const isForum = chat?.is_forum === true || message?.is_topic_message === true
+  const isGroup = chat?.type === 'group' || chat?.type === 'supergroup'
   const isPrivate = chat?.type === 'private'
-  if (!isPrivate && !isForum) return null
+  if (!isPrivate && !isForum && !isGroup) return null
 
   // A message with a file but no text used to be dropped silently, so footage
   // filmed on a phone never reached the agency at all.
@@ -111,7 +125,7 @@ function parseInbound(update: unknown): TelegramInbound | null {
     ...(typeof message?.text === 'string' ? { text: message.text } : {}),
     ...(attachment ? { attachment } : {}),
     ...(threadId !== null ? { threadId } : {}),
-    ...(isPrivate ? {} : { fromForum: true }),
+    ...(isPrivate ? {} : { fromGroup: true }),
   }
 }
 
@@ -119,37 +133,45 @@ async function getTelegramAccount(
   admin: ReturnType<typeof createAdminClient>,
   inbound: TelegramInbound,
 ) {
-  // A forum group has its own chat id, not the paired private one. The PERSON
-  // is what was paired, so match on them there — a group member who was never
+  // A group has its own chat id, not the paired private one. The PERSON is
+  // what was paired, so match on them there — a group member who was never
   // paired still resolves to nothing and gets no access.
   let query = admin
     .from('telegram_accounts')
-    .select('id, actor_user_id')
+    .select('id, actor_user_id, allowed_brand_ids')
     .eq('telegram_user_id', inbound.telegramUserId)
     .is('revoked_at', null)
 
-  if (!inbound.fromForum) query = query.eq('telegram_chat_id', inbound.chatId)
+  if (!inbound.fromGroup) query = query.eq('telegram_chat_id', inbound.chatId)
 
   const { data } = await query.maybeSingle()
-  return data as { id: string; actor_user_id: string } | null
+  return data as TelegramAccount | null
 }
 
 async function getTelegramGrants(
   admin: ReturnType<typeof createAdminClient>,
-  actorUserId: string,
+  account: TelegramAccount,
 ): Promise<TelegramGrant[]> {
   const { data } = await admin
     .from('project_access_grants')
     .select('id, brand_id, capabilities, brands!inner(name)')
-    .eq('actor_user_id', actorUserId)
+    .eq('actor_user_id', account.actor_user_id)
     .eq('channel', 'telegram')
     .eq('status', 'active')
     .is('revoked_at', null)
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 
+  // A shared NRS account can be handed to a second person for one brand. The
+  // grants belong to the account; this fence belongs to the Telegram user, so
+  // they never see a project list wider than what they were let in for.
+  const fence = Array.isArray(account.allowed_brand_ids) && account.allowed_brand_ids.length > 0
+    ? new Set(account.allowed_brand_ids)
+    : null
+
   return ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
     const brand = row.brands as { name?: unknown } | null
     if (typeof row.id !== 'string' || typeof row.brand_id !== 'string' || typeof brand?.name !== 'string') return []
+    if (fence && !fence.has(row.brand_id)) return []
     return [{
       grantId: row.id,
       projectId: row.brand_id,
@@ -163,16 +185,19 @@ async function sendProjectPicker({
   botToken,
   chatId,
   grants,
+  threadId,
 }: {
   botToken: string
   chatId: string
   grants: TelegramGrant[]
+  threadId?: number
 }): Promise<void> {
   if (grants.length === 0) {
     await sendTelegramText({
       botToken,
       chatId,
       text: 'This Telegram chat has no enabled NRS project access. Create a new pairing command from NRS Settings.',
+      ...(threadId !== undefined ? { threadId } : {}),
     })
     return
   }
@@ -182,6 +207,7 @@ async function sendProjectPicker({
     chatId,
     text: 'Choose the project for this marketing request. NRS keeps every project separate unless you explicitly create an approved link.',
     replyMarkup: addMiniAppButton(buildScopedProjectKeyboard(grants)),
+    ...(threadId !== undefined ? { threadId } : {}),
   })
 }
 
@@ -347,6 +373,7 @@ async function queueTelegramDirectorWork({
   message,
   botToken,
   chatId,
+  threadId,
 }: {
   admin: ReturnType<typeof createAdminClient>
   account: { id: string; actor_user_id: string }
@@ -354,6 +381,8 @@ async function queueTelegramDirectorWork({
   message: string
   botToken: string
   chatId: string
+  /** The project's forum topic, so the answer comes back to it. */
+  threadId?: number
 }): Promise<void> {
   const inspection = inspectMarketingInput(message)
   if (!inspection.allowed) {
@@ -365,7 +394,7 @@ async function queueTelegramDirectorWork({
       outcome: 'denied',
       detail: { reason: 'marketing_boundary' },
     })
-    await sendTelegramText({ botToken, chatId, text: inspection.reason })
+    await sendTelegramText({ botToken, chatId, text: inspection.reason, ...(threadId !== undefined ? { threadId } : {}) })
     return
   }
 
@@ -379,6 +408,8 @@ async function queueTelegramDirectorWork({
         capabilities: grant.capabilities.filter((capability): capability is 'director:chat' => capability === 'director:chat'),
       },
       chatId,
+      projectName: grant.projectName,
+      ...(threadId !== undefined ? { threadId } : {}),
     })
   } catch {
     await logExecution(admin, {
@@ -389,7 +420,7 @@ async function queueTelegramDirectorWork({
       outcome: 'denied',
       detail: { reason: 'missing_director_capability' },
     })
-    await sendTelegramText({ botToken, chatId, text: 'This selected project is not permitted to run Director work in Telegram.' })
+    await sendTelegramText({ botToken, chatId, text: 'This selected project is not permitted to run Director work in Telegram.', ...(threadId !== undefined ? { threadId } : {}) })
     return
   }
 
@@ -418,7 +449,7 @@ async function queueTelegramDirectorWork({
       outcome: 'error',
       detail: { reason: 'queue_failed' },
     })
-    await sendTelegramText({ botToken, chatId, text: 'NRS could not start that marketing request. Your project remains selected; please try again.' })
+    await sendTelegramText({ botToken, chatId, text: 'NRS could not start that marketing request. Your project remains selected; please try again.', ...(threadId !== undefined ? { threadId } : {}) })
     return
   }
 
@@ -434,8 +465,17 @@ async function queueTelegramDirectorWork({
     botToken,
     chatId,
     text: getTelegramJobAcknowledgement(grant.projectName, message),
+    ...(threadId !== undefined ? { threadId } : {}),
   })
 
+  // This audits the outcome. It deliberately sends NOTHING.
+  //
+  // Delivery moved into the job when this continuation proved it could be
+  // reclaimed mid-flight — but the sends were left here as well, so every
+  // answer went out twice: once from the job, once from here. Worse, the
+  // boundary check below ran after the job had already delivered, so a
+  // withheld response was sent and then declared withheld. The job now
+  // decides and sends; this records what happened.
   after(async () => {
     try {
       await runDirectorJob(job.id, execution, { brand_id: execution.projectId, message })
@@ -450,11 +490,21 @@ async function queueTelegramDirectorWork({
         .is('api_key_id', null)
         .maybeSingle()
       const response = (completed?.result as { response?: unknown } | null)?.response
+
       if (completed?.status !== 'done' || typeof response !== 'string') {
-        await sendTelegramText({ botToken, chatId, text: 'That marketing draft could not be completed. Your project selection is unchanged; please try again.' })
+        await logExecution(admin, {
+          actorUserId: execution.actorUserId,
+          grantId: execution.projectAccessGrantId,
+          projectId: execution.projectId,
+          action: 'director_response',
+          outcome: 'error',
+          detail: { reason: 'job_not_done' },
+        })
         return
       }
 
+      // Same input, same function, same verdict as the job reached — so the
+      // record matches what the owner actually received.
       const outputInspection = inspectMarketingInput(response)
       if (!outputInspection.allowed) {
         await logExecution(admin, {
@@ -465,11 +515,8 @@ async function queueTelegramDirectorWork({
           outcome: 'denied',
           detail: { reason: 'marketing_boundary' },
         })
-        await sendTelegramText({ botToken, chatId, text: 'NRS withheld that response because it did not meet the project marketing data boundary.' })
         return
       }
-
-      const telegramResponse = formatTelegramMarketingCopy(response)
 
       await logExecution(admin, {
         actorUserId: execution.actorUserId,
@@ -477,9 +524,11 @@ async function queueTelegramDirectorWork({
         projectId: execution.projectId,
         action: 'director_response',
         outcome: 'allowed',
-        detail: { delivered: true, response_length: telegramResponse.length },
+        detail: {
+          delivered: true,
+          response_length: formatTelegramMarketingCopy(response).length,
+        },
       })
-      await sendTelegramText({ botToken, chatId, text: telegramResponse })
     } catch {
       await logExecution(admin, {
         actorUserId: execution.actorUserId,
@@ -489,7 +538,6 @@ async function queueTelegramDirectorWork({
         outcome: 'error',
         detail: { reason: 'runner_failed' },
       })
-      await sendTelegramText({ botToken, chatId, text: 'NRS could not complete that marketing draft. Your project selection is unchanged; please try again.' })
     }
   })
 }
@@ -517,43 +565,56 @@ export async function POST(request: NextRequest) {
   const intent = parseScopedTelegramIntent(inbound.text, inbound.callbackData)
   let account = await getTelegramAccount(admin, inbound)
 
+  // Every reply goes back to the topic the request came from. In a group with
+  // a topic per project, answering outside the thread strands the reply in
+  // General — the one topic that does not say which brand it is about.
+  const thread = inbound.threadId !== undefined ? { threadId: inbound.threadId } : {}
+  const reply = (text: string, replyMarkup?: TelegramReplyMarkup) =>
+    sendTelegramText({
+      botToken: config.botToken,
+      chatId: inbound.chatId,
+      text,
+      ...thread,
+      ...(replyMarkup ? { replyMarkup } : {}),
+    })
+
   if (intent.kind === 'pair') {
     if (account) {
-      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'This Telegram chat is already paired with NRS. Choose a project from the list below.' })
+      await reply('This Telegram chat is already paired with NRS. Choose a project from the list below.')
       return NextResponse.json({ received: true, status: 'already_paired' })
     }
     const paired = await redeemPairCode({ admin, inbound, code: intent.code })
     if (!paired) {
-      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'That pairing command is invalid, expired or already used. Create a new one in NRS Settings.' })
+      await reply('That pairing command is invalid, expired or already used. Create a new one in NRS Settings.')
       return NextResponse.json({ received: true, status: 'pairing_denied' })
     }
     account = { id: paired.accountId, actor_user_id: paired.actorUserId }
-    const grants = await getTelegramGrants(admin, account.actor_user_id)
+    const grants = await getTelegramGrants(admin, account)
     await logExecution(admin, {
       actorUserId: account.actor_user_id,
       action: 'pair',
       outcome: 'allowed',
       detail: { project_count: grants.length },
     })
-    await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants })
+    await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants, ...thread })
     return NextResponse.json({ received: true, status: 'paired' })
   }
 
   if (!account) {
-    await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'This private NRS Telegram channel is not paired. Create a pairing command in NRS Settings, then send it here.' })
+    await reply('This private NRS Telegram channel is not paired. Create a pairing command in NRS Settings, then send it here.')
     return NextResponse.json({ received: true, status: 'unpaired' })
   }
 
-  const grants = await getTelegramGrants(admin, account.actor_user_id)
+  const grants = await getTelegramGrants(admin, account)
   if (intent.kind === 'choose_project') {
-    await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants })
+    await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants, ...thread })
     return NextResponse.json({ received: true, status: 'project_picker' })
   }
 
   if (intent.kind === 'select_project') {
     const grant = grants.find((candidate) => candidate.grantId === intent.grantId)
     if (!grant) {
-      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: 'That project selection is not available to this Telegram account. Choose a project from the current list.' })
+      await reply('That project selection is not available to this Telegram account. Choose a project from the current list.')
       return NextResponse.json({ received: true, status: 'selection_denied' })
     }
 
@@ -575,7 +636,7 @@ export async function POST(request: NextRequest) {
       action: 'project_selected',
       outcome: 'allowed',
     })
-    await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: `Using ${grant.projectName}. Send a marketing request whenever you are ready.` })
+    await reply(`Using ${grant.projectName}. Send a marketing request whenever you are ready.`)
     return NextResponse.json({ received: true, status: 'project_selected' })
   }
 
@@ -585,7 +646,7 @@ export async function POST(request: NextRequest) {
       ? grants.find((candidate) => candidate.grantId === session.grantId && candidate.projectId === session.projectId)
       : undefined
     if (intent.scope === 'current' && !selectedGrant) {
-      await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants })
+      await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants, ...thread })
       return NextResponse.json({ received: true, status: 'project_required' })
     }
     const projectsToConnect: TelegramGrant[] = intent.scope === 'all'
@@ -615,38 +676,60 @@ export async function POST(request: NextRequest) {
         projectName: candidate.projectName,
       })),
     })
-    await sendTelegramText({
-      botToken: config.botToken,
-      chatId: inbound.chatId,
-      text: describeTopicSetup(result),
-    })
+    await reply(describeTopicSetup(result))
     return NextResponse.json({ received: true, status: 'topics_setup' })
   }
 
   if (intent.kind !== 'marketing_request') return NextResponse.json({ received: true, status: 'ignored' })
 
-  // A forum topic says which project this is about, so there is nothing to
-  // pick. Falling back to the selected project only when the thread is
-  // unmapped — posting a ScentSell caption to Underground Parfums because a
-  // stale selection was left over is worse than asking.
-  const topicRoute = await routeByTopic(admin, account.id, inbound.threadId ?? null)
+  // Which project this is about, in order of how certain each answer is:
+  //
+  //   1. the forum topic it was posted in — unambiguous by construction
+  //   2. the only project this Telegram user has — nothing to choose between
+  //   3. the project they last selected
+  //
+  // and otherwise ask, rather than guess. Posting a ScentSell caption to
+  // Underground Parfums because a stale selection was left over is worse than
+  // asking.
+  const topicRoute = await routeByTopic(admin, inbound.chatId, inbound.threadId ?? null)
   const grant = topicRoute
     ? grants.find(
         (candidate) =>
           candidate.grantId === topicRoute.grantId && candidate.projectId === topicRoute.projectId,
       )
-    : await (async () => {
-        const session = await getActiveSession(admin, account.id)
-        return session
-          ? grants.find(
-              (candidate) =>
-                candidate.grantId === session.grantId && candidate.projectId === session.projectId,
-            )
-          : undefined
-      })()
+    // Someone let in for one brand should never be asked which brand. This is
+    // also what makes a plain group work for them with no setup at all.
+    : grants.length === 1
+      ? grants[0]
+      : await (async () => {
+          const session = await getActiveSession(admin, account.id)
+          return session
+            ? grants.find(
+                (candidate) =>
+                  candidate.grantId === session.grantId && candidate.projectId === session.projectId,
+              )
+            : undefined
+        })()
 
   if (!grant) {
-    await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants })
+    // The topic names a real project, but not one this person was let in for.
+    // Say that, rather than a generic "pick a project" that reads as a fault.
+    if (topicRoute) {
+      await reply('That topic is for a project your Telegram access does not cover. Post in a topic you have access to, and nothing here has changed.')
+      return NextResponse.json({ received: true, status: 'topic_not_permitted' })
+    }
+
+    // Inline buttons only work in the private chat — a callback press from a
+    // group is refused, because a scope change in a shared room could be made
+    // by whoever taps it. So in a group, say what to do instead of sending a
+    // picker that cannot be used.
+    if (inbound.fromGroup) {
+      await reply(
+        'Which project is this for? Set it in your private chat with me, or turn on Topics for this group and say "set up topics" — then the topic decides.',
+      )
+      return NextResponse.json({ received: true, status: 'project_required' })
+    }
+    await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants, ...thread })
     return NextResponse.json({ received: true, status: 'project_required' })
   }
 
@@ -655,11 +738,7 @@ export async function POST(request: NextRequest) {
   // do nothing at all.
   let mediaNote = ''
   if (inbound.attachment) {
-    await sendTelegramText({
-      botToken: config.botToken,
-      chatId: inbound.chatId,
-      text: acknowledgeAttachment(inbound.attachment, grant.projectName),
-    })
+    await reply(acknowledgeAttachment(inbound.attachment, grant.projectName))
 
     const stored = await storeTelegramMedia({
       supabase: admin,
@@ -670,7 +749,7 @@ export async function POST(request: NextRequest) {
     })
 
     if ('error' in stored) {
-      await sendTelegramText({ botToken: config.botToken, chatId: inbound.chatId, text: stored.error })
+      await reply(stored.error)
       return NextResponse.json({ received: true, status: 'media_rejected' })
     }
 
@@ -719,6 +798,7 @@ export async function POST(request: NextRequest) {
     message: (intent.message || 'Write captions for what I just sent.') + mediaNote,
     botToken: config.botToken,
     chatId: inbound.chatId,
+    ...(inbound.threadId !== undefined ? { threadId: inbound.threadId } : {}),
   })
   return NextResponse.json({ received: true, status: 'queued' })
 }

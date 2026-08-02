@@ -34,15 +34,22 @@ export function readThreadId(message: Record<string, unknown>): number | null {
  */
 export async function routeByTopic(
   supabase: SupabaseClient,
-  telegramAccountId: string,
+  chatId: string,
   threadId: number | null,
 ): Promise<TopicRoute | null> {
   if (threadId === null) return null
 
+  // Keyed on the CHAT, not the person. A topic means the same project to
+  // everyone in the group — otherwise only whoever ran setup could use them,
+  // and a second member posting in the ScentSell topic would be asked to pick
+  // a project in a room where the picker's buttons do not work.
+  //
+  // This grants nothing. The caller still has to hold a grant for whatever
+  // project comes back.
   const { data, error } = await supabase
     .from('telegram_project_sessions')
     .select('project_access_grant_id, brand_id')
-    .eq('telegram_account_id', telegramAccountId)
+    .eq('telegram_chat_id', chatId)
     .eq('message_thread_id', threadId)
     .eq('status', 'topic')
     .maybeSingle()
@@ -80,7 +87,7 @@ export async function createTopicsForProjects({
   const { data: alreadyMapped } = await supabase
     .from('telegram_project_sessions')
     .select('brand_id')
-    .eq('telegram_account_id', telegramAccountId)
+    .eq('telegram_chat_id', chatId)
     .eq('status', 'topic')
 
   const mapped = new Set((alreadyMapped ?? []).map((row) => row.brand_id as string))
@@ -112,6 +119,7 @@ export async function createTopicsForProjects({
 
     const { error } = await supabase.from('telegram_project_sessions').insert({
       telegram_account_id: telegramAccountId,
+      telegram_chat_id: chatId,
       project_access_grant_id: project.grantId,
       brand_id: project.projectId,
       status: 'topic',
@@ -141,6 +149,18 @@ export function describeTopicSetup(result: {
   if (result.existing.length > 0) {
     lines.push(`Already had one: ${result.existing.join(', ')}.`)
   }
+  // Telegram will not create a topic in a group that has not had Topics turned
+  // on, and only a human admin can turn it on. Saying "the chat is not a
+  // forum" is true and useless; say where the switch is.
+  const notAForum = result.failed.some((f) => /not a forum|topics? (?:are|is) disabled/i.test(f.reason))
+  if (notAForum) {
+    lines.push(
+      'This group does not have Topics turned on yet, and only a group admin can turn them on.',
+      'Open the group → Edit → Topics → switch it on, then send "set up topics" here again.',
+    )
+    return lines.join('\n')
+  }
+
   if (result.failed.length > 0) {
     lines.push(
       `Could not set up: ${result.failed.map((f) => `${f.name} (${f.reason})`).join('; ')}.`,

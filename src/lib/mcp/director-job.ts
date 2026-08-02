@@ -731,7 +731,31 @@ That's the difference between a marketing director and a tech support agent. Def
     // is the thing that hands it over, in an execution already proven to have
     // survived long enough to finish the work.
     if (execution.channel === 'telegram' && execution.telegramChatId) {
-      await deliverTelegramResult(execution.telegramChatId, response)
+      // The marketing data boundary is checked HERE, before the answer is
+      // handed over. It used to be checked by the webhook's continuation,
+      // which ran after this had already sent the message — so a response that
+      // failed the boundary was delivered, and then followed by a note saying
+      // it had been withheld. Checking it at the point of delivery is what
+      // makes withholding mean anything.
+      const outputInspection = inspectMarketingInput(response)
+
+      if (!outputInspection.allowed) {
+        await deliverTelegramResult(
+          execution.telegramChatId,
+          'NRS withheld that response because it did not meet the project marketing data boundary.',
+          execution.telegramThreadId,
+        )
+      } else {
+        await deliverTelegramResult(execution.telegramChatId, response, execution.telegramThreadId)
+        // Then the files themselves. Text alone meant a finished carousel
+        // could only be collected on a desktop; as an album it saves to the
+        // phone, which is the only way a TikTok photo post can be made.
+        await deliverTelegramMedia({
+          supabase,
+          execution,
+          since: new Date(startTime).toISOString(),
+        })
+      }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -742,6 +766,7 @@ That's the difference between a marketing director and a tech support agent. Def
       await deliverTelegramResult(
         execution.telegramChatId,
         'That did not complete. Your project selection is unchanged — try again.',
+        execution.telegramThreadId,
       ).catch(() => { /* the owner already has the acknowledgement */ })
     }
   }
@@ -753,7 +778,11 @@ That's the difference between a marketing director and a tech support agent. Def
  * Failures are logged and swallowed: the work is already stored, and throwing
  * here would mark a completed job as failed.
  */
-async function deliverTelegramResult(chatId: string, text: string): Promise<void> {
+async function deliverTelegramResult(
+  chatId: string,
+  text: string,
+  threadId?: number,
+): Promise<void> {
   try {
     const { getNRSTelegramConfig } = await import('@/lib/telegram/nrs-telegram-config')
     const { sendTelegramText } = await import('@/lib/telegram/telegram-api')
@@ -766,9 +795,65 @@ async function deliverTelegramResult(chatId: string, text: string): Promise<void
       botToken: config.botToken,
       chatId,
       text: formatTelegramMarketingCopy(text),
+      ...(threadId !== undefined ? { threadId } : {}),
     })
   } catch (err) {
     console.error('[director-job] Telegram delivery failed:', err instanceof Error ? err.message : err)
+  }
+}
+
+/**
+ * Send the files the job produced back as an album.
+ *
+ * Nothing here throws. The work is saved in NRS and already reported; a
+ * Telegram refusal must not turn a finished job into a failed one. When the
+ * album does not go through, say so, because silence would read as "there was
+ * nothing to send".
+ */
+async function deliverTelegramMedia({
+  supabase,
+  execution,
+  since,
+}: {
+  supabase: ReturnType<typeof createAdminClient>
+  execution: DirectorExecutionScope
+  since: string
+}): Promise<void> {
+  if (!execution.telegramChatId) return
+
+  try {
+    const { getNRSTelegramConfig } = await import('@/lib/telegram/nrs-telegram-config')
+    const { sendTelegramAlbum, sendTelegramText } = await import('@/lib/telegram/telegram-api')
+    const { findJobDeliverables, describeDeliverables } = await import('@/lib/telegram/telegram-deliverables')
+
+    const config = getNRSTelegramConfig()
+    if (!config) return
+
+    const deliverables = await findJobDeliverables({
+      supabase,
+      brandId: execution.projectId,
+      since,
+    })
+    if (!deliverables) return
+
+    const result = await sendTelegramAlbum({
+      botToken: config.botToken,
+      chatId: execution.telegramChatId,
+      items: deliverables.media.map((item) => ({ url: item.url, kind: item.kind })),
+      caption: describeDeliverables(deliverables, execution.projectName ?? 'Your project'),
+      ...(execution.telegramThreadId !== undefined ? { threadId: execution.telegramThreadId } : {}),
+    })
+
+    if (result.sent === 0) {
+      await sendTelegramText({
+        botToken: config.botToken,
+        chatId: execution.telegramChatId,
+        text: 'The files are in the NRS media library — Telegram would not take them here, so open Studio to download the set.',
+        ...(execution.telegramThreadId !== undefined ? { threadId: execution.telegramThreadId } : {}),
+      })
+    }
+  } catch (err) {
+    console.error('[director-job] Telegram media delivery failed:', err instanceof Error ? err.message : err)
   }
 }
 

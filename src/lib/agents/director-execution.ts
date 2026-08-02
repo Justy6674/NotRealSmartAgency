@@ -28,6 +28,16 @@ export interface DirectorExecutionScope {
    * it" and then silence.
    */
   readonly telegramChatId?: string
+  /**
+   * Forum topic the request came from, so the answer goes back to it.
+   *
+   * A group runs a topic per project. Replying without this puts every answer
+   * in General, detached from the request and in the one topic that does not
+   * say which brand it is about.
+   */
+  readonly telegramThreadId?: number
+  /** Project name, for the line that goes with a delivered album. */
+  readonly projectName?: string
 }
 
 export interface ScopedDirectorJob {
@@ -58,10 +68,14 @@ export function createTelegramDirectorExecution({
   userId,
   grant,
   chatId,
+  threadId,
+  projectName,
 }: {
   userId: string
   grant: ProjectAccessGrant
   chatId?: string
+  threadId?: number
+  projectName?: string
 }): DirectorExecutionScope {
   if (!grant.capabilities.includes('director:chat')) {
     throw new Error('This Telegram project grant does not allow director:chat.')
@@ -74,6 +88,8 @@ export function createTelegramDirectorExecution({
     projectAccessGrantId: grant.grantId,
     policyVersion: 1,
     ...(chatId !== undefined ? { telegramChatId: chatId } : {}),
+    ...(threadId !== undefined ? { telegramThreadId: threadId } : {}),
+    ...(projectName !== undefined ? { projectName } : {}),
   })
 }
 
