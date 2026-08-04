@@ -204,7 +204,7 @@ CRITICAL: never supply the caption or hashtags yourself. Pass the user's angle h
         // both confident, neither real. A proposal is where the name first gets
         // written down, so the check belongs here and not only downstream.
         'PRODUCT NAMES — CHECK, DO NOT GUESS.',
-        'If a product or brand name from the media is at all uncertain, call verify_product BEFORE putting it in the hook, caption or hashtags.',
+        'Collect EVERY uncertain product or brand name from the media and check them ALL in ONE verify_product call, passing the `products` array. A walkthrough names a dozen; one call each exhausts the step budget before the copy is written and the captions come out unverified.',
         'Only write a name whose verdict came back "exists". If it comes back not_found or uncertain, do NOT print it — refer to it naturally ("this one", "today\'s scent of the day") and say in the rationale that the owner needs to confirm which product it was.',
         'Tidying a garbled name into one that merely sounds right is the exact failure this prevents. A missing name is recoverable; a fabricated one published to customers is not.',
         '',

@@ -119,7 +119,7 @@ export function buildMediaDirective({
     // once and "Bijou Zafran" the next time — two different inventions, both
     // confident, neither real.
     'PRODUCT NAMES — CHECK, DO NOT GUESS.',
-    'Speech-to-text mangles brand and product names. If a product name in the transcript is at all uncertain, call verify_product BEFORE writing it anywhere — caption, title or hashtag.',
+    'Speech-to-text mangles brand and product names. Collect EVERY uncertain name from the transcript and check them ALL in ONE verify_product call using the `products` array, BEFORE writing any of them — caption, title or hashtag. A walkthrough names a dozen products; checking them one call each runs the step budget out before the copy is written.',
     'Only write a name whose verdict came back "exists". If it comes back not_found or uncertain, do NOT print the name: refer to it naturally ("today\'s scent of the day", "this one") and tell the owner you need him to confirm which product it was.',
     'Tidying a garbled name into one that merely sounds right is the exact failure this prevents. A missing name is recoverable; a fabricated one published to customers is not.',
     '',

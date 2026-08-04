@@ -58,19 +58,81 @@ export function createVerifyProductTool(supabase?: SupabaseClient, brandId?: str
     description:
       'Check that a named product really exists BEFORE writing it into a caption, blog, ad or any customer-facing copy. MANDATORY whenever a product name came from a video or audio transcript, because speech-to-text mangles brand names — and a tidied-up guess is how a fabricated product ends up published. Also use whenever you are less than certain of a spelling. If the verdict is not_found or uncertain, do NOT state the name: ask the owner what the product was, or write around it.',
     inputSchema: z.object({
+      products: z
+        .array(
+          z.object({
+            product_name: z.string().describe('The product name as you would write it, e.g. "Ormonde Jayne Ta\'if"'),
+            category: z.string().optional().describe('What kind of product, e.g. "fragrance", "skincare"'),
+            heard_as: z.string().optional().describe('The raw transcript wording, if this came from speech'),
+          }),
+        )
+        .min(1)
+        .max(12)
+        .optional()
+        .describe(
+          'EVERY product name to check, in ONE call. A walkthrough video names a dozen products; checking them one per call exhausts the step budget before the copy is written, which is how a caption ends up unverified. Send them all together.',
+        ),
       product_name: z
         .string()
-        .describe('The product name as you would write it, e.g. "Ormonde Jayne Bijou Saffron"'),
-      category: z
-        .string()
         .optional()
-        .describe('What kind of product, e.g. "fragrance", "skincare" — narrows the search'),
-      heard_as: z
-        .string()
-        .optional()
-        .describe('The raw transcript wording, if this came from speech, e.g. "Ormond Janes Bijous Saffron"'),
+        .describe('Single-product shorthand. Prefer `products` when there is more than one.'),
+      category: z.string().optional().describe('Category for the single-product form'),
+      heard_as: z.string().optional().describe('Raw transcript wording for the single-product form'),
     }),
-    execute: async ({ product_name, category, heard_as }) => {
+    execute: async ({ products, product_name, category, heard_as }) => {
+      const batch = products?.length
+        ? products
+        : product_name
+          ? [{ product_name, category, heard_as }]
+          : []
+
+      if (batch.length === 0) {
+        return {
+          error: 'Give either `products` (preferred) or `product_name`.',
+          safe_to_publish: false,
+        }
+      }
+
+      // Concurrency is bounded because each check may hit a live web search;
+      // a dozen at once would be rude to the provider and no faster in practice.
+      const results: Array<Awaited<ReturnType<typeof verifyOne>> & { asked: string }> = []
+      const queue = [...batch]
+      const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+        for (let next = queue.shift(); next; next = queue.shift()) {
+          const verdict = await verifyOne(next)
+          results.push({ ...verdict, asked: next.product_name })
+        }
+      })
+      await Promise.all(workers)
+
+      // One name in, one verdict out — unchanged for every existing caller.
+      if (batch.length === 1 && results[0]) {
+        const { asked: _asked, ...single } = results[0]
+        return single
+      }
+
+      const unsafe = results.filter((r) => !r.safe_to_publish)
+      return {
+        checked: results.length,
+        all_safe_to_publish: unsafe.length === 0,
+        results,
+        next_step:
+          unsafe.length === 0
+            ? 'Every name checked out. Use the canonical spelling given for each.'
+            : `Do NOT print these ${unsafe.length}: ${unsafe.map((r) => `"${r.asked}"`).join(', ')}. Write around them or ask the owner which product he meant.`,
+      }
+    },
+  })
+
+  async function verifyOne({
+    product_name,
+    category,
+    heard_as,
+  }: {
+    product_name: string
+    category?: string
+    heard_as?: string
+  }) {
       const model = getGatewayModel('fast')
       try {
         const question = [
@@ -182,8 +244,7 @@ export function createVerifyProductTool(supabase?: SupabaseClient, brandId?: str
           next_step: 'The check did not run, so treat the name as unverified. Ask the owner rather than publishing it.',
         }
       }
-    },
-  })
+  }
 }
 
 /**

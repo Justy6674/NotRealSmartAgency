@@ -71,7 +71,20 @@ test('the directive demands product names be verified, not guessed', () => {
     transcript: 'Ormond Janes, Bijous, Saffron, it is worth the hype',
   })
   assert.match(directive, /CHECK, DO NOT GUESS/)
-  assert.match(directive, /call verify_product BEFORE writing it/)
+  assert.match(directive, /verify_product/)
+  assert.match(directive, /BEFORE writing/)
+})
+
+test('the directive asks for one batched check, not one call per name', () => {
+  // A walkthrough names a dozen products. One call each ran the Director out
+  // of steps before any copy was written, so the captions went out unverified.
+  const directive = buildMediaDirective({
+    kind: 'video',
+    mediaItemIds: ['x'],
+    transcript: 'Ta\'if, Fils de Dieu, Hermann, Ghost in the Shell, I Am Trash',
+  })
+  assert.match(directive, /ALL in ONE verify_product call/)
+  assert.match(directive, /products` array/)
 })
 
 test('an unverified name must not be printed at all', () => {
