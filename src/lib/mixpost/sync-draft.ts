@@ -108,6 +108,17 @@ export async function ensureMediaInMixpost(
     }
   }
 
+  // Publish the delivery copy when the pipeline made one.
+  //
+  // Instagram does not receive an upload — it fetches this URL and transcodes
+  // its end, and a 300 MB phone video fails that fetch with "error code
+  // 2207082" long after the draft looked fine. The master stays in the library
+  // untouched; what goes out is the lighter copy.
+  const deliveryUrl = ((item.metadata as Record<string, unknown> | null)?.delivery as
+    | { url?: string }
+    | undefined)?.url
+  const publishUrl = typeof deliveryUrl === 'string' && deliveryUrl ? deliveryUrl : item.file_url
+
   // Remote initiate
   const initiateRes = await fetch(`${workspaceBase}/media/remote/initiate`, {
     method: 'POST',
@@ -115,7 +126,7 @@ export async function ensureMediaInMixpost(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ url: item.file_url, alt_text: '' }),
+    body: JSON.stringify({ url: publishUrl, alt_text: '' }),
   })
 
   if (!initiateRes.ok) {

@@ -26,6 +26,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { transcribeFile } from '@/lib/transcription/transcribe'
 import { extractFirstFrameFromUrl } from '@/lib/video/ffmpeg-thumbnail'
+import { needsDeliveryCopy, transcodeForDeliveryFromUrl } from '@/lib/video/ffmpeg-transcode'
 import {
   generateDeterministicTags,
   generateAITagsForImage,
@@ -45,12 +46,13 @@ export interface StageReport {
 
 export interface ProcessingReport {
   thumbnail: StageReport
+  delivery?: StageReport
   transcription: StageReport
   ai: StageReport
   completed_at: string
 }
 
-export type ProcessingStage = 'thumbnail' | 'transcription' | 'ai'
+export type ProcessingStage = 'thumbnail' | 'delivery' | 'transcription' | 'ai'
 
 async function runStage<T>(
   fn: () => Promise<T>,
@@ -101,7 +103,7 @@ export async function runMediaProcessingPipeline({
   mediaItemId: string
   runStages?: ProcessingStage[]
 }): Promise<PipelineResult> {
-  const stages = new Set<ProcessingStage>(runStages ?? ['thumbnail', 'transcription', 'ai'])
+  const stages = new Set<ProcessingStage>(runStages ?? ['thumbnail', 'delivery', 'transcription', 'ai'])
 
   const { data: mediaItem, error: fetchError } = await supabase
     .from('media_items')
@@ -147,8 +149,16 @@ export async function runMediaProcessingPipeline({
   const priorReport = (mediaItem.metadata as Record<string, unknown> | null)?.processing as
     | ProcessingReport
     | undefined
+  // A delivery copy already made is reused rather than re-encoded; re-running
+  // the pipeline must not cost another four minutes of ffmpeg.
+  const priorDelivery = (mediaItem.metadata as Record<string, unknown> | null)?.delivery as
+    | { url: string; bytes: number; source_bytes: number }
+    | undefined
+  let delivery: { url: string; bytes: number; source_bytes: number } | undefined
+
   const report: ProcessingReport = {
     thumbnail: priorReport?.thumbnail ?? { status: 'skipped' },
+    delivery: priorReport?.delivery ?? { status: 'skipped' },
     transcription: priorReport?.transcription ?? { status: 'skipped' },
     ai: priorReport?.ai ?? { status: 'skipped' },
     completed_at: '',
@@ -194,6 +204,52 @@ export async function runMediaProcessingPipeline({
     report.thumbnail = { status: 'skipped', error: 'file too large (>500MB)' }
   } else if (stages.has('thumbnail') && isVideo && mediaItem.thumbnail_url) {
     report.thumbnail = { status: 'skipped', error: 'already has thumbnail' }
+  }
+
+  // ── Step 1b: Delivery copy (big videos only) ─────────────────────────────
+  //
+  // A platform does not receive an upload — it fetches the URL and transcodes
+  // its end. A 300 MB phone video is legal in every respect and still fails
+  // that fetch, and it fails LATE: caption written, draft created, Mixpost
+  // synced, then "Media upload has failed with error code 2207082".
+  //
+  // The master is never touched. This writes a lighter copy beside it and
+  // records where it is; publishing prefers it when present.
+  if (stages.has('delivery') && needsDeliveryCopy(mediaItem.file_type, fileSize) && !priorDelivery?.url) {
+    const result = await runStage(async () => {
+      const { buffer, bytes } = await transcodeForDeliveryFromUrl(mediaItem.file_url)
+
+      const mainUrl = new URL(mediaItem.file_url)
+      const pathMatch = mainUrl.pathname.match(/\/storage\/v1\/object\/public\/media\/(.+)$/)
+      if (!pathMatch) throw new Error('Could not parse storage path from file_url')
+      const deliveryPath = `${decodeURIComponent(pathMatch[1])}_social.mp4`
+
+      const { error: uploadError } = await supabase.storage
+        .from('media')
+        .upload(deliveryPath, buffer, { contentType: 'video/mp4', upsert: true })
+      if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`)
+
+      const { data: publicUrl } = supabase.storage.from('media').getPublicUrl(deliveryPath)
+      return { url: publicUrl.publicUrl, bytes, source_bytes: fileSize }
+    })
+
+    if (result.ok) {
+      delivery = result.value
+      report.delivery = { status: 'ok', duration_ms: result.duration_ms }
+      console.log(
+        `[pipeline:${mediaItemId}] delivery copy ${(fileSize / 1048576).toFixed(0)}MB → ${(result.value.bytes / 1048576).toFixed(0)}MB in ${result.duration_ms}ms`,
+      )
+    } else {
+      // The master still publishes; it may just be refused by the platform.
+      // Better a known-risky original than silently no video at all.
+      report.delivery = { status: 'failed', error: result.error, duration_ms: result.duration_ms }
+      console.error(`[pipeline:${mediaItemId}] delivery copy failed: ${result.error}`)
+    }
+  } else if (stages.has('delivery') && priorDelivery?.url) {
+    delivery = priorDelivery
+    report.delivery = { status: 'skipped', error: 'already has a delivery copy' }
+  } else if (stages.has('delivery') && isVideo) {
+    report.delivery = { status: 'skipped', error: 'small enough to publish as-is' }
   }
 
   // ── Step 2: Transcription ────────────────────────────────────────────────
@@ -284,6 +340,7 @@ export async function runMediaProcessingPipeline({
   updates.metadata = {
     ...((mediaItem.metadata as Record<string, unknown>) ?? {}),
     processing: report,
+    ...(delivery ? { delivery } : {}),
   }
 
   const { error: updateError } = await supabase.from('media_items').update(updates).eq('id', mediaItemId)
