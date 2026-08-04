@@ -196,7 +196,19 @@ CRITICAL: never supply the caption or hashtags yourself. Pass the user's angle h
         '- 5-8 hashtags, lowercase, no # prefix, mix broad (brand/category) and narrow (product/topic).',
         '- post_type should auto-fit: video media → reel (for IG/FB/TikTok) or video (YouTube/LinkedIn), multiple images → carousel, single image → single.',
         '- Match the brand voice you know from your memories. Australian English throughout.',
-        '- Do not call any tools. Return the JSON and stop.',
+        '',
+        // Speech-to-text mangles brand names, and tidying a mangled name into a
+        // plausible one is how a product that does not exist reaches customers.
+        // It has happened on the same video twice: "Bijous Saffron" became
+        // "Bijou Saffron" once and "Bijou Zafran" the next — two inventions,
+        // both confident, neither real. A proposal is where the name first gets
+        // written down, so the check belongs here and not only downstream.
+        'PRODUCT NAMES — CHECK, DO NOT GUESS.',
+        'If a product or brand name from the media is at all uncertain, call verify_product BEFORE putting it in the hook, caption or hashtags.',
+        'Only write a name whose verdict came back "exists". If it comes back not_found or uncertain, do NOT print it — refer to it naturally ("this one", "today\'s scent of the day") and say in the rationale that the owner needs to confirm which product it was.',
+        'Tidying a garbled name into one that merely sounds right is the exact failure this prevents. A missing name is recoverable; a fabricated one published to customers is not.',
+        '',
+        '- verify_product is the ONLY tool to call. Once any names are settled, return the JSON and stop.',
       ]
         .filter(Boolean)
         .join('\n')
@@ -213,8 +225,11 @@ CRITICAL: never supply the caption or hashtags yourself. Pass the user's angle h
           conversationId: null,
         },
         {
-          maxSteps: 1,
-          timeoutMs: 90000,
+          // Room to verify names before answering. At maxSteps 1 the worker
+          // could not call verify_product at all, so an uncertain name had no
+          // route other than being guessed.
+          maxSteps: 6,
+          timeoutMs: 120000,
         },
       )
 
