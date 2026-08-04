@@ -1,7 +1,7 @@
 'use client'
 
 import Script from 'next/script'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 interface TelegramWebApp {
   initData: string
@@ -68,6 +68,19 @@ export default function TelegramMiniAppPage() {
   const [uploadPercent, setUploadPercent] = useState<number | null>(null)
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedId) ?? null, [projects, selectedId])
+
+  /**
+   * Bring the chosen brand into view.
+   *
+   * With fourteen brands the strip is far wider than a phone, and the active
+   * one is routinely off-screen — so the app looked like it had lost the brand
+   * that was in fact already selected. Highlighting it is not enough when the
+   * highlight is past the right edge.
+   */
+  const selectedChipRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    selectedChipRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [selectedId, projects.length])
 
   useEffect(() => {
     let cancelled = false
@@ -297,7 +310,9 @@ export default function TelegramMiniAppPage() {
                 {projects.map((project) => (
                   <button
                     key={project.id}
+                    ref={selectedId === project.id ? selectedChipRef : null}
                     type="button"
+                    aria-current={selectedId === project.id ? 'true' : undefined}
                     onClick={() => chooseProject(project.id)}
                     className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${selectedId === project.id ? 'border-[var(--tg-theme-button-color,#2aabee)] bg-[var(--tg-theme-button-color,#2aabee)] text-[var(--tg-theme-button-text-color,#fff)]' : 'border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)]'}`}
                   >
