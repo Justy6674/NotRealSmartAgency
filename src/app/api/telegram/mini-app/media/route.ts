@@ -17,7 +17,19 @@ export const runtime = 'nodejs'
 /** Enough to cover a session's uploads without paging. */
 const RECENT_LIMIT = 20
 
-type Stage = 'listening' | 'ready' | 'failed'
+/**
+ * listening — still being transcribed, or the first pass is still being written.
+ * ready     — a proposal is waiting.
+ * no_draft  — transcribed, but no proposal ever arrived. Clips uploaded before
+ *             proposals existed sit here, as does anything Content & Copy could
+ *             not write for. Without this the list would say "listening…"
+ *             forever and the app would poll for a proposal that is not coming.
+ * failed    — the file could not be read at all.
+ */
+type Stage = 'listening' | 'ready' | 'no_draft' | 'failed'
+
+/** How long to keep waiting on a first pass before calling it a no-show. */
+const PROPOSAL_GRACE_MS = 10 * 60 * 1000
 
 export async function POST(request: Request) {
   const config = getNRSTelegramConfig()
@@ -73,11 +85,15 @@ export async function POST(request: Request) {
   const items = media.map((item) => {
     const found = proposalByMedia.get(item.id as string)
     const meta = (found?.meta ?? {}) as Record<string, unknown>
+    const ageMs = Date.now() - new Date(item.created_at as string).getTime()
+    const transcribed = item.transcription_status === 'transcribed'
     const stage: Stage = found
       ? 'ready'
       : item.transcription_status === 'failed'
         ? 'failed'
-        : 'listening'
+        : transcribed && ageMs > PROPOSAL_GRACE_MS
+          ? 'no_draft'
+          : 'listening'
 
     return {
       id: item.id,

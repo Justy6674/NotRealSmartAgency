@@ -33,8 +33,8 @@ interface TelegramMediaItem {
   id: string
   file_name: string
   file_type: string
-  /** listening — being transcribed; ready — a proposal is waiting. */
-  stage: 'listening' | 'ready' | 'failed'
+  /** See the media route for what each stage means. */
+  stage: 'listening' | 'ready' | 'no_draft' | 'failed'
   proposal: TelegramProposal | null
 }
 
@@ -397,7 +397,13 @@ export default function TelegramMiniAppPage() {
                       <div className="flex items-baseline justify-between gap-3">
                         <span className="truncate font-medium">{item.file_name}</span>
                         <span className="shrink-0 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
-                          {item.stage === 'listening' ? 'listening…' : item.stage === 'failed' ? 'could not read' : 'ready'}
+                          {item.stage === 'listening'
+                            ? 'listening…'
+                            : item.stage === 'failed'
+                              ? 'could not read'
+                              : item.stage === 'no_draft'
+                                ? 'transcribed — no draft yet'
+                                : 'ready'}
                         </span>
                       </div>
                       {item.proposal && (
