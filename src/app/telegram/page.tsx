@@ -20,6 +20,24 @@ interface TelegramMessage {
   text: string
 }
 
+interface TelegramProposal {
+  output_id: string
+  hook: string
+  caption: string
+  hashtags: string[]
+  post_type: string
+  approved: boolean
+}
+
+interface TelegramMediaItem {
+  id: string
+  file_name: string
+  file_type: string
+  /** listening — being transcribed; ready — a proposal is waiting. */
+  stage: 'listening' | 'ready' | 'failed'
+  proposal: TelegramProposal | null
+}
+
 declare global {
   interface Window {
     Telegram?: { WebApp?: TelegramWebApp }
@@ -65,7 +83,8 @@ export default function TelegramMiniAppPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uploadPercent, setUploadPercent] = useState<number | null>(null)
+  const [uploadPercents, setUploadPercents] = useState<Record<string, number>>({})
+  const [mediaItems, setMediaItems] = useState<TelegramMediaItem[]>([])
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedId) ?? null, [projects, selectedId])
 
@@ -137,7 +156,48 @@ export default function TelegramMiniAppPage() {
       return
     }
     setSelectedId(grantId)
+    setMediaItems([])
   }
+
+  /** What has landed for this project, and what has been written about it. */
+  const refreshMedia = async () => {
+    if (!initData) return
+    const response = await fetch('/api/telegram/mini-app/media', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ init_data: initData }),
+    })
+    if (!response.ok) return
+    const data = (await response.json().catch(() => ({}))) as { items?: TelegramMediaItem[] }
+    setMediaItems(data.items ?? [])
+  }
+
+  /** Show what is already waiting when the app opens, not just this session's uploads. */
+  useEffect(() => {
+    if (initData && selectedId) void refreshMedia()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initData, selectedId])
+
+  /**
+   * Keep checking only while something is still being listened to.
+   *
+   * Transcription and the first-pass proposal run in the background after the
+   * upload returns, so the list has to fill itself in. Once every clip is ready
+   * there is nothing left to wait for and the polling stops.
+   */
+  const awaitingWork = mediaItems.some((item) => item.stage === 'listening')
+  useEffect(() => {
+    if (!initData || !selectedId || !awaitingWork) return
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      if (!cancelled) void refreshMedia()
+    }, 5_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initData, selectedId, awaitingWork])
 
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault()
@@ -191,13 +251,7 @@ export default function TelegramMiniAppPage() {
    * pass through a serverless function either, whose request body limit a
    * 224 MB video would blow just as surely.
    */
-  const sendFile = async (file: File) => {
-    if (!selectedProject || sending) return
-    setSending(true)
-    setError(null)
-    setUploadPercent(0)
-    setMessages((current) => [...current, { role: 'user', text: `Sent ${file.name}` }])
-
+  const sendFile = async (file: File, angle: string) => {
     const started = await fetch('/api/telegram/mini-app/upload', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -215,19 +269,16 @@ export default function TelegramMiniAppPage() {
       storage_path?: string
     }
     if (!started.ok || !startData.signed_url || !startData.storage_path) {
-      setError(startData.error ?? 'Could not start the upload.')
-      setSending(false)
-      return
+      throw new Error(startData.error ?? `Could not start the upload for ${file.name}.`)
     }
 
     try {
-      await uploadWithProgress(startData.signed_url, file, setUploadPercent)
+      await uploadWithProgress(startData.signed_url, file, (percent) =>
+        setUploadPercents((current) => ({ ...current, [file.name]: percent })),
+      )
     } catch {
-      setError('The upload did not finish. Check your connection and try again.')
-      setSending(false)
-      return
+      throw new Error(`${file.name} did not finish uploading. Check your connection.`)
     }
-    setUploadPercent(100)
 
     const finished = await fetch('/api/telegram/mini-app/upload', {
       method: 'POST',
@@ -238,49 +289,48 @@ export default function TelegramMiniAppPage() {
         storage_path: startData.storage_path,
         file_name: file.name,
         file_type: file.type,
-        ...(draft.trim() ? { instruction: draft.trim() } : {}),
+        ...(angle ? { instruction: angle } : {}),
       }),
     })
-    const finishData = (await finished.json().catch(() => ({}))) as { error?: string; job_id?: string }
-    if (!finished.ok || !finishData.job_id) {
-      setError(finishData.error ?? 'The file uploaded but NRS could not start work on it.')
-      setSending(false)
-      return
+    const finishData = (await finished.json().catch(() => ({}))) as { error?: string; media_item_id?: string }
+    if (!finished.ok || !finishData.media_item_id) {
+      throw new Error(finishData.error ?? `${file.name} uploaded but could not be filed.`)
     }
-    setDraft('')
-    setUploadPercent(null)
-    await pollJob(finishData.job_id)
   }
 
-  /** Shared by the message and upload flows. */
-  const pollJob = async (jobId: string) => {
-    // A video is transcribed before the Director writes, so this waits longer
-    // than a text request would.
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      await wait(2_500)
-      const poll = await fetch(`/api/telegram/mini-app/jobs/${jobId}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ init_data: initData }),
-      })
-      const result = (await poll.json().catch(() => ({}))) as {
-        status?: string
-        response?: string
-        error?: string
-      }
-      if (result.status === 'done') {
-        setMessages((current) => [...current, { role: 'director', text: result.response ?? '' }])
-        setSending(false)
-        return
-      }
-      if (result.status === 'error') {
-        setError(result.error ?? 'The Director could not complete that request.')
-        setSending(false)
-        return
-      }
-    }
-    setError('The Director is still working. Reopen the Mini App shortly to check the result.')
+  /**
+   * Send everything picked, at once.
+   *
+   * Uploads run together rather than one after another, and nothing waits for
+   * the Director — each clip is transcribed and given a first-pass hook and
+   * caption on its own, and the list below fills in as they land. Sending five
+   * clips no longer means sitting through five rounds of drafting.
+   *
+   * Anything typed alongside them is passed as an angle for Content & Copy, not
+   * as an order: at this point it is a hint about the footage, and the real
+   * conversation happens once there is a proposal to argue with.
+   */
+  const sendFiles = async (files: File[]) => {
+    if (!selectedProject || sending || files.length === 0) return
+    setSending(true)
+    setError(null)
+    setUploadPercents(Object.fromEntries(files.map((file) => [file.name, 0])))
+    const angle = draft.trim()
+    setDraft('')
+    setMessages((current) => [
+      ...current,
+      { role: 'user', text: `Sent ${files.map((file) => file.name).join(', ')}` },
+    ])
+
+    const outcomes = await Promise.allSettled(files.map((file) => sendFile(file, angle)))
+    const failures = outcomes.flatMap((outcome) =>
+      outcome.status === 'rejected' ? [String(outcome.reason?.message ?? outcome.reason)] : [],
+    )
+    if (failures.length > 0) setError(failures.join(' '))
+
+    setUploadPercents({})
     setSending(false)
+    void refreshMedia()
   }
 
   return (
@@ -333,12 +383,41 @@ export default function TelegramMiniAppPage() {
                   {message.text}
                 </div>
               ))}
-              {uploadPercent !== null && (
-                <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">
-                  Uploading… {uploadPercent}%
+              {Object.entries(uploadPercents).map(([name, percent]) => (
+                <div key={name} className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">
+                  {name} — uploading… {percent}%
+                </div>
+              ))}
+              {sending && Object.keys(uploadPercents).length === 0 && <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">The Director is working…</div>}
+
+              {mediaItems.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  {mediaItems.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-sm">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="truncate font-medium">{item.file_name}</span>
+                        <span className="shrink-0 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+                          {item.stage === 'listening' ? 'listening…' : item.stage === 'failed' ? 'could not read' : 'ready'}
+                        </span>
+                      </div>
+                      {item.proposal && (
+                        <div className="mt-3 space-y-2">
+                          {item.proposal.hook && <p className="font-semibold leading-6">{item.proposal.hook}</p>}
+                          <p className="whitespace-pre-wrap leading-6 text-[var(--tg-theme-text-color,#f2f4f6)]">{item.proposal.caption}</p>
+                          {item.proposal.hashtags.length > 0 && (
+                            <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+                              {item.proposal.hashtags.map((tag) => `#${tag}`).join(' ')}
+                            </p>
+                          )}
+                          <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+                            {item.proposal.post_type} · not in Mixpost yet — say what to change, or tell the Director to draft it
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
-              {sending && uploadPercent === null && <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">The Director is working…</div>}
             </section>
 
             <form onSubmit={sendMessage} className="sticky bottom-0 mt-5 flex items-end gap-2 bg-[var(--tg-theme-bg-color,#0e151c)] py-2">
@@ -350,12 +429,13 @@ export default function TelegramMiniAppPage() {
                 <input
                   type="file"
                   accept="video/*,image/*,audio/*"
+                  multiple
                   disabled={!selectedProject || sending}
                   className="hidden"
                   onChange={(event) => {
-                    const file = event.target.files?.[0]
+                    const files = Array.from(event.target.files ?? [])
                     event.target.value = ''
-                    if (file) void sendFile(file)
+                    if (files.length > 0) void sendFiles(files)
                   }}
                 />
               </label>

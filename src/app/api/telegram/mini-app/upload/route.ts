@@ -1,12 +1,10 @@
 import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { runDirectorJob } from '@/lib/mcp/director-job'
-import { createTelegramDirectorExecution } from '@/lib/agents/director-execution'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
 import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
-import { buildMediaDirective } from '@/lib/telegram/telegram-album'
+import { proposeAndStore } from '@/lib/telegram/mini-app-proposal'
 
 /**
  * Upload real footage from inside Telegram.
@@ -115,10 +113,8 @@ export async function POST(request: Request) {
   const storagePath = typeof body?.storage_path === 'string' ? body.storage_path : ''
   const fileName = typeof body?.file_name === 'string' ? body.file_name : 'upload'
   const fileType = typeof body?.file_type === 'string' ? body.file_type : 'application/octet-stream'
-  const instruction =
-    typeof body?.instruction === 'string' && body.instruction.trim()
-      ? body.instruction.trim()
-      : 'Make posts out of what I just sent.'
+  const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : ''
+  const instructionGiven = instruction.length > 0
 
   // The path is built here at start, so a caller cannot point this at
   // someone else's file by inventing one.
@@ -157,59 +153,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'The file uploaded but could not be filed.' }, { status: 500 })
   }
 
-  const execution = createTelegramDirectorExecution({
-    userId: context.actorUserId,
-    grant: { grantId: grant.grantId, projectId: grant.projectId, capabilities: ['director:chat'] },
-  })
-
-  const { data: job, error: jobError } = await admin
-    .from('mcp_jobs')
-    .insert({
-      user_id: execution.actorUserId,
-      brand_id: execution.projectId,
-      channel: execution.channel,
-      api_key_id: null,
-      project_access_grant_id: execution.projectAccessGrantId,
-      policy_version: execution.policyVersion,
-      job_type: 'director_chat',
-      status: 'queued',
-      input: { brand_id: execution.projectId, message: instruction, media_item_id: media.id },
-    })
-    .select('id')
-    .single()
-
-  if (jobError || !job) {
-    return NextResponse.json({ error: 'NRS could not start that request.' }, { status: 500 })
-  }
-
-  // Transcribe and describe BEFORE the Director writes, so the copy comes from
-  // what is actually in the file rather than from the file name.
+  // Transcribe and describe first, then take a first pass at the post.
+  //
+  // Nothing is drafted and nothing reaches Mixpost here. Several clips can be
+  // sent one after another and each comes back carrying a hook and a caption to
+  // react to; the Director is only involved once there is something to discuss.
+  // Anything typed alongside the file is treated as an angle for Content & Copy
+  // rather than an order, because at upload time it is a hint, not a brief.
   after(async () => {
     await runMediaProcessingPipeline({ supabase: admin, mediaItemId: media.id }).catch(() => {
-      /* the directive below says what is and is not available */
+      /* a proposal off the file name alone is still better than nothing */
     })
 
-    const { data: processed } = await admin
-      .from('media_items')
-      .select('transcription, ai_description')
-      .eq('id', media.id)
-      .maybeSingle()
-
-    const message =
-      instruction +
-      buildMediaDirective({
-        kind: fileType.startsWith('video/') ? 'video' : fileType.startsWith('audio/') ? 'recording' : 'photo',
-        mediaItemIds: [media.id],
-        transcript: typeof processed?.transcription === 'string' ? processed.transcription : null,
-        description: typeof processed?.ai_description === 'string' ? processed.ai_description : null,
-      })
-
-    await admin.from('mcp_jobs').update({ input: { brand_id: execution.projectId, message } }).eq('id', job.id)
-    await runDirectorJob(job.id, execution, { brand_id: execution.projectId, message })
+    await proposeAndStore({
+      supabase: admin,
+      userId: context.actorUserId,
+      brandId: grant.projectId,
+      mediaItemId: media.id,
+      fileName,
+      ...(instructionGiven ? { angle: instruction } : {}),
+    })
   })
 
   return NextResponse.json({
-    job_id: job.id,
     media_item_id: media.id,
     project_name: grant.projectName,
   })
