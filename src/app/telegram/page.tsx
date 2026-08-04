@@ -20,6 +20,15 @@ interface TelegramMessage {
   text: string
 }
 
+/** Attached and uploading, or uploaded and waiting on Send. */
+interface StagedFile {
+  name: string
+  type: string
+  percent: number
+  /** Set once the bytes are in storage; until then it cannot be committed. */
+  storagePath: string | null
+}
+
 interface TelegramProposal {
   output_id: string
   hook: string
@@ -83,7 +92,7 @@ export default function TelegramMiniAppPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uploadPercents, setUploadPercents] = useState<Record<string, number>>({})
+  const [staged, setStaged] = useState<StagedFile[]>([])
   const [mediaItems, setMediaItems] = useState<TelegramMediaItem[]>([])
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedId) ?? null, [projects, selectedId])
@@ -199,10 +208,66 @@ export default function TelegramMiniAppPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initData, selectedId, awaitingWork])
 
+  /**
+   * Commit everything attached, using what was typed as the direction.
+   *
+   * The bytes are already in storage by now — attaching starts that straight
+   * away so the wait happens while the direction is being typed. What waits for
+   * Send is the part that matters: filing the clip and letting Content & Copy
+   * write about it. Sending the file the moment it was picked meant the
+   * direction had nowhere to go, because the writing had already begun.
+   */
+  const sendStaged = async (direction: string) => {
+    const ready = staged.filter((item) => item.storagePath)
+    if (ready.length === 0) return
+    setSending(true)
+    setError(null)
+    setMessages((current) => [
+      ...current,
+      { role: 'user', text: [direction, `Sent ${ready.map((item) => item.name).join(', ')}`].filter(Boolean).join('\n') },
+    ])
+    setDraft('')
+    setStaged([])
+
+    const outcomes = await Promise.allSettled(
+      ready.map(async (item) => {
+        const finished = await fetch('/api/telegram/mini-app/upload', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            init_data: initData,
+            action: 'complete',
+            storage_path: item.storagePath,
+            file_name: item.name,
+            file_type: item.type,
+            ...(direction ? { instruction: direction } : {}),
+          }),
+        })
+        const data = (await finished.json().catch(() => ({}))) as { error?: string; media_item_id?: string }
+        if (!finished.ok || !data.media_item_id) throw new Error(data.error ?? `${item.name} could not be filed.`)
+      }),
+    )
+    const failures = outcomes.flatMap((outcome) =>
+      outcome.status === 'rejected' ? [String(outcome.reason?.message ?? outcome.reason)] : [],
+    )
+    if (failures.length > 0) setError(failures.join(' '))
+    setSending(false)
+    void refreshMedia()
+  }
+
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault()
     const message = draft.trim()
-    if (!message || !selectedProject || sending) return
+    if (!selectedProject || sending) return
+    if (staged.length > 0) {
+      if (staged.some((item) => !item.storagePath)) {
+        setError('Still uploading — give it a moment, then press Send.')
+        return
+      }
+      await sendStaged(message)
+      return
+    }
+    if (!message) return
     setSending(true)
     setError(null)
     setMessages((current) => [...current, { role: 'user', text: message }])
@@ -243,7 +308,12 @@ export default function TelegramMiniAppPage() {
   }
 
   /**
-   * Send a video, photo or recording from the phone.
+   * Attach files and get their bytes moving, without committing them.
+   *
+   * The upload starts on attach so a 224 MB video is travelling while the
+   * direction is being typed, but the clip is not filed and nothing is written
+   * about it until Send. That split is why the route has separate `start` and
+   * `complete` steps.
    *
    * The bytes go straight from here to storage using a signed URL. They do not
    * pass through the bot, which Telegram will not let fetch anything over
@@ -251,86 +321,59 @@ export default function TelegramMiniAppPage() {
    * pass through a serverless function either, whose request body limit a
    * 224 MB video would blow just as surely.
    */
-  const sendFile = async (file: File, angle: string) => {
-    const started = await fetch('/api/telegram/mini-app/upload', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        init_data: initData,
-        action: 'start',
-        file_name: file.name,
-        file_type: file.type,
-        file_size: file.size,
-      }),
-    })
-    const startData = (await started.json().catch(() => ({}))) as {
-      error?: string
-      signed_url?: string
-      storage_path?: string
-    }
-    if (!started.ok || !startData.signed_url || !startData.storage_path) {
-      throw new Error(startData.error ?? `Could not start the upload for ${file.name}.`)
-    }
-
-    try {
-      await uploadWithProgress(startData.signed_url, file, (percent) =>
-        setUploadPercents((current) => ({ ...current, [file.name]: percent })),
-      )
-    } catch {
-      throw new Error(`${file.name} did not finish uploading. Check your connection.`)
-    }
-
-    const finished = await fetch('/api/telegram/mini-app/upload', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        init_data: initData,
-        action: 'complete',
-        storage_path: startData.storage_path,
-        file_name: file.name,
-        file_type: file.type,
-        ...(angle ? { instruction: angle } : {}),
-      }),
-    })
-    const finishData = (await finished.json().catch(() => ({}))) as { error?: string; media_item_id?: string }
-    if (!finished.ok || !finishData.media_item_id) {
-      throw new Error(finishData.error ?? `${file.name} uploaded but could not be filed.`)
-    }
-  }
-
-  /**
-   * Send everything picked, at once.
-   *
-   * Uploads run together rather than one after another, and nothing waits for
-   * the Director — each clip is transcribed and given a first-pass hook and
-   * caption on its own, and the list below fills in as they land. Sending five
-   * clips no longer means sitting through five rounds of drafting.
-   *
-   * Anything typed alongside them is passed as an angle for Content & Copy, not
-   * as an order: at this point it is a hint about the footage, and the real
-   * conversation happens once there is a proposal to argue with.
-   */
-  const sendFiles = async (files: File[]) => {
+  const attachFiles = async (files: File[]) => {
     if (!selectedProject || sending || files.length === 0) return
-    setSending(true)
     setError(null)
-    setUploadPercents(Object.fromEntries(files.map((file) => [file.name, 0])))
-    const angle = draft.trim()
-    setDraft('')
-    setMessages((current) => [
+    setStaged((current) => [
       ...current,
-      { role: 'user', text: `Sent ${files.map((file) => file.name).join(', ')}` },
+      ...files.map((file) => ({ name: file.name, type: file.type, percent: 0, storagePath: null })),
     ])
 
-    const outcomes = await Promise.allSettled(files.map((file) => sendFile(file, angle)))
-    const failures = outcomes.flatMap((outcome) =>
-      outcome.status === 'rejected' ? [String(outcome.reason?.message ?? outcome.reason)] : [],
-    )
-    if (failures.length > 0) setError(failures.join(' '))
+    await Promise.allSettled(
+      files.map(async (file) => {
+        const started = await fetch('/api/telegram/mini-app/upload', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            init_data: initData,
+            action: 'start',
+            file_name: file.name,
+            file_type: file.type,
+            file_size: file.size,
+          }),
+        })
+        const startData = (await started.json().catch(() => ({}))) as {
+          error?: string
+          signed_url?: string
+          storage_path?: string
+        }
+        if (!started.ok || !startData.signed_url || !startData.storage_path) {
+          setStaged((current) => current.filter((item) => item.name !== file.name))
+          setError(startData.error ?? `Could not start the upload for ${file.name}.`)
+          return
+        }
 
-    setUploadPercents({})
-    setSending(false)
-    void refreshMedia()
+        try {
+          await uploadWithProgress(startData.signed_url, file, (percent) =>
+            setStaged((current) =>
+              current.map((item) => (item.name === file.name ? { ...item, percent } : item)),
+            ),
+          )
+        } catch {
+          setStaged((current) => current.filter((item) => item.name !== file.name))
+          setError(`${file.name} did not finish uploading. Check your connection.`)
+          return
+        }
+
+        setStaged((current) =>
+          current.map((item) =>
+            item.name === file.name
+              ? { ...item, percent: 100, storagePath: startData.storage_path as string }
+              : item,
+          ),
+        )
+      }),
+    )
   }
 
   return (
@@ -383,12 +426,7 @@ export default function TelegramMiniAppPage() {
                   {message.text}
                 </div>
               ))}
-              {Object.entries(uploadPercents).map(([name, percent]) => (
-                <div key={name} className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">
-                  {name} — uploading… {percent}%
-                </div>
-              ))}
-              {sending && Object.keys(uploadPercents).length === 0 && <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">The Director is working…</div>}
+              {sending && <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">Working…</div>}
 
               {mediaItems.length > 0 && (
                 <div className="space-y-2 pt-1">
@@ -426,9 +464,25 @@ export default function TelegramMiniAppPage() {
               )}
             </section>
 
-            <form onSubmit={sendMessage} className="sticky bottom-0 mt-5 flex items-end gap-2 bg-[var(--tg-theme-bg-color,#0e151c)] py-2">
+            <div className="sticky bottom-0 mt-5 bg-[var(--tg-theme-bg-color,#0e151c)] py-2">
+            {staged.length > 0 && (
+              <div className="mb-2 space-y-1">
+                {staged.map((item) => (
+                  <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-3 py-2 text-xs">
+                    <span className="truncate">{item.name}</span>
+                    <span className="shrink-0 text-[var(--tg-theme-hint-color,#82909f)]">
+                      {item.storagePath ? 'attached' : `uploading… ${item.percent}%`}
+                    </span>
+                  </div>
+                ))}
+                <p className="px-1 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+                  Say what you want from {staged.length === 1 ? 'it' : 'them'} — the story, the angle, the feel — then press Send.
+                </p>
+              </div>
+            )}
+            <form onSubmit={sendMessage} className="flex items-end gap-2">
               <label className="sr-only" htmlFor="telegram-message">Message the NRS Director</label>
-              <textarea id="telegram-message" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!selectedProject || sending} rows={2} placeholder={selectedProject ? `Ask about ${selectedProject.name}…` : 'Choose a project first'} className="min-h-12 flex-1 resize-none rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm outline-none placeholder:text-[var(--tg-theme-hint-color,#82909f)] focus:border-[var(--tg-theme-button-color,#2aabee)]" />
+              <textarea id="telegram-message" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!selectedProject || sending} rows={2} placeholder={staged.length > 0 ? 'What is this one about?' : selectedProject ? `Ask about ${selectedProject.name}…` : 'Choose a project first'} className="min-h-12 flex-1 resize-none rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm outline-none placeholder:text-[var(--tg-theme-hint-color,#82909f)] focus:border-[var(--tg-theme-button-color,#2aabee)]" />
               <label className={`flex cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm ${!selectedProject || sending ? 'opacity-40' : ''}`} title="Send a video, photo or recording">
                 <span aria-hidden>+</span>
                 <span className="sr-only">Attach a video, photo or recording</span>
@@ -441,12 +495,13 @@ export default function TelegramMiniAppPage() {
                   onChange={(event) => {
                     const files = Array.from(event.target.files ?? [])
                     event.target.value = ''
-                    if (files.length > 0) void sendFiles(files)
+                    if (files.length > 0) void attachFiles(files)
                   }}
                 />
               </label>
-              <button type="submit" disabled={!draft.trim() || !selectedProject || sending} className="rounded-2xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-3 text-sm font-semibold text-[var(--tg-theme-button-text-color,#fff)] disabled:opacity-40">Send</button>
+              <button type="submit" disabled={(!draft.trim() && staged.length === 0) || !selectedProject || sending} className="rounded-2xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-3 text-sm font-semibold text-[var(--tg-theme-button-text-color,#fff)] disabled:opacity-40">Send</button>
             </form>
+            </div>
           </>
         )}
       </div>
