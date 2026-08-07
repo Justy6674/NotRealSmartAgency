@@ -38,6 +38,15 @@ export interface DirectorExecutionScope {
   readonly telegramThreadId?: number
   /** Project name, for the line that goes with a delivered album. */
   readonly projectName?: string
+  /**
+   * Whether the written answer is sent to the chat as well as the files.
+   *
+   * False for the Mini App, whose caller already shows the answer in its own
+   * box — sending it again would say everything twice. The files still go to
+   * the chat, because a file is the thing that cannot be saved out of a web
+   * view onto the phone.
+   */
+  readonly deliverText?: boolean
 }
 
 export interface ScopedDirectorJob {
@@ -70,12 +79,14 @@ export function createTelegramDirectorExecution({
   chatId,
   threadId,
   projectName,
+  deliverText = true,
 }: {
   userId: string
   grant: ProjectAccessGrant
   chatId?: string
   threadId?: number
   projectName?: string
+  deliverText?: boolean
 }): DirectorExecutionScope {
   if (!grant.capabilities.includes('director:chat')) {
     throw new Error('This Telegram project grant does not allow director:chat.')
@@ -90,6 +101,7 @@ export function createTelegramDirectorExecution({
     ...(chatId !== undefined ? { telegramChatId: chatId } : {}),
     ...(threadId !== undefined ? { telegramThreadId: threadId } : {}),
     ...(projectName !== undefined ? { projectName } : {}),
+    deliverText,
   })
 }
 

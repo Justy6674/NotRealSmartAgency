@@ -29,7 +29,9 @@ test('group membership alone still grants nothing', () => {
 test('a Telegram account can be fenced to a subset of its projects', () => {
   const source = route()
   assert.match(source, /allowed_brand_ids/)
-  assert.match(source, /if \(fence && !fence\.has\(row\.brand_id\)\) return \[\]/)
+  // The fence itself lives in project-fence.ts, shared with the Mini App, so
+  // that the two surfaces cannot drift apart. See mini-app-parity.test.ts.
+  assert.match(source, /applyBrandFence\(all, account\.allowed_brand_ids\)/)
 })
 
 test('someone with one project is never asked which project', () => {

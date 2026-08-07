@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { applyBrandFence } from './project-fence'
 
 export interface TelegramMiniAppUser {
   id: string | number
@@ -73,7 +74,7 @@ export async function resolveTelegramMiniAppContext(
 ): Promise<TelegramMiniAppContext | null> {
   const { data: account } = await admin
     .from('telegram_accounts')
-    .select('id, actor_user_id')
+    .select('id, actor_user_id, allowed_brand_ids')
     .eq('telegram_user_id', auth.telegramUserId)
     .is('revoked_at', null)
     .maybeSingle()
@@ -88,7 +89,7 @@ export async function resolveTelegramMiniAppContext(
     .is('revoked_at', null)
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 
-  const grants = ((grantRows ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
+  const allGrants = ((grantRows ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
     const brand = row.brands as { name?: unknown } | null
     if (typeof row.id !== 'string' || typeof row.brand_id !== 'string' || typeof brand?.name !== 'string') return []
     return [{
@@ -99,6 +100,11 @@ export async function resolveTelegramMiniAppContext(
     }]
   })
 
+  // The same fence the webhook applies. It used to live only there — and the
+  // webhook is the surface that receives nothing, while this one is the
+  // surface people actually use, so a fenced account saw every project here.
+  const grants = applyBrandFence(allGrants, account.allowed_brand_ids)
+
   const { data: session } = await admin
     .from('telegram_project_sessions')
     .select('project_access_grant_id, brand_id')
@@ -106,13 +112,23 @@ export async function resolveTelegramMiniAppContext(
     .eq('status', 'active')
     .maybeSingle()
 
+  const selected = session
+    && typeof session.project_access_grant_id === 'string'
+    && typeof session.brand_id === 'string'
+    ? { grantId: session.project_access_grant_id, projectId: session.brand_id }
+    : null
+
   return {
     auth,
     accountId: account.id,
     actorUserId: account.actor_user_id,
     grants,
-    activeSession: session && typeof session.project_access_grant_id === 'string' && typeof session.brand_id === 'string'
-      ? { grantId: session.project_access_grant_id, projectId: session.brand_id }
+    // A project switched off after it was selected must stop being the active
+    // one. Otherwise the stale selection survives and the next message fails
+    // with "cannot run Director work", which reads as a fault rather than as
+    // the switch that was deliberately turned off.
+    activeSession: selected && grants.some((grant) => grant.projectId === selected.projectId)
+      ? selected
       : null,
   }
 }

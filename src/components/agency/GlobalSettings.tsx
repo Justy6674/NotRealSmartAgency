@@ -537,6 +537,144 @@ function ApiKeysSection() {
   )
 }
 
+interface TelegramAccountProjects {
+  id: string
+  label: string
+  telegram_user_id: string
+  all_projects: boolean
+  projects: Array<{ id: string; name: string; enabled: boolean }>
+}
+
+/**
+ * The on/off switch for which projects appear in Telegram.
+ *
+ * One switch drives every Telegram surface — the Mini App's picker, the
+ * project list in chat, and which projects get a forum topic — so a project
+ * turned off here is off everywhere rather than off in one place and quietly
+ * on in another.
+ *
+ * It is also how a second person is limited to their brands, which is why
+ * each paired account gets its own row of switches.
+ */
+function TelegramProjectSwitches() {
+  const [accounts, setAccounts] = useState<TelegramAccountProjects[]>([])
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/telegram/projects')
+      .then((response) => response.ok ? response.json() : { accounts: [] })
+      .then((data) => setAccounts(data.accounts ?? []))
+      .catch(() => setAccounts([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(load, [load])
+
+  const save = async (account: TelegramAccountProjects, enabledIds: string[]) => {
+    setSavingId(account.id)
+    setError(null)
+    try {
+      const everythingOn = enabledIds.length === account.projects.length
+      const response = await fetch('/api/telegram/projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          everythingOn
+            ? { account_id: account.id, all_projects: true }
+            : { account_id: account.id, brand_ids: enabledIds },
+        ),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setError(data.error ?? 'Could not save that change.')
+        load()
+        return
+      }
+      setSaved(account.id)
+      setTimeout(() => setSaved(null), 2_000)
+    } catch {
+      setError('Could not save that change.')
+      load()
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const toggle = (account: TelegramAccountProjects, projectId: string) => {
+    const next = account.projects.map((project) =>
+      project.id === projectId ? { ...project, enabled: !project.enabled } : project)
+    const enabledIds = next.filter((project) => project.enabled).map((project) => project.id)
+
+    // Refusing an empty set here rather than after a round trip: an account
+    // with nothing switched on cannot do anything in Telegram at all.
+    if (enabledIds.length === 0) {
+      setError('Leave at least one project switched on.')
+      return
+    }
+
+    setAccounts((current) => current.map((candidate) =>
+      candidate.id === account.id
+        ? { ...candidate, projects: next, all_projects: enabledIds.length === next.length }
+        : candidate))
+    save({ ...account, projects: next }, enabledIds)
+  }
+
+  if (loading) {
+    return <p className="text-[11px] text-muted-foreground">Loading Telegram projects…</p>
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <p className="text-[11px] text-muted-foreground">
+        No Telegram account is paired yet. Create a pairing command below, then these switches appear.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {accounts.map((account) => {
+        const enabledCount = account.projects.filter((project) => project.enabled).length
+        return (
+          <div key={account.id} className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">{account.label}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {savingId === account.id
+                  ? 'Saving…'
+                  : saved === account.id
+                    ? 'Saved'
+                    : `${enabledCount} of ${account.projects.length} on`}
+              </p>
+            </div>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {account.projects.map((project) => (
+                <label
+                  key={project.id}
+                  className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/40"
+                >
+                  <input
+                    type="checkbox"
+                    checked={project.enabled}
+                    onChange={() => toggle(account, project.id)}
+                    className="size-4 shrink-0"
+                  />
+                  <span className="min-w-0 truncate">{project.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+      {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
+    </div>
+  )
+}
+
 function TelegramPairingSection() {
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([])
@@ -593,6 +731,14 @@ function TelegramPairingSection() {
       <p className="text-[11px] text-muted-foreground">
         Choose which project workspaces this private Telegram chat can use. It cannot discover or switch to any other project from a message. Telegram remains disabled until its token is rotated and production verification is complete.
       </p>
+
+      <fieldset className="space-y-2">
+        <legend className="text-xs font-medium text-muted-foreground">Projects switched on in Telegram</legend>
+        <p className="text-[11px] text-muted-foreground">
+          Turn a project off and it disappears from the Telegram project list and gets no topic. Nothing is deleted — turn it back on and it returns. Each paired person has their own switches.
+        </p>
+        <TelegramProjectSwitches />
+      </fieldset>
 
       <fieldset className="space-y-2" aria-describedby="telegram-project-scope-help">
         <legend className="text-xs font-medium text-muted-foreground">Projects this Telegram chat can use</legend>

@@ -11,6 +11,7 @@ import { hashGitHubConnectState } from '@/lib/github/project-connection'
 import { TELEGRAM_CHANNEL_STATUS } from '@/lib/telegram/telegram-channel-status'
 import { hashTelegramPairCode } from '@/lib/telegram/telegram-pairing'
 import { sendTelegramText, type TelegramReplyMarkup } from '@/lib/telegram/telegram-api'
+import { applyBrandFence } from '@/lib/telegram/project-fence'
 import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-copy'
 import { getTelegramJobAcknowledgement } from '@/lib/telegram/telegram-job-status'
 import {
@@ -161,17 +162,9 @@ async function getTelegramGrants(
     .is('revoked_at', null)
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
 
-  // A shared NRS account can be handed to a second person for one brand. The
-  // grants belong to the account; this fence belongs to the Telegram user, so
-  // they never see a project list wider than what they were let in for.
-  const fence = Array.isArray(account.allowed_brand_ids) && account.allowed_brand_ids.length > 0
-    ? new Set(account.allowed_brand_ids)
-    : null
-
-  return ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
+  const all = ((data ?? []) as Array<Record<string, unknown>>).flatMap((row) => {
     const brand = row.brands as { name?: unknown } | null
     if (typeof row.id !== 'string' || typeof row.brand_id !== 'string' || typeof brand?.name !== 'string') return []
-    if (fence && !fence.has(row.brand_id)) return []
     return [{
       grantId: row.id,
       projectId: row.brand_id,
@@ -179,6 +172,10 @@ async function getTelegramGrants(
       capabilities: Array.isArray(row.capabilities) ? row.capabilities.filter((value): value is string => typeof value === 'string') : [],
     }]
   })
+
+  // Shared with the Mini App rather than written twice — the fence has to hold
+  // on every Telegram surface, and a second copy is a second thing to forget.
+  return applyBrandFence(all, account.allowed_brand_ids)
 }
 
 async function sendProjectPicker({

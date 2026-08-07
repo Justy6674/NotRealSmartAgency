@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { formatTelegramMarketingCopy } from '@/lib/telegram/telegram-marketing-copy'
+import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
 
@@ -22,6 +23,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ job
   if (job.status === 'queued' || job.status === 'running') return NextResponse.json({ status: job.status })
   if (job.status === 'error') return NextResponse.json({ status: 'error', error: job.error ?? 'The Director could not complete that request.' })
   const result = (job.result ?? {}) as { response?: unknown }
-  const response = typeof result.response === 'string' ? formatTelegramMarketingCopy(result.response) : ''
+  const raw = typeof result.response === 'string' ? result.response : ''
+
+  // The marketing data boundary applies to what leaves NRS, not to the route
+  // it leaves by. It was checked on the chat path only — and this is the path
+  // that actually carries traffic, so a response the chat would have withheld
+  // was handed over here in full.
+  const inspection = inspectMarketingInput(raw)
+  if (raw && !inspection.allowed) {
+    return NextResponse.json({
+      status: 'done',
+      response: 'NRS withheld that response because it did not meet the project marketing data boundary.',
+      withheld: true,
+      cost_cents: job.cost_cents,
+      duration_ms: job.duration_ms,
+    })
+  }
+
+  const response = raw ? formatTelegramMarketingCopy(raw) : ''
   return NextResponse.json({ status: 'done', response, cost_cents: job.cost_cents, duration_ms: job.duration_ms })
 }

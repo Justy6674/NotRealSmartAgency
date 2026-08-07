@@ -740,13 +740,17 @@ That's the difference between a marketing director and a tech support agent. Def
       const outputInspection = inspectMarketingInput(response)
 
       if (!outputInspection.allowed) {
-        await deliverTelegramResult(
-          execution.telegramChatId,
-          'NRS withheld that response because it did not meet the project marketing data boundary.',
-          execution.telegramThreadId,
-        )
+        if (execution.deliverText !== false) {
+          await deliverTelegramResult(
+            execution.telegramChatId,
+            'NRS withheld that response because it did not meet the project marketing data boundary.',
+            execution.telegramThreadId,
+          )
+        }
       } else {
-        await deliverTelegramResult(execution.telegramChatId, response, execution.telegramThreadId)
+        if (execution.deliverText !== false) {
+          await deliverTelegramResult(execution.telegramChatId, response, execution.telegramThreadId)
+        }
         // Then the files themselves. Text alone meant a finished carousel
         // could only be collected on a desktop; as an album it saves to the
         // phone, which is the only way a TikTok photo post can be made.

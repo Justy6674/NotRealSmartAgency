@@ -32,6 +32,17 @@ export async function POST(request: Request) {
   const execution = createTelegramDirectorExecution({
     userId: context.actorUserId,
     grant: { grantId: grant.grantId, projectId: grant.projectId, capabilities: ['director:chat'] },
+    // For a private chat Telegram's chat id IS the user id, so this is where
+    // finished files go. Without it the job had nowhere to send them, and the
+    // carousel-as-an-album delivery could never fire from the Mini App — the
+    // one Telegram surface that works without a webhook.
+    //
+    // The ANSWER is not sent here: this route's caller polls for it and shows
+    // it in the Mini App's own box. Only the files go to the chat, because a
+    // file is the thing you cannot save out of a web view.
+    chatId: context.auth.telegramUserId,
+    deliverText: false,
+    projectName: grant.projectName,
   })
   const { data: job, error } = await admin.from('mcp_jobs').insert({
     user_id: execution.actorUserId,
