@@ -26,6 +26,14 @@ export interface BrandTraffic {
   note?: string
 }
 
+/**
+ * A label the API could not fill in. Printing "most-read page: (unknown page)"
+ * is worse than printing nothing — it reads as broken rather than as absent.
+ */
+function isPlaceholder(label: string): boolean {
+  return label.startsWith('(') && label.endsWith(')')
+}
+
 export function percentChange(now: number, before: number): number | null {
   if (before <= 0) return null
   return Math.round(((now - before) / before) * 100)
@@ -87,11 +95,11 @@ export function buildWeeklyTrafficText(rows: readonly BrandTraffic[], weekEnding
     )
 
     const referrer = row.topReferrers?.[0]
-    if (referrer && referrer.label !== '(direct / none)') {
+    if (referrer && !isPlaceholder(referrer.label)) {
       lines.push(`   most came from ${referrer.label}`)
     }
     const page = row.topPages?.[0]
-    if (page) {
+    if (page && !isPlaceholder(page.label)) {
       lines.push(`   most-read page: ${page.label}`)
     }
   }
@@ -136,11 +144,13 @@ export function buildWeeklyTrafficHtml(
 
     const detail: string[] = []
     const referrer = row.topReferrers?.[0]
-    if (referrer && referrer.label !== '(direct / none)') {
+    if (referrer && !isPlaceholder(referrer.label)) {
       detail.push(`most came from <strong>${escapeHtml(referrer.label)}</strong>`)
     }
     const page = row.topPages?.[0]
-    if (page) detail.push(`most-read: <strong>${escapeHtml(page.label)}</strong>`)
+    if (page && !isPlaceholder(page.label)) {
+      detail.push(`most-read: <strong>${escapeHtml(page.label)}</strong>`)
+    }
 
     return `<tr><td style="padding:12px 0;border-bottom:1px solid #eee">
       <strong style="color:#111;font-size:16px">${escapeHtml(row.brand)}</strong>

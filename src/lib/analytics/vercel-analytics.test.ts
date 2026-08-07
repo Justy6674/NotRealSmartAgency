@@ -153,3 +153,11 @@ test('"analytics not switched on" is reported as a toggle, not as a broken reque
     },
   )
 })
+
+test('an empty value is worded to suit the dimension it came from', () => {
+  // "most-read page: (direct / none)" appeared in the first live preview.
+  assert.equal(readLabel({ referrerHostname: '' }, 'referrerHostname'), '(direct / none)')
+  assert.equal(readLabel({ route: '' }, 'route'), '(unknown page)')
+  assert.equal(readLabel({ country: null }, 'country'), '(unknown country)')
+  assert.equal(readLabel({ somethingNew: '' }, 'somethingNew'), '(not recorded)')
+})

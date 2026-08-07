@@ -109,3 +109,44 @@ test('the speed section only appears when there is speed data', () => {
   assert.doesNotMatch(buildWeeklyTrafficHtml(WEEK, '7 August 2026'), /Site speed/)
   assert.match(buildWeeklyTrafficHtml(WEEK, '7 August 2026', '🟢 Scent Sell'), /Site speed/)
 })
+
+/**
+ * The first live preview printed "most-read: (direct / none)" — a REFERRER
+ * placeholder leaking into the page slot. A placeholder in a report reads as
+ * broken data, so nothing at all is better.
+ */
+test('a placeholder label is left out rather than printed', () => {
+  const rows: BrandTraffic[] = [{
+    brand: 'Scent Sell',
+    website: null,
+    visitors: 10,
+    pageviews: 20,
+    previousVisitors: 10,
+    topReferrers: [{ label: '(direct / none)', visitors: 10 }],
+    topPages: [{ label: '(unknown page)', visitors: 10 }],
+  }]
+
+  const text = buildWeeklyTrafficText(rows, '7 August 2026')
+  assert.doesNotMatch(text, /most came from/)
+  assert.doesNotMatch(text, /most-read/)
+  assert.doesNotMatch(text, /\(direct/)
+  assert.doesNotMatch(text, /\(unknown/)
+
+  const html = buildWeeklyTrafficHtml(rows, '7 August 2026')
+  assert.doesNotMatch(html, /most-read/)
+})
+
+test('a real page and a real referrer are still shown', () => {
+  const rows: BrandTraffic[] = [{
+    brand: 'Scent Sell',
+    website: null,
+    visitors: 10,
+    pageviews: 20,
+    previousVisitors: 10,
+    topReferrers: [{ label: 'facebook.com', visitors: 8 }],
+    topPages: [{ label: '/listings/[id]', visitors: 6 }],
+  }]
+  const text = buildWeeklyTrafficText(rows, '7 August 2026')
+  assert.match(text, /most came from facebook\.com/)
+  assert.match(text, /most-read page: \/listings\/\[id\]/)
+})

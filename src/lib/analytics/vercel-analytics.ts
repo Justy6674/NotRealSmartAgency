@@ -188,8 +188,23 @@ export function readLabel(row: Record<string, unknown>, dimension: string): stri
     const value = row[key] ?? row[dimension]
     return value === null || value === undefined || value === '' ? '(not set)' : String(value)
   }
+
   const value = row[dimension]
-  return value === null || value === undefined || value === '' ? '(direct / none)' : String(value)
+  if (value !== null && value !== undefined && value !== '') return String(value)
+
+  // The empty-value wording has to match what the dimension MEANS. A blank
+  // referrer genuinely is direct traffic; a blank page is not — printing
+  // "most-read page: (direct / none)" is nonsense that reads as broken data.
+  return EMPTY_LABEL[dimension] ?? '(not recorded)'
+}
+
+const EMPTY_LABEL: Record<string, string> = {
+  referrerHostname: '(direct / none)',
+  utmCampaign: '(no campaign tag)',
+  country: '(unknown country)',
+  deviceType: '(unknown device)',
+  route: '(unknown page)',
+  requestPath: '(unknown page)',
 }
 
 /** ISO date (YYYY-MM-DD) `days` ago, which is what `since` expects. */
