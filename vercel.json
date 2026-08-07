@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/web-vitals",
       "schedule": "0 20 * * 1"
+    },
+    {
+      "path": "/api/cron/weekly-traffic",
+      "schedule": "0 21 * * 0"
     }
   ]
 }
