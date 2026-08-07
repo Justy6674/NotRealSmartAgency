@@ -29,9 +29,28 @@ test('one failing vital fails the site — Core Web Vitals is not an average', (
   assert.equal(overallVerdict({ lcp: 1200, inp: 100, cls: 0.05 }), 'good')
 })
 
-test('a site with too few visitors is reported as ungraded, not as failing', () => {
+test('a quiet but healthy site is reported as ungraded, not as failing', () => {
   const report = buildWeeklyReport([site({ field: null, verdict: 'no-data' })])
-  assert.match(report, /not enough real visitors/)
+  assert.match(report, /too few visitors/)
+  assert.doesNotMatch(report, /need attention/)
+})
+
+test('a quiet site with a bad test score is still raised', () => {
+  // The first real run said "nothing needs doing this week" while ScentSell
+  // scored 37/100, because no field data meant no verdict. Traffic arrives
+  // long before a fix does, so a weak lab score has to speak for itself.
+  const report = buildWeeklyReport([
+    site({ brand: 'ScentSell', field: null, verdict: 'no-data', lab: { performance: 37, seo: 90, accessibility: 90 } }),
+  ])
+  assert.match(report, /1 of 1 sites need attention/)
+  assert.match(report, /37\/100/)
+  assert.doesNotMatch(report, /Nothing needs doing/)
+})
+
+test('a quiet site scoring well is not raised', () => {
+  const report = buildWeeklyReport([
+    site({ brand: 'Do Today', field: null, verdict: 'no-data', lab: { performance: 96, seo: 100, accessibility: 95 } }),
+  ])
   assert.doesNotMatch(report, /need attention/)
 })
 
