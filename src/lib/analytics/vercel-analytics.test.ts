@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  dateWindow,
   daysAgo,
   escapeODataValue,
   getEventsBy,
@@ -86,12 +87,13 @@ test('custom events come back with counts', async () => {
   assert.match(calls[0], /events\/aggregate/)
 })
 
-test('analytics not switched on is reported as a setting, not a crash', async () => {
+test('a 403 is reported as a key-scope problem, which is what it actually is', async () => {
+  // A token scoped to only one team returns 403 for the other team's projects.
   const { fetchImpl } = stub({ error: 'forbidden' }, { ok: false, status: 403 })
   await assert.rejects(
     () => getTrafficTotals(TARGET, {}, { token: 't', fetchImpl }),
     (error: VercelAnalyticsError) => {
-      assert.match(error.message, /may not be switched on/)
+      assert.match(error.message, /key may not cover the team/)
       assert.equal(error.status, 403)
       return true
     },
@@ -124,4 +126,30 @@ test('a date window is computed from a passed clock, never an ambient one', () =
   const now = new Date('2026-08-07T10:00:00.000Z')
   assert.equal(daysAgo(7, now), '2026-07-31')
   assert.equal(daysAgo(0, now), '2026-08-07')
+})
+
+/**
+ * Both of these were found against the LIVE API, not by reading the docs.
+ */
+test('a date range always carries both ends — a lone `since` is rejected outright', () => {
+  const now = new Date('2026-08-07T10:00:00.000Z')
+  assert.deepEqual(dateWindow(7, now), { since: '2026-07-31', until: '2026-08-07' })
+})
+
+test('"analytics not switched on" is reported as a toggle, not as a broken request', async () => {
+  // Vercel returns this as a 400 with a code in the body, NOT as a 403.
+  // Matching on status alone sent the owner hunting for a fault that was
+  // really a setting.
+  const { fetchImpl } = stub(
+    { error: { code: 'web_analytics_not_enabled', message: 'Web Analytics is not enabled for this project' } },
+    { ok: false, status: 400 },
+  )
+  await assert.rejects(
+    () => getTrafficTotals(TARGET, { since: '2026-07-31', until: '2026-08-07' }, { token: 't', fetchImpl }),
+    (error: VercelAnalyticsError) => {
+      assert.match(error.message, /not switched on/)
+      assert.match(error.message, /Vercel dashboard/)
+      return true
+    },
+  )
 })

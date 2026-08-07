@@ -78,14 +78,25 @@ async function query<T>(
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '')
-    // 403 here almost always means Web Analytics is not switched on for the
-    // project, which is a setting rather than a fault — say so plainly.
-    if (response.status === 403 || response.status === 404) {
+
+    // Vercel reports "not switched on" as a 400 with a specific code, not as a
+    // 403 — verified against the live API. Matching on the status alone would
+    // report a project that simply needs a toggle flipped as a broken request,
+    // which sends the owner looking for a fault that is not there.
+    if (detail.includes('web_analytics_not_enabled')) {
       throw new VercelAnalyticsError(
-        'Vercel returned no analytics for that project. Web Analytics may not be switched on for it yet.',
+        'Web Analytics is not switched on for that project yet. Turn it on in the Vercel dashboard → the project → Analytics, and numbers start collecting from that moment.',
         response.status,
       )
     }
+
+    if (response.status === 403 || response.status === 404) {
+      throw new VercelAnalyticsError(
+        'Vercel returned no analytics for that project — the key may not cover the team that owns it.',
+        response.status,
+      )
+    }
+
     throw new VercelAnalyticsError(`Vercel analytics request failed (${response.status}): ${detail.slice(0, 200)}`, response.status)
   }
 
@@ -185,4 +196,15 @@ export function readLabel(row: Record<string, unknown>, dimension: string): stri
 export function daysAgo(days: number, now: Date): string {
   const then = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
   return then.toISOString().slice(0, 10)
+}
+
+/**
+ * A complete date window.
+ *
+ * `until` is REQUIRED whenever `since` is sent — the live API answers a lone
+ * `since` with "missing required property `until`" and no data at all. Building
+ * the pair in one place means no caller can send half a window.
+ */
+export function dateWindow(days: number, now: Date): { since: string; until: string } {
+  return { since: daysAgo(days, now), until: daysAgo(0, now) }
 }

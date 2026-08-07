@@ -2,7 +2,7 @@ import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
-  daysAgo,
+  dateWindow,
   getEventsBy,
   getTrafficBy,
   getTrafficTotals,
@@ -58,7 +58,8 @@ export function createQuerySiteTrafficTool(
 
       const target = { project: brand.vercel_project as string, team: brand.vercel_team as string | null }
       const now = new Date()
-      const since = daysAgo(days, now)
+      // Both ends, always: the API rejects a lone `since` outright.
+      const { since, until } = dateWindow(days, now)
       const window = `the last ${days} day${days === 1 ? '' : 's'}`
 
       try {
@@ -66,7 +67,7 @@ export function createQuerySiteTrafficTool(
           const rows = await getEventsBy(
             target,
             'day',
-            { since, filter: `eventName eq '${event_name.replace(/'/g, "''")}'`, limit: days },
+            { since, until, filter: `eventName eq '${event_name.replace(/'/g, "''")}'`, limit: days },
           )
           const total = rows.reduce((sum, row) => sum + row.count, 0)
           if (total === 0) {
@@ -78,7 +79,7 @@ export function createQuerySiteTrafficTool(
           ].join('\n')
         }
 
-        const totals = await getTrafficTotals(target, { since })
+        const totals = await getTrafficTotals(target, { since, until })
 
         if (breakdown === 'summary') {
           if (totals.visitors === 0) {
@@ -87,7 +88,7 @@ export function createQuerySiteTrafficTool(
           return `${brand.name} (${brand.website_url ?? 'site'}) over ${window}: ${totals.visitors} visitors, ${totals.pageviews} page views.`
         }
 
-        const rows = await getTrafficBy(target, breakdown, { since, limit: 10 })
+        const rows = await getTrafficBy(target, breakdown, { since, until, limit: 10 })
         const heading = {
           day: 'by day',
           route: 'most-viewed pages',
