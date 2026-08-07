@@ -20,6 +20,7 @@ import { createGenerateSlidesTool } from './generate-slides'
 import { createQueryOutputsTool } from './query-outputs'
 import { createQueryCalendarTool } from './query-calendar'
 import { createQueryAnalyticsTool } from './query-analytics'
+import { createQuerySiteTrafficTool } from './query-site-traffic'
 import { createQueryMediaTool } from './query-media'
 import { createProcessMediaTool } from './process-media'
 import { createRepurposeContentTool } from './repurpose-content'
@@ -124,6 +125,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const queryOutputs = createQueryOutputsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const queryCalendar = createQueryCalendarTool(ctx.supabase, ctx.userId, ctx.brandId)
   const queryAnalytics = createQueryAnalyticsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const querySiteTraffic = createQuerySiteTrafficTool(ctx.supabase, ctx.userId, ctx.brandId)
   const queryMedia = createQueryMediaTool(ctx.supabase, ctx.userId, ctx.brandId)
   const processMedia = createProcessMediaTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const repurposeContent = createRepurposeContentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
@@ -249,6 +251,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       fill_calendar: fillCalendar,
       query_calendar: queryCalendar,
       query_analytics: queryAnalytics,
+      query_site_traffic: querySiteTraffic,
       query_media: queryMedia,
       update_proforma: updateProforma,
       design_graphic: designGraphic,
@@ -330,7 +333,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, search_designs: searchDesigns, list_brand_kits: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },
     brand: { save_output: saveOutput, create_collage: createCollage, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_kits: listBrandKits, get_design: getDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, comment_on_design: commentOnDesign, list_comments: listComments, list_replies: listReplies, reply_to_comment: replyToComment, create_folder: createFolder, move_item_to_folder: moveItemToFolder, resolve_shortlink: resolveShortlink, analyse_voice: analyseVoice, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, ...managementTools },
-    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, query_social_analytics: querySocialAnalytics, analyse_content_gaps: analyseContentGaps, inspect_project_marketing_backend: inspectProjectMarketingBackend, ...managementTools },
+    analytics: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, query_site_traffic: querySiteTraffic, query_social_analytics: querySocialAnalytics, analyse_content_gaps: analyseContentGaps, inspect_project_marketing_backend: inspectProjectMarketingBackend, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, inspect_project_marketing_backend: inspectProjectMarketingBackend, ...managementTools },
     video: { save_output: saveOutput, verify_product: verifyProduct, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, propose_post_from_media: proposePost, upload_asset_from_url: uploadAssetFromUrl, browse_mixpost_media: browseMixpostMedia, publish_to_social: publishToSocial, upload_media: uploadMedia, ...managementTools },
     help: { save_output: saveOutput, browse_page: browsePage, ...managementTools },

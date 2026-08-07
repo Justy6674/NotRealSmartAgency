@@ -19,16 +19,17 @@ import { buildWeeklyReport } from '@/lib/vitals/report'
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
-/** The brands Justin asked to be watched, by slug in the brands table. */
-const WATCHED = [
-  'downscale',        // Downscale Weight Loss
-  'scent-sell',       // ScentSell
-  'do-today',
-  'endorseme',
-  'telescribe',
-  'telecheck',
-  'telecheck-clinic',
-] as const
+/**
+ * Every brand with a live site gets checked.
+ *
+ * This was a seven-name list, so five brands with real websites — Black Health
+ * Intelligence, DownscaleDerm, NotRealSmart, Sniffopotamus and Underground
+ * Parfums — were silently never measured. A hand-maintained list is a thing to
+ * forget; having a website_url is the actual qualifier, so that is the test.
+ *
+ * Brands with no website_url (Downscale Diary, Tele360) are skipped below
+ * because there is nothing to measure.
+ */
 
 function authorised(request: Request): boolean {
   const secret = process.env.CRON_SECRET
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
   const { data: brands } = await admin
     .from('brands')
     .select('id, name, slug, website_url, user_id')
-    .in('slug', WATCHED as unknown as string[])
+    .eq('is_active', true)
 
   const targets = (brands ?? []).filter(
     (b): b is typeof b & { website_url: string } => typeof b.website_url === 'string' && b.website_url.length > 0,

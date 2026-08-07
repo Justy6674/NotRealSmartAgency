@@ -1,0 +1,188 @@
+/**
+ * Real website traffic — how many people actually turned up.
+ *
+ * NRS could report what it had PUBLISHED and how fast the site loaded, and
+ * called that "performance". It had never once seen a visitor. So "how are we
+ * doing?" was answered with "you posted three times", which tells the owner
+ * nothing about whether any of it worked.
+ *
+ * This reads Vercel's Web Analytics API — the same aggregated numbers the
+ * dashboard shows, so what the Director says matches what he sees if he looks.
+ *
+ * Read-only. Nothing here can change a deployment or a project.
+ */
+
+const API = 'https://api.vercel.com/v1/query/web-analytics'
+
+export interface VercelAnalyticsTarget {
+  /** Vercel project name, e.g. 'scent-australia'. */
+  project: string
+  /** Team slug that owns it. Omit for a personal-account project. */
+  team?: string | null
+}
+
+export interface TrafficTotals {
+  pageviews: number
+  visitors: number
+}
+
+export interface TrafficRow {
+  label: string
+  pageviews: number
+  visitors: number
+}
+
+export interface EventRow {
+  label: string
+  count: number
+  visitors: number
+}
+
+export class VercelAnalyticsError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message)
+    this.name = 'VercelAnalyticsError'
+  }
+}
+
+export function vercelAnalyticsConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.VERCEL_API_TOKEN)
+}
+
+/**
+ * Values in an OData filter are single-quoted, so a value containing a quote
+ * would end the string early and change the query. Doubling it is the escape.
+ */
+export function escapeODataValue(value: string): string {
+  return value.replace(/'/g, "''")
+}
+
+async function query<T>(
+  path: string,
+  params: Record<string, string | number | undefined>,
+  { token = process.env.VERCEL_API_TOKEN, fetchImpl = fetch }: {
+    token?: string
+    fetchImpl?: typeof fetch
+  } = {},
+): Promise<T> {
+  if (!token) throw new VercelAnalyticsError('VERCEL_API_TOKEN is not set')
+
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') search.set(key, String(value))
+  }
+
+  const response = await fetchImpl(`${API}/${path}?${search.toString()}`, {
+    headers: { authorization: `Bearer ${token}` },
+  })
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    // 403 here almost always means Web Analytics is not switched on for the
+    // project, which is a setting rather than a fault — say so plainly.
+    if (response.status === 403 || response.status === 404) {
+      throw new VercelAnalyticsError(
+        'Vercel returned no analytics for that project. Web Analytics may not be switched on for it yet.',
+        response.status,
+      )
+    }
+    throw new VercelAnalyticsError(`Vercel analytics request failed (${response.status}): ${detail.slice(0, 200)}`, response.status)
+  }
+
+  return (await response.json()) as T
+}
+
+function targetParams(target: VercelAnalyticsTarget) {
+  return {
+    projectId: target.project,
+    ...(target.team ? { teamId: target.team, slug: target.team } : {}),
+  }
+}
+
+/** Total pageviews and visitors over a window. */
+export async function getTrafficTotals(
+  target: VercelAnalyticsTarget,
+  { since, until, filter }: { since?: string; until?: string; filter?: string } = {},
+  options?: { token?: string; fetchImpl?: typeof fetch },
+): Promise<TrafficTotals> {
+  const body = await query<{ data?: { pageviews?: number; visitors?: number } }>(
+    'visits/count',
+    { ...targetParams(target), since, until, filter },
+    options,
+  )
+  return {
+    pageviews: body.data?.pageviews ?? 0,
+    visitors: body.data?.visitors ?? 0,
+  }
+}
+
+/**
+ * Traffic grouped by one dimension — day, route, country, referrerHostname,
+ * deviceType, utmCampaign. Used for "what did people actually look at".
+ */
+export async function getTrafficBy(
+  target: VercelAnalyticsTarget,
+  dimension: string,
+  { since, until, limit = 10, filter }: { since?: string; until?: string; limit?: number; filter?: string } = {},
+  options?: { token?: string; fetchImpl?: typeof fetch },
+): Promise<TrafficRow[]> {
+  const body = await query<{ data?: Array<Record<string, unknown>> }>(
+    'visits/aggregate',
+    { ...targetParams(target), since, until, by: dimension, limit, filter },
+    options,
+  )
+
+  return (body.data ?? []).map((row) => ({
+    label: readLabel(row, dimension),
+    pageviews: Number(row.pageviews ?? 0),
+    visitors: Number(row.visitors ?? 0),
+  }))
+}
+
+/** Custom events — signups, listings created, checkouts. */
+export async function getEventsBy(
+  target: VercelAnalyticsTarget,
+  dimension: string,
+  { since, until, limit = 10, filter }: { since?: string; until?: string; limit?: number; filter?: string } = {},
+  options?: { token?: string; fetchImpl?: typeof fetch },
+): Promise<EventRow[]> {
+  const body = await query<{ data?: Array<Record<string, unknown>> }>(
+    'events/aggregate',
+    { ...targetParams(target), since, until, by: dimension, limit, filter },
+    options,
+  )
+
+  return (body.data ?? []).map((row) => ({
+    label: readLabel(row, dimension),
+    count: Number(row.count ?? 0),
+    visitors: Number(row.visitors ?? 0),
+  }))
+}
+
+/**
+ * Pull the grouped value out of a row.
+ *
+ * The API names the column after the dimension, EXCEPT for `eventData/<prop>`
+ * which comes back as plain `eventData`, and time grouping which comes back as
+ * `timestamp`. Guessing wrong yields "undefined" as a row label, which reads
+ * like broken data to the owner.
+ */
+export function readLabel(row: Record<string, unknown>, dimension: string): string {
+  if (dimension === 'day' || dimension === 'hour' || dimension === 'month') {
+    const stamp = row.timestamp
+    return typeof stamp === 'string' ? stamp.slice(0, 10) : 'unknown'
+  }
+  if (dimension.startsWith('eventData/') || dimension.startsWith('flags/')) {
+    const key = dimension.startsWith('eventData/') ? 'eventData' : 'flags'
+    const value = row[key] ?? row[dimension]
+    return value === null || value === undefined || value === '' ? '(not set)' : String(value)
+  }
+  const value = row[dimension]
+  return value === null || value === undefined || value === '' ? '(direct / none)' : String(value)
+}
+
+/** ISO date (YYYY-MM-DD) `days` ago, which is what `since` expects. */
+export function daysAgo(days: number, now: Date): string {
+  const then = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  return then.toISOString().slice(0, 10)
+}
