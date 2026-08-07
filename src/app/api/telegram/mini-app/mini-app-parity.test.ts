@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import test from 'node:test'
 
@@ -33,13 +33,40 @@ test('a project switched off cannot stay the active selection', () => {
   assert.match(miniApp, /grants\.some\(\(grant\) => grant\.projectId === selected\.projectId\)/)
 })
 
-test('the marketing boundary is enforced on the Mini App answer too', () => {
-  const jobs = read('src/app/api/telegram/mini-app/jobs/[jobId]/route.ts')
-  assert.match(jobs, /inspectMarketingInput/)
-  const inspection = jobs.indexOf('inspectMarketingInput(raw)')
-  const send = jobs.indexOf('formatTelegramMarketingCopy(raw)')
-  assert.ok(inspection > -1 && send > -1)
-  assert.ok(inspection < send, 'the boundary must be checked before the answer is returned')
+/**
+ * The boundary moved with the answer.
+ *
+ * It used to be asserted on the job-polling route, which the timeline
+ * replaced. Rather than deleting the guard with the route, it now lives in
+ * timeline-text.ts as an EXHAUSTIVE switch — so a new event kind cannot be
+ * added without declaring which of its text fields a model wrote. The check
+ * stopped being something anyone has to remember.
+ */
+test('the marketing boundary is enforced on everything the timeline returns', () => {
+  const text = read('src/lib/telegram/timeline-text.ts')
+  assert.match(text, /inspectMarketingInput/)
+  assert.match(text, /const exhaustive: never = payload/)
+
+  const route = read('src/app/api/telegram/mini-app/timeline/route.ts')
+  assert.match(route, /sanitiseTimeline/)
+  const sanitise = route.indexOf('sanitiseTimeline(sourceEvents)')
+  const build = route.indexOf('buildTelegramTimeline')
+  assert.ok(sanitise > -1 && build > -1)
+  assert.ok(build < sanitise, 'events are sanitised on the way into the builder')
+})
+
+test('the routes the timeline replaced are gone, not left beside it', () => {
+  // Leaving /media alive preserves the newest-first ordering this whole
+  // change exists to remove.
+  assert.equal(existsSync(resolve(process.cwd(), 'src/app/api/telegram/mini-app/media/route.ts')), false)
+  assert.equal(existsSync(resolve(process.cwd(), 'src/app/api/telegram/mini-app/jobs/[jobId]/route.ts')), false)
+})
+
+test('the client never sorts the conversation itself', () => {
+  const page = read('src/app/telegram/page.tsx')
+  const view = read('src/app/telegram/timeline-view.tsx')
+  assert.doesNotMatch(page, /\.sort\(/)
+  assert.doesNotMatch(view, /\.sort\(/)
 })
 
 test('the Mini App sends files to the chat but not a duplicate of the answer', () => {

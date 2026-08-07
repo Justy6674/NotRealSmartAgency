@@ -1,7 +1,10 @@
 'use client'
 
 import Script from 'next/script'
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { TimelineView } from './timeline-view'
+import { mergeTimeline, type TimelineEvent } from '@/lib/telegram/timeline'
+import { anchorAfterPrepend, nextScrollTop, shouldFollow, shouldOfferJump } from '@/lib/telegram/chat-scroll'
 
 interface TelegramWebApp {
   initData: string
@@ -15,11 +18,6 @@ interface TelegramProject {
   project_id: string
 }
 
-interface TelegramMessage {
-  role: 'user' | 'director'
-  text: string
-}
-
 /** Attached and uploading, or uploaded and waiting on Send. */
 interface StagedFile {
   name: string
@@ -29,36 +27,11 @@ interface StagedFile {
   storagePath: string | null
 }
 
-interface TelegramProposal {
-  output_id: string
-  /** The Director's opening line — what it watched, and what it suggests next. */
-  opener: string
-  hook: string
-  caption: string
-  hashtags: string[]
-  post_type: string
-  approved: boolean
-}
-
-interface TelegramMediaItem {
-  id: string
-  file_name: string
-  file_type: string
-  /** See the media route for what each stage means. */
-  stage: 'listening' | 'ready' | 'no_draft' | 'failed'
-  proposal: TelegramProposal | null
-}
-
 declare global {
   interface Window {
     Telegram?: { WebApp?: TelegramWebApp }
   }
 }
-
-async function wait(ms: number) {
-  await new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
 
 /**
  * PUT the file to the signed storage URL, reporting progress.
@@ -89,13 +62,18 @@ export default function TelegramMiniAppPage() {
   const [firstName, setFirstName] = useState('')
   const [projects, setProjects] = useState<TelegramProject[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<TelegramMessage[]>([])
+  const [events, setEvents] = useState<TimelineEvent[]>([])
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [staged, setStaged] = useState<StagedFile[]>([])
-  const [mediaItems, setMediaItems] = useState<TelegramMediaItem[]>([])
+  const [hasMore, setHasMore] = useState(false)
+  const [oldestAnchorMs, setOldestAnchorMs] = useState<number | null>(null)
+  const [showJump, setShowJump] = useState(false)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const followingRef = useRef(true)
+  const newestIdRef = useRef<string | null>(null)
 
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedId) ?? null, [projects, selectedId])
 
@@ -167,48 +145,138 @@ export default function TelegramMiniAppPage() {
       return
     }
     setSelectedId(grantId)
-    setMediaItems([])
+    setEvents([])
+    newestIdRef.current = null
+    followingRef.current = true
   }
 
-  /** What has landed for this project, and what has been written about it. */
-  const refreshMedia = async () => {
+  /**
+   * Fetch the whole conversation, in order, from the server.
+   *
+   * The server owns the order and the history. The client's job is to render
+   * what it is given — it never sorts, and it no longer keeps the conversation
+   * in React state where closing the app erased it.
+   */
+  const refreshTimeline = useCallback(async () => {
     if (!initData) return
-    const response = await fetch('/api/telegram/mini-app/media', {
+    const response = await fetch('/api/telegram/mini-app/timeline', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ init_data: initData }),
     })
     if (!response.ok) return
-    const data = (await response.json().catch(() => ({}))) as { items?: TelegramMediaItem[] }
-    setMediaItems(data.items ?? [])
-  }
+    const data = (await response.json().catch(() => ({}))) as {
+      events?: TimelineEvent[]
+      has_more?: boolean
+      oldest_anchor_ms?: number | null
+    }
+    const server = data.events ?? []
+    setEvents((current) => mergeTimeline(current, server))
+    setHasMore(Boolean(data.has_more))
+    setOldestAnchorMs(data.oldest_anchor_ms ?? null)
+  }, [initData])
 
-  /** Show what is already waiting when the app opens, not just this session's uploads. */
+  /** Load the conversation on open, and whenever the project changes. */
   useEffect(() => {
-    if (initData && selectedId) void refreshMedia()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initData, selectedId])
+    if (initData && selectedId) void refreshTimeline()
+  }, [initData, selectedId, refreshTimeline])
 
   /**
-   * Keep checking only while something is still being listened to.
+   * Keep checking only while something is actually outstanding.
    *
-   * Transcription and the first-pass proposal run in the background after the
-   * upload returns, so the list has to fill itself in. Once every clip is ready
-   * there is nothing left to wait for and the polling stops.
+   * An answer being written, or a clip still being listened to, is the only
+   * reason to poll. Once everything has settled the polling stops by itself —
+   * so an idle app on phone data costs nothing.
    */
-  const awaitingWork = mediaItems.some((item) => item.stage === 'listening')
+  const awaitingWork = useMemo(
+    () => events.some((event) =>
+      event.payload.kind === 'director_pending' ||
+      (event.payload.kind === 'media_upload' && event.payload.stage === 'listening')),
+    [events],
+  )
+
   useEffect(() => {
     if (!initData || !selectedId || !awaitingWork) return
     let cancelled = false
     const timer = window.setInterval(() => {
-      if (!cancelled) void refreshMedia()
-    }, 5_000)
+      if (!cancelled) void refreshTimeline()
+    }, 3_000)
     return () => {
       cancelled = true
       window.clearInterval(timer)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initData, selectedId, awaitingWork])
+  }, [initData, selectedId, awaitingWork, refreshTimeline])
+
+  /**
+   * Follow the bottom, but only when the reader is already there.
+   *
+   * Always scrolling would yank the page away mid-sentence when a background
+   * job finishes; never scrolling is what the old screen did, so a new answer
+   * arrived below the fold and had to be hunted for.
+   */
+  useEffect(() => {
+    const node = scrollRef.current
+    if (!node || events.length === 0) return
+
+    const newestId = events[events.length - 1].id
+    const changed = newestIdRef.current !== null && newestIdRef.current !== newestId
+    newestIdRef.current = newestId
+
+    const top = nextScrollTop({
+      following: followingRef.current,
+      scrollHeight: node.scrollHeight,
+      clientHeight: node.clientHeight,
+      currentTop: node.scrollTop,
+    })
+    if (top !== node.scrollTop) node.scrollTop = top
+    setShowJump(shouldOfferJump({ following: followingRef.current, newestChanged: changed }))
+  }, [events])
+
+  const onScroll = useCallback(() => {
+    const node = scrollRef.current
+    if (!node) return
+    followingRef.current = shouldFollow({
+      scrollHeight: node.scrollHeight,
+      scrollTop: node.scrollTop,
+      clientHeight: node.clientHeight,
+    })
+    if (followingRef.current) setShowJump(false)
+  }, [])
+
+  const jumpToLatest = useCallback(() => {
+    const node = scrollRef.current
+    if (!node) return
+    node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight)
+    followingRef.current = true
+    setShowJump(false)
+  }, [])
+
+  /** Load older history above, keeping the same message under the eye. */
+  const loadOlder = useCallback(async () => {
+    const node = scrollRef.current
+    if (!initData || !hasMore || oldestAnchorMs === null) return
+    const previousHeight = node?.scrollHeight ?? 0
+    const previousTop = node?.scrollTop ?? 0
+
+    const response = await fetch('/api/telegram/mini-app/timeline', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ init_data: initData, before_anchor_ms: oldestAnchorMs }),
+    })
+    if (!response.ok) return
+    const data = (await response.json().catch(() => ({}))) as {
+      events?: TimelineEvent[]
+      has_more?: boolean
+      oldest_anchor_ms?: number | null
+    }
+    setEvents((current) => mergeTimeline(current, data.events ?? []))
+    setHasMore(Boolean(data.has_more))
+    setOldestAnchorMs(data.oldest_anchor_ms ?? null)
+
+    window.requestAnimationFrame(() => {
+      if (node) node.scrollTop = anchorAfterPrepend(previousHeight, node.scrollHeight, previousTop)
+    })
+  }, [initData, hasMore, oldestAnchorMs])
 
   /**
    * Commit everything attached, using what was typed as the direction.
@@ -224,10 +292,6 @@ export default function TelegramMiniAppPage() {
     if (ready.length === 0) return
     setSending(true)
     setError(null)
-    setMessages((current) => [
-      ...current,
-      { role: 'user', text: [direction, `Sent ${ready.map((item) => item.name).join(', ')}`].filter(Boolean).join('\n') },
-    ])
     setDraft('')
     setStaged([])
 
@@ -254,8 +318,68 @@ export default function TelegramMiniAppPage() {
     )
     if (failures.length > 0) setError(failures.join(' '))
     setSending(false)
-    void refreshMedia()
+    // The clip is now a real row, so it comes back as part of the one timeline
+    // rather than into a separate list with its own ordering.
+    void refreshTimeline()
   }
+
+  /**
+   * Send a message.
+   *
+   * The optimistic bubble carries the same `client_event_id` the server
+   * stores, so when the server reports the message back it REPLACES the local
+   * copy instead of appearing beside it. That id is also what makes a repeated
+   * tap safe: the unique index turns the second one into the same job.
+   *
+   * There is no polling loop here any more. The old one asked a job route 60
+   * times and pushed the answer into React state — which is why the answer was
+   * lost on brand switch, and why the whole conversation vanished on reload.
+   * The timeline poller picks the answer up and puts it in its place.
+   */
+  const submitMessage = useCallback(async (message: string, reuseClientEventId?: string | null) => {
+    if (!selectedProject || !message.trim()) return
+    const clientEventId = reuseClientEventId ?? crypto.randomUUID()
+    const nowMs = Date.now()
+
+    setSending(true)
+    setError(null)
+    followingRef.current = true
+
+    const optimistic: TimelineEvent = {
+      id: `local:${clientEventId}`,
+      kind: 'user_message',
+      groupParentId: null,
+      occurredAtMs: nowMs,
+      side: 'owner',
+      brandId: selectedProject.project_id,
+      clientEventId,
+      payload: { kind: 'user_message', text: message, mediaIds: [], status: 'sent' },
+      groupId: `turn:local:${clientEventId}`,
+      groupAnchorMs: nowMs,
+      memberRank: 0,
+      occurredAt: new Date(nowMs).toISOString(),
+    }
+    setEvents((current) => mergeTimeline([...current, optimistic], []))
+
+    try {
+      const response = await fetch('/api/telegram/mini-app/message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ init_data: initData, message, client_event_id: clientEventId }),
+      })
+      const data = (await response.json().catch(() => ({}))) as { error?: string; job_id?: string }
+      if (!response.ok || !data.job_id) {
+        setError(data.error ?? 'NRS could not start that request.')
+        return
+      }
+      // The server now has it; the timeline is the authority from here.
+      await refreshTimeline()
+    } catch {
+      setError('That did not send. Check your connection and try again.')
+    } finally {
+      setSending(false)
+    }
+  }, [selectedProject, initData, refreshTimeline])
 
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault()
@@ -270,43 +394,8 @@ export default function TelegramMiniAppPage() {
       return
     }
     if (!message) return
-    setSending(true)
-    setError(null)
-    setMessages((current) => [...current, { role: 'user', text: message }])
     setDraft('')
-    const response = await fetch('/api/telegram/mini-app/message', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ init_data: initData, message }),
-    })
-    const data = await response.json().catch(() => ({})) as { error?: string; job_id?: string }
-    if (!response.ok || !data.job_id) {
-      setError(data.error ?? 'NRS could not start that request.')
-      setSending(false)
-      return
-    }
-
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      await wait(2_500)
-      const poll = await fetch(`/api/telegram/mini-app/jobs/${data.job_id}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ init_data: initData }),
-      })
-      const result = await poll.json().catch(() => ({})) as { status?: string; response?: string; error?: string }
-      if (result.status === 'done') {
-        setMessages((current) => [...current, { role: 'director', text: result.response ?? '' }])
-        setSending(false)
-        return
-      }
-      if (result.status === 'error') {
-        setError(result.error ?? 'The Director could not complete that request.')
-        setSending(false)
-        return
-      }
-    }
-    setError('The Director is still working. Reopen the Mini App shortly to check the result.')
-    setSending(false)
+    await submitMessage(message)
   }
 
   /**
@@ -427,55 +516,51 @@ export default function TelegramMiniAppPage() {
               </div>
             </section>
 
-            <section className="flex-1 space-y-3" aria-live="polite">
-              {messages.length === 0 && (
-                <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-5 text-sm text-[var(--tg-theme-hint-color,#82909f)]">
-                  Ask the Director to move the selected brand toward its active goal. If no goal exists yet, it will ask you for the outcome first.
-                </div>
-              )}
-              {messages.map((message, index) => (
-                <div key={`${message.role}-${index}`} className={`max-w-[92%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-[var(--tg-theme-button-color,#2aabee)] text-[var(--tg-theme-button-text-color,#fff)]' : 'bg-[var(--tg-theme-secondary-bg-color,#17212b)]'}`}>
-                  {message.text}
-                </div>
-              ))}
-              {sending && <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm text-[var(--tg-theme-hint-color,#82909f)]">Working…</div>}
+            {/*
+              ONE list, oldest at the top, newest at the bottom — the order the
+              server built. This used to be three blocks with three orderings,
+              which is why a clip from the morning sat below an afternoon
+              message and above a clip from an hour earlier.
+            */}
+            <section className="relative flex-1 overflow-hidden">
+              <div
+                ref={scrollRef}
+                onScroll={onScroll}
+                className="h-full overflow-y-auto overscroll-contain pr-0.5"
+                style={{ overflowAnchor: 'none' }}
+                aria-live="polite"
+                aria-label="Conversation"
+              >
+                {hasMore && (
+                  <button
+                    type="button"
+                    onClick={() => void loadOlder()}
+                    className="mx-auto mb-3 block rounded-full border border-white/10 px-4 py-1.5 text-xs text-[var(--tg-theme-hint-color,#82909f)] hover:bg-white/5"
+                  >
+                    Load earlier
+                  </button>
+                )}
 
-              {mediaItems.length > 0 && (
-                <div className="space-y-2 pt-1">
-                  {mediaItems.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-sm">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="truncate font-medium">{item.file_name}</span>
-                        <span className="shrink-0 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
-                          {item.stage === 'listening'
-                            ? 'listening…'
-                            : item.stage === 'failed'
-                              ? 'could not read'
-                              : item.stage === 'no_draft'
-                                ? 'transcribed — no draft yet'
-                                : 'ready'}
-                        </span>
-                      </div>
-                      {item.proposal?.opener && (
-                        <p className="mt-3 leading-6 text-[var(--tg-theme-text-color,#f2f4f6)]">{item.proposal.opener}</p>
-                      )}
-                      {item.proposal && (
-                        <div className="mt-3 space-y-2 rounded-xl border border-white/10 p-3">
-                          {item.proposal.hook && <p className="font-semibold leading-6">{item.proposal.hook}</p>}
-                          <p className="whitespace-pre-wrap leading-6 text-[var(--tg-theme-text-color,#f2f4f6)]">{item.proposal.caption}</p>
-                          {item.proposal.hashtags.length > 0 && (
-                            <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">
-                              {item.proposal.hashtags.map((tag) => `#${tag}`).join(' ')}
-                            </p>
-                          )}
-                          <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">
-                            {item.proposal.post_type} · not in Mixpost yet — say what to change, or tell the Director to draft it
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {events.length === 0 ? (
+                  <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-5 text-sm text-[var(--tg-theme-hint-color,#82909f)]">
+                    Ask the Director to move the selected brand toward its active goal, or send a video and it will write from that.
+                  </div>
+                ) : (
+                  <TimelineView
+                    events={events}
+                    onRetry={(text, clientEventId) => void submitMessage(text, clientEventId)}
+                  />
+                )}
+              </div>
+
+              {showJump && (
+                <button
+                  type="button"
+                  onClick={jumpToLatest}
+                  className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2 text-xs font-medium text-[var(--tg-theme-button-text-color,#fff)] shadow-lg"
+                >
+                  New below ↓
+                </button>
               )}
             </section>
 

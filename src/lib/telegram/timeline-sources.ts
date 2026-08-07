@@ -1,0 +1,344 @@
+/**
+ * Where the timeline's events come from.
+ *
+ * The extension seam. `buildTelegramTimeline` never learns a table name, and
+ * the comparator never learns an event kind beyond its rank — so adding
+ * "published post" or "approval" later is one adapter and one array entry, not
+ * a new section in the page and a new special case in the sort.
+ *
+ * That matters because the bug being fixed here WAS a new section: media was
+ * bolted on beside the chat as its own list with its own ordering, and the two
+ * could never interleave. One more of those and the screen is broken again.
+ */
+
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { STALE_AFTER_MS, toUtcMs, type TimelineSourceEvent } from './timeline'
+
+export interface TimelineFetchContext {
+  admin: SupabaseClient
+  userId: string
+  brandId: string
+  /** Only rows at or after this instant. Null means the most recent window. */
+  fromMs: number | null
+  /** Generous — the builder pages by group afterwards. */
+  rowLimit: number
+}
+
+export interface TimelineMapOptions {
+  brandId: string
+  /** Passed in, never read from the ambient clock, so tests are deterministic. */
+  nowMs: number
+}
+
+export interface TimelineSource<Row> {
+  name: string
+  fetch(context: TimelineFetchContext): Promise<Row[]>
+  map(rows: Row[], options: TimelineMapOptions): TimelineSourceEvent[]
+}
+
+/** How long a proposal may be missing before a clip stops saying "listening". */
+const PROPOSAL_GRACE_MS = 10 * 60 * 1000
+
+interface JobRow {
+  id: string
+  status: string | null
+  input: Record<string, unknown> | null
+  result: Record<string, unknown> | null
+  error: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+/**
+ * The owner's messages and the Director's answers.
+ *
+ * One row becomes TWO events — the question, and exactly one of
+ * pending / reply / error for the answer. They share a group anchored on the
+ * question, which is what keeps an answer directly beneath the thing it
+ * answers however long it took.
+ */
+export const directorJobSource: TimelineSource<JobRow> = {
+  name: 'director_jobs',
+
+  async fetch({ admin, userId, brandId, fromMs, rowLimit }) {
+    let query = admin
+      .from('mcp_jobs')
+      .select('id, status, input, result, error, created_at, completed_at')
+      .eq('user_id', userId)
+      .eq('brand_id', brandId)
+      .eq('channel', 'telegram')
+      .order('created_at', { ascending: false })
+      .limit(rowLimit)
+
+    if (fromMs !== null) query = query.gte('created_at', new Date(fromMs).toISOString())
+
+    const { data } = await query
+    return (data ?? []) as JobRow[]
+  },
+
+  map(rows, { brandId, nowMs }) {
+    const events: TimelineSourceEvent[] = []
+
+    for (const row of rows) {
+      const askedAtMs = toUtcMs(row.created_at)
+      if (askedAtMs === null) continue
+
+      const message = typeof row.input?.message === 'string' ? row.input.message.trim() : ''
+      const clientEventId =
+        typeof row.input?.client_event_id === 'string' ? row.input.client_event_id : null
+      const askId = `ask:${row.id}`
+
+      // A message the Director wrote for itself (an internal directive) has no
+      // owner text; showing an empty bubble would be a phantom the owner never
+      // sent.
+      if (message) {
+        events.push({
+          id: askId,
+          kind: 'user_message',
+          groupParentId: null,
+          occurredAtMs: askedAtMs,
+          side: 'owner',
+          brandId,
+          clientEventId,
+          payload: { kind: 'user_message', text: message, mediaIds: [], status: 'sent' },
+        })
+      }
+
+      const answerId = `answer:${row.id}`
+      const parent = message ? askId : null
+      const response = typeof row.result?.response === 'string' ? row.result.response : ''
+      const completedAtMs = toUtcMs(row.completed_at)
+
+      if (row.status === 'done' && response) {
+        events.push({
+          id: answerId,
+          kind: 'director_reply',
+          groupParentId: parent,
+          // Its own instant, for the day separator. The GROUP anchor is what
+          // it sorts by, and that is the question's instant — see timeline.ts.
+          occurredAtMs: completedAtMs ?? askedAtMs,
+          side: 'director',
+          brandId,
+          payload: { kind: 'director_reply', jobId: row.id, text: response, withheld: false },
+        })
+        continue
+      }
+
+      if (row.status === 'error' || (row.status === 'done' && !response)) {
+        events.push({
+          id: answerId,
+          kind: 'director_error',
+          groupParentId: parent,
+          occurredAtMs: completedAtMs ?? askedAtMs,
+          side: 'director',
+          brandId,
+          payload: {
+            kind: 'director_error',
+            jobId: row.id,
+            text: row.error?.trim()
+              ? 'That did not complete. Nothing else changed — try again.'
+              : 'That did not complete. Nothing else changed — try again.',
+            retryText: message || null,
+            retryClientEventId: clientEventId,
+          },
+        })
+        continue
+      }
+
+      // Still queued or running. Past the stale bound it is reported as failed
+      // WITH a retry, rather than spinning forever with nothing to act on.
+      const waitedMs = nowMs - askedAtMs
+      if (waitedMs > STALE_AFTER_MS) {
+        events.push({
+          id: answerId,
+          kind: 'director_error',
+          groupParentId: parent,
+          occurredAtMs: askedAtMs,
+          side: 'director',
+          brandId,
+          payload: {
+            kind: 'director_error',
+            jobId: row.id,
+            text: 'This one stopped responding. Nothing else changed — send it again when you are ready.',
+            retryText: message || null,
+            retryClientEventId: clientEventId,
+          },
+        })
+        continue
+      }
+
+      events.push({
+        id: answerId,
+        kind: 'director_pending',
+        groupParentId: parent,
+        occurredAtMs: askedAtMs,
+        side: 'director',
+        brandId,
+        payload: {
+          kind: 'director_pending',
+          jobId: row.id,
+          label: 'Working…',
+          waitingSinceMs: askedAtMs,
+        },
+      })
+    }
+
+    return events
+  },
+}
+
+interface MediaRow {
+  id: string
+  file_name: string | null
+  file_type: string | null
+  thumbnail_url: string | null
+  transcription_status: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+/** Clips and photos sent from the Mini App. */
+export const miniAppMediaSource: TimelineSource<MediaRow> = {
+  name: 'mini_app_media',
+
+  async fetch({ admin, userId, brandId, fromMs, rowLimit }) {
+    let query = admin
+      .from('media_items')
+      .select('id, file_name, file_type, thumbnail_url, transcription_status, metadata, created_at')
+      .eq('user_id', userId)
+      .eq('brand_id', brandId)
+      // Unchanged from the route this replaces. Broadening it to every
+      // Telegram source would double-render a captioned photo sent to the bot:
+      // once from its job row, once as a clip, with no shared key to collapse
+      // them. That needs a shared message id on both writers first.
+      .contains('metadata', { source: 'telegram', via: 'mini_app' })
+      .order('created_at', { ascending: false })
+      .limit(rowLimit)
+
+    if (fromMs !== null) query = query.gte('created_at', new Date(fromMs).toISOString())
+
+    const { data } = await query
+    return (data ?? []) as MediaRow[]
+  },
+
+  map(rows, { brandId, nowMs }) {
+    return rows.flatMap((row) => {
+      const atMs = toUtcMs(row.created_at)
+      if (atMs === null) return []
+
+      const transcribed = row.transcription_status === 'transcribed'
+      const ageMs = nowMs - atMs
+      const stage =
+        row.transcription_status === 'failed'
+          ? 'failed'
+          : transcribed && ageMs > PROPOSAL_GRACE_MS
+            ? 'no_draft'
+            : transcribed
+              ? 'ready'
+              : 'listening'
+
+      const clientEventId =
+        typeof row.metadata?.client_event_id === 'string' ? row.metadata.client_event_id : null
+
+      return [{
+        id: `clip:${row.id}`,
+        kind: 'media_upload' as const,
+        groupParentId: null,
+        occurredAtMs: atMs,
+        side: 'owner' as const,
+        brandId,
+        clientEventId,
+        payload: {
+          kind: 'media_upload' as const,
+          mediaItemId: row.id,
+          fileName: row.file_name ?? 'file',
+          fileType: row.file_type ?? '',
+          thumbnailUrl: row.thumbnail_url,
+          stage,
+          transcriptionStatus: row.transcription_status,
+          uploadPercent: 100,
+          containedByEventId: null,
+        },
+      }]
+    })
+  },
+}
+
+interface OutputRow {
+  id: string
+  title: string | null
+  content: string | null
+  metadata: Record<string, unknown> | null
+  is_approved: boolean | null
+  created_at: string
+}
+
+/**
+ * First-pass posts written about a clip.
+ *
+ * Joined back to the clip through `metadata.media_item_ids`, which our own code
+ * writes — not a model — so the link is reliable. A proposal whose clip is
+ * outside the window stands on its own rather than disappearing.
+ */
+export const proposalSource: TimelineSource<OutputRow> = {
+  name: 'proposals',
+
+  async fetch({ admin, userId, brandId, fromMs, rowLimit }) {
+    let query = admin
+      .from('outputs')
+      .select('id, title, content, metadata, is_approved, created_at')
+      .eq('user_id', userId)
+      .eq('brand_id', brandId)
+      .eq('output_type', 'social_post')
+      .order('created_at', { ascending: false })
+      .limit(rowLimit)
+
+    if (fromMs !== null) query = query.gte('created_at', new Date(fromMs).toISOString())
+
+    const { data } = await query
+    return (data ?? []) as OutputRow[]
+  },
+
+  map(rows, { brandId }) {
+    return rows.flatMap((row) => {
+      const meta = row.metadata ?? {}
+      if (meta.stage !== 'proposal') return []
+
+      const atMs = toUtcMs(row.created_at)
+      const mediaItemIds = Array.isArray(meta.media_item_ids)
+        ? meta.media_item_ids.filter((id): id is string => typeof id === 'string')
+        : []
+
+      return [{
+        id: `output:${row.id}`,
+        kind: 'proposal' as const,
+        groupParentId: mediaItemIds.length > 0 ? `clip:${mediaItemIds[0]}` : null,
+        occurredAtMs: atMs,
+        side: 'director' as const,
+        brandId,
+        payload: {
+          kind: 'proposal' as const,
+          outputId: row.id,
+          mediaItemIds,
+          aboutFileName: typeof meta.file_name === 'string' ? meta.file_name : null,
+          opener: typeof meta.opener === 'string' ? meta.opener : '',
+          hook: typeof meta.hook === 'string' ? meta.hook : (row.title ?? ''),
+          caption: row.content ?? '',
+          hashtags: Array.isArray(meta.hashtags)
+            ? meta.hashtags.filter((tag): tag is string => typeof tag === 'string')
+            : [],
+          postType: typeof meta.post_type === 'string' ? meta.post_type : 'single',
+          approved: Boolean(row.is_approved),
+          withheld: false,
+        },
+      }]
+    })
+  },
+}
+
+/** Every source the timeline is built from. Add one here and it appears. */
+export const TELEGRAM_TIMELINE_SOURCES: readonly TimelineSource<never>[] = [
+  directorJobSource,
+  miniAppMediaSource,
+  proposalSource,
+] as unknown as readonly TimelineSource<never>[]

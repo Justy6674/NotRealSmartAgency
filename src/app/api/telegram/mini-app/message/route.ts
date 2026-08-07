@@ -13,9 +13,22 @@ export const maxDuration = 300
 export async function POST(request: Request) {
   const config = getNRSTelegramConfig()
   if (!config?.enabled) return NextResponse.json({ error: 'Telegram Mini App is not enabled.' }, { status: 503 })
-  const body = await request.json().catch(() => null) as { init_data?: unknown; message?: unknown } | null
+  const body = await request.json().catch(() => null) as {
+    init_data?: unknown
+    message?: unknown
+    client_event_id?: unknown
+  } | null
   const initData = typeof body?.init_data === 'string' ? body.init_data : ''
   const message = typeof body?.message === 'string' ? body.message.trim() : ''
+  /**
+   * The client's own id for this send, so the same tap can never become two
+   * Director runs. On phone data a slow Send is tapped again; without this that
+   * is two jobs, two paid model calls and two answers.
+   */
+  const clientEventId =
+    typeof body?.client_event_id === 'string' && /^[0-9a-f-]{8,64}$/i.test(body.client_event_id)
+      ? body.client_event_id
+      : null
   const auth = validateTelegramMiniAppInitData(initData, config.botToken)
   if (!auth) return NextResponse.json({ error: 'Invalid or expired Telegram session.' }, { status: 401 })
   if (!message || message.length > 4000) return NextResponse.json({ error: 'Message must be between 1 and 4000 characters.' }, { status: 400 })
@@ -53,8 +66,32 @@ export async function POST(request: Request) {
     policy_version: execution.policyVersion,
     job_type: 'director_chat',
     status: 'queued',
-    input: { brand_id: execution.projectId, message },
+    input: {
+      brand_id: execution.projectId,
+      message,
+      ...(clientEventId ? { client_event_id: clientEventId } : {}),
+    },
   }).select('id').single()
+
+  // Insert FIRST and let the unique index arbitrate. Checking for an existing
+  // job before inserting leaves a window between the read and the write that
+  // two quick taps fit through exactly.
+  if (error?.code === '23505' && clientEventId) {
+    const { data: existing } = await admin
+      .from('mcp_jobs')
+      .select('id')
+      .eq('user_id', execution.actorUserId)
+      .eq('brand_id', execution.projectId)
+      .eq('channel', 'telegram')
+      .filter('input->>client_event_id', 'eq', clientEventId)
+      .maybeSingle()
+
+    if (existing) {
+      // The first tap already started it. Hand back the same job.
+      return NextResponse.json({ job_id: existing.id, project_name: grant.projectName, deduplicated: true })
+    }
+  }
+
   if (error || !job) return NextResponse.json({ error: 'NRS could not start that request.' }, { status: 500 })
 
   after(async () => {

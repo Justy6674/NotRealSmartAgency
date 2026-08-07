@@ -1,0 +1,185 @@
+'use client'
+
+/**
+ * The conversation, rendered as ONE list.
+ *
+ * Previously this was three blocks — messages, then a spinner, then media
+ * newest-first — so a clip from this morning sat below a message from this
+ * afternoon and above a clip from an hour ago. There is now a single ordered
+ * array from the server and this file renders it in the order it arrives. It
+ * does not sort. Nothing outside `timeline.ts` sorts.
+ */
+
+import { memo } from 'react'
+import type { TimelineEvent } from '@/lib/telegram/timeline'
+
+const DAY = new Intl.DateTimeFormat('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+
+function dayKey(ms: number): string {
+  const date = new Date(ms)
+  return `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`
+}
+
+/**
+ * Only day separators, never a clock on each message.
+ *
+ * An answer sorts with the question that caused it, so a slow reply can carry
+ * a later time than the message beneath it. Showing per-message times would put
+ * a visibly out-of-order clock on screen; the day is the useful granularity
+ * anyway, and it is derived from the group anchor, which is monotonic.
+ */
+function DaySeparator({ ms }: { ms: number }) {
+  return (
+    <div className="my-4 flex items-center gap-3">
+      <span className="h-px flex-1 bg-white/10" />
+      <span className="text-[11px] uppercase tracking-wider text-[var(--tg-theme-hint-color,#82909f)]">
+        {DAY.format(new Date(ms))}
+      </span>
+      <span className="h-px flex-1 bg-white/10" />
+    </div>
+  )
+}
+
+const OwnerBubble = memo(function OwnerBubble({ text }: { text: string }) {
+  return (
+    <div className="ml-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2.5 text-[15px] leading-6 text-[var(--tg-theme-button-text-color,#fff)]">
+      {text}
+    </div>
+  )
+})
+
+const DirectorBubble = memo(function DirectorBubble({
+  text,
+  withheld,
+}: {
+  text: string
+  withheld: boolean
+}) {
+  return (
+    <div
+      className={`mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md px-4 py-2.5 text-[15px] leading-6 ${
+        withheld
+          ? 'border border-amber-400/30 bg-amber-400/10 text-amber-100'
+          : 'bg-[var(--tg-theme-secondary-bg-color,#17212b)]'
+      }`}
+    >
+      {text}
+    </div>
+  )
+})
+
+function Working({ label }: { label: string }) {
+  return (
+    <div className="mr-auto flex max-w-[88%] items-center gap-2 rounded-2xl rounded-bl-md bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-[15px] text-[var(--tg-theme-hint-color,#82909f)]">
+      <span className="flex gap-1" aria-hidden>
+        <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-current" />
+      </span>
+      <span className="sr-only">{label}</span>
+    </div>
+  )
+}
+
+export interface TimelineViewProps {
+  events: TimelineEvent[]
+  onRetry: (text: string, clientEventId: string | null) => void
+}
+
+export function TimelineView({ events, onRetry }: TimelineViewProps) {
+  let lastDay = ''
+
+  return (
+    <div className="flex flex-col gap-2">
+      {events.map((event) => {
+        const key = dayKey(event.groupAnchorMs)
+        const newDay = key !== lastDay
+        lastDay = key
+
+        return (
+          <div key={event.id} className="contents">
+            {newDay && <DaySeparator ms={event.groupAnchorMs} />}
+            <EventRow event={event} onRetry={onRetry} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function EventRow({ event, onRetry }: { event: TimelineEvent; onRetry: TimelineViewProps['onRetry'] }) {
+  const payload = event.payload
+
+  switch (payload.kind) {
+    case 'user_message':
+      return <OwnerBubble text={payload.text} />
+
+    case 'director_reply':
+      return <DirectorBubble text={payload.text} withheld={payload.withheld} />
+
+    case 'director_pending':
+      return <Working label={payload.label} />
+
+    case 'director_error':
+      return (
+        <div className="mr-auto max-w-[88%] rounded-2xl rounded-bl-md border border-red-400/30 bg-red-400/10 px-4 py-3 text-[15px] leading-6 text-red-100">
+          <p>{payload.text}</p>
+          {payload.retryText && (
+            <button
+              type="button"
+              onClick={() => onRetry(payload.retryText!, payload.retryClientEventId)}
+              className="mt-2 rounded-lg border border-red-300/40 px-3 py-1 text-xs font-medium hover:bg-red-400/10"
+            >
+              Send it again
+            </button>
+          )}
+        </div>
+      )
+
+    case 'media_upload':
+      return (
+        <div className="ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2.5 text-[15px] text-[var(--tg-theme-button-text-color,#fff)]">
+          <div className="flex items-center justify-between gap-3">
+            <span className="truncate font-medium">{payload.fileName}</span>
+            <span className="shrink-0 text-xs opacity-80">
+              {payload.stage === 'uploading'
+                ? `${payload.uploadPercent}%`
+                : payload.stage === 'listening'
+                  ? 'listening…'
+                  : payload.stage === 'failed'
+                    ? 'could not read'
+                    : payload.stage === 'no_draft'
+                      ? 'transcribed'
+                      : 'ready'}
+            </span>
+          </div>
+        </div>
+      )
+
+    case 'proposal':
+      return (
+        <div className="mr-auto max-w-[92%] space-y-3">
+          {payload.opener && <DirectorBubble text={payload.opener} withheld={payload.withheld} />}
+          {!payload.withheld && (payload.hook || payload.caption) && (
+            <div className="rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-[15px] leading-6">
+              {payload.hook && <p className="font-semibold">{payload.hook}</p>}
+              {payload.caption && <p className="mt-2 whitespace-pre-wrap">{payload.caption}</p>}
+              {payload.hashtags.length > 0 && (
+                <p className="mt-2 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+                  {payload.hashtags.map((tag) => `#${tag}`).join(' ')}
+                </p>
+              )}
+              <p className="mt-3 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+                {payload.postType} · not in Mixpost yet — say what to change, or ask for it as a draft
+              </p>
+            </div>
+          )}
+        </div>
+      )
+
+    default: {
+      const exhaustive: never = payload
+      return exhaustive
+    }
+  }
+}
