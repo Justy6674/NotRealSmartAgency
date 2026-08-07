@@ -86,7 +86,7 @@ export function MacroBoard() {
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   /** Open the Director on this project with the suggestion already written. */

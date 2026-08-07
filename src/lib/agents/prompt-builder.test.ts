@@ -7,6 +7,8 @@ const brand: Brand = {
   id: 'underground-id',
   user_id: 'owner-id',
   name: 'Underground Parfums',
+  name_full: null,
+  name_never: null,
   slug: 'underground-parfums',
   tagline: null,
   description: 'An independent perfume house.',
@@ -186,4 +188,27 @@ test('a project with no palette gets no invented one', () => {
   const prompt = buildSystemPrompt(brand, director)
 
   assert.doesNotMatch(prompt, /Brand colours \(use these exact values\)/)
+})
+
+/**
+ * The owner read his own company's name spelt wrong in copy this platform
+ * wrote for him, because the writer only ever saw a transcript and a
+ * transcript is speech-to-text. The rule has to be IN the prompt.
+ */
+test('the prompt states the exact wordmark and what must never be written', () => {
+  const prompt = buildSystemPrompt(
+    { ...brand, name: 'Scent Sell', name_full: 'Scent Sell Fragrance Marketplace in Australia', name_never: ['ScentSell', 'Sentel'] },
+    director,
+  )
+
+  assert.match(prompt, /written exactly "Scent Sell"/)
+  assert.match(prompt, /Scent Sell Fragrance Marketplace in Australia/)
+  assert.match(prompt, /NEVER write:.*"ScentSell".*"Sentel"/)
+  assert.match(prompt, /transcript is speech-to-text/)
+})
+
+test('a brand with no naming rules gains no naming noise', () => {
+  const prompt = buildSystemPrompt(brand, director)
+  assert.doesNotMatch(prompt, /NEVER write:/)
+  assert.match(prompt, /written exactly "Underground Parfums"/)
 })

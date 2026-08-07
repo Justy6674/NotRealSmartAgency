@@ -29,7 +29,7 @@ type ProcessingStage =
   | 'analysing'
   | 'ready'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 interface VisualAnalysis {
   summary?: string
   products?: string[]

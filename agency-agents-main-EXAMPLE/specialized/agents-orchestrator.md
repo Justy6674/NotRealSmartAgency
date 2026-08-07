@@ -364,4 +364,3 @@ The following agents are available for orchestration based on task requirements:
 **Single Command Pipeline Execution**:
 ```
 Please spawn an agents-orchestrator to execute complete development pipeline for project-specs/[project]-setup.md. Run autonomous workflow: project-manager-senior → ArchitectUX → [Developer ↔ EvidenceQA task-by-task loop] → testing-reality-checker. Each task must pass QA before advancing.
-```

@@ -134,16 +134,24 @@ const handlers = {
   },
 
   'pre-bash': () => {
-    // Basic command safety check — prefer stdin command data from Claude Code
+    // Cursor/Claude PreToolUse hooks MUST return JSON on stdout.
     const cmd = (hookInput.command || prompt).toLowerCase();
     const dangerous = ['rm -rf /', 'format c:', 'del /s /q c:\\', ':(){:|:&};:'];
     for (const d of dangerous) {
       if (cmd.includes(d)) {
-        console.error(`[BLOCKED] Dangerous command detected: ${d}`);
-        process.exit(1);
+        console.log(JSON.stringify({
+          permission: 'deny',
+          user_message: `Dangerous command blocked: ${d}`,
+          agent_message: `Blocked dangerous command pattern: ${d}`,
+        }));
+        return;
       }
     }
-    console.log('[OK] Command validated');
+    console.log(JSON.stringify({ permission: 'allow' }));
+  },
+
+  'pre-edit': () => {
+    console.log(JSON.stringify({ permission: 'allow' }));
   },
 
   'post-edit': () => {

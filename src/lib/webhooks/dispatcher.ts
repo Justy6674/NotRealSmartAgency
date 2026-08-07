@@ -91,7 +91,7 @@ export async function fireUserWebhooks({
 }
 
 async function deliverOne(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   supabase: any,
   webhook: UserWebhookRow,
   event: WebhookEvent,

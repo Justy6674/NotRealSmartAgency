@@ -514,7 +514,7 @@ export function ReviewRoom() {
                     return (
                       <div key={m.id} className="rounded-lg overflow-hidden border border-border bg-black">
                         {isVideo ? (
-                          // eslint-disable-next-line jsx-a11y/media-has-caption
+                           
                           <video
                             src={m.file_url}
                             poster={m.thumbnail_url ?? undefined}

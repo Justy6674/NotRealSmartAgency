@@ -237,7 +237,6 @@ def shap_global_analysis(model, X: pd.DataFrame, output_dir: str = "."):
 
     return importance
 
-
 def shap_local_explanation(model, X: pd.DataFrame, idx: int):
     """
     Local interpretability: explain a single prediction.
@@ -291,7 +290,6 @@ def pdp_analysis(
         fig.tight_layout()
         fig.savefig(f"{output_dir}/pdp_{feature}.png", dpi=150)
         plt.close(fig)
-
 
 def pdp_interaction(
     model,

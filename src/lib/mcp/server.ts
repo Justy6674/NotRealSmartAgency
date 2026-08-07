@@ -127,7 +127,7 @@ export function createNRSMcpServer(principal: McpPrincipal): McpServer {
       description: compatibility
         ? 'Compatibility alias for list_projects. Returns only project workspaces granted to this connection.'
         : 'List only the project workspaces granted to this connection. Call this before selecting a project for another tool.',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     }, async (_args: any) => {
       try {
         const projects = await loadGrantedProjects()
@@ -216,7 +216,7 @@ export function createNRSMcpServer(principal: McpPrincipal): McpServer {
   // Register quick_start prompt
   server.registerPrompt('quick_start', {
     description: 'Get started with your NRS Agency',
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   }, async (_extra: any) => {
     return {
       messages: [{

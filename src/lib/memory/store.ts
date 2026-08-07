@@ -251,7 +251,7 @@ export async function memorySearchV2(
 // ---- Keyword fallback (matches ruflo/client.ts pattern) -------------------
 
 async function keywordFallback(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   supabase: any,
   query: string,
   namespace: string,
@@ -275,7 +275,7 @@ async function keywordFallback(
     const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
     const now = Date.now()
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const scored: MemorySearchResult[] = data.map((row: any) => {
       const text = `${row.key} ${typeof row.value === 'string' ? row.value : JSON.stringify(row.value)}`.toLowerCase()
       const tags = (row.tags ?? []) as string[]

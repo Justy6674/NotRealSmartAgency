@@ -61,7 +61,7 @@ const BUILD_SHA = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 
  * and fire-and-forget means logging can never block the upload pipeline.
  */
 function log(traceId: string, step: string, data?: Record<string, unknown>) {
-  // eslint-disable-next-line no-console
+   
   console.log(`[NRS-UPLOAD ${BUILD_SHA}] ${step}`, data ?? '')
   try {
     fetch('/api/debug/upload-log', {

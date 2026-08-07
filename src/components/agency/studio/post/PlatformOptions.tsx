@@ -1,6 +1,6 @@
 'use client'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 
 /**
  * PlatformOptions — per-platform metadata fields.

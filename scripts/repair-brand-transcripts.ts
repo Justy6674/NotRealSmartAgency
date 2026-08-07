@@ -34,7 +34,7 @@ async function main() {
     auth: { persistSession: false },
   })
 
-  const { data: brands, error: brandError } = await db.from('brands').select('id, name')
+  const { data: brands, error: brandError } = await db.from('brands').select('id, name, name_never')
   if (brandError || !brands) throw new Error(`Could not read brands: ${brandError?.message}`)
 
   let scanned = 0
@@ -54,6 +54,7 @@ async function main() {
       const { text, corrections } = correctBrandNameWithCount(before, {
         canonical: brand.name as string,
         terms: [],
+        never: Array.isArray(brand.name_never) ? (brand.name_never as string[]) : [],
       })
       if (corrections === 0) continue
 

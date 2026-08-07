@@ -55,7 +55,7 @@ export function ConnectionsPanel() {
 
   useEffect(() => {
     void check()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   return (

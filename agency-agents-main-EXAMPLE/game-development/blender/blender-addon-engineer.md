@@ -105,7 +105,6 @@ class PIPELINE_PT_export_panel(bpy.types.Panel):
         layout.operator("pipeline.validate_assets", icon="CHECKMARK")
         layout.operator("pipeline.export_selected", icon="EXPORT")
 
-
 class PIPELINE_OT_export_selected(bpy.types.Operator):
     bl_idname = "pipeline.export_selected"
     bl_label = "Export Selected"

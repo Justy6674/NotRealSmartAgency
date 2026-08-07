@@ -153,18 +153,18 @@ function buildMentionExtension(
     suggestion: {
       char,
       items: ({ query }: { query: string }) => fetcher({ query, brandId }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       render: (): any => {
         let reactRenderer: ReactRenderer<SuggestionListHandle, SuggestionListProps>
         let popup: TippyInstance[]
 
         return {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           onStart: (props: any) => {
             reactRenderer = new ReactRenderer<SuggestionListHandle, SuggestionListProps>(SuggestionList, {
               props: {
                 items: props.items,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                 
                 command: (item: SuggestionItem) =>
                   (props.command as (x: { id: string; label?: string }) => void)({ id: item.id, label: item.label }),
               },
@@ -181,7 +181,7 @@ function buildMentionExtension(
               placement: 'bottom-start',
             })
           },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           onUpdate: (props: any) => {
             reactRenderer?.updateProps({
               items: props.items,

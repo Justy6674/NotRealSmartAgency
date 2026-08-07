@@ -16,7 +16,7 @@ type ZodShape = Record<string, z.ZodTypeAny>
  */
 export function adaptToolForMCP(
   name: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   aiSdkTool: any,
   mcpServer: McpServer,
   principal: McpPrincipal,
@@ -35,7 +35,7 @@ export function adaptToolForMCP(
   mcpServer.registerTool(name, {
     description: aiSdkTool.description ?? name,
     inputSchema: mcpShape,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   }, async (args: any) => {
     const brandId = args.brand_id as string
     const toolArgs = { ...args }
@@ -68,7 +68,7 @@ export function adaptToolForMCP(
 
     // Rebuild the tool with the CORRECT brandId — not the dummy placeholder
     const freshTools = toolFactory(brandId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const freshTool = freshTools[name] as any
 
     if (!freshTool?.execute) {

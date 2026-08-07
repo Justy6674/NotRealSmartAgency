@@ -149,7 +149,7 @@ export interface TelegramThreadLoadScope {
  * the first channel to need it.
  */
 export async function loadTelegramThreadHistory(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- admin client query builder
+   
   supabase: { from: (table: string) => any },
   scope: TelegramThreadLoadScope,
 ): Promise<TelegramThreadTurn[]> {

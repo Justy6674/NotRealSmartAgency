@@ -134,10 +134,19 @@ export function soundsLikeBrand(candidateKey: string, targetKey: string): boolea
 }
 
 export interface BrandVocabulary {
-  /** The canonical spelling, exactly as it should always appear. */
+  /** The wordmark, exactly as it must always appear. */
   canonical: string
   /** Extra proper nouns worth boosting — products, people, sub-brands. */
   terms: string[]
+  /**
+   * Spellings that mean this brand but must never be printed.
+   *
+   * The owner's list, not a guess. It covers the run-together form as well as
+   * the mishearings, because "ScentSell" and "Scent Sell" sound identical and
+   * no amount of phonetics will separate them — only the owner can say which
+   * one is his. Matched case-insensitively and rewritten to `canonical`.
+   */
+  never?: string[]
 }
 
 /**
@@ -190,30 +199,58 @@ export function correctBrandNameWithCount(
   const tokens = [...text.matchAll(/[A-Za-z][A-Za-z'’]*/g)]
   if (tokens.length === 0) return { text, corrections: 0 }
 
+  // The owner's own never-print list wins outright — it is a statement about
+  // his brand, not an inference from sound. Longest first, so "Scent Sail"
+  // is matched before a shorter entry could take half of it.
+  const never = [...(vocabulary.never ?? [])]
+    .filter((entry) => entry.trim() && entry.trim() !== canonical)
+    .sort((a, b) => b.length - a.length)
+
   const replacements: Array<{ start: number; end: number }> = []
   let index = 0
 
   while (index < tokens.length) {
     const single = tokens[index]
     const pair = tokens[index + 1]
-
-    // Two words may be joined ONLY when they are separated by a plain space and
-    // the pair sounds EXACTLY like the brand.
-    //
-    // Both conditions were learned from real data. Allowing any tolerance on a
-    // pair turned "fun scents. So we've got" into "fun ScentSell we've got" —
-    // it welded a sentence to the start of the next one and deleted words.
-    // Requiring an exact match, and refusing to reach across punctuation,
-    // keeps the case this is for ("Scent Sell" spoken as two words) and drops
-    // the rest.
     const between = pair ? text.slice(single.index! + single[0].length, pair.index!) : ''
+
+    // 1. A spelling the owner has forbidden. Checked first and checked on the
+    //    literal text, because "ScentSell" and "Scent Sell" sound identical —
+    //    no phonetic rule can tell them apart, and only the owner can say
+    //    which one is his brand.
+    const oneWord = single[0]
+    const twoWords = pair && /^ ?$/.test(between) ? `${single[0]} ${pair[0]}` : null
+    const bannedPair = twoWords && never.some((entry) => entry.toLowerCase() === twoWords.toLowerCase())
+    const bannedOne = never.some((entry) => entry.toLowerCase() === oneWord.toLowerCase())
+
+    if (bannedPair) {
+      replacements.push({ start: single.index!, end: pair!.index! + pair![0].length })
+      index += 2
+      continue
+    }
+    if (bannedOne) {
+      replacements.push({ start: single.index!, end: single.index! + single[0].length })
+      index += 1
+      continue
+    }
+
+    // 2. Two words joined ONLY across a plain space and ONLY on an exact sound
+    //    match. Both conditions were learned from real data: any tolerance on
+    //    a pair turned "fun scents. So we've got" into "fun ScentSell we've
+    //    got", welding one sentence to the next and deleting words.
     if (pair && /^ ?$/.test(between) && soundKey(single[0] + pair[0]) === target) {
-      replacements.push({ start: single.index!, end: pair.index! + pair[0].length })
+      // Already written the way the owner wants it — leave it alone.
+      if (twoWords !== canonical) {
+        replacements.push({ start: single.index!, end: pair.index! + pair[0].length })
+      }
       index += 2
       continue
     }
 
-    if (soundsLikeBrand(soundKey(single[0]), target) && squash(single[0]) !== squash(canonical)) {
+    // 3. A single word that sounds like the brand. Skipped only when it is
+    //    already EXACTLY the wordmark — comparing squashed forms would treat
+    //    "ScentSell" as already correct when the brand is "Scent Sell".
+    if (soundsLikeBrand(soundKey(single[0]), target) && single[0] !== canonical) {
       replacements.push({ start: single.index!, end: single.index! + single[0].length })
     }
     index += 1

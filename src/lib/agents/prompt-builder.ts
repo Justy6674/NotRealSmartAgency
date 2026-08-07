@@ -275,6 +275,24 @@ function buildBrandContext(brand: Brand): string {
     `**Brand:** ${brand.name}`,
   ]
 
+  // How the name is written is not a stylistic choice, and it is not something
+  // to infer from a transcript or a domain. The owner watched this platform
+  // spell his own company wrong in copy it had written for him, from a
+  // transcript that had mis-heard it. State the rule, at the top, every time.
+  lines.push(
+    `**The brand is written exactly "${brand.name}" — always, with no exceptions.**`,
+  )
+  if (brand.name_full) {
+    lines.push(`**Full name:** ${brand.name_full} — use this for a first mention or an introduction.`)
+  }
+  if (Array.isArray(brand.name_never) && brand.name_never.length > 0) {
+    lines.push(
+      `**NEVER write:** ${brand.name_never.map((wrong) => `"${wrong}"`).join(', ')}. ` +
+      `These are wrong, including any that appear in a transcript or that you have seen elsewhere. ` +
+      `A transcript is speech-to-text and gets brand names wrong; "${brand.name}" is the authority, not the transcript.`,
+    )
+  }
+
   if (brand.tagline) lines.push(`**Tagline:** ${brand.tagline}`)
   if (brand.description) lines.push(`**Description:** ${brand.description}`)
   if (brand.website_url) lines.push(`**Website:** ${brand.website_url}`)

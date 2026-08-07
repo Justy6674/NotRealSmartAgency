@@ -222,7 +222,7 @@ async function updateBrand(
   }
 
   // Build update payload — only include fields that were provided
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   const updates: Record<string, any> = {}
   const changedFields: string[] = []
 

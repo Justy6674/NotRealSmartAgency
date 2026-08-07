@@ -321,7 +321,17 @@ export interface VideoPreferences {
 export interface Brand {
   id: string
   user_id: string
+  /** The wordmark, exactly as it must always be written. */
   name: string
+  /** The full descriptive name, for a first mention. Null means use `name`. */
+  name_full: string | null
+  /**
+   * Spellings that mean this brand but must never be printed — run-together
+   * forms and known speech-to-text mishearings. The owner's list, not a guess:
+   * "ScentSell" and "Scent Sell" sound identical, so only he can say which is
+   * his. Normalised to `name` in transcripts and forbidden in every prompt.
+   */
+  name_never: string[] | null
   slug: string
   tagline: string | null
   description: string | null

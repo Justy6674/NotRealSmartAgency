@@ -72,7 +72,7 @@ export function RichCaptionEditor({
         : []),
     ],
     // Recreate only when placeholder or limit actually change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [placeholder, characterLimit],
   )
 

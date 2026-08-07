@@ -133,7 +133,7 @@ export async function runMediaProcessingPipeline({
 
   const { data: brand } = await supabase
     .from('brands')
-    .select('name, niche, content_pillars, compliance_flags, description, target_audience, tone_of_voice')
+    .select('name, name_full, name_never, niche, content_pillars, compliance_flags, description, target_audience, tone_of_voice')
     .eq('id', mediaItem.brand_id)
     .single()
 
@@ -273,7 +273,13 @@ export async function runMediaProcessingPipeline({
     // word — "ScentSell" came back as "Sentel", and every caption written from
     // that transcript repeated the owner's company name to him misspelt.
     const vocabulary = brand?.name
-      ? { canonical: brand.name as string, terms: [] as string[] }
+      ? {
+          canonical: brand.name as string,
+          terms: [] as string[],
+          // The owner's own never-print list. "ScentSell" and "Scent Sell"
+          // sound identical, so only he can say which is his brand.
+          never: Array.isArray(brand.name_never) ? (brand.name_never as string[]) : [],
+        }
       : undefined
 
     const transcriptionResult = await runStage(async () => {
