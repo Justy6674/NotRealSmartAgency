@@ -1,5 +1,8 @@
+import { generateText } from 'ai'
+import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createProposePostTool } from '@/lib/agents/tools/propose-post'
+import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 /**
  * Take the first pass at a post the moment a clip has finished transcribing.
@@ -30,6 +33,52 @@ export interface StoredProposal {
   hashtags: string[]
   postType: string
   rationale: string
+  /** What the Director says when it comes back, before the draft itself. */
+  opener: string
+}
+
+/**
+ * Open the conversation instead of dropping a card.
+ *
+ * A proposal appearing silently in a list reads as nothing having happened —
+ * the owner sat watching a screen twice wondering whether his video had gone
+ * anywhere. So the Director says what it watched and offers the obvious next
+ * move, in his words, and he answers in the box.
+ *
+ * Written from the transcript rather than the caption: the point is to prove it
+ * actually watched the thing, which a rephrased hook does not do.
+ */
+async function writeOpener({
+  transcript,
+  fileName,
+  postType,
+}: {
+  transcript: string | null
+  fileName: string
+  postType: string
+}): Promise<string> {
+  if (!transcript?.trim()) {
+    return `Got ${fileName}, but I couldn't make out any speech in it. Tell me what's in it and what you want, and I'll write from that.`
+  }
+  try {
+    const { text } = await generateText({
+      model: gateway(getGatewayModel('fast')),
+      providerOptions: getGatewayProviderOptions('fast', { tags: ['miniapp-opener'] }),
+      prompt: [
+        'You are the NRS Director, replying to the owner in a chat straight after watching his video.',
+        'Write TWO short sentences, Australian English, no greeting, no emoji, no hashtags:',
+        '1. What the video is actually about — specific enough to prove you watched it.',
+        `2. Offer the obvious next move and ask which he wants. A ${postType} draft is already written and waiting below.`,
+        'Do not write a caption. Do not repeat the draft. Under 45 words.',
+        '',
+        'Transcript:',
+        transcript.slice(0, 2000),
+      ].join('\n'),
+    })
+    return text.trim() || `Watched ${fileName} — draft below. Want it as is, or shall I change the angle?`
+  } catch {
+    return `Watched ${fileName} — there's a ${postType} draft below. Want it as is, or shall I change the angle?`
+  }
 }
 
 interface RawProposal {
@@ -102,8 +151,22 @@ export async function proposeAndStore({
   const raw = extractProposalJson(output)
   if (!raw || typeof raw.caption !== 'string' || !raw.caption.trim()) return null
 
+  const { data: mediaRow } = await supabase
+    .from('media_items')
+    .select('transcription')
+    .eq('id', mediaItemId)
+    .maybeSingle()
+
+  const postType = typeof raw.post_type === 'string' ? raw.post_type : 'single'
+  const opener = await writeOpener({
+    transcript: typeof mediaRow?.transcription === 'string' ? mediaRow.transcription : null,
+    fileName,
+    postType,
+  })
+
   const proposal: StoredProposal = {
     outputId: '',
+    opener,
     hook: typeof raw.hook === 'string' ? raw.hook : '',
     caption: raw.caption,
     hashtags: asStringArray(raw.hashtags),
@@ -129,6 +192,7 @@ export async function proposeAndStore({
         hashtags: proposal.hashtags,
         post_type: proposal.postType,
         rationale: proposal.rationale,
+        opener: proposal.opener,
         platform,
       },
     })

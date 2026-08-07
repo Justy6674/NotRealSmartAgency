@@ -104,6 +104,7 @@ export async function POST(request: Request) {
       proposal: found
         ? {
             output_id: found.id,
+            opener: typeof meta.opener === 'string' ? meta.opener : '',
             hook: typeof meta.hook === 'string' ? meta.hook : (found.title as string) ?? '',
             caption: (found.content as string) ?? '',
             hashtags: Array.isArray(meta.hashtags) ? meta.hashtags : [],

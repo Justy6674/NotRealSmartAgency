@@ -31,6 +31,8 @@ interface StagedFile {
 
 interface TelegramProposal {
   output_id: string
+  /** The Director's opening line — what it watched, and what it suggests next. */
+  opener: string
   hook: string
   caption: string
   hashtags: string[]
@@ -454,8 +456,11 @@ export default function TelegramMiniAppPage() {
                                 : 'ready'}
                         </span>
                       </div>
+                      {item.proposal?.opener && (
+                        <p className="mt-3 leading-6 text-[var(--tg-theme-text-color,#f2f4f6)]">{item.proposal.opener}</p>
+                      )}
                       {item.proposal && (
-                        <div className="mt-3 space-y-2">
+                        <div className="mt-3 space-y-2 rounded-xl border border-white/10 p-3">
                           {item.proposal.hook && <p className="font-semibold leading-6">{item.proposal.hook}</p>}
                           <p className="whitespace-pre-wrap leading-6 text-[var(--tg-theme-text-color,#f2f4f6)]">{item.proposal.caption}</p>
                           {item.proposal.hashtags.length > 0 && (
