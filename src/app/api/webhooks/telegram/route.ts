@@ -545,6 +545,25 @@ async function queueTelegramDirectorWork({
  * happens to exist. Every reachable route below is scoped by a pairing grant.
  */
 export async function POST(request: NextRequest) {
+  // Telegram RETRIES any update the webhook answers with a 5xx.
+  //
+  // So an unhandled throw is not a one-off error, it is a loop: the same
+  // update is redelivered, throws again, and repeats. The commonest cause is
+  // an outbound send failing for a reason that will never change — the person
+  // blocked the bot, or the chat no longer exists. Seen live: a send to a
+  // non-existent chat returned 400, the throw escaped, and the webhook 500'd.
+  //
+  // Once an update has been accepted, this always answers 200. Whatever went
+  // wrong is logged and the update is not sent again.
+  try {
+    return await handleTelegramUpdate(request)
+  } catch (err) {
+    console.error('[telegram] update failed:', err instanceof Error ? err.message : err)
+    return NextResponse.json({ received: true, status: 'error_swallowed' })
+  }
+}
+
+async function handleTelegramUpdate(request: NextRequest) {
   const config = getNRSTelegramConfig()
   if (!config?.enabled) {
     return NextResponse.json({ received: true, status: TELEGRAM_CHANNEL_STATUS })
@@ -566,14 +585,23 @@ export async function POST(request: NextRequest) {
   // a topic per project, answering outside the thread strands the reply in
   // General — the one topic that does not say which brand it is about.
   const thread = inbound.threadId !== undefined ? { threadId: inbound.threadId } : {}
-  const reply = (text: string, replyMarkup?: TelegramReplyMarkup) =>
-    sendTelegramText({
-      botToken: config.botToken,
-      chatId: inbound.chatId,
-      text,
-      ...thread,
-      ...(replyMarkup ? { replyMarkup } : {}),
-    })
+
+  // Never throws. A message that cannot be delivered must not abandon the work
+  // that follows it — the draft is already saved either way, and the owner is
+  // better served by the job finishing than by the acknowledgement arriving.
+  const reply = async (text: string, replyMarkup?: TelegramReplyMarkup) => {
+    try {
+      await sendTelegramText({
+        botToken: config.botToken,
+        chatId: inbound.chatId,
+        text,
+        ...thread,
+        ...(replyMarkup ? { replyMarkup } : {}),
+      })
+    } catch (err) {
+      console.error('[telegram] reply failed:', err instanceof Error ? err.message : err)
+    }
+  }
 
   if (intent.kind === 'pair') {
     if (account) {

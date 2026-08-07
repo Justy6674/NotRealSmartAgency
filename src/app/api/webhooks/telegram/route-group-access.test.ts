@@ -57,3 +57,23 @@ test('callback buttons are still refused outside the private chat', () => {
   const source = route()
   assert.match(source, /if \(chat\?\.type !== 'private' \|\| from\?\.is_bot === true/)
 })
+
+/**
+ * Telegram RETRIES any update the webhook answers with a 5xx, so an unhandled
+ * throw is a loop, not a one-off. Seen live: a send to a chat that no longer
+ * exists returned 400, the throw escaped, and the webhook 500'd — which would
+ * have had Telegram redeliver the same update indefinitely.
+ */
+test('an accepted update is always answered 200, whatever goes wrong', () => {
+  const source = route()
+  assert.match(source, /try \{\s*return await handleTelegramUpdate\(request\)/)
+  assert.match(source, /status: 'error_swallowed'/)
+  // The 401 for a forged secret must still be a real rejection, not swallowed.
+  assert.match(source, /status: 'invalid_webhook_secret' \}, \{ status: 401 \}/)
+})
+
+test('a reply that cannot be delivered does not abandon the work', () => {
+  const source = route()
+  assert.match(source, /const reply = async \(text: string/)
+  assert.match(source, /\[telegram\] reply failed:/)
+})
