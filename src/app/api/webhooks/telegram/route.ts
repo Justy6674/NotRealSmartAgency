@@ -27,6 +27,7 @@ import {
   createTopicsForProjects,
   describeTopicSetup,
 } from '@/lib/telegram/forum-topics'
+import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
 import {
   addMiniAppButton,
   buildScopedProjectKeyboard,
@@ -690,6 +691,26 @@ async function handleTelegramUpdate(request: NextRequest) {
 
   // "set up topics" — give every project its own forum topic, once.
   if (/\b(set ?up|create|make)\b.*\btopics?\b/i.test(inbound.text ?? '')) {
+    // Check the three conditions FIRST and name the one that is missing.
+    //
+    // Telegram's requirements are explicit — the chat must be a forum, and the
+    // bot must be an administrator holding can_manage_topics — but every one
+    // of them fails as an identical "Bad Request". Attempting the call and
+    // relaying that is useless to someone who just wants to know which switch
+    // to flip.
+    const botId = await getBotId(config.botToken)
+    if (botId !== null) {
+      const readiness = await checkTopicReadiness({
+        botToken: config.botToken,
+        chatId: inbound.chatId,
+        botId,
+      })
+      if (!readiness.ready) {
+        await reply(readiness.instruction ?? 'Topics cannot be set up here yet.')
+        return NextResponse.json({ received: true, status: `topics_blocked:${readiness.blocker}` })
+      }
+    }
+
     const result = await createTopicsForProjects({
       supabase: admin,
       botToken: config.botToken,
