@@ -25,6 +25,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { transcribeFile } from '@/lib/transcription/transcribe'
+import { correctBrandNameWithCount } from '@/lib/transcription/brand-vocabulary'
 import { extractFirstFrameFromUrl } from '@/lib/video/ffmpeg-thumbnail'
 import { needsDeliveryCopy, transcodeForDeliveryFromUrl } from '@/lib/video/ffmpeg-transcode'
 import {
@@ -267,13 +268,38 @@ export async function runMediaProcessingPipeline({
     updates.transcription_status = 'transcribing'
     await supabase.from('media_items').update({ transcription_status: 'transcribing' }).eq('id', mediaItemId)
 
+    // The brand's own name goes to the recogniser as a boosted term. An
+    // unfamiliar proper noun is otherwise replaced with the nearest ordinary
+    // word — "ScentSell" came back as "Sentel", and every caption written from
+    // that transcript repeated the owner's company name to him misspelt.
+    const vocabulary = brand?.name
+      ? { canonical: brand.name as string, terms: [] as string[] }
+      : undefined
+
     const transcriptionResult = await runStage(async () => {
-      return await transcribeFile(mediaItem.file_url, mediaItem.file_name, fileSize)
+      return await transcribeFile(mediaItem.file_url, mediaItem.file_name, fileSize, vocabulary)
     })
 
     if (transcriptionResult.ok) {
       const transcription = transcriptionResult.value
-      updates.transcription = transcription.text
+
+      // Repair whatever still slipped through, ONCE, before it is stored.
+      //
+      // Here rather than in the caption writer: the transcript feeds the
+      // opener, the captions, the tags and the search index, so correcting it
+      // at any one of those leaves the others still wrong.
+      let text = transcription.text
+      if (vocabulary) {
+        const repaired = correctBrandNameWithCount(text, vocabulary)
+        if (repaired.corrections > 0) {
+          console.log(
+            `[pipeline:${mediaItemId}] corrected ${repaired.corrections} mis-heard mention(s) of "${vocabulary.canonical}"`,
+          )
+          text = repaired.text
+        }
+      }
+
+      updates.transcription = text
       updates.transcription_model = transcription.model
       updates.transcription_status = 'transcribed'
       if (transcription.duration) updates.duration_seconds = transcription.duration

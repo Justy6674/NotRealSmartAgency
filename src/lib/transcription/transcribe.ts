@@ -4,6 +4,8 @@
  * Layer 2: OpenAI Whisper-1 (battle-tested fallback)
  */
 
+import { deepgramKeywordParams, type BrandVocabulary } from './brand-vocabulary'
+
 export interface TranscriptionResult {
   text: string
   model: string
@@ -14,7 +16,10 @@ export interface TranscriptionResult {
  * Deepgram URL mode — send the file URL, Deepgram fetches it directly.
  * No download into serverless memory. Works for any file size.
  */
-async function transcribeWithDeepgramUrl(fileUrl: string): Promise<TranscriptionResult> {
+async function transcribeWithDeepgramUrl(
+  fileUrl: string,
+  vocabulary?: BrandVocabulary,
+): Promise<TranscriptionResult> {
   const apiKey = process.env.DEEPGRAM_API_KEY
   if (!apiKey) throw new Error('DEEPGRAM_API_KEY not configured')
 
@@ -22,7 +27,20 @@ async function transcribeWithDeepgramUrl(fileUrl: string): Promise<Transcription
   const timeout = setTimeout(() => controller.abort(), 180_000) // 3 min — Deepgram fetches + processes
 
   try {
-    const res = await fetch('https://api.deepgram.com/v1/listen?model=nova-2&language=en-AU&smart_format=true&punctuate=true', {
+    // Boost the brand's own proper nouns so they are candidates BEFORE the
+    // recogniser reaches for the nearest ordinary English word. Without this it
+    // heard "ScentSell" as "Sentel" and every caption written from the
+    // transcript repeated the owner's company name back to him misspelt.
+    const keywords = vocabulary ? deepgramKeywordParams(vocabulary) : ''
+    const query = [
+      'model=nova-2',
+      'language=en-AU',
+      'smart_format=true',
+      'punctuate=true',
+      ...(keywords ? [keywords] : []),
+    ].join('&')
+
+    const res = await fetch(`https://api.deepgram.com/v1/listen?${query}`, {
       method: 'POST',
       headers: {
         Authorization: `Token ${apiKey}`,
@@ -91,13 +109,15 @@ const WHISPER_MAX_SIZE = 25 * 1024 * 1024 // 25MB — Whisper's file size limit
 export async function transcribeFile(
   fileUrl: string,
   fileName: string = 'audio.mp4',
-  fileSizeBytes?: number
+  fileSizeBytes?: number,
+  /** The brand's proper nouns, so the recogniser has heard of them. */
+  vocabulary?: BrandVocabulary
 ): Promise<TranscriptionResult> {
   const errors: string[] = []
 
   // Layer 1: Deepgram URL mode (no download, works for any file size)
   try {
-    return await transcribeWithDeepgramUrl(fileUrl)
+    return await transcribeWithDeepgramUrl(fileUrl, vocabulary)
   } catch (err) {
     errors.push(`Deepgram: ${err instanceof Error ? err.message : 'unknown'}`)
   }

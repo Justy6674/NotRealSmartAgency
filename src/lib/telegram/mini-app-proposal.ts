@@ -52,10 +52,20 @@ async function writeOpener({
   transcript,
   fileName,
   postType,
+  brandName,
 }: {
   transcript: string | null
   fileName: string
   postType: string
+  /**
+   * The brand's name, as ground truth.
+   *
+   * This was not passed at all, so the opener had only the transcript to go on
+   * — and a transcript that said "Sentel" produced an opener that said
+   * "Sentel's marketplace model". The owner read his own company's name
+   * misspelt back to him by his own marketing platform.
+   */
+  brandName: string | null
 }): Promise<string> {
   if (!transcript?.trim()) {
     return `Got ${fileName}, but I couldn't make out any speech in it. Tell me what's in it and what you want, and I'll write from that.`
@@ -70,6 +80,14 @@ async function writeOpener({
         '1. What the video is actually about — specific enough to prove you watched it.',
         `2. Offer the obvious next move and ask which he wants. A ${postType} draft is already written and waiting below.`,
         'Do not write a caption. Do not repeat the draft. Under 45 words.',
+        ...(brandName
+          ? [
+              '',
+              `The brand is spelled exactly "${brandName}". That spelling is correct and the`,
+              'transcript may not be — speech-to-text mangles brand names. If the transcript',
+              `spells it any other way, use "${brandName}". Never invent a different spelling.`,
+            ]
+          : []),
         '',
         'Transcript:',
         transcript.slice(0, 2000),
@@ -151,17 +169,18 @@ export async function proposeAndStore({
   const raw = extractProposalJson(output)
   if (!raw || typeof raw.caption !== 'string' || !raw.caption.trim()) return null
 
-  const { data: mediaRow } = await supabase
-    .from('media_items')
-    .select('transcription')
-    .eq('id', mediaItemId)
-    .maybeSingle()
+  const [{ data: mediaRow }, { data: brandRow }] = await Promise.all([
+    supabase.from('media_items').select('transcription').eq('id', mediaItemId).maybeSingle(),
+    supabase.from('brands').select('name').eq('id', brandId).maybeSingle(),
+  ])
 
+  const brandName = typeof brandRow?.name === 'string' ? brandRow.name : null
   const postType = typeof raw.post_type === 'string' ? raw.post_type : 'single'
   const opener = await writeOpener({
     transcript: typeof mediaRow?.transcription === 'string' ? mediaRow.transcription : null,
     fileName,
     postType,
+    brandName,
   })
 
   const proposal: StoredProposal = {
