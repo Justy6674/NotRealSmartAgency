@@ -1,14 +1,31 @@
 import { embed } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { gateway } from '@ai-sdk/gateway'
 
 // ---------------------------------------------------------------------------
 // Embedding client for memory v2
 //
-// Uses OpenAI text-embedding-3-small (1536 dims) via AI SDK.
-// Simple LRU cache (Map, 100 entries max) to avoid re-embedding identical strings.
+// Routed through the Vercel AI Gateway, which is already configured for every
+// other model call here. That is the point: the old client called OpenAI
+// directly and needed OPENAI_API_KEY, which was never set — so every embed
+// threw, silently, on every request. 7,074 memories were stored with no vector
+// at all and nothing could ever be recalled by meaning.
+//
+// Nothing was migrated to make this change: not one row had an embedding, so
+// there were no vectors from another model to be incompatible with. Two models
+// do not share a vector space even at identical width, so if that ever stops
+// being true, changing model means re-embedding every row, not just editing
+// this constant.
 // ---------------------------------------------------------------------------
 
-const EMBEDDING_MODEL = 'text-embedding-3-small'
+/**
+ * `agent_memories.embedding` is `vector(1536)` and Postgres rejects anything
+ * else, so the width is a contract, not a preference. Gemini is natively 3072
+ * and is asked for 1536; the assertion below is what stops a model change
+ * quietly writing nothing again.
+ */
+export const EMBEDDING_DIMENSIONS = 1536
+
+const EMBEDDING_MODEL = process.env.NRS_EMBEDDING_MODEL ?? 'google/gemini-embedding-001'
 const CACHE_MAX = 100
 
 const cache = new Map<string, number[]>()
@@ -36,9 +53,23 @@ export async function embedText(text: string): Promise<number[]> {
 
   try {
     const { embedding } = await embed({
-      model: openai.embedding(EMBEDDING_MODEL),
+      model: gateway.textEmbeddingModel(EMBEDDING_MODEL),
       value: trimmed,
+      providerOptions: {
+        // Gemini is Matryoshka — it can be truncated to a narrower width
+        // without retraining, which is what lets it meet the column.
+        google: { outputDimensionality: EMBEDDING_DIMENSIONS },
+      },
     })
+
+    // A wrong width is not a smaller answer, it is an unusable one: the insert
+    // would be rejected and the memory stored blind, exactly as before.
+    if (embedding.length !== EMBEDDING_DIMENSIONS) {
+      console.error(
+        `[memory/v2] ${EMBEDDING_MODEL} returned ${embedding.length} dimensions, expected ${EMBEDDING_DIMENSIONS} — refusing to store`,
+      )
+      return []
+    }
 
     cacheSet(trimmed, embedding)
     return embedding
