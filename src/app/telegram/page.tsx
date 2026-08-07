@@ -392,7 +392,17 @@ export default function TelegramMiniAppPage() {
         {loading && <p className="rounded-xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-sm">Opening your NRS workspace…</p>}
         {error && <p role="alert" className="mb-4 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-100">{error}</p>}
 
-        {!loading && !error && (
+        {/*
+          Once a session is open the workspace stays on screen, whatever went
+          wrong. Hiding it behind `!error` turned every message into a dead end:
+          "Still uploading — press Send" removed the Send button along with the
+          brands, the attached files and the whole composer, leaving an
+          instruction and no way to follow it, or to go back.
+
+          A message about one upload is not a reason to take the app away. Only
+          a session that never opened — no projects — has nothing to show.
+        */}
+        {!loading && projects.length > 0 && (
           <>
             <section aria-labelledby="projects-heading" className="mb-5">
               <div className="mb-2 flex items-center justify-between">
