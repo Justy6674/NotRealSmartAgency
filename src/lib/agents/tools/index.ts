@@ -22,6 +22,7 @@ import { createQueryCalendarTool } from './query-calendar'
 import { createQueryAnalyticsTool } from './query-analytics'
 import { createQuerySiteTrafficTool } from './query-site-traffic'
 import { createApproveProposalTool } from './approve-proposal'
+import { createCaptionVideoTool } from './caption-video'
 import { createQueryMediaTool } from './query-media'
 import { createProcessMediaTool } from './process-media'
 import { createRepurposeContentTool } from './repurpose-content'
@@ -128,6 +129,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const queryAnalytics = createQueryAnalyticsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const querySiteTraffic = createQuerySiteTrafficTool(ctx.supabase, ctx.userId, ctx.brandId)
   const approveProposal = createApproveProposalTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const captionVideo = createCaptionVideoTool(ctx.brandId, ctx.userId)
   const queryMedia = createQueryMediaTool(ctx.supabase, ctx.userId, ctx.brandId)
   const processMedia = createProcessMediaTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const repurposeContent = createRepurposeContentTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
@@ -255,6 +257,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       query_analytics: queryAnalytics,
       query_site_traffic: querySiteTraffic,
       approve_proposal: approveProposal,
+      caption_video: captionVideo,
       query_media: queryMedia,
       update_proforma: updateProforma,
       design_graphic: designGraphic,
@@ -326,7 +329,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       blotato_post_status: blotatoPostStatus,
       ...managementTools,
     },
-    content: { approve_proposal: approveProposal, save_output: saveOutput, create_collage: createCollage, verify_product: verifyProduct, word_count: wordCount, query_media: queryMedia, propose_post_from_media: proposePost, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_templates: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, browse_mixpost_media: browseMixpostMedia, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, blotato_extract_content: blotatoExtractContent, blotato_source_status: blotatoSourceStatus, blotato_list_templates: blotatoListTemplatesTool, blotato_create_visual: blotatoCreateVisualTool, blotato_visual_status: blotatoVisualStatus, ...managementTools },
+    content: { approve_proposal: approveProposal, caption_video: captionVideo, save_output: saveOutput, create_collage: createCollage, verify_product: verifyProduct, word_count: wordCount, query_media: queryMedia, propose_post_from_media: proposePost, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_templates: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, browse_mixpost_media: browseMixpostMedia, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, blotato_extract_content: blotatoExtractContent, blotato_source_status: blotatoSourceStatus, blotato_list_templates: blotatoListTemplatesTool, blotato_create_visual: blotatoCreateVisualTool, blotato_visual_status: blotatoVisualStatus, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
     strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, query_social_analytics: querySocialAnalytics, manage_tags: manageTags, request_outline_review: requestOutlineReview, import_design_from_url: importDesignFromUrl, get_presenter_notes: getPresenterNotes, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, analyse_content_gaps: analyseContentGaps, publish_to_social: publishToSocial, manage_collections: manageCollections, manage_media_tags: manageMediaTags, research_industry: researchIndustry, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, research_industry: researchIndustry, ...managementTools },

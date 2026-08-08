@@ -114,10 +114,17 @@ export async function ensureMediaInMixpost(
   // its end, and a 300 MB phone video fails that fetch with "error code
   // 2207082" long after the draft looked fine. The master stays in the library
   // untouched; what goes out is the lighter copy.
-  const deliveryUrl = ((item.metadata as Record<string, unknown> | null)?.delivery as
-    | { url?: string }
-    | undefined)?.url
-  const publishUrl = typeof deliveryUrl === 'string' && deliveryUrl ? deliveryUrl : item.file_url
+  //
+  // A captioned copy outranks both. Asking for captions and then publishing
+  // the version without them would be the worst possible outcome — it looks
+  // like it worked right up until the post is live.
+  const itemMetadata = (item.metadata as Record<string, unknown> | null) ?? {}
+  const captionedUrl = (itemMetadata.captioned as { url?: string } | undefined)?.url
+  const deliveryUrl = (itemMetadata.delivery as { url?: string } | undefined)?.url
+  const publishUrl =
+    (typeof captionedUrl === 'string' && captionedUrl)
+    || (typeof deliveryUrl === 'string' && deliveryUrl)
+    || item.file_url
 
   // Remote initiate
   const initiateRes = await fetch(`${workspaceBase}/media/remote/initiate`, {

@@ -7,11 +7,14 @@ const nextConfig: NextConfig = {
   // Chromium resolves its Brotli browser pack at runtime. Keep that pack only
   // with routes that can run the rendered website audit, rather than relying
   // on static dependency tracing to discover a dynamically assembled path.
+  // libass given a font it cannot find does not error — it renders a video
+  // with no captions on it and reports success. So the subtitle font is traced
+  // into every function that can burn captions, alongside Chromium's pack.
   outputFileTracingIncludes: {
-    '/api/chat': ['node_modules/@sparticuz/chromium/bin/**'],
-    '/api/mcp': ['node_modules/@sparticuz/chromium/bin/**'],
-    '/api/webhooks/telegram': ['node_modules/@sparticuz/chromium/bin/**'],
-    '/api/telegram/mini-app/message': ['node_modules/@sparticuz/chromium/bin/**'],
+    '/api/chat': ['node_modules/@sparticuz/chromium/bin/**', 'assets/fonts/**'],
+    '/api/mcp': ['node_modules/@sparticuz/chromium/bin/**', 'assets/fonts/**'],
+    '/api/webhooks/telegram': ['node_modules/@sparticuz/chromium/bin/**', 'assets/fonts/**'],
+    '/api/telegram/mini-app/message': ['node_modules/@sparticuz/chromium/bin/**', 'assets/fonts/**'],
     '/api/brands/\\[brandId\\]/review': ['node_modules/@sparticuz/chromium/bin/**'],
     '/api/integrations/github/callback': ['node_modules/@sparticuz/chromium/bin/**'],
   },

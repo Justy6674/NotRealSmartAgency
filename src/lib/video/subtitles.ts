@@ -119,3 +119,128 @@ export function buildSrt(words: readonly TranscriptionWord[]): string {
 export function canCaption(words: readonly TranscriptionWord[] | undefined): boolean {
   return Array.isArray(words) && words.length > 0
 }
+
+/**
+ * ── WHERE ON SCREEN, AND IN WHAT ─────────────────────────────────────────────
+ *
+ * Both of these are measurements, not taste, because both have a wrong answer
+ * that is invisible on a laptop and obvious on a phone.
+ *
+ * WHERE. The bottom of a Reel is not ours. Instagram and Facebook lay their own
+ * caption and engagement rail over roughly the bottom 420px of a 1080×1920
+ * frame, and TikTok puts the handle and description bottom-left with a button
+ * rail up the right. Text placed at a comfortable-looking 80px from the bottom
+ * sits underneath all of it. So the caption band is ~420px up from the bottom,
+ * in a centred column narrow enough to clear the right-hand rail — the same
+ * safe rectangle every social team draws on their templates.
+ *
+ * IN WHAT. White, bold, with a thick black OUTLINE and no box. A box is the
+ * obvious way to guarantee contrast and it is why burnt-in captions usually
+ * look like a DVD: it blanks out a strip of the picture whether the picture
+ * needed it or not. An outline gives the same legibility over a bright sky or
+ * a dark room and covers nothing. Sentence case, not caps — caps are a look,
+ * lowercase is faster to read, and this is text nobody chose to read.
+ *
+ * Everything is expressed as a fraction of the frame so a square or landscape
+ * clip is not captioned with numbers derived from a vertical one.
+ */
+
+/** Of the short edge. Large enough to read at arm's length on a phone. */
+const FONT_SIZE_RATIO = 0.059
+/** Of the height, on portrait: clears Instagram's caption and engagement rail. */
+const PORTRAIT_BOTTOM_RATIO = 0.219
+/** Landscape and square have no such rail; sit the text just off the edge. */
+const OTHER_BOTTOM_RATIO = 0.08
+/** Of the width, each side: clears TikTok's right-hand button rail. */
+const SIDE_MARGIN_RATIO = 0.139
+/** Of the short edge. Thick enough to hold up over a bright, busy frame. */
+const OUTLINE_RATIO = 0.0037
+
+/** The font shipped with the app. Servers have no fonts of their own. */
+export const SUBTITLE_FONT_NAME = 'Inter'
+
+export interface SubtitleStyle {
+  fontSize: number
+  marginVertical: number
+  marginSide: number
+  outline: number
+}
+
+/** The style for a given frame, in real pixels. */
+export function styleForFrame(width: number, height: number): SubtitleStyle {
+  const shortEdge = Math.min(width, height)
+  const portrait = height > width
+  return {
+    fontSize: Math.round(shortEdge * FONT_SIZE_RATIO),
+    marginVertical: Math.round(height * (portrait ? PORTRAIT_BOTTOM_RATIO : OTHER_BOTTOM_RATIO)),
+    marginSide: Math.round(width * SIDE_MARGIN_RATIO),
+    outline: Math.max(2, Math.round(shortEdge * OUTLINE_RATIO)),
+  }
+}
+
+/** ASS wants H:MM:SS.cc — centiseconds, and a single-digit hour. */
+export function formatAssTime(seconds: number): string {
+  const safe = Math.max(0, seconds)
+  const hours = Math.floor(safe / 3600)
+  const minutes = Math.floor((safe % 3600) / 60)
+  const secs = Math.floor(safe % 60)
+  const centis = Math.round((safe - Math.floor(safe)) * 100)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${hours}:${pad(minutes)}:${pad(secs)}.${pad(Math.min(99, centis))}`
+}
+
+/**
+ * The cues as an ASS subtitle file, styled and positioned for this frame.
+ *
+ * ASS rather than SRT because SRT carries no styling, so ffmpeg would fall
+ * back to libass's defaults — and those are sized against a 384×288 script
+ * canvas from the 2000s. Captions burnt that way come out either microscopic
+ * or enormous, depending on the clip, which is exactly the kind of fault that
+ * looks fine in a test and is humiliating in public. PlayResX/PlayResY are
+ * written explicitly so every number above means the pixels it says.
+ */
+export function buildAss(
+  words: readonly TranscriptionWord[],
+  width: number,
+  height: number,
+): string {
+  const cues = buildCues(words)
+  if (cues.length === 0) return ''
+
+  const style = styleForFrame(width, height)
+
+  // ASS colours are &HAABBGGRR — alpha first, then BLUE, green, red. Written
+  // as if it were RGB you get the right white and a blue-tinted outline.
+  const white = '&H00FFFFFF'
+  const black = '&H00000000'
+
+  const header = [
+    '[Script Info]',
+    'ScriptType: v4.00+',
+    'WrapStyle: 0',
+    'ScaledBorderAndShadow: yes',
+    `PlayResX: ${Math.round(width)}`,
+    `PlayResY: ${Math.round(height)}`,
+    '',
+    '[V4+ Styles]',
+    'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour,'
+      + ' Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline,'
+      + ' Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+    // BorderStyle 1 = outline, not a box. Shadow 0 — an outline this thick does
+    // the work, and a drop shadow on top reads as amateur.
+    // Alignment 2 = bottom centre.
+    `Style: Caption,${SUBTITLE_FONT_NAME},${style.fontSize},${white},${white},${black},${black},`
+      + `-1,0,0,0,100,100,0,0,1,${style.outline},0,2,`
+      + `${style.marginSide},${style.marginSide},${style.marginVertical},1`,
+    '',
+    '[Events]',
+    'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+  ].join('\n')
+
+  const events = cues.map((cue) =>
+    `Dialogue: 0,${formatAssTime(cue.start)},${formatAssTime(cue.end)},Caption,,0,0,0,,`
+      // A literal newline would end the event line and corrupt the file.
+      + cue.text.replace(/\r?\n/g, '\\N'))
+
+  return `${header}\n${events.join('\n')}\n`
+}
