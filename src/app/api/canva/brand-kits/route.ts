@@ -112,9 +112,17 @@ export async function GET() {
     }
   }
 
-  // Fetch brand kits
+  /**
+   * `/brand-kits` DOES NOT EXIST in the Canva Connect API.
+   *
+   * The real endpoint is `/v1/brand-templates`, guarded by the
+   * `brandtemplate:meta:read` scope — which NRS already requests at consent.
+   * So every call here hit a URL Canva has never had, failed, and was reported
+   * as the connection misbehaving. That is why designs worked and "brand kits"
+   * never did.
+   */
   const fetchBrandKits = async (token: string) => {
-    const res = await fetch(`${CANVA_BASE_URL}/brand-kits`, {
+    const res = await fetch(`${CANVA_BASE_URL}/brand-templates?limit=100`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -163,7 +171,8 @@ export async function GET() {
 
     const brandKits = items.map((kit: Record<string, unknown>) => ({
       id: kit.id,
-      name: (kit.name as string) ?? 'Untitled Brand Kit',
+      // Brand templates carry `title`, not `name`.
+      name: (kit.title as string) ?? (kit.name as string) ?? 'Untitled template',
       is_default: kit.is_default ?? false,
     }))
 

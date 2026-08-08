@@ -129,10 +129,25 @@ export function createSearchFoldersTool(
       const apiKey = canva.token
 
       try {
-        const params = new URLSearchParams({ query, ownership: 'any' })
-        const res = await canvaFetch(apiKey, `/folders/search?${params}`)
+        /**
+         * Canva has no folder-search endpoint. `/v1/folders/search` returns
+         * 404 endpoint_not_found — verified against the live API — so this
+         * tool has never once returned a folder.
+         *
+         * Folders are browsed, not searched: `/v1/folders/{id}/items` lists a
+         * folder's contents, and "root" is the top level. So list the root and
+         * match on the name here.
+         */
+        const res = await canvaFetch(apiKey, '/folders/root/items?limit=100')
         const data = await res.json()
-        const items = data.items ?? []
+        const needle = query.trim().toLowerCase()
+        const items = (data.items ?? [])
+          .flatMap((item: Record<string, unknown>) => {
+            const folder = item.folder as Record<string, unknown> | undefined
+            return folder ? [folder] : []
+          })
+          .filter((folder: Record<string, unknown>) =>
+            !needle || String(folder.name ?? '').toLowerCase().includes(needle))
 
         if (items.length === 0) {
           return {
@@ -273,7 +288,7 @@ export function createListBrandKitsTool(
 ) {
   return tool({
     description:
-      'List brand kits available in the connected Canva account. Brand kits contain colours, fonts, and logos. Use to find a brand_kit_id for on-brand design creation.',
+      "List the brand templates in the connected Canva account — the owner's own branded layouts, with their colours, fonts and logos already applied. Use this to find a template to build a carousel or post on, and pass its id to create a design from it.",
     inputSchema: z.object({}),
     execute: async () => {
       const canva = await requireCanva(supabase, userId)
@@ -281,7 +296,14 @@ export function createListBrandKitsTool(
       const apiKey = canva.token
 
       try {
-        const res = await canvaFetch(apiKey, '/brand-kits')
+        /**
+         * `/brand-kits` DOES NOT EXIST. Canva answers
+         * 404 endpoint_not_found — verified against the live API — so this
+         * tool has never returned a single result. The real endpoint is
+         * `/v1/brand-templates`, covered by the `brandtemplate:meta:read`
+         * scope NRS already asks for at consent.
+         */
+        const res = await canvaFetch(apiKey, '/brand-templates?limit=100')
         const data = await res.json()
         const kits = data.items ?? []
 
@@ -290,23 +312,26 @@ export function createListBrandKitsTool(
             success: true,
             count: 0,
             message:
-              'No brand kits found in Canva. You can create one at canva.com → Brand Kit to set up your brand colours, fonts, and logos.',
+              'No brand templates found in Canva. Create one at canva.com (Brand → Templates) and it will appear here. Do NOT invent a template or claim to have seen one.',
           }
         }
 
         const results = kits.map(
-          (k: { id: string; name: string; thumbnail?: { url?: string } }) => ({
+          (k: { id: string; title?: string; name?: string; thumbnail?: { url?: string }; view_url?: string }) => ({
             id: k.id,
-            name: k.name,
+            // Brand templates carry `title`; the old code read `name`, which
+            // would have printed "undefined" even once the URL was right.
+            name: k.title ?? k.name ?? 'Untitled template',
             thumbnail: k.thumbnail?.url,
+            view_url: k.view_url,
           })
         )
 
         return {
           success: true,
           count: results.length,
-          brand_kits: results,
-          message: `Found ${results.length} brand kit(s):\n${results.map((k: { name: string; id: string }, i: number) => `${i + 1}. **${k.name}** (ID: ${k.id})`).join('\n')}\n\nI can use these to create on-brand designs with your colours and fonts.`,
+          brand_templates: results,
+          message: `Found ${results.length} brand template(s):\n${results.map((k: { name: string; id: string }, i: number) => `${i + 1}. **${k.name}** (ID: ${k.id})`).join('\n')}\n\nPass one of these ids to build a design on it, so the layout, colours and fonts are the owner's own.`,
         }
       } catch (err) {
         return {
