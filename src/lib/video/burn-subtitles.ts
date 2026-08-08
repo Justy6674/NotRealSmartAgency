@@ -20,7 +20,8 @@ import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildAss, canCaption } from './subtitles'
-import { DELIVERY_VIDEO_BITRATE } from './ffmpeg-transcode'
+import { DELIVERY_MAX_BYTES } from './ffmpeg-transcode'
+import { bitrateForDuration, AUDIO_BITRATE_KBPS } from './bitrate'
 import type { TranscriptionWord } from '@/lib/transcription/transcribe'
 
 const ffmpegPath = ffmpegBinary()
@@ -47,8 +48,18 @@ export interface BurnResult {
   cueCount: number
 }
 
-/** Read the frame size, because every caption measurement is derived from it. */
-export function probeFrameSize(input: string): Promise<{ width: number; height: number }> {
+/**
+ * Frame size and length, in one probe.
+ *
+ * Both are needed and both cost a round trip to the file, which for a 300 MB
+ * clip in storage is not free. The length matters as much as the size: it is
+ * the only thing that decides whether a capped encode lands under the limit.
+ */
+export function probeVideo(input: string): Promise<{
+  width: number
+  height: number
+  seconds: number
+}> {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(input, (error, data) => {
       if (error) return reject(error)
@@ -56,7 +67,7 @@ export function probeFrameSize(input: string): Promise<{ width: number; height: 
       const width = Number(stream?.width)
       const height = Number(stream?.height)
       if (!width || !height) return reject(new Error('no video stream to caption'))
-      resolve({ width, height })
+      resolve({ width, height, seconds: Number(data.format?.duration) || 0 })
     })
   })
 }
@@ -101,12 +112,17 @@ export async function burnSubtitlesFromUrl(
     throw new Error('there is no speech in this clip to caption')
   }
 
-  const source = await probeFrameSize(url)
+  const source = await probeVideo(url)
   // The geometry has to describe the OUTPUT frame, since that is what libass
   // draws into and what the caption margins were measured against.
   const { width, height } = scaledFrame(source.width, source.height)
   const ass = buildAss(words, width, height)
   if (!ass) throw new Error('there is no speech in this clip to caption')
+
+  // A flat ceiling cannot know how long the clip runs. 4500 kbps is right for
+  // thirty seconds and produced 93 MB from two and a half minutes — over the
+  // limit, and back to the fetch failure this was meant to prevent.
+  const rate = bitrateForDuration(source.seconds, DELIVERY_MAX_BYTES)
 
   const dir = await mkdtemp(join(tmpdir(), 'nrs-captions-'))
   const assPath = join(dir, 'captions.ass')
@@ -126,9 +142,10 @@ export async function burnSubtitlesFromUrl(
 
       const command = ffmpeg(url)
         .videoCodec('libx264')
-        // The audio is untouched, so re-encoding it would only lose a
-        // generation of quality for nothing.
-        .audioCodec('copy')
+        // Re-encoded rather than copied: the size budget above counts the
+        // audio, and a copied track carries whatever bitrate the phone chose,
+        // which on some handsets is most of the budget on its own.
+        .audioCodec('aac')
         .outputOptions([
           '-preset veryfast',
           // Delivery-grade, not archive-grade.
@@ -139,9 +156,10 @@ export async function burnSubtitlesFromUrl(
           // which is the exact size Instagram's fetch gives up on with "error
           // code 2207082" long after the draft looked fine. The master is
           // untouched in the library; this one has a platform to satisfy.
-          `-b:v ${DELIVERY_VIDEO_BITRATE}`,
-          `-maxrate ${DELIVERY_VIDEO_BITRATE}`,
-          '-bufsize 9000k',
+          `-b:v ${rate.videoKbps}k`,
+          `-maxrate ${rate.videoKbps}k`,
+          `-bufsize ${rate.videoKbps * 2}k`,
+          `-b:a ${AUDIO_BITRATE_KBPS}k`,
           '-pix_fmt yuv420p',
           `-vf ${filter}`,
           '-movflags +faststart',
@@ -161,6 +179,12 @@ export async function burnSubtitlesFromUrl(
     })
 
     const buffer = await readFile(outputPath)
+    if (!rate.fits) {
+      console.warn(
+        `[captions] ${Math.round(source.seconds)}s is too long to fit under`
+        + ` ${DELIVERY_MAX_BYTES / 1048576} MB at a watchable bitrate — ${(buffer.byteLength / 1048576).toFixed(1)} MB`,
+      )
+    }
     return {
       buffer,
       bytes: buffer.byteLength,

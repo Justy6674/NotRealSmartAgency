@@ -117,14 +117,18 @@ test('the caption is sized for the frame that ships, not the frame that arrived'
   assert.equal(odd.height % 2, 0)
 })
 
-test('the published copy is capped to a size a platform will fetch', () => {
+test('the published copy is sized from how long the clip runs', () => {
   // Instagram does not receive an upload, it fetches the URL — and gives up on
   // a large one with "error code 2207082" long after the draft looked fine.
-  // A one-minute clip captioned at crf 21 with no ceiling came out at 103 MB.
+  // crf 21 with no ceiling gave 103 MB; a flat 4500 kbps ceiling still gave
+  // 93 MB, because a fixed rate cannot know the clip is two and a half minutes.
   const source = readFileSync(join(process.cwd(), 'src/lib/video/burn-subtitles.ts'), 'utf8')
-  assert.match(source, /-maxrate \$\{DELIVERY_VIDEO_BITRATE\}/,
-    'the captioned copy must carry a bitrate ceiling — it is the file that publishes')
+  assert.match(source, /bitrateForDuration/, 'the bitrate must come from the duration')
+  assert.match(source, /-maxrate \$\{rate\.videoKbps\}k/, 'no ceiling on the encode')
   assert.ok(!/'-crf 21'/.test(source), 'crf alone has no ceiling')
+  // The size budget counts the audio, so it cannot be a copied track of
+  // unknown bitrate.
+  assert.ok(!/audioCodec\('copy'\)/.test(source), 'copied audio is outside the budget')
 })
 
 test('scaling happens before captioning, in one filter chain', () => {

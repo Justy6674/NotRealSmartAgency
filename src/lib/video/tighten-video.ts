@@ -15,7 +15,8 @@ import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { planTighten, remapWords, selectFilters, isWorthTightening, type TightenPlan } from './tighten'
-import { DELIVERY_VIDEO_BITRATE } from './ffmpeg-transcode'
+import { DELIVERY_MAX_BYTES } from './ffmpeg-transcode'
+import { bitrateForDuration, AUDIO_BITRATE_KBPS } from './bitrate'
 import type { TranscriptionWord } from '@/lib/transcription/transcribe'
 
 const ffmpegPath = ffmpegBinary()
@@ -56,6 +57,11 @@ export async function tightenFromUrl(
     throw new Error('there is not enough dead air in this clip to be worth re-encoding')
   }
 
+  // Sized against the TIGHTENED length, which is the whole point of having
+  // just cut it — budgeting for the original would starve the picture for
+  // seconds that are no longer in the file.
+  const rate = bitrateForDuration(plan.tightenedSeconds, DELIVERY_MAX_BYTES)
+
   const dir = await mkdtemp(join(tmpdir(), 'nrs-tighten-'))
   const outputPath = join(dir, 'tightened.mp4')
 
@@ -78,13 +84,13 @@ export async function tightenFromUrl(
           // which is the exact size Instagram's fetch gives up on with "error
           // code 2207082" long after the draft looked fine. The master is
           // untouched in the library; this one has a platform to satisfy.
-          `-b:v ${DELIVERY_VIDEO_BITRATE}`,
-          `-maxrate ${DELIVERY_VIDEO_BITRATE}`,
-          '-bufsize 9000k',
+          `-b:v ${rate.videoKbps}k`,
+          `-maxrate ${rate.videoKbps}k`,
+          `-bufsize ${rate.videoKbps * 2}k`,
           '-pix_fmt yuv420p',
           `-vf scale='min(1080,iw)':-2,${video}`,
           `-af ${audio}`,
-          '-b:a 128k',
+          `-b:a ${AUDIO_BITRATE_KBPS}k`,
           '-movflags +faststart',
         ])
         .on('error', reject)
