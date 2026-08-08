@@ -36,6 +36,7 @@ import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
 import { actionsFrom, enforceClaims } from './claimed-actions'
 import { enforceBrandName } from '@/lib/brand/enforce-name'
 import { brainConfigured } from '@/lib/brain/gbrain'
+import { correctionsForPrompt, recordCorrection } from '@/lib/brain/record-correction'
 import { reactionLessonsForPrompt } from '@/lib/telegram/handle-reaction'
 import {
   buildWebsiteScanGroundingDirective,
@@ -627,6 +628,15 @@ That's the difference between a marketing director and a tech support agent. Def
     }).catch(() => null)
     if (reactionLessons) systemPrompt += `\n\n---\n\n${reactionLessons}`
 
+    // Its own caught mistakes, counted. "You have done this 14 times" carries
+    // weight that a general instruction does not.
+    const priorMistakes = await correctionsForPrompt(supabase, {
+      brandId: execution.projectId,
+      brandSlug: typedBrand.slug,
+      userId,
+    }).catch(() => null)
+    if (priorMistakes) systemPrompt += `\n\n---\n\n${priorMistakes}`
+
     // Point at the brain, hard.
     //
     // Every serious failure on 8 August was already written down in gbrain and
@@ -702,6 +712,16 @@ That's the difference between a marketing director and a tech support agent. Def
     if (naming.corrected.length > 0) {
       console.warn(`[director-job] brand name corrected: ${naming.corrected.join(', ')}`)
       response = naming.text
+      // Remembered, not just logged. "ScentSell" was corrected repeatedly on
+      // 8 August and each correction taught the system nothing.
+      void recordCorrection(supabase, {
+        kind: 'brand_name',
+        brandId: execution.projectId,
+        brandSlug: typedBrand.slug,
+        userId,
+        detail: naming.corrected.join(', '),
+        lesson: `You keep misspelling the brand. It is "${typedBrand.name}" — never any other form.`,
+      })
     }
 
     // Recorded so the NEXT turn can read what this one changed, rather than
@@ -712,6 +732,15 @@ That's the difference between a marketing director and a tech support agent. Def
     if (claims.corrected) {
       console.warn(`[director-job] unbacked claim corrected: "${claims.evidence}"`)
       response = claims.response
+      void recordCorrection(supabase, {
+        kind: 'unbacked_claim',
+        brandId: execution.projectId,
+        brandSlug: typedBrand.slug,
+        userId,
+        detail: claims.evidence ?? 'a claimed change',
+        lesson: 'You have said work was done when no tool had run. Never state that a draft or'
+          + ' post changed unless you called the tool that changes it in this same turn.',
+      })
     }
 
     let repairInputTokens = 0
