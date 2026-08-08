@@ -38,7 +38,7 @@ import { enforceBrandName } from '@/lib/brand/enforce-name'
  */
 const MIXPOST_WAIT_MS = 90_000
 
-export type MixpostSyncOutcome = 'synced' | 'pending' | 'failed' | 'skipped'
+export type MixpostSyncOutcome = 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate'
 
 export interface CreateDraftInput {
   /** Client used for the insert — RLS applies where the caller is a user. */
@@ -75,6 +75,13 @@ export interface CreateDraftResult {
   mixpostError?: string
   /** Present once Mixpost confirms — this is what the Review tab renders from. */
   mixpostPostUuid?: string
+  /**
+   * The draft this request matched instead of creating a second one.
+   *
+   * Returned rather than hidden so the caller can SAY "that one already
+   * exists" — silently returning an old id would be its own quiet lie.
+   */
+  duplicateOf?: string
 }
 
 /**
@@ -152,6 +159,11 @@ function derivePostType(
  * through `mixpost`/`mixpostError`, never by discarding a draft the user's
  * agent already wrote.
  */
+/** Long enough to catch a repeated request, short enough to allow a repost. */
+const DUPLICATE_WINDOW_MS = 30 * 60 * 1000
+/** Enough of the caption to identify it; not so much that an edit slips past. */
+const DUPLICATE_MATCH_CHARS = 120
+
 export async function createDraftPost(input: CreateDraftInput): Promise<CreateDraftResult> {
   const {
     supabase,
@@ -191,6 +203,53 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     console.warn(`[create-draft] brand name corrected in caption: ${naming.corrected.join(', ')}`)
   }
   const correctedCaption = naming.text
+
+  // Has this exact post already been drafted?
+  //
+  // The owner asked once and received SIX drafts — three identical pairs. He
+  // even said "you did them already" and got two more, because nothing
+  // anywhere checked, and a Director that has just written a caption has no
+  // way to know it wrote the same one four minutes ago.
+  //
+  // Matched on brand, platform, media and the opening of the caption, within a
+  // short window. Not on the whole caption: a reworded version IS a new draft
+  // and must be allowed through. The window keeps a deliberate repost next
+  // week working.
+  const { data: recent } = await supabase
+    .from('scheduled_posts')
+    .select('id, caption, media_item_ids, metadata')
+    .eq('brand_id', brandId)
+    .eq('platform', platform)
+    .eq('status', 'draft')
+    .gte('created_at', new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString())
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  const opening = correctedCaption.trim().slice(0, DUPLICATE_MATCH_CHARS).toLowerCase()
+  const duplicate = (recent ?? []).find((row) => {
+    const sameOpening = typeof row.caption === 'string'
+      && row.caption.trim().slice(0, DUPLICATE_MATCH_CHARS).toLowerCase() === opening
+    const sameMedia = JSON.stringify((row.media_item_ids ?? []).slice().sort())
+      === JSON.stringify(mediaItemIds.slice().sort())
+    return sameOpening && sameMedia
+  })
+
+  if (duplicate) {
+    console.warn(`[create-draft] duplicate suppressed for ${platform}; returning ${duplicate.id}`)
+    return {
+      id: duplicate.id as string,
+      postType: postTypeOverride ?? 'single',
+      mediaItemIds,
+      mixpost: 'duplicate',
+      // The Mixpost id lives in metadata, not a column — a select-columns test
+      // caught this being asked for as a field that has never existed.
+      ...(() => {
+        const uuid = (duplicate.metadata as { mixpost?: { uuid?: unknown } } | null)?.mixpost?.uuid
+        return typeof uuid === 'string' ? { mixpostPostUuid: uuid } : {}
+      })(),
+      duplicateOf: duplicate.id as string,
+    }
+  }
 
   // Resolve the media so post_type and image_url match what's attached.
   let isVideo = false
@@ -355,5 +414,11 @@ export function describeMixpostOutcome(result: CreateDraftResult): string {
       return 'Saved in NRS, but it did NOT reach Mixpost. It is safe to try again.'
     case 'skipped':
       return 'Saved in NRS.'
+    case 'duplicate':
+      // Said out loud rather than passed off as a new draft. The owner asked
+      // once and got six; being told plainly that one already exists is the
+      // whole point of catching it.
+      return 'That one is already drafted — I have not made a second copy. It is in Mixpost'
+        + ' waiting for you.'
   }
 }

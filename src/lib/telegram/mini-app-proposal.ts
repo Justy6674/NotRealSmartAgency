@@ -80,7 +80,15 @@ async function writeOpener({
   productRules: string | null
 }): Promise<string> {
   if (!transcript?.trim()) {
-    return `Got ${fileName}, but I couldn't make out any speech in it. Tell me what's in it and what you want, and I'll write from that.`
+    // An image has no speech, so saying "I couldn't make out any speech" about
+    // a PNG is nonsense that makes the whole thing look like it is not reading
+    // what it was sent. The two cases are genuinely different: a silent video
+    // is a disappointment, a picture is simply a picture.
+    const looksLikeImage = /\.(png|jpe?g|gif|webp|heic|heif)$/i.test(fileName)
+    return looksLikeImage
+      ? `Got ${fileName}. Tell me what it is and what you want from it, and I'll write from that.`
+      : `Got ${fileName}, but I couldn't make out any speech in it. Tell me what's in it and what`
+        + ' you want, and I\'ll write from that.'
   }
   try {
     const { text } = await generateText({
