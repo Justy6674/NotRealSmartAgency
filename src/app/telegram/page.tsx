@@ -107,6 +107,7 @@ export default function TelegramMiniAppPage() {
   const [staged, setStaged] = useState<StagedFile[]>([])
   /** Typed and sent before the upload finished; goes the moment it lands. */
   const [queuedDirection, setQueuedDirection] = useState<string | null>(null)
+  const [startingNew, setStartingNew] = useState(false)
   const [tick, setTick] = useState(() => 0)
   const [hasMore, setHasMore] = useState(false)
   const [oldestAnchorMs, setOldestAnchorMs] = useState<number | null>(null)
@@ -185,6 +186,50 @@ export default function TelegramMiniAppPage() {
     const timer = window.setInterval(() => setTick((n) => n + 1), 1000)
     return () => window.clearInterval(timer)
   }, [uploading])
+
+  /**
+   * Finish this piece of work and start the next.
+   *
+   * Nothing is deleted — what was decided is saved into the brand's memory
+   * first and the older conversation stays in the database. This only moves
+   * where the screen starts, so a fresh clip is not read against three days of
+   * argument about a different one.
+   */
+  const startNewThread = async () => {
+    if (!selectedProject || startingNew || sending) return
+    setStartingNew(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/telegram/mini-app/new-thread', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ init_data: initData }),
+      })
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string; turns_saved?: number; memory_saved?: boolean
+      }
+      if (!response.ok) {
+        setError(data.error ?? 'Could not start a new one. Nothing was lost.')
+        return
+      }
+      setEvents([])
+      newestIdRef.current = null
+      followingRef.current = true
+      setStaged([])
+      setQueuedDirection(null)
+      setNotice(
+        data.memory_saved && (data.turns_saved ?? 0) > 0
+          ? `Saved what we settled and started fresh. Ask for anything.`
+          // Said plainly rather than claiming a save that did not happen.
+          : 'Started fresh. Nothing from before has been deleted.',
+      )
+      await refreshTimeline()
+    } catch {
+      setError('Could not start a new one. Check your connection.')
+    } finally {
+      setStartingNew(false)
+    }
+  }
 
   const chooseProject = async (grantId: string) => {
     setError(null)
@@ -645,8 +690,8 @@ export default function TelegramMiniAppPage() {
               edge is how you know there are more to the side. Clipped inside a
               padded box it just looked broken.
             */}
-            <section aria-label="Choose a project" className="-mx-4 mb-2 shrink-0 sm:-mx-6">
-              <div className="flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden">
+            <section aria-label="Choose a project" className="-mx-4 mb-2 flex shrink-0 items-center gap-2 pr-4 sm:-mx-6 sm:pr-6">
+              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden">
                 {projects.map((project) => (
                   <button
                     key={project.id}
@@ -660,6 +705,23 @@ export default function TelegramMiniAppPage() {
                   </button>
                 ))}
               </div>
+              {/*
+                Finish this one, start the next.
+
+                Everything for a brand used to land in one endless scroll, so by
+                the third clip there was no telling which video an answer
+                belonged to. This saves what was settled, then starts the screen
+                again — it deletes nothing.
+              */}
+              <button
+                type="button"
+                onClick={() => void startNewThread()}
+                disabled={!selectedProject || startingNew || sending}
+                title="Save what we settled and start something new"
+                className="mb-2 shrink-0 rounded-full bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-3 py-1.5 text-sm font-medium text-[var(--tg-theme-hint-color,#82909f)] ring-1 ring-black/10 disabled:opacity-40 dark:ring-white/10"
+              >
+                {startingNew ? 'Saving…' : '+ New'}
+              </button>
             </section>
 
             {/*

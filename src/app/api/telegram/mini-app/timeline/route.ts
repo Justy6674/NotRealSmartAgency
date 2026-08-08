@@ -16,6 +16,7 @@ import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '
 import { buildTelegramTimeline, PAGE_GROUPS, takeNewestGroups } from '@/lib/telegram/timeline'
 import { TELEGRAM_TIMELINE_SOURCES } from '@/lib/telegram/timeline-sources'
 import { sanitiseTimeline } from '@/lib/telegram/timeline-text'
+import { readThreadStart } from '@/lib/telegram/thread-boundary'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,11 +47,22 @@ export async function POST(request: Request) {
   const nowMs = Date.now()
   const brandId = context.activeSession.projectId
 
+  // Start of the current piece of work, if the owner has ever said "new".
+  // Older events are not deleted — they simply sit above the line, so a fresh
+  // clip is not read against three days of argument about a different one.
+  const { data: brand } = await admin
+    .from('brands').select('slug').eq('id', brandId).maybeSingle()
+  const threadStartMs = brand?.slug
+    ? await readThreadStart(admin, {
+      brandId, brandSlug: brand.slug as string, userId: context.actorUserId,
+    }).catch(() => null)
+    : null
+
   const fetchContext = {
     admin,
     userId: context.actorUserId,
     brandId,
-    fromMs: null,
+    fromMs: threadStartMs,
     rowLimit: ROW_LIMIT,
   }
 
