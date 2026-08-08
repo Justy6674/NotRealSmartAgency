@@ -5,6 +5,20 @@ import { gateway } from '@ai-sdk/gateway'
 import { experimental_generateImage as generateImage } from 'ai'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+/**
+ * gpt-image-1 offers three shapes, so the five ratios map onto the nearest.
+ *
+ * 4:3 and 3:4 have no exact match and take the square rather than a landscape
+ * or portrait that is visibly wrong for the platform they were asked for.
+ */
+const SIZE_FOR_RATIO: Record<'1:1' | '16:9' | '9:16' | '4:3' | '3:4', `${number}x${number}`> = {
+  '1:1': '1024x1024',
+  '16:9': '1536x1024',
+  '9:16': '1024x1536',
+  '4:3': '1024x1024',
+  '3:4': '1024x1024',
+}
+
 export function createGenerateImageTool(
   supabase: SupabaseClient,
   userId: string,
@@ -22,8 +36,17 @@ export function createGenerateImageTool(
         const result = await generateImage({
           model: gateway.image('openai/gpt-image-1'),
           prompt,
-          aspectRatio,
+          // `size`, NOT `aspectRatio`. The Gateway answers this model with
+          // "The feature \"aspectRatio\" is not supported. This model does not
+          // support aspect ratio. Use `size` instead." — a warning that has
+          // been in the logs since 24 March. The ratio was silently dropped
+          // and OpenAI chose the shape itself, so 7 of the first 32 images
+          // came out wrong: a 1:1 Instagram request returned 1536x1024
+          // landscape, a 9:16 Stories request returned a square.
+          size: SIZE_FOR_RATIO[aspectRatio],
           providerOptions: {
+            // 'medium' is load-bearing on cost, not just quality: the same
+            // image at 'high' is $0.167 instead of $0.042 — four times more.
             openai: { quality: 'medium' },
           },
         })
