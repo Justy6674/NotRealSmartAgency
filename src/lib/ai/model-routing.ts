@@ -34,11 +34,27 @@ export const GATEWAY_MODELS: Record<GatewayModelTier, string> = {
   code: 'openai/gpt-5.3-codex',
 }
 
+/**
+ * Where a tier goes when its first choice is unavailable.
+ *
+ * Checked against `GET https://ai-gateway.vercel.sh/v1/models` on 2026-08-09
+ * rather than written from memory — the Gateway's own guidance is that model
+ * IDs recalled from memory are stale by default, and every ID and price below
+ * was read from that response.
+ *
+ * The Anthropic primaries were already current: sonnet-5 and opus-5 are the
+ * newest that exist. The OpenAI fallbacks were two generations behind, and the
+ * replacements are both newer AND cheaper — gpt-5.6-terra is $2/$12 per
+ * million against gpt-5.4's $2.50/$15, so this is not a trade.
+ *
+ * gpt-5.3-codex stays the `code` primary: it is genuinely the newest codex in
+ * the catalogue, ahead of 5.2-codex and 5.1-codex-max.
+ */
 const GATEWAY_FALLBACKS: Record<GatewayModelTier, readonly string[]> = {
-  fast: ['google/gemini-3-flash', 'openai/gpt-5.4-nano'],
-  agency: ['openai/gpt-5.4', 'google/gemini-3-flash'],
-  frontier: ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'],
-  code: ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'],
+  fast: ['google/gemini-3-flash', 'openai/gpt-5.6-luna'],
+  agency: ['openai/gpt-5.6-terra', 'google/gemini-3-flash'],
+  frontier: ['anthropic/claude-sonnet-5', 'openai/gpt-5.6-terra'],
+  code: ['anthropic/claude-sonnet-5', 'openai/gpt-5.6-terra'],
 }
 
 interface GatewayModelPricing {
@@ -49,7 +65,13 @@ interface GatewayModelPricing {
 }
 
 /**
- * USD per token from the Gateway model catalogue, refreshed 2026-07-25.
+ * USD per token, read from `GET /v1/models` on the Gateway on 2026-08-09.
+ *
+ * Every existing figure was re-checked against that response and all seven
+ * matched exactly, so this table is verified rather than merely old. The base
+ * (sub-272k-token) tier is used; the Gateway charges roughly double above that
+ * threshold, which no NRS call approaches.
+ *
  * Unknown custom registry models are conservatively budgeted as Opus 5.
  */
 const GATEWAY_MODEL_PRICING: Record<string, GatewayModelPricing> = {
@@ -60,6 +82,8 @@ const GATEWAY_MODEL_PRICING: Record<string, GatewayModelPricing> = {
   'openai/gpt-5.4': { input: 0.0000025, output: 0.000015, cacheRead: 0.00000025 },
   'openai/gpt-5.4-nano': { input: 0.0000002, output: 0.00000125, cacheRead: 0.00000002 },
   'google/gemini-3-flash': { input: 0.0000005, output: 0.000003, cacheRead: 0.00000005 },
+  'openai/gpt-5.6-terra': { input: 0.000002, output: 0.000012, cacheRead: 0.0000002, cacheWrite: 0.0000025 },
+  'openai/gpt-5.6-luna': { input: 0.0000002, output: 0.0000012, cacheRead: 0.00000002, cacheWrite: 0.00000025 },
 }
 
 export interface GatewayUsageForCosting {
