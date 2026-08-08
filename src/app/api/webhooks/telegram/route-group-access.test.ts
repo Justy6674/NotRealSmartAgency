@@ -36,7 +36,23 @@ test('a Telegram account can be fenced to a subset of its projects', () => {
 
 test('someone with one project is never asked which project', () => {
   const source = route()
-  assert.match(source, /grants\.length === 1\s*\n\s*\?\s*grants\[0\]/)
+  assert.match(source, /if \(grants\.length === 1\) return grants\[0\]/)
+})
+
+/**
+ * The "why does it keep reverting to Scent Sell" fault: a message posted in a
+ * topic that was linked to nothing fell through to a selection made somewhere
+ * else entirely. Posting in a topic states which project is meant, and a stale
+ * selection must never override it.
+ */
+test('an unlinked topic asks rather than falling back to the last selection', () => {
+  const source = route()
+  assert.match(source, /if \(inATopic\) return undefined/)
+  assert.match(source, /status: 'topic_unlinked'/)
+  // The fallback must come AFTER the refusal, so it cannot be reached from a topic.
+  const refusal = source.indexOf('if (inATopic) return undefined')
+  const fallback = source.indexOf('const session = await getActiveSession(admin, account.id)', refusal)
+  assert.ok(refusal > -1 && fallback > refusal, 'the stale-selection fallback must sit after the topic refusal')
 })
 
 test('a group with no topic is told what to do instead of being sent dead buttons', () => {

@@ -693,11 +693,16 @@ async function handleTelegramUpdate(request: NextRequest) {
   const inbound = parseInbound(update)
   if (!inbound) return NextResponse.json({ received: true, status: 'ignored' })
 
-  // A group's chat id is not otherwise recorded anywhere, and without it NRS
-  // cannot act on the group by itself — it can only ever react to a message.
-  // Logged so setup can be completed for the owner rather than by him.
+  // Remember the group. Telegram offers no way to ask which chats a bot is in,
+  // so without this NRS knows a group's id for the length of one request and
+  // can only ever reply in one — never set anything up in it.
   if (inbound.fromGroup) {
-    console.log(`[telegram] group chat id ${inbound.chatId} (thread ${inbound.threadId ?? 'none'})`)
+    await admin
+      .from('telegram_groups')
+      .upsert({ chat_id: inbound.chatId, last_seen_at: new Date().toISOString() }, { onConflict: 'chat_id' })
+      .then(({ error }) => {
+        if (error) console.error('[telegram] could not record the group:', error.message)
+      })
   }
 
   const intent = parseScopedTelegramIntent(inbound.text, inbound.callbackData)
@@ -868,24 +873,42 @@ async function handleTelegramUpdate(request: NextRequest) {
   // Underground Parfums because a stale selection was left over is worse than
   // asking.
   const topicRoute = await routeByTopic(admin, inbound.chatId, inbound.threadId ?? null)
-  const grant = topicRoute
-    ? grants.find(
+  const inATopic = inbound.threadId !== undefined
+
+  /**
+   * The last rule used to apply everywhere, and that is the "why does it keep
+   * reverting to Scent Sell" the owner kept hitting: he posted in a topic, the
+   * topic was linked to nothing, and the answer fell through to a selection he
+   * had made somewhere else entirely — often days earlier, in a different chat.
+   *
+   * Posting in a topic is a deliberate statement of which project is meant.
+   * Contradicting it with a stale selection is worse than asking, which is
+   * what the comment above always claimed and the code never did.
+   */
+  const resolveGrant = async (): Promise<TelegramGrant | undefined> => {
+    if (topicRoute) {
+      return grants.find(
         (candidate) =>
           candidate.grantId === topicRoute.grantId && candidate.projectId === topicRoute.projectId,
       )
-    // Someone let in for one brand should never be asked which brand. This is
-    // also what makes a plain group work for them with no setup at all.
-    : grants.length === 1
-      ? grants[0]
-      : await (async () => {
-          const session = await getActiveSession(admin, account.id)
-          return session
-            ? grants.find(
-                (candidate) =>
-                  candidate.grantId === session.grantId && candidate.projectId === session.projectId,
-              )
-            : undefined
-        })()
+    }
+
+    // Someone let in for one brand should never be asked which brand.
+    if (grants.length === 1) return grants[0]
+
+    // An unlinked topic: refuse to guess.
+    if (inATopic) return undefined
+
+    const session = await getActiveSession(admin, account.id)
+    return session
+      ? grants.find(
+          (candidate) =>
+            candidate.grantId === session.grantId && candidate.projectId === session.projectId,
+        )
+      : undefined
+  }
+
+  const grant = await resolveGrant()
 
   if (!grant) {
     // The topic names a real project, but not one this person was let in for.
@@ -899,9 +922,17 @@ async function handleTelegramUpdate(request: NextRequest) {
     // group is refused, because a scope change in a shared room could be made
     // by whoever taps it. So in a group, say what to do instead of sending a
     // picker that cannot be used.
+    // An unlinked topic gets the one instruction that fixes it for good.
+    if (inATopic) {
+      await reply(
+        `This topic is not linked to a project, so I will not guess which one you mean.\n\nRename it to one of these and I will link it straight away: ${grants.map((candidate) => candidate.projectName).join(', ')}.`,
+      )
+      return NextResponse.json({ received: true, status: 'topic_unlinked' })
+    }
+
     if (inbound.fromGroup) {
       await reply(
-        'Which project is this for? Set it in your private chat with me, or turn on Topics for this group and say "set up topics" — then the topic decides.',
+        `Which project is this for? Name a topic after one of these and anything posted in it goes there: ${grants.map((candidate) => candidate.projectName).join(', ')}.`,
       )
       return NextResponse.json({ received: true, status: 'project_required' })
     }
