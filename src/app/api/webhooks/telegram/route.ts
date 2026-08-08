@@ -30,6 +30,12 @@ import {
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
+  describeTopicLink,
+  linkForTopicName,
+  parseTopicNamed,
+  type TopicNamed,
+} from '@/lib/telegram/topic-autolink'
+import {
   DIRECTOR_TOPIC_NAME,
   isTopicSetupRequest,
   selectTopicProjects,
@@ -571,6 +577,84 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Record what a newly named topic means, and say so once.
+ *
+ * The person who created it is whoever is in the group, so this deliberately
+ * does not require a pairing: the mapping is about the TOPIC, and access is
+ * still checked against each sender's own grants when they post in it.
+ */
+async function linkNamedTopic(
+  admin: ReturnType<typeof createAdminClient>,
+  botToken: string,
+  named: TopicNamed,
+): Promise<string> {
+  // The projects available here are the owner's — the account that paired this
+  // group's brands. A topic belongs to the group, not to one person.
+  const { data: accounts } = await admin
+    .from('telegram_accounts')
+    .select('id, actor_user_id, allowed_brand_ids')
+    .is('revoked_at', null)
+    .order('created_at')
+    .limit(1)
+
+  const account = (accounts ?? [])[0] as TelegramAccount | undefined
+  if (!account) return 'no_account'
+
+  const grants = await getTelegramGrants(admin, account)
+  const link = linkForTopicName(named.name, grants)
+  if (link.kind === 'none') return 'unmatched'
+
+  // A rename points an existing thread somewhere new, so clear the old row
+  // rather than leaving two mappings for one topic.
+  await admin
+    .from('telegram_project_sessions')
+    .delete()
+    .eq('telegram_chat_id', named.chatId)
+    .eq('message_thread_id', named.threadId)
+    .eq('status', 'topic')
+
+  if (link.kind === 'brand') {
+    await admin
+      .from('telegram_project_sessions')
+      .delete()
+      .eq('telegram_chat_id', named.chatId)
+      .eq('brand_id', link.project.projectId)
+      .eq('status', 'topic')
+  } else {
+    await admin
+      .from('telegram_project_sessions')
+      .delete()
+      .eq('telegram_chat_id', named.chatId)
+      .is('brand_id', null)
+      .eq('status', 'topic')
+  }
+
+  const { error } = await admin.from('telegram_project_sessions').insert({
+    telegram_account_id: account.id,
+    telegram_chat_id: named.chatId,
+    message_thread_id: named.threadId,
+    status: 'topic',
+    ...(link.kind === 'brand'
+      ? { brand_id: link.project.projectId, project_access_grant_id: link.project.grantId }
+      : {}),
+  })
+
+  if (error) {
+    // Never the database's words. Silence is better than a constraint name.
+    console.error(`[topics] could not link "${named.name}":`, error.message)
+    return 'link_failed'
+  }
+
+  const said = describeTopicLink(link, named.name)
+  if (said && !named.renamed) {
+    await sendTelegramText({ botToken, chatId: named.chatId, text: said, threadId: named.threadId })
+      .catch((err) => console.error('[topics] confirm failed:', err instanceof Error ? err.message : err))
+  }
+
+  return link.kind
+}
+
 async function handleTelegramUpdate(request: NextRequest) {
   const config = getNRSTelegramConfig()
   if (!config?.enabled) {
@@ -582,6 +666,7 @@ async function handleTelegramUpdate(request: NextRequest) {
   }
 
   const update = await request.json().catch(() => null)
+  const admin = createAdminClient()
 
   // Being added to a group, or promoted in one, arrives as `my_chat_member`
   // rather than as a message. Without answering it the bot lands in silence
@@ -596,10 +681,17 @@ async function handleTelegramUpdate(request: NextRequest) {
     return NextResponse.json({ received: true, status: `membership:${membership.status}` })
   }
 
+  // A topic named after a project IS the instruction. He creates a topic
+  // called "Scent Sell" because he wants Scent Sell in it — there is nothing
+  // further to say, and no command he should have to run or interpret.
+  const named = parseTopicNamed(update)
+  if (named) {
+    const linked = await linkNamedTopic(admin, config.botToken, named)
+    return NextResponse.json({ received: true, status: `topic_${linked}` })
+  }
+
   const inbound = parseInbound(update)
   if (!inbound) return NextResponse.json({ received: true, status: 'ignored' })
-
-  const admin = createAdminClient()
 
   // A group's chat id is not otherwise recorded anywhere, and without it NRS
   // cannot act on the group by itself — it can only ever react to a message.
