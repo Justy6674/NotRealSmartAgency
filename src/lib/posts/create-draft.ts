@@ -26,6 +26,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { syncDraftToMixpost } from '@/lib/mixpost/sync-draft'
 import { userSafeError } from '@/lib/errors/user-safe'
 import type { PostPlatform, PostType, ScheduledPostStatus } from '@/types/database'
+import { enforceBrandName } from '@/lib/brand/enforce-name'
 
 /**
  * How long a caller waits for Mixpost before it reports 'pending' and moves on.
@@ -170,6 +171,27 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     awaitMixpost = true,
   } = input
 
+  // Spell the brand right in anything that will be published.
+  //
+  // This is the ONE place a draft is born, so it is the one place the check
+  // has to hold — a caption can reach here from the Director, from a tool, or
+  // from a hand edit, and the copy that goes to a customer must be correct
+  // whichever door it came through. URLs and handles are left alone.
+  const { data: namingBrand } = await supabase
+    .from('brands').select('name, name_never').eq('id', brandId).maybeSingle()
+
+  const naming = namingBrand?.name
+    ? enforceBrandName(caption, {
+      name: namingBrand.name as string,
+      nameNever: (namingBrand.name_never as string[] | null) ?? [],
+    })
+    : { text: caption, corrected: [] as string[] }
+
+  if (naming.corrected.length > 0) {
+    console.warn(`[create-draft] brand name corrected in caption: ${naming.corrected.join(', ')}`)
+  }
+  const correctedCaption = naming.text
+
   // Resolve the media so post_type and image_url match what's attached.
   let isVideo = false
   let firstMediaUrl: string | null = null
@@ -204,7 +226,7 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     user_id: userId,
     brand_id: brandId,
     platform,
-    caption,
+    caption: correctedCaption,
     hashtags,
     status,
     scheduled_at: resolvedScheduledAt,

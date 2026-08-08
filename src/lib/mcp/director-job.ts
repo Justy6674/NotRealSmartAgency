@@ -34,6 +34,7 @@ import { keepTyping } from '@/lib/telegram/typing'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
 import { enforceClaims } from './claimed-actions'
+import { enforceBrandName } from '@/lib/brand/enforce-name'
 import { reactionLessonsForPrompt } from '@/lib/telegram/handle-reaction'
 import {
   buildWebsiteScanGroundingDirective,
@@ -615,6 +616,24 @@ That's the difference between a marketing director and a tech support agent. Def
     // Checked rather than instructed: a model that has just composed the
     // perfect caption believes the work is done, and "I've updated the draft"
     // is the natural next sentence whether a tool ran or not.
+    // Spell the brand right, by correcting rather than asking.
+    //
+    // "ScentSell" reached the owner in finished copy while that exact spelling
+    // sat in the forbidden list on his own brand record. The list was an
+    // instruction, and an instruction competes with fluency — a model that has
+    // just written a fluent sentence has no signal that one word in it is
+    // wrong. URLs, handles and hashtags are left alone: scentsell.com.au and
+    // @scentsellsocials are correct, and rewriting them breaks a link and tags
+    // a stranger.
+    const naming = enforceBrandName(response, {
+      name: typedBrand.name,
+      nameNever: (typedBrand.name_never as string[] | null) ?? [],
+    })
+    if (naming.corrected.length > 0) {
+      console.warn(`[director-job] brand name corrected: ${naming.corrected.join(', ')}`)
+      response = naming.text
+    }
+
     const claims = enforceClaims(response, (result as { steps?: unknown }).steps)
     if (claims.corrected) {
       console.warn(`[director-job] unbacked claim corrected: "${claims.evidence}"`)
