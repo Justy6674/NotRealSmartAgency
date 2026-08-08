@@ -47,7 +47,7 @@ export function ConnectionsPanel() {
           const count = Array.isArray(data.brand_kits) ? data.brand_kits.length : null
           return {
             connected: true,
-            detail: count === null ? 'Connected' : `Connected — ${count} brand kit${count === 1 ? '' : 's'}`,
+            detail: count === null ? 'Connected' : `Connected — ${count} brand template${count === 1 ? '' : 's'}`,
           }
         })
         .catch(() => ({ connected: false, detail: 'Could not be checked just now' })),
@@ -90,7 +90,7 @@ export function ConnectionsPanel() {
       <div className="mt-4 space-y-2">
         <Row
           name="Canva"
-          purpose="Designs, brand kits and brand templates"
+          purpose="Designs, brand templates and folders"
           loading={state.loading}
           connected={state.canva?.connected ?? null}
           detail={state.canva?.detail ?? ''}

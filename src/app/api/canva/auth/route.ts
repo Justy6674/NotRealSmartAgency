@@ -51,13 +51,13 @@ export async function GET() {
     'brandtemplate:meta:read',
     'brandtemplate:content:read',
     'brandtemplate:content:write',
-    // Brand KITS are a separate permission from brand TEMPLATES, and it was
-    // never requested — which is why colours, fonts and logos were never
-    // reachable however many times the connection was redone. The scope name
-    // is `brandkit:read`, with no underscore. Canva's own tooling reports
-    // "Missing scopes: [brandkit:read]" when it is absent, and a token cannot
-    // gain a scope afterwards: it has to be asked for at consent.
-    'brandkit:read',
+    // NOT requested: `brandkit:read`. Brand KITS are not in the Canva Connect
+    // API at all — the published OpenAPI spec has no brand-kit path anywhere,
+    // so there is nothing the scope could be used for, and an unrecognised
+    // scope risks breaking consent for everything else. Canva's own tooling
+    // can list brand kits because it is first-party; a Connect integration
+    // cannot. Brand TEMPLATES are the supported equivalent and are requested
+    // above.
   ].join(' ')
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'https://notrealsmart.com.au'}/api/canva/callback`

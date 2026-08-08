@@ -6,10 +6,27 @@
 
 import { deepgramKeywordParams, type BrandVocabulary } from './brand-vocabulary'
 
+export interface TranscriptionWord {
+  word: string
+  /** Seconds from the start of the media. */
+  start: number
+  end: number
+}
+
 export interface TranscriptionResult {
   text: string
   model: string
   duration?: number
+  /**
+   * Word-level timings, when the recogniser provides them.
+   *
+   * Deepgram returns these on every request and they were being discarded, so
+   * subtitles had to be treated as a feature nobody had rather than data
+   * already sitting in the response. They are what makes burnt-in captions
+   * possible — and captions are not optional on social video, where most of
+   * the audience watches with the sound off.
+   */
+  words?: TranscriptionWord[]
 }
 
 /**
@@ -53,12 +70,25 @@ async function transcribeWithDeepgramUrl(
     if (!res.ok) throw new Error(`Deepgram ${res.status}: ${await res.text()}`)
 
     const data = await res.json()
-    const transcript = data.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? ''
+    const alternative = data.results?.channels?.[0]?.alternatives?.[0]
+    const transcript = alternative?.transcript ?? ''
     const duration = data.metadata?.duration
 
     if (!transcript.trim()) throw new Error('Empty transcription from Deepgram')
 
-    return { text: transcript, model: 'deepgram-nova-2', duration }
+    const words: TranscriptionWord[] = Array.isArray(alternative?.words)
+      ? alternative.words.flatMap((w: Record<string, unknown>) =>
+          typeof w.start === 'number' && typeof w.end === 'number'
+            ? [{
+                // punctuated_word keeps the sentence readable on screen.
+                word: String(w.punctuated_word ?? w.word ?? ''),
+                start: w.start,
+                end: w.end,
+              }]
+            : [])
+      : []
+
+    return { text: transcript, model: 'deepgram-nova-2', duration, ...(words.length ? { words } : {}) }
   } finally {
     clearTimeout(timeout)
   }

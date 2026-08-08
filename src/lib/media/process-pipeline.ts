@@ -307,6 +307,18 @@ export async function runMediaProcessingPipeline({
 
       updates.transcription = text
       updates.transcription_model = transcription.model
+
+      // Keep the word timings. They arrive in every Deepgram response and were
+      // discarded, which made burnt-in captions look like a feature nobody
+      // had — when the only missing part was not throwing the data away.
+      // Captions are not optional on social video: most of it is watched with
+      // the sound off.
+      if (transcription.words?.length) {
+        updates.metadata = {
+          ...(mediaItem.metadata as Record<string, unknown> | null ?? {}),
+          transcript_words: transcription.words,
+        }
+      }
       updates.transcription_status = 'transcribed'
       if (transcription.duration) updates.duration_seconds = transcription.duration
       report.transcription = { status: 'ok', duration_ms: transcriptionResult.duration_ms }
@@ -371,6 +383,10 @@ export async function runMediaProcessingPipeline({
   updates.tags = allTags
   updates.metadata = {
     ...((mediaItem.metadata as Record<string, unknown>) ?? {}),
+    // Anything an earlier stage already staged — the transcript's word timings,
+    // for one — must survive. Rebuilding this object from the ROW alone
+    // silently dropped them, because the row is what it was before this run.
+    ...((updates.metadata as Record<string, unknown> | undefined) ?? {}),
     processing: report,
     ...(delivery ? { delivery } : {}),
   }
