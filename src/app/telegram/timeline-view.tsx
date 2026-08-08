@@ -58,7 +58,7 @@ function CaptionBlock({
 
   if (editing) {
     return (
-      <div className="rounded-2xl border border-[var(--tg-theme-button-color,#2aabee)] bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-3">
+      <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-3 ring-2 ring-[var(--tg-theme-button-color,#2aabee)]">
         <textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -77,7 +77,7 @@ function CaptionBlock({
           <button
             type="button"
             onClick={() => { setDraft(caption); setEditing(false) }}
-            className="rounded-xl border border-white/15 px-4 py-2 text-sm"
+            className="rounded-xl px-4 py-2 text-sm ring-1 ring-black/15 dark:ring-white/15"
           >
             Cancel
           </button>
@@ -87,7 +87,7 @@ function CaptionBlock({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-[15px] leading-6">
+    <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 ring-1 ring-black/10 dark:ring-white/10 text-[15px] leading-6">
       {hook && <p className="font-semibold">{hook}</p>}
       {caption && <p className="mt-2 whitespace-pre-wrap">{caption}</p>}
       {hashtags.length > 0 && (
@@ -95,11 +95,11 @@ function CaptionBlock({
           {hashtags.map((tag) => `#${tag}`).join(' ')}
         </p>
       )}
-      <div className="mt-3 flex gap-2 border-t border-white/10 pt-3">
-        <button type="button" onClick={copy} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs">
+      <div className="mt-3 flex gap-2 border-t border-black/10 pt-3 dark:border-white/10">
+        <button type="button" onClick={copy} className="rounded-lg px-3 py-1.5 text-xs ring-1 ring-black/15 dark:ring-white/15">
           {copied ? 'Copied' : 'Copy'}
         </button>
-        <button type="button" onClick={() => setEditing(true)} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs">
+        <button type="button" onClick={() => setEditing(true)} className="rounded-lg px-3 py-1.5 text-xs ring-1 ring-black/15 dark:ring-white/15">
           Edit
         </button>
       </div>
@@ -123,11 +123,11 @@ function dayKey(ms: number): string {
 function DaySeparator({ ms }: { ms: number }) {
   return (
     <div className="my-4 flex items-center gap-3">
-      <span className="h-px flex-1 bg-white/10" />
+      <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
       <span className="text-[11px] uppercase tracking-wider text-[var(--tg-theme-hint-color,#82909f)]">
         {DAY.format(new Date(ms))}
       </span>
-      <span className="h-px flex-1 bg-white/10" />
+      <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
     </div>
   )
 }
@@ -151,7 +151,7 @@ const DirectorBubble = memo(function DirectorBubble({
     <div
       className={`mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md px-4 py-2.5 text-[15px] leading-6 ${
         withheld
-          ? 'border border-amber-400/30 bg-amber-400/10 text-amber-100'
+          ? 'bg-amber-500 text-white'
           : 'bg-[var(--tg-theme-secondary-bg-color,#17212b)]'
       }`}
     >
@@ -216,13 +216,13 @@ function EventRow({ event, onRetry, onEditCaption }: { event: TimelineEvent; onR
 
     case 'director_error':
       return (
-        <div className="mr-auto max-w-[88%] rounded-2xl rounded-bl-md border border-red-400/30 bg-red-400/10 px-4 py-3 text-[15px] leading-6 text-red-100">
+        <div className="mr-auto max-w-[88%] rounded-2xl rounded-bl-md bg-red-600 px-4 py-3 text-[15px] leading-6 text-white">
           <p>{payload.text}</p>
           {payload.retryText && (
             <button
               type="button"
               onClick={() => onRetry(payload.retryText!, payload.retryClientEventId)}
-              className="mt-2 rounded-lg border border-red-300/40 px-3 py-1 text-xs font-medium hover:bg-red-400/10"
+              className="mt-2 rounded-lg bg-white/20 px-3 py-1 text-xs font-medium"
             >
               Send it again
             </button>

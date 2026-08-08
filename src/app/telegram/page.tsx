@@ -23,8 +23,36 @@ interface StagedFile {
   name: string
   type: string
   percent: number
+  sizeBytes: number
+  /** When the bytes started moving, so elapsed time can be shown. */
+  startedAt: number
+  /**
+   * Whether the browser has ever told us how far along it is.
+   *
+   * iOS does not. Telegram runs Mini Apps in a WKWebView, which buffers the
+   * whole request body before sending and fires no upload progress events, so
+   * a 289 MB video sat on "uploading… 0%" for three minutes and looked broken
+   * when it was working perfectly. When this stays false we must not show a
+   * percentage at all — a number that never moves is worse than no number.
+   */
+  sawProgress: boolean
   /** Set once the bytes are in storage; until then it cannot be committed. */
   storagePath: string | null
+}
+
+/** A phone video over mobile data. Worth warning about before the wait. */
+const SLOW_UPLOAD_BYTES = 40 * 1024 * 1024
+
+function megabytes(bytes: number): string {
+  return bytes >= 1024 * 1024 * 1024
+    ? `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
+    : `${Math.round(bytes / 1024 / 1024)} MB`
+}
+
+/** m:ss, so a long upload reads as progress rather than as a hang. */
+function elapsedLabel(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
 declare global {
@@ -49,7 +77,9 @@ function uploadWithProgress(
     request.open('PUT', signedUrl, true)
     request.setRequestHeader('content-type', file.type || 'application/octet-stream')
     request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100))
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(Math.round((event.loaded / event.total) * 100))
+      }
     }
     request.onload = () => (request.status >= 200 && request.status < 300 ? resolve() : reject(new Error(String(request.status))))
     request.onerror = () => reject(new Error('network'))
@@ -67,7 +97,17 @@ export default function TelegramMiniAppPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Something worth saying that is NOT a failure.
+   *
+   * "Still uploading" was being shown in the red error box, so a video that
+   * was uploading perfectly well looked like it had gone wrong.
+   */
+  const [notice, setNotice] = useState<string | null>(null)
   const [staged, setStaged] = useState<StagedFile[]>([])
+  /** Typed and sent before the upload finished; goes the moment it lands. */
+  const [queuedDirection, setQueuedDirection] = useState<string | null>(null)
+  const [tick, setTick] = useState(() => 0)
   const [hasMore, setHasMore] = useState(false)
   const [oldestAnchorMs, setOldestAnchorMs] = useState<number | null>(null)
   const [showJump, setShowJump] = useState(false)
@@ -131,6 +171,20 @@ export default function TelegramMiniAppPage() {
       window.clearTimeout(timer)
     }
   }, [])
+
+  /**
+   * A second hand, but only while bytes are moving.
+   *
+   * On iOS there is no progress to report, so elapsed time is the only honest
+   * evidence the app can offer that it is still working. It stops the moment
+   * the last upload lands.
+   */
+  const uploading = staged.some((item) => !item.storagePath)
+  useEffect(() => {
+    if (!uploading) return
+    const timer = window.setInterval(() => setTick((n) => n + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [uploading])
 
   const chooseProject = async (grantId: string) => {
     setError(null)
@@ -304,6 +358,7 @@ export default function TelegramMiniAppPage() {
     if (ready.length === 0) return
     setSending(true)
     setError(null)
+    setNotice(null)
     setDraft('')
     setStaged([])
 
@@ -430,7 +485,13 @@ export default function TelegramMiniAppPage() {
     if (!selectedProject || sending) return
     if (staged.length > 0) {
       if (staged.some((item) => !item.storagePath)) {
-        setError('Still uploading — give it a moment, then press Send.')
+        // Not a failure — she is early, and the app can simply wait. Making
+        // her watch a bar and press Send again at the right moment is work
+        // the app should be doing.
+        setQueuedDirection(message)
+        setDraft('')
+        setError(null)
+        setNotice('Got it — this goes as soon as the upload finishes. No need to press Send again.')
         return
       }
       await sendStaged(message)
@@ -455,13 +516,50 @@ export default function TelegramMiniAppPage() {
    * pass through a serverless function either, whose request body limit a
    * 224 MB video would blow just as surely.
    */
+  /**
+   * Send what was typed early, once the bytes are actually there.
+   *
+   * Guarded on there being something staged so a queued direction cannot fire
+   * against an empty attachment list after a failure cleared it.
+   */
+  useEffect(() => {
+    if (queuedDirection === null || sending) return
+    if (staged.length === 0) { setQueuedDirection(null); setNotice(null); return }
+    if (staged.some((item) => !item.storagePath)) return
+    setQueuedDirection(null)
+    setNotice(null)
+    void sendStaged(queuedDirection)
+    // sendStaged reads the latest staged list from state when it runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedDirection, staged, sending])
+
   const attachFiles = async (files: File[]) => {
     if (!selectedProject || sending || files.length === 0) return
     setError(null)
+    const startedAt = Date.now()
     setStaged((current) => [
       ...current,
-      ...files.map((file) => ({ name: file.name, type: file.type, percent: 0, storagePath: null })),
+      ...files.map((file) => ({
+        name: file.name,
+        type: file.type,
+        percent: 0,
+        sizeBytes: file.size,
+        startedAt,
+        sawProgress: false,
+        storagePath: null,
+      })),
     ])
+
+    // Say up front how long this is likely to be. Bec's first upload was a
+    // 289 MB video: the app was working, but nothing on screen said so, and a
+    // three-minute silence reads as a broken app.
+    const biggest = Math.max(...files.map((file) => file.size))
+    setNotice(
+      biggest >= SLOW_UPLOAD_BYTES
+        ? `Sending ${megabytes(biggest)} — on mobile data that takes a few minutes. Type what you want`
+          + ' from it and press Send; it will go as soon as the upload lands.'
+        : null,
+    )
 
     await Promise.allSettled(
       files.map(async (file) => {
@@ -490,7 +588,8 @@ export default function TelegramMiniAppPage() {
         try {
           await uploadWithProgress(startData.signed_url, file, (percent) =>
             setStaged((current) =>
-              current.map((item) => (item.name === file.name ? { ...item, percent } : item)),
+              current.map((item) =>
+                item.name === file.name ? { ...item, percent, sawProgress: true } : item),
             ),
           )
         } catch {
@@ -502,7 +601,7 @@ export default function TelegramMiniAppPage() {
         setStaged((current) =>
           current.map((item) =>
             item.name === file.name
-              ? { ...item, percent: 100, storagePath: startData.storage_path as string }
+              ? { ...item, percent: 100, sawProgress: true, storagePath: startData.storage_path as string }
               : item,
           ),
         )
@@ -513,18 +612,19 @@ export default function TelegramMiniAppPage() {
   return (
     <main className="h-screen overflow-hidden bg-[var(--tg-theme-bg-color,#0e151c)] text-[var(--tg-theme-text-color,#f2f4f6)]">
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
-      <div className="mx-auto flex h-full w-full max-w-2xl flex-col px-4 pb-2 pt-4 sm:px-6">
-        <header className="mb-3 flex shrink-0 items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--tg-theme-hint-color,#82909f)]">NRS Director</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{firstName ? `What are we moving forward, ${firstName}?` : 'What are we moving forward?'}</h1>
-            <p className="mt-2 text-sm text-[var(--tg-theme-hint-color,#82909f)]">One focused request at a time, tied to your selected brand goal.</p>
-          </div>
-          <span className="rounded-full bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-3 py-1 text-xs text-[var(--tg-theme-hint-color,#82909f)]">Private</span>
-        </header>
+      <div className="mx-auto flex h-full w-full max-w-2xl flex-col px-4 pb-2 pt-2 sm:px-6">
 
         {loading && <p className="rounded-xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-sm">Opening your NRS workspace…</p>}
-        {error && <p role="alert" className="mb-4 rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-100">{error}</p>}
+        {error && (
+          <p role="alert" className="mb-3 shrink-0 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white">
+            {error}
+          </p>
+        )}
+        {notice && !error && (
+          <p className="mb-3 shrink-0 rounded-xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-3 text-sm font-medium text-[var(--tg-theme-button-text-color,#fff)]">
+            {notice}
+          </p>
+        )}
 
         {/*
           Once a session is open the workspace stays on screen, whatever went
@@ -538,12 +638,15 @@ export default function TelegramMiniAppPage() {
         */}
         {!loading && projects.length > 0 && (
           <>
-            <section aria-labelledby="projects-heading" className="mb-3 shrink-0">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 id="projects-heading" className="text-sm font-medium">Working on</h2>
-                <span className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">Choose a workspace</span>
-              </div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+            {/*
+              One slim strip, edge to edge.
+
+              It runs the full width on purpose — a chip half-cut at the screen
+              edge is how you know there are more to the side. Clipped inside a
+              padded box it just looked broken.
+            */}
+            <section aria-label="Choose a project" className="-mx-4 mb-2 shrink-0 sm:-mx-6">
+              <div className="flex gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden">
                 {projects.map((project) => (
                   <button
                     key={project.id}
@@ -551,7 +654,7 @@ export default function TelegramMiniAppPage() {
                     type="button"
                     aria-current={selectedId === project.id ? 'true' : undefined}
                     onClick={() => chooseProject(project.id)}
-                    className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${selectedId === project.id ? 'border-[var(--tg-theme-button-color,#2aabee)] bg-[var(--tg-theme-button-color,#2aabee)] text-[var(--tg-theme-button-text-color,#fff)]' : 'border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)]'}`}
+                    className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm transition-colors ${selectedId === project.id ? 'bg-[var(--tg-theme-button-color,#2aabee)] font-medium text-[var(--tg-theme-button-text-color,#fff)]' : 'bg-[var(--tg-theme-secondary-bg-color,#17212b)] text-[var(--tg-theme-hint-color,#82909f)]'}`}
                   >
                     {project.name}
                   </button>
@@ -578,15 +681,21 @@ export default function TelegramMiniAppPage() {
                   <button
                     type="button"
                     onClick={() => void loadOlder()}
-                    className="mx-auto mb-3 block rounded-full border border-white/10 px-4 py-1.5 text-xs text-[var(--tg-theme-hint-color,#82909f)] hover:bg-white/5"
+                    className="mx-auto mb-3 block rounded-full bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-1.5 text-xs text-[var(--tg-theme-hint-color,#82909f)]"
                   >
                     Load earlier
                   </button>
                 )}
 
                 {events.length === 0 ? (
-                  <div className="rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-5 text-sm text-[var(--tg-theme-hint-color,#82909f)]">
-                    Ask the Director to move the selected brand toward its active goal, or send a video and it will write from that.
+                  <div className="mr-auto max-w-[88%] space-y-2 rounded-2xl rounded-bl-md bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-[15px] leading-6">
+                    <p className="font-semibold">
+                      {firstName ? `What are we moving forward, ${firstName}?` : 'What are we moving forward?'}
+                    </p>
+                    <p>
+                      Tell me what you want for {selectedProject?.name ?? 'this brand'} — or send a video
+                      or photo and I&apos;ll write from that.
+                    </p>
                   </div>
                 ) : (
                   <TimelineView
@@ -610,12 +719,20 @@ export default function TelegramMiniAppPage() {
 
             <div className="shrink-0 pt-3 bg-[var(--tg-theme-bg-color,#0e151c)]">
             {staged.length > 0 && (
-              <div className="mb-2 space-y-1">
+              <div className="mb-2 space-y-1" data-tick={tick}>
                 {staged.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-3 py-2 text-xs">
-                    <span className="truncate">{item.name}</span>
-                    <span className="shrink-0 text-[var(--tg-theme-hint-color,#82909f)]">
-                      {item.storagePath ? 'attached' : `uploading… ${item.percent}%`}
+                  <div key={item.name} className="flex items-center justify-between gap-3 rounded-xl border border-black/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-3 py-2 text-xs dark:border-white/10">
+                    <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                    <span className="shrink-0 tabular-nums text-[var(--tg-theme-hint-color,#82909f)]">
+                      {item.storagePath
+                        ? 'ready'
+                        : item.sawProgress
+                          // The browser is telling us how far along it is.
+                          ? `${item.percent}%`
+                          // It is not, and never will on iOS. Size and elapsed
+                          // time are the only honest things left to show — and
+                          // both of them move, which "0%" never did.
+                          : `${megabytes(item.sizeBytes)} · ${elapsedLabel(Date.now() - item.startedAt)}`}
                     </span>
                   </div>
                 ))}
@@ -626,8 +743,8 @@ export default function TelegramMiniAppPage() {
             )}
             <form onSubmit={sendMessage} className="flex items-end gap-2">
               <label className="sr-only" htmlFor="telegram-message">Message the NRS Director</label>
-              <textarea id="telegram-message" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!selectedProject || sending} rows={2} placeholder={staged.length > 0 ? 'What is this one about?' : selectedProject ? `Ask about ${selectedProject.name}…` : 'Choose a project first'} className="min-h-12 flex-1 resize-none rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm outline-none placeholder:text-[var(--tg-theme-hint-color,#82909f)] focus:border-[var(--tg-theme-button-color,#2aabee)]" />
-              <label className={`flex cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm ${!selectedProject || sending ? 'opacity-40' : ''}`} title="Send a video, photo or recording">
+              <textarea id="telegram-message" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!selectedProject || sending} rows={2} placeholder={staged.length > 0 ? 'What is this one about?' : selectedProject ? `Ask about ${selectedProject.name}…` : 'Choose a project first'} className="min-h-12 flex-1 resize-none rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm outline-none ring-1 ring-black/10 dark:ring-white/10 placeholder:text-[var(--tg-theme-hint-color,#82909f)] focus:border-[var(--tg-theme-button-color,#2aabee)]" />
+              <label className={`flex cursor-pointer items-center justify-center rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm ring-1 ring-black/10 dark:ring-white/10 ${!selectedProject || sending ? 'opacity-40' : ''}`} title="Send a video, photo or recording">
                 <span aria-hidden>+</span>
                 <span className="sr-only">Attach a video, photo or recording</span>
                 <input
