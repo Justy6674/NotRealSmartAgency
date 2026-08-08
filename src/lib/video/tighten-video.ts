@@ -15,6 +15,7 @@ import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { planTighten, remapWords, selectFilters, isWorthTightening, type TightenPlan } from './tighten'
+import { DELIVERY_VIDEO_BITRATE } from './ffmpeg-transcode'
 import type { TranscriptionWord } from '@/lib/transcription/transcribe'
 
 const ffmpegPath = ffmpegBinary()
@@ -69,9 +70,19 @@ export async function tightenFromUrl(
         .audioCodec('aac')
         .outputOptions([
           '-preset veryfast',
-          '-crf 21',
+          // Delivery-grade, not archive-grade.
+          //
+          // This copy is the one that PUBLISHES — it outranks the delivery
+          // copy precisely because it carries work the owner asked for. At
+          // crf 21 with no ceiling a one-minute phone clip came out at 103 MB,
+          // which is the exact size Instagram's fetch gives up on with "error
+          // code 2207082" long after the draft looked fine. The master is
+          // untouched in the library; this one has a platform to satisfy.
+          `-b:v ${DELIVERY_VIDEO_BITRATE}`,
+          `-maxrate ${DELIVERY_VIDEO_BITRATE}`,
+          '-bufsize 9000k',
           '-pix_fmt yuv420p',
-          `-vf ${video}`,
+          `-vf scale='min(1080,iw)':-2,${video}`,
           `-af ${audio}`,
           '-b:a 128k',
           '-movflags +faststart',

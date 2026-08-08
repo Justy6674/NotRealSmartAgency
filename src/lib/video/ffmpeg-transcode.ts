@@ -32,7 +32,7 @@ if (ffmpegPath) {
 export const DELIVERY_MAX_BYTES = 80 * 1024 * 1024
 
 /** Comfortably inside every platform's guidance for 1080p vertical video. */
-const TARGET_VIDEO_BITRATE = '4500k'
+export const DELIVERY_VIDEO_BITRATE = '4500k'
 const TARGET_AUDIO_BITRATE = '128k'
 
 /** Long enough for a few minutes of 1080p, short enough to fail before the platform does. */
@@ -75,8 +75,8 @@ export async function transcodeForDeliveryFromUrl(url: string): Promise<Transcod
         .audioCodec('aac')
         .outputOptions([
           '-preset veryfast',
-          `-b:v ${TARGET_VIDEO_BITRATE}`,
-          `-maxrate ${TARGET_VIDEO_BITRATE}`,
+          `-b:v ${DELIVERY_VIDEO_BITRATE}`,
+          `-maxrate ${DELIVERY_VIDEO_BITRATE}`,
           '-bufsize 9000k',
           '-pix_fmt yuv420p',
           // Never upscale, and keep it within 1080 on the long edge. -2 keeps

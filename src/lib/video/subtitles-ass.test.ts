@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildAss, formatAssTime, styleForFrame, SUBTITLE_FONT_NAME } from './subtitles'
-import { escapeFilterPath, FONTS_DIR } from './burn-subtitles'
+import { escapeFilterPath, FONTS_DIR, scaledFrame } from './burn-subtitles'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { TranscriptionWord } from '@/lib/transcription/transcribe'
@@ -100,5 +100,39 @@ test('the bundled font is actually there', () => {
   assert.ok(
     header.equals(Buffer.from([0x00, 0x01, 0x00, 0x00])) || header.toString('latin1') === 'true',
     'not a TrueType file — a woff2 from a web font package will not load here',
+  )
+})
+
+test('the caption is sized for the frame that ships, not the frame that arrived', () => {
+  // The published copy is downscaled to 1080 on the long edge. Measure the
+  // captions against a 4K source and they come out a third of the intended
+  // size on the video anyone actually watches.
+  assert.deepEqual(scaledFrame(2160, 3840), { width: 1080, height: 1920 })
+  assert.deepEqual(scaledFrame(1080, 1920), { width: 1080, height: 1920 })
+  // Never upscaled — blowing up a small clip only softens it.
+  assert.deepEqual(scaledFrame(720, 1280), { width: 720, height: 1280 })
+  // H.264 requires even dimensions; an odd one fails the encode outright.
+  const odd = scaledFrame(1081, 1921)
+  assert.equal(odd.width % 2, 0)
+  assert.equal(odd.height % 2, 0)
+})
+
+test('the published copy is capped to a size a platform will fetch', () => {
+  // Instagram does not receive an upload, it fetches the URL — and gives up on
+  // a large one with "error code 2207082" long after the draft looked fine.
+  // A one-minute clip captioned at crf 21 with no ceiling came out at 103 MB.
+  const source = readFileSync(join(process.cwd(), 'src/lib/video/burn-subtitles.ts'), 'utf8')
+  assert.match(source, /-maxrate \$\{DELIVERY_VIDEO_BITRATE\}/,
+    'the captioned copy must carry a bitrate ceiling — it is the file that publishes')
+  assert.ok(!/'-crf 21'/.test(source), 'crf alone has no ceiling')
+})
+
+test('scaling happens before captioning, in one filter chain', () => {
+  const source = readFileSync(join(process.cwd(), 'src/lib/video/burn-subtitles.ts'), 'utf8')
+  const chain = source.match(/const filter = [\s\S]*?fontsdir[^\n]*/)?.[0] ?? ''
+  assert.match(chain, /scale=/, 'no scale in the chain')
+  assert.ok(
+    chain.indexOf('scale=') < chain.indexOf('subtitles='),
+    'captioning before scaling shrinks the words along with the picture',
   )
 })

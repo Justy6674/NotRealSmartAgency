@@ -20,6 +20,7 @@ import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { buildAss, canCaption } from './subtitles'
+import { DELIVERY_VIDEO_BITRATE } from './ffmpeg-transcode'
 import type { TranscriptionWord } from '@/lib/transcription/transcribe'
 
 const ffmpegPath = ffmpegBinary()
@@ -73,6 +74,19 @@ export function escapeFilterPath(path: string): string {
 }
 
 /**
+ * The frame the output will actually have, after the delivery downscale.
+ *
+ * Long edge capped at 1080, never upscaled, both sides even.
+ */
+export function scaledFrame(width: number, height: number): { width: number; height: number } {
+  if (width <= 1080) return { width: even(width), height: even(height) }
+  const scale = 1080 / width
+  return { width: 1080, height: even(Math.round(height * scale)) }
+}
+
+const even = (n: number) => (n % 2 === 0 ? n : n - 1)
+
+/**
  * Burn captions from the transcript's word timings into a copy of the video.
  *
  * The master is never touched. This produces a new file; the original stays in
@@ -87,7 +101,10 @@ export async function burnSubtitlesFromUrl(
     throw new Error('there is no speech in this clip to caption')
   }
 
-  const { width, height } = await probeFrameSize(url)
+  const source = await probeFrameSize(url)
+  // The geometry has to describe the OUTPUT frame, since that is what libass
+  // draws into and what the caption margins were measured against.
+  const { width, height } = scaledFrame(source.width, source.height)
   const ass = buildAss(words, width, height)
   if (!ass) throw new Error('there is no speech in this clip to caption')
 
@@ -99,7 +116,12 @@ export async function burnSubtitlesFromUrl(
     await writeFile(assPath, ass, 'utf8')
 
     await new Promise<void>((resolve, reject) => {
-      const filter = `subtitles=filename='${escapeFilterPath(assPath)}'`
+      // Scale FIRST, then caption, so the caption is measured against the
+      // frame it will actually be shown at. Captioning a 4K frame and then
+      // shrinking it makes the words a third of the size they were designed to
+      // be. Never upscales; -2 keeps the other side even, which H.264 needs.
+      const filter = "scale='min(1080,iw)':-2,"
+        + `subtitles=filename='${escapeFilterPath(assPath)}'`
         + `:fontsdir='${escapeFilterPath(FONTS_DIR)}'`
 
       const command = ffmpeg(url)
@@ -109,7 +131,17 @@ export async function burnSubtitlesFromUrl(
         .audioCodec('copy')
         .outputOptions([
           '-preset veryfast',
-          '-crf 21',
+          // Delivery-grade, not archive-grade.
+          //
+          // This copy is the one that PUBLISHES — it outranks the delivery
+          // copy precisely because it carries work the owner asked for. At
+          // crf 21 with no ceiling a one-minute phone clip came out at 103 MB,
+          // which is the exact size Instagram's fetch gives up on with "error
+          // code 2207082" long after the draft looked fine. The master is
+          // untouched in the library; this one has a platform to satisfy.
+          `-b:v ${DELIVERY_VIDEO_BITRATE}`,
+          `-maxrate ${DELIVERY_VIDEO_BITRATE}`,
+          '-bufsize 9000k',
           '-pix_fmt yuv420p',
           `-vf ${filter}`,
           '-movflags +faststart',
