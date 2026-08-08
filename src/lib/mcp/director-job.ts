@@ -30,6 +30,8 @@ import { memoryStoreV2 } from '@/lib/memory/store'
 import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { getDirectorCompletion } from './director-completion'
+import { keepTyping } from '@/lib/telegram/typing'
+import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
 import {
   buildWebsiteScanGroundingDirective,
@@ -99,6 +101,22 @@ export async function runDirectorJob(
     .from('mcp_jobs')
     .update({ status: 'running', started_at: new Date().toISOString() })
     .eq('id', jobId)
+
+  /**
+   * Show "…is typing" for as long as this runs.
+   *
+   * A job takes anywhere from seconds to minutes. The acknowledgement said
+   * work had started and then nothing moved, which on a phone reads as dead.
+   * Best-effort throughout: it is stopped in `finally`, so no path can leave
+   * the dots spinning after the answer has landed.
+   */
+  const typing = execution.channel === 'telegram' && execution.telegramChatId
+    ? keepTyping({
+        botToken: getNRSTelegramConfig()?.botToken ?? '',
+        chatId: execution.telegramChatId,
+        ...(execution.telegramThreadId !== undefined ? { threadId: execution.telegramThreadId } : {}),
+      })
+    : null
 
   try {
     const { brand_id, message } = input

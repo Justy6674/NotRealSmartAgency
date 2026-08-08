@@ -28,6 +28,7 @@ import {
   describeTopicSetup,
 } from '@/lib/telegram/forum-topics'
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
+import { sendTypingAction } from '@/lib/telegram/typing'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
   buildDirectorTopicDirective,
@@ -732,6 +733,16 @@ async function handleTelegramUpdate(request: NextRequest) {
 
   const inbound = parseInbound(update)
   if (!inbound) return NextResponse.json({ received: true, status: 'ignored' })
+
+  // Show the dots the moment a message lands, not when the job finally starts.
+  // The gap between the two is where it used to look like nothing happened.
+  if (inbound.text || inbound.attachment) {
+    void sendTypingAction({
+      botToken: config.botToken,
+      chatId: inbound.chatId,
+      ...(inbound.threadId !== undefined ? { threadId: inbound.threadId } : {}),
+    })
+  }
 
   // Remember the group. Telegram offers no way to ask which chats a bot is in,
   // so without this NRS knows a group's id for the length of one request and
