@@ -59,7 +59,15 @@ export async function sendTelegramText({
    */
   threadId?: number
   fetchImpl?: typeof fetch
-}): Promise<void> {
+  /**
+   * The ids of the messages sent.
+   *
+   * Returned so a reaction can be tied back to the answer it was about. A 👍
+   * arrives carrying only a message id; without this there is no way to know
+   * WHICH piece of copy landed, and the feedback is unusable.
+   */
+}): Promise<number[]> {
+  const messageIds: number[] = []
   for (const chunk of splitTelegramMessage(text)) {
     const response = await fetchImpl(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
@@ -76,7 +84,13 @@ export async function sendTelegramText({
     if (!response.ok) {
       throw new Error(`Telegram sendMessage failed: ${response.status}`)
     }
+
+    const body = await response.json().catch(() => null) as
+      | { result?: { message_id?: unknown } }
+      | null
+    if (typeof body?.result?.message_id === 'number') messageIds.push(body.result.message_id)
   }
+  return messageIds
 }
 
 /** Telegram accepts at most ten items in one media group. */

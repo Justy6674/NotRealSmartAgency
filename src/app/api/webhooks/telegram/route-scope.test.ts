@@ -59,7 +59,10 @@ test('the boundary check sits in front of Telegram delivery', () => {
   )
 
   const inspection = job.indexOf('const outputInspection = inspectMarketingInput(response)')
-  const delivery = job.indexOf('await deliverTelegramResult(execution.telegramChatId, response')
+  // Matched on the call itself, not its arguments — the argument list has been
+  // reformatted before and a string search on it fails without the ordering
+  // having changed, which teaches nothing and wastes the guard.
+  const delivery = job.indexOf('deliverTelegramResult(')
   assert.ok(inspection > -1, 'the job must inspect the response it is about to send')
   assert.ok(delivery > -1, 'the job must deliver the response')
   assert.ok(inspection < delivery, 'the boundary check must run before delivery')

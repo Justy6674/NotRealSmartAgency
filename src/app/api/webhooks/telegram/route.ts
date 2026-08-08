@@ -29,6 +29,8 @@ import {
 } from '@/lib/telegram/forum-topics'
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
 import { keepTyping, sendTypingAction } from '@/lib/telegram/typing'
+import { parseReaction } from '@/lib/telegram/reactions'
+import { recordReaction } from '@/lib/telegram/handle-reaction'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
   buildDirectorTopicDirective,
@@ -729,6 +731,53 @@ async function handleTelegramUpdate(request: NextRequest) {
   if (named) {
     const linked = await linkNamedTopic(admin, config.botToken, named)
     return NextResponse.json({ received: true, status: `topic_${linked}` })
+  }
+
+  // A 👍 on an answer.
+  //
+  // Handled before parseInbound, which understands messages and button taps
+  // and nothing else — a reaction has neither, so it fell straight through to
+  // "ignored". Recorded only: a reaction never triggers work, because acting
+  // on an ambiguous tap is how a marketing tool starts publishing things
+  // nobody asked for.
+  const reaction = parseReaction(update)
+  if (reaction) {
+    const account = await getTelegramAccount(admin, {
+      chatId: reaction.chatId,
+      telegramUserId: reaction.telegramUserId,
+      fromGroup: false,
+    } as TelegramInbound)
+
+    if (!account) return NextResponse.json({ received: true, status: 'reaction_unpaired' })
+
+    const grants = await getTelegramGrants(admin, account)
+    const { data: session } = await admin
+      .from('telegram_project_sessions')
+      .select('brand_id')
+      .eq('telegram_account_id', account.id)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    const brandId = (session?.brand_id as string | undefined) ?? grants[0]?.projectId
+    if (!brandId) return NextResponse.json({ received: true, status: 'reaction_no_project' })
+
+    const { data: brand } = await admin
+      .from('brands').select('slug').eq('id', brandId).maybeSingle()
+    if (!brand?.slug) return NextResponse.json({ received: true, status: 'reaction_no_brand' })
+
+    const outcome = await recordReaction(admin, reaction, {
+      userId: account.actor_user_id,
+      brandId,
+      brandSlug: brand.slug as string,
+    }).catch((error: unknown) => {
+      console.error('[reaction]', error)
+      return { recorded: false, reason: 'threw' }
+    })
+
+    return NextResponse.json({
+      received: true,
+      status: outcome.recorded ? 'reaction_recorded' : `reaction_skipped:${outcome.reason ?? ''}`,
+    })
   }
 
   const inbound = parseInbound(update)

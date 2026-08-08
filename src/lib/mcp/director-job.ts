@@ -34,6 +34,7 @@ import { keepTyping } from '@/lib/telegram/typing'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
 import { enforceClaims } from './claimed-actions'
+import { reactionLessonsForPrompt } from '@/lib/telegram/handle-reaction'
 import {
   buildWebsiteScanGroundingDirective,
   isWebsiteScanRequest,
@@ -301,6 +302,7 @@ export async function runDirectorJob(
     }
     systemPrompt += `\n\n---\n\n${buildMarketingSkillContext(message, execution.channel)}`
 
+
     // ── Injection 2: pending review queue (mirrored from /api/chat/route.ts) ──
     try {
       const { data: draftPosts } = await supabase
@@ -567,6 +569,17 @@ That's the difference between a marketing director and a tech support agent. Def
     })
 
     const typedBrand = brand as Brand
+
+    // The owner's own verdicts on this Director's writing, one tap at a time.
+    // Worth more than any general instinct about good copy, because it is the
+    // taste of the person the copy is for. Appended here rather than earlier
+    // because it needs the brand, and it must reach the model in this turn.
+    const reactionLessons = await reactionLessonsForPrompt(supabase, {
+      userId,
+      brandId: execution.projectId,
+      brandSlug: typedBrand.slug,
+    }).catch(() => null)
+    if (reactionLessons) systemPrompt += `\n\n---\n\n${reactionLessons}`
     const isHealthBrand = typedBrand.compliance_flags?.ahpra || typedBrand.compliance_flags?.tga
     const modelRoute = resolveAgentModelRoute({
       agentType: 'overall',
@@ -781,7 +794,19 @@ That's the difference between a marketing director and a tech support agent. Def
         }
       } else {
         if (execution.deliverText !== false) {
-          await deliverTelegramResult(execution.telegramChatId, response, execution.telegramThreadId)
+          const messageIds = await deliverTelegramResult(
+            execution.telegramChatId, response, execution.telegramThreadId,
+          )
+          // Recorded on the job so a later 👍 can find the words it was about.
+          // Best-effort: feedback plumbing must never fail a finished answer.
+          if (messageIds.length > 0) {
+            await supabase.from('mcp_jobs')
+              .update({ result: { response, telegram_message_ids: messageIds } })
+              .eq('id', jobId)
+              .then(({ error }) => {
+                if (error) console.error('[director-job] message ids not stored:', error.message)
+              })
+          }
         }
         // Then the files themselves. Text alone meant a finished carousel
         // could only be collected on a desktop; as an album it saves to the
@@ -823,16 +848,18 @@ async function deliverTelegramResult(
   chatId: string,
   text: string,
   threadId?: number,
-): Promise<void> {
+): Promise<number[]> {
   try {
     const { getNRSTelegramConfig } = await import('@/lib/telegram/nrs-telegram-config')
     const { sendTelegramText } = await import('@/lib/telegram/telegram-api')
     const { formatTelegramMarketingCopy } = await import('@/lib/telegram/telegram-marketing-copy')
 
     const config = getNRSTelegramConfig()
-    if (!config) return
+    if (!config) return []
 
-    await sendTelegramText({
+    // The ids come back so a reaction can be tied to the answer it was about.
+    // A 👍 arrives carrying only a message id.
+    return await sendTelegramText({
       botToken: config.botToken,
       chatId,
       text: formatTelegramMarketingCopy(text),
@@ -840,6 +867,7 @@ async function deliverTelegramResult(
     })
   } catch (err) {
     console.error('[director-job] Telegram delivery failed:', err instanceof Error ? err.message : err)
+    return []
   }
 }
 
