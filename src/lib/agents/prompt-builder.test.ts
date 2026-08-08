@@ -212,3 +212,19 @@ test('a brand with no naming rules gains no naming noise', () => {
   assert.doesNotMatch(prompt, /NEVER write:/)
   assert.match(prompt, /written exactly "Underground Parfums"/)
 })
+
+/**
+ * "It's usually spelling the brand wrong, fragrance names incorrect, perfumers
+ * wrong and just spitting garbage."
+ *
+ * verify_product existed with a clear instruction and was enforced nowhere, so
+ * the model skipped it. A model recalling a perfumer from training data
+ * produces something plausible and wrong — which is precisely what gets
+ * published without anyone catching it.
+ */
+test('naming a real product without checking it is forbidden', () => {
+  const prompt = buildSystemPrompt(brand, director)
+  assert.match(prompt, /Never write the name of a real product, fragrance, house or perfumer from memory/)
+  assert.match(prompt, /verify_product/)
+  assert.match(prompt, /do NOT state the name/)
+})

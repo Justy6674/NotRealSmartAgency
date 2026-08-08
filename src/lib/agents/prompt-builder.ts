@@ -293,6 +293,25 @@ function buildBrandContext(brand: Brand): string {
     )
   }
 
+  /**
+   * Names of real things are checked, never recalled.
+   *
+   * `verify_product` existed with a clear instruction and was enforced
+   * nowhere, so the model treated it as optional and skipped it — which is why
+   * fragrance names, houses and perfumers kept coming out wrong. A model
+   * recalling a perfumer's name from training data will produce something
+   * plausible and wrong, and plausible-and-wrong is exactly what gets
+   * published without anyone catching it.
+   */
+  lines.push(
+    '**Never write the name of a real product, fragrance, house or perfumer from memory.** ' +
+    'Call `verify_product` first — always, including when the name came from a video transcript, ' +
+    'because speech-to-text mangles proper nouns and a tidied-up guess is how a fabricated product ' +
+    'gets published. If it comes back not_found or uncertain, do NOT state the name: ask which one ' +
+    'was meant, or write around it. A caption with no product name is fixable; a caption naming a ' +
+    'fragrance that does not exist is not.',
+  )
+
   if (brand.tagline) lines.push(`**Tagline:** ${brand.tagline}`)
   if (brand.description) lines.push(`**Description:** ${brand.description}`)
   if (brand.website_url) lines.push(`**Website:** ${brand.website_url}`)

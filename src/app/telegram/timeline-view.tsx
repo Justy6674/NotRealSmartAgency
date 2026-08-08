@@ -10,10 +10,102 @@
  * does not sort. Nothing outside `timeline.ts` sorts.
  */
 
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { TimelineEvent } from '@/lib/telegram/timeline'
 
 const DAY = new Intl.DateTimeFormat('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+
+/**
+ * The caption, with the two things anyone actually wants to do to it.
+ *
+ * COPY, because the fastest fix for a wrong word has always been to take the
+ * text somewhere you can type properly and bring it back — and there was no
+ * way to get it out of the app at all, so it was being retyped by hand.
+ *
+ * EDIT, because a caption that can only be corrected by asking a model to
+ * rewrite it comes back different in three other places. Typing the fix is
+ * quicker than describing it, and it is the only way to be sure the change is
+ * the one that was wanted.
+ */
+function CaptionBlock({
+  hook,
+  caption,
+  hashtags,
+  onSave,
+}: {
+  hook: string
+  caption: string
+  hashtags: string[]
+  onSave: (next: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(caption)
+  const [copied, setCopied] = useState(false)
+
+  const full = [hook, caption, hashtags.map((tag) => `#${tag}`).join(' ')]
+    .filter(Boolean)
+    .join('\n\n')
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(full)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="rounded-2xl border border-[var(--tg-theme-button-color,#2aabee)] bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-3">
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          rows={Math.min(16, Math.max(5, draft.split('\n').length + 2))}
+          className="w-full resize-none rounded-xl bg-[var(--tg-theme-bg-color,#0e151c)] p-3 text-[15px] leading-6 outline-none"
+          autoFocus
+        />
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => { onSave(draft); setEditing(false) }}
+            className="rounded-xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2 text-sm font-medium text-[var(--tg-theme-button-text-color,#fff)]"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={() => { setDraft(caption); setEditing(false) }}
+            className="rounded-xl border border-white/15 px-4 py-2 text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-[15px] leading-6">
+      {hook && <p className="font-semibold">{hook}</p>}
+      {caption && <p className="mt-2 whitespace-pre-wrap">{caption}</p>}
+      {hashtags.length > 0 && (
+        <p className="mt-2 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+          {hashtags.map((tag) => `#${tag}`).join(' ')}
+        </p>
+      )}
+      <div className="mt-3 flex gap-2 border-t border-white/10 pt-3">
+        <button type="button" onClick={copy} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs">
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+        <button type="button" onClick={() => setEditing(true)} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs">
+          Edit
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function dayKey(ms: number): string {
   const date = new Date(ms)
@@ -84,9 +176,11 @@ function Working({ label }: { label: string }) {
 export interface TimelineViewProps {
   events: TimelineEvent[]
   onRetry: (text: string, clientEventId: string | null) => void
+  /** A corrected caption, typed by the person who spotted the mistake. */
+  onEditCaption: (outputId: string, caption: string) => void
 }
 
-export function TimelineView({ events, onRetry }: TimelineViewProps) {
+export function TimelineView({ events, onRetry, onEditCaption }: TimelineViewProps) {
   let lastDay = ''
 
   return (
@@ -99,7 +193,7 @@ export function TimelineView({ events, onRetry }: TimelineViewProps) {
         return (
           <div key={event.id} className="contents">
             {newDay && <DaySeparator ms={event.groupAnchorMs} />}
-            <EventRow event={event} onRetry={onRetry} />
+            <EventRow event={event} onRetry={onRetry} onEditCaption={onEditCaption} />
           </div>
         )
       })}
@@ -107,7 +201,7 @@ export function TimelineView({ events, onRetry }: TimelineViewProps) {
   )
 }
 
-function EventRow({ event, onRetry }: { event: TimelineEvent; onRetry: TimelineViewProps['onRetry'] }) {
+function EventRow({ event, onRetry, onEditCaption }: { event: TimelineEvent; onRetry: TimelineViewProps['onRetry']; onEditCaption: TimelineViewProps['onEditCaption'] }) {
   const payload = event.payload
 
   switch (payload.kind) {
@@ -161,17 +255,18 @@ function EventRow({ event, onRetry }: { event: TimelineEvent; onRetry: TimelineV
         <div className="mr-auto max-w-[92%] space-y-3">
           {payload.opener && <DirectorBubble text={payload.opener} withheld={payload.withheld} />}
           {!payload.withheld && (payload.hook || payload.caption) && (
-            <div className="rounded-2xl border border-white/10 bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-[15px] leading-6">
-              {payload.hook && <p className="font-semibold">{payload.hook}</p>}
-              {payload.caption && <p className="mt-2 whitespace-pre-wrap">{payload.caption}</p>}
-              {payload.hashtags.length > 0 && (
-                <p className="mt-2 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
-                  {payload.hashtags.map((tag) => `#${tag}`).join(' ')}
-                </p>
-              )}
-              <p className="mt-3 text-xs text-[var(--tg-theme-hint-color,#82909f)]">
-                {payload.postType} · not in Mixpost yet — say what to change, or ask for it as a draft
+            <div>
+              <CaptionBlock
+                hook={payload.hook}
+                caption={payload.caption}
+                hashtags={payload.hashtags}
+                onSave={(next) => onEditCaption(payload.outputId, next)}
+              />
+              <div className="mt-2">
+              <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">
+                {payload.postType} · not in Mixpost yet — edit it above, then say approve
               </p>
+              </div>
             </div>
           )}
         </div>

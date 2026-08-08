@@ -393,6 +393,37 @@ export default function TelegramMiniAppPage() {
     }
   }, [selectedProject, initData, refreshTimeline])
 
+  /**
+   * Save a caption the reader corrected by hand.
+   *
+   * Applied to the timeline immediately, then saved. Waiting for the round
+   * trip to show your own typing back to you is how an app feels broken on
+   * phone data — and if the save fails the refresh puts the original back, so
+   * nothing is silently lost.
+   */
+  const saveCaption = useCallback(async (outputId: string, caption: string) => {
+    setEvents((current) => current.map((event) =>
+      event.payload.kind === 'proposal' && event.payload.outputId === outputId
+        ? { ...event, payload: { ...event.payload, caption } }
+        : event))
+
+    try {
+      const response = await fetch('/api/telegram/mini-app/caption', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ init_data: initData, output_id: outputId, caption }),
+      })
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        setError(data.error ?? 'That change could not be saved.')
+        await refreshTimeline()
+      }
+    } catch {
+      setError('That change could not be saved. Check your connection.')
+      await refreshTimeline()
+    }
+  }, [initData, refreshTimeline])
+
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault()
     const message = draft.trim()
@@ -561,6 +592,7 @@ export default function TelegramMiniAppPage() {
                   <TimelineView
                     events={events}
                     onRetry={(text, clientEventId) => void submitMessage(text, clientEventId)}
+                    onEditCaption={(outputId, caption) => void saveCaption(outputId, caption)}
                   />
                 )}
               </div>
