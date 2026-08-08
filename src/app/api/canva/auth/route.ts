@@ -51,6 +51,13 @@ export async function GET() {
     'brandtemplate:meta:read',
     'brandtemplate:content:read',
     'brandtemplate:content:write',
+    // Brand KITS are a separate permission from brand TEMPLATES, and it was
+    // never requested — which is why colours, fonts and logos were never
+    // reachable however many times the connection was redone. The scope name
+    // is `brandkit:read`, with no underscore. Canva's own tooling reports
+    // "Missing scopes: [brandkit:read]" when it is absent, and a token cannot
+    // gain a scope afterwards: it has to be asked for at consent.
+    'brandkit:read',
   ].join(' ')
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'https://notrealsmart.com.au'}/api/canva/callback`
