@@ -24,6 +24,8 @@ const ROUTES_THAT_RUN_FFMPEG = [
   '/api/webhooks/telegram',
   '/api/chat',
   '/api/mcp',
+  // The probe that proves the rest of this list is true in production.
+  '/api/diagnostics/video',
 ]
 
 test('the ffmpeg binary is shipped with every route that spawns it', () => {

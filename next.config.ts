@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
   // with no captions on it and reports success. So the subtitle font ships
   // alongside.
   outputFileTracingIncludes: {
+    '/api/diagnostics/video': ['node_modules/ffmpeg-static/ffmpeg', 'assets/fonts/**'],
     '/api/media/process': ['node_modules/ffmpeg-static/ffmpeg', 'assets/fonts/**'],
     '/api/telegram/mini-app/upload': ['node_modules/ffmpeg-static/ffmpeg', 'assets/fonts/**'],
     '/api/chat': ['node_modules/@sparticuz/chromium/bin/**', 'assets/fonts/**', 'node_modules/ffmpeg-static/ffmpeg'],
