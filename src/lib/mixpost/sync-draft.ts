@@ -45,6 +45,39 @@ interface DraftSyncResult {
 }
 
 /**
+ * Which file actually gets published for a media item.
+ *
+ * Videos may have derived copies — `_captioned.mp4`, `_tight.mp4`,
+ * `_social.mp4` — and the most finished one must win, in that order: captioned
+ * is built ON TOP of tightened, so publishing the tightened copy after captions
+ * were asked for would drop them silently, and Instagram fetches this URL
+ * itself and fails on a 300 MB master long after the draft looked fine.
+ *
+ * IMAGES ALWAYS PUBLISH THE ORIGINAL BYTES. Nothing in the pipeline writes any
+ * of those three keys onto an image row today, but the chain was not gated on
+ * file type, so one stray key would have silently published a derived file in
+ * place of the owner's upload. That risk is not abstract here: he lost a full
+ * day to a blurry card — a clean 117 KB PNG uploaded twice, and a 48 KB
+ * Telegram-compressed JPEG published instead.
+ */
+export function resolvePublishUrl(item: {
+  file_url: string
+  file_type?: string | null
+  metadata?: Record<string, unknown> | null
+}): string {
+  const isVideoItem = typeof item.file_type === 'string' && item.file_type.startsWith('video/')
+  if (!isVideoItem) return item.file_url
+
+  const metadata = item.metadata ?? {}
+  const urlAt = (key: string): string | null => {
+    const value = (metadata[key] as { url?: unknown } | undefined)?.url
+    return typeof value === 'string' && value ? value : null
+  }
+
+  return urlAt('captioned') ?? urlAt('tightened') ?? urlAt('delivery') ?? item.file_url
+}
+
+/**
  * Ensure a single media_items row is uploaded to Mixpost.
  * Returns the Mixpost numeric media_id (cached or freshly uploaded).
  *
@@ -118,18 +151,11 @@ export async function ensureMediaInMixpost(
   // A captioned copy outranks both. Asking for captions and then publishing
   // the version without them would be the worst possible outcome — it looks
   // like it worked right up until the post is live.
-  const itemMetadata = (item.metadata as Record<string, unknown> | null) ?? {}
-  // Order matters: captioned is built ON TOP of tightened, so it is the most
-  // finished file there is. Publishing a tightened copy after captions were
-  // asked for would drop them silently.
-  const captionedUrl = (itemMetadata.captioned as { url?: string } | undefined)?.url
-  const tightenedUrl = (itemMetadata.tightened as { url?: string } | undefined)?.url
-  const deliveryUrl = (itemMetadata.delivery as { url?: string } | undefined)?.url
-  const publishUrl =
-    (typeof captionedUrl === 'string' && captionedUrl)
-    || (typeof tightenedUrl === 'string' && tightenedUrl)
-    || (typeof deliveryUrl === 'string' && deliveryUrl)
-    || item.file_url
+  const publishUrl = resolvePublishUrl({
+    file_url: item.file_url as string,
+    file_type: item.file_type as string | null,
+    metadata: item.metadata as Record<string, unknown> | null,
+  })
 
   // Remote initiate
   const initiateRes = await fetch(`${workspaceBase}/media/remote/initiate`, {

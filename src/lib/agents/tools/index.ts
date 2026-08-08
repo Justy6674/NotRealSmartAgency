@@ -68,6 +68,16 @@ export interface ToolContext {
   agentRegistryId?: string | null
   /** Present for autonomous heartbeat work; approval requests retain this link. */
   taskId?: string | null
+  /**
+   * The owner's own words for this turn, verbatim — never the model's
+   * paraphrase, and never NRS's own media directive (strip that first).
+   *
+   * Used by manage_posts to decide, deterministically, when a deictic "use
+   * THIS image" must beat the older media id the model recalled from the
+   * transcript. Optional: channels that have no owner turn (heartbeat work,
+   * plug-in tool calls) simply leave it off and behave exactly as before.
+   */
+  ownerMessage?: string
 }
 
 export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
@@ -171,7 +181,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const writeBlog = createWriteBlogTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const writeEmailCampaign = createWriteEmailCampaignTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.conversationId)
   const deepCompetitorScan = createDeepCompetitorScanTool(ctx.supabase, ctx.userId, ctx.brandId)
-  const managePosts = createManagePostsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const managePosts = createManagePostsTool(ctx.supabase, ctx.userId, ctx.brandId, ctx.ownerMessage)
   const createCollage = createCollageTool(ctx.supabase, ctx.userId, ctx.brandId)
   const verifyProduct = createVerifyProductTool(ctx.supabase, ctx.brandId)
   const analyseVoice = createAnalyseVoiceTool(ctx.supabase, ctx.userId, ctx.brandId)

@@ -79,6 +79,40 @@ export async function resolveAlbum({
 }
 
 /**
+ * Fences around the directive so it can be removed again.
+ *
+ * The directive is concatenated onto the owner's Telegram message and stored in
+ * `mcp_jobs.input.message`, which the thread loader replays verbatim as a USER
+ * turn for the next eight jobs. That turned NRS's own one-off instruction into
+ * a standing, owner-voiced order naming a specific UUID — which is how a 48 KB
+ * Telegram-compressed JPEG from 09:58 kept getting attached to drafts long
+ * after the owner had uploaded a clean 117 KB PNG, twice. He typed "do it again
+ * with THIS image" and lost to a sentence he never wrote.
+ *
+ * The directive is right for the turn the media arrived on. It is wrong on
+ * every turn after that, so it is fenced and stripped from replayed history.
+ */
+export const MEDIA_DIRECTIVE_OPEN = '[NRS-MEDIA-DIRECTIVE]'
+export const MEDIA_DIRECTIVE_CLOSE = '[/NRS-MEDIA-DIRECTIVE]'
+
+const DIRECTIVE_BLOCK = new RegExp(
+  `\\s*\\[NRS-MEDIA-DIRECTIVE\\][\\s\\S]*?\\[\\/NRS-MEDIA-DIRECTIVE\\]`,
+  'g',
+)
+
+/**
+ * Remove NRS's own media instruction, leaving the owner's actual words.
+ *
+ * Two callers depend on this and both matter:
+ *  - thread replay, so a past turn's UUID stops arriving as a present order;
+ *  - the stale-media guard, which must see the owner's OWN text — a UUID left
+ *    in it reads as "the owner named an id" and disables the guard entirely.
+ */
+export function stripMediaDirective(message: string): string {
+  return message.replace(DIRECTIVE_BLOCK, '').trim()
+}
+
+/**
  * The instruction handed to the Director once media has been processed.
  *
  * The old wording asked only for captions, so whether anything reached the
@@ -105,7 +139,7 @@ export function buildMediaDirective({
     : `The owner sent a ${kind}. It is in the media library as ${mediaItemIds[0]}.`
 
   return [
-    `\n\n[${what}`,
+    `\n\n${MEDIA_DIRECTIVE_OPEN}${what}`,
     transcript ? `What he says in it: "${transcript.slice(0, 2000)}"` : null,
     description ? `What it shows: ${description.slice(0, 600)}` : null,
     !transcript && !description
@@ -127,7 +161,8 @@ export function buildMediaDirective({
     `Use manage_posts with action=create_draft, once per connected platform, passing media_item_ids ${isAlbum ? `[${idList}]` : `[${mediaItemIds[0]}]`}.`,
     'Write each caption for that specific platform, and include the brand hashtags.',
     'Leave them as unscheduled drafts for review. Do not schedule or publish.',
-    "Then tell him, per platform, exactly what the tool's mixpost field said — synced, pending or failed. Never say a draft is ready to review unless it came back synced.]",
+    "Then tell him, per platform, exactly what the tool's mixpost field said — synced, pending or failed. Never say a draft is ready to review unless it came back synced."
+    + MEDIA_DIRECTIVE_CLOSE,
   ]
     .filter(Boolean)
     .join('\n')

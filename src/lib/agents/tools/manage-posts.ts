@@ -81,6 +81,15 @@ export function createManagePostsTool(
   supabase: SupabaseClient,
   userId: string,
   brandId: string,
+  /**
+   * The owner's own words for this turn, passed in rather than asked of the
+   * model. `media_item_ids` below is model-filled and had no freshness check,
+   * so an old id sitting in the transcript beat a fresh upload every time —
+   * a 48 KB Telegram-compressed JPEG kept winning over the clean 117 KB PNG
+   * the owner had just uploaded twice. createDraftPost uses this to decide,
+   * in code, when "THIS image" means the newest one.
+   */
+  ownerMessage?: string,
 ) {
   return tool({
     description:
@@ -146,6 +155,7 @@ export function createManagePostsTool(
             caption,
             hashtags: hashtags ?? [],
             mediaItemIds: media_item_ids ?? [],
+            ...(ownerMessage ? { ownerMessage } : {}),
             scheduledAt: scheduled_at,
             metadata: { source: 'director', created_by: 'NRS Director' },
           })
@@ -156,6 +166,10 @@ export function createManagePostsTool(
             platform,
             post_type: draft.postType,
             media_attached: draft.mediaItemIds.length,
+            // The ids ACTUALLY attached, which is not always what was asked
+            // for. Reported so the Director cannot claim it used one image
+            // while the draft carries another.
+            media_item_ids_used: draft.mediaItemIds,
             mixpost: draft.mixpost,
             ...(draft.mixpostError ? { mixpost_error: draft.mixpostError } : {}),
             // Relay this verbatim — do not upgrade 'pending' to 'ready'.

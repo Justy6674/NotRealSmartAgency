@@ -7,6 +7,8 @@
  * and "what did I ask you" resolve against real prior turns instead of a blank slate.
  */
 
+import { stripMediaDirective } from './telegram-album'
+
 export const TELEGRAM_THREAD_TURN_LIMIT = 8
 
 export interface TelegramThreadTurn {
@@ -75,7 +77,23 @@ export function parseTelegramJobTurn(row: {
 }): TelegramThreadTurn | null {
   const input = row.input && typeof row.input === 'object' ? row.input as Record<string, unknown> : null
   const result = row.result && typeof row.result === 'object' ? row.result as Record<string, unknown> : null
-  const userMessage = typeof input?.message === 'string' ? input.message.trim() : ''
+  // Replay what the OWNER said, not what NRS told itself to do.
+  //
+  // The Telegram webhook appends its own media directive to the owner's message
+  // before storing it, so `input.message` on an upload turn ends with an
+  // imperative naming a specific UUID: "passing media_item_ids [853c7b19-…]".
+  // Replayed as a user turn for the next eight jobs, that read as a standing
+  // order from the owner. It is why a 48 KB Telegram-compressed JPEG from 09:58
+  // kept being attached to every draft after the owner uploaded a clean 117 KB
+  // PNG at 10:09 and again at 10:27, and why saying "do it again with THIS
+  // image" changed nothing — the fresher upload never named itself anywhere,
+  // and the stale one named itself in every turn.
+  //
+  // The directive belongs to the turn it was written for. Stripped here it
+  // stops being a permanent instruction; the media itself is still in the
+  // library and query_media still returns it newest-first.
+  const rawUserMessage = typeof input?.message === 'string' ? input.message : ''
+  const userMessage = stripMediaDirective(rawUserMessage)
   const assistantResponse = typeof result?.response === 'string' ? result.response.trim() : ''
 
   // A turn survives if EITHER side said something.

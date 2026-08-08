@@ -62,6 +62,7 @@ import {
   loadTelegramThreadHistory,
   resolveTelegramWorkMessage,
 } from '@/lib/telegram/telegram-thread'
+import { stripMediaDirective } from '@/lib/telegram/telegram-album'
 import {
   matchesDirectorJobScope,
   type DirectorExecutionScope,
@@ -585,6 +586,16 @@ That's the difference between a marketing director and a tech support agent. Def
       brandId: brand_id,
       conversationId: null,
       agentRegistryId: registry?.id ?? null,
+      // The owner's OWN words, with NRS's media directive taken back out.
+      //
+      // manage_posts uses this to decide in code when "do it again with THIS
+      // image" must beat the older media id the model recalled. It has to be
+      // stripped: the directive contains a UUID, and a UUID in the owner's text
+      // is read as "he named the id himself", which would switch the whole
+      // safeguard off — the exact 48 KB-JPEG-over-117 KB-PNG failure it exists
+      // to stop. `telegramWorkMessage` also resolves "try again" back to the
+      // real ask, so a follow-up still carries the deictic reference.
+      ownerMessage: stripMediaDirective(telegramWorkMessage),
     })
 
     const delegateCtx = {

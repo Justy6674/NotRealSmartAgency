@@ -50,6 +50,22 @@ export interface CreateDraftInput {
   hashtags?: string[]
   /** Media to attach. Post type and image_url are derived from the first item. */
   mediaItemIds?: string[]
+  /**
+   * The owner's OWN words for this turn — not the model's paraphrase, and not
+   * the Telegram media directive NRS writes for itself (strip that first with
+   * `stripMediaDirective`).
+   *
+   * Supplying it turns on the stale-media guard. The owner uploaded a clean
+   * 117 KB PNG twice and every draft afterwards attached a 48 KB
+   * Telegram-compressed JPEG from hours earlier, because `mediaItemIds` is a
+   * model-filled parameter and the strongest id in the model's context was the
+   * old one. When he points at media instead of naming it — "do it again with
+   * THIS image" — the newest upload wins, in code. See lib/media/fresh-upload.
+   *
+   * Omit it and nothing changes; the browser routes, where the user picked the
+   * media by hand in a UI, deliberately leave it off.
+   */
+  ownerMessage?: string
   /** Override the derived post type (carousel, for instance). */
   postType?: PostType
   status?: ScheduledPostStatus
@@ -82,6 +98,15 @@ export interface CreateDraftResult {
    * exists" — silently returning an old id would be its own quiet lie.
    */
   duplicateOf?: string
+  /**
+   * The stale media item that was dropped in favour of a newer upload.
+   *
+   * Present only when the guard actually acted. Returned rather than hidden so
+   * the caller can SAY which image it used — swapping media without telling the
+   * owner would be its own quiet lie, and this whole safeguard exists because
+   * of a day lost to publishing the wrong picture without anyone saying so.
+   */
+  /** One sentence about the media choice, for the Director to relay verbatim. */
 }
 
 /**
@@ -172,7 +197,8 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     platform,
     caption,
     hashtags = [],
-    mediaItemIds = [],
+    mediaItemIds: requestedMediaItemIds = [],
+    ownerMessage,
     postType: postTypeOverride,
     status = 'draft',
     scheduledAt,
@@ -182,6 +208,33 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     outputId,
     awaitMixpost = true,
   } = input
+
+  // Attach the media he MEANT, not the media the model remembered.
+  //
+  // `mediaItemIds` arrives as a plain model-filled tool parameter with no
+  // freshness check of any kind. On 2026-08-08 that let a 48 KB
+  // Telegram-compressed JPEG from 09:58 beat the clean 117 KB PNG the owner had
+  // just uploaded — twice, at 10:09 and 10:27 — because the old UUID was sitting
+  // in the transcript as an explicit instruction and "do it again with THIS
+  // image" was not. Every card published that day was blurry.
+  //
+  // Resolved BEFORE the duplicate check below, deliberately: the old order
+  // matched the stale draft on media + caption and returned it as a 'duplicate',
+  // so retrying with the right picture silently handed back the wrong post.
+  // No guessing about which media the owner meant.
+  //
+  // A regex over his phrasing was tried and rejected: it did not match "do a
+  // post on this" — his actual words — and it DID match "repost the photo from
+  // our March launch", which would have silently swapped in today's upload.
+  // Publishing the wrong picture is worse than publishing a blurry one.
+  //
+  // The real fix is upstream, and it is deterministic: the stale UUID only
+  // ever entered the model's head because NRS concatenated
+  // "passing media_item_ids [853c7b19…]" onto the owner's message and stored
+  // it as HIS words, so every later turn replayed it as a standing order.
+  // `stripMediaDirective` removes it on replay. With no standing order there
+  // is nothing stale to copy, and no need to second-guess him here.
+  const mediaItemIds = requestedMediaItemIds
 
   // Spell the brand right in anything that will be published.
   //
@@ -291,8 +344,12 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     scheduled_at: resolvedScheduledAt,
     post_type: postType,
     media_item_ids: mediaItemIds,
-    metadata: { ...metadata, source: metadata.source ?? 'unknown' },
+    metadata: {
+      ...metadata,
+      source: metadata.source ?? 'unknown',
+    },
   }
+
   // Images render from image_url in the Review tab; videos render from the
   // Mixpost preview, so setting it for a video would show a broken still.
   if (firstMediaUrl && !isVideo) insertData.image_url = firstMediaUrl
@@ -316,7 +373,12 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
   }
 
   const postId = data.id as string
-  const base: CreateDraftResult = { id: postId, postType, mediaItemIds, mixpost: 'skipped' }
+  const base: CreateDraftResult = {
+    id: postId,
+    postType,
+    mediaItemIds,
+    mixpost: 'skipped',
+  }
 
   // Only drafts and scheduled posts belong in Mixpost.
   if (status !== 'draft' && status !== 'scheduled') return base
@@ -403,7 +465,13 @@ export async function createDraftPosts(
  * Keeps the honesty contract in one place instead of each tool inventing it.
  */
 export function describeMixpostOutcome(result: CreateDraftResult): string {
-  switch (result.mixpost) {
+  // Which picture went on the post, said out loud.
+  //
+  return describeMixpostState(result.mixpost)
+}
+
+function describeMixpostState(state: MixpostSyncOutcome): string {
+  switch (state) {
     case 'synced':
       return 'In Mixpost and ready to review.'
     case 'pending':

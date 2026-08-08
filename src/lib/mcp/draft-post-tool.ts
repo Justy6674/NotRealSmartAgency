@@ -349,6 +349,11 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
           caption,
           hashtags: parsedHashtags,
           mediaItemIds: mediaItemRow ? [mediaItemRow.id] : [],
+          // `intent` is the user's request verbatim — the tool contract above
+          // demands it. That makes it the honest owner turn for the stale-media
+          // guard: "draft a post with this image" attaches the newest upload
+          // rather than whichever media_id the calling model remembered.
+          ownerMessage: intent,
           metadata: metadata as unknown as Record<string, unknown>,
         })
       } catch (err) {
@@ -376,6 +381,9 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
         source: 'mcp_external',
         department: 'Content & Copy',
         post_type: postType,
+        // The ids the draft ACTUALLY carries, which is not always the media_id
+        // that was passed in — see the stale-media guard in createDraftPost.
+        media_item_ids_used: draft.mediaItemIds,
         ...(mediaItemRow ? { media_attached: { id: mediaItemRow.id, type: mediaItemRow.file_type } } : {}),
         cost_cents: workerResult.costCents,
         duration_ms: workerResult.durationMs,

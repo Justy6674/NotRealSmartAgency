@@ -352,6 +352,10 @@ That's the difference between a marketing director and a tech support agent. Def
     brandId,
     conversationId: conversationId ?? null,
     agentRegistryId: registry?.id ?? null,
+    // What the user actually typed this turn. manage_posts needs it to tell
+    // "use THIS image" (attach the newest upload) apart from a deliberate
+    // choice of an older library item.
+    ownerMessage: lastMessageText,
   })
 
   // Add delegation + meeting tools for Director only
