@@ -33,6 +33,7 @@ import { getDirectorCompletion } from './director-completion'
 import { keepTyping } from '@/lib/telegram/typing'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
+import { enforceClaims } from './claimed-actions'
 import {
   buildWebsiteScanGroundingDirective,
   isWebsiteScanRequest,
@@ -595,6 +596,18 @@ That's the difference between a marketing director and a tech support agent. Def
       throw new Error(completion.reason)
     }
     let response = completion.response
+
+    // A reply that says the draft was updated, when nothing was, is
+    // indistinguishable from success — the owner finds out by opening Mixpost.
+    // Checked rather than instructed: a model that has just composed the
+    // perfect caption believes the work is done, and "I've updated the draft"
+    // is the natural next sentence whether a tool ran or not.
+    const claims = enforceClaims(response, (result as { steps?: unknown }).steps)
+    if (claims.corrected) {
+      console.warn(`[director-job] unbacked claim corrected: "${claims.evidence}"`)
+      response = claims.response
+    }
+
     let repairInputTokens = 0
     let repairOutputTokens = 0
     let repairCostUsd = 0

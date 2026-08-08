@@ -28,7 +28,7 @@ import {
   describeTopicSetup,
 } from '@/lib/telegram/forum-topics'
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
-import { sendTypingAction } from '@/lib/telegram/typing'
+import { keepTyping, sendTypingAction } from '@/lib/telegram/typing'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
   buildDirectorTopicDirective,
