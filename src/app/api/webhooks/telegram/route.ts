@@ -30,6 +30,11 @@ import {
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
+  buildDirectorTopicDirective,
+  directorTopicAcknowledgement,
+  namedProjectIn,
+} from '@/lib/telegram/director-topic'
+import {
   describeTopicLink,
   linkForTopicName,
   parseTopicNamed,
@@ -414,6 +419,7 @@ async function queueTelegramDirectorWork({
   botToken,
   chatId,
   threadId,
+  acknowledgement,
 }: {
   admin: ReturnType<typeof createAdminClient>
   account: { id: string; actor_user_id: string }
@@ -423,6 +429,11 @@ async function queueTelegramDirectorWork({
   chatId: string
   /** The project's forum topic, so the answer comes back to it. */
   threadId?: number
+  /**
+   * Overrides the "Working on <brand>" line. The Director topic spans every
+   * project, so naming one there would state the opposite of what is true.
+   */
+  acknowledgement?: string
 }): Promise<void> {
   const inspection = inspectMarketingInput(message)
   if (!inspection.allowed) {
@@ -504,7 +515,7 @@ async function queueTelegramDirectorWork({
   await sendTelegramText({
     botToken,
     chatId,
-    text: getTelegramJobAcknowledgement(grant.projectName, message),
+    text: acknowledgement ?? getTelegramJobAcknowledgement(grant.projectName, message),
     ...(threadId !== undefined ? { threadId } : {}),
   })
 
@@ -926,7 +937,11 @@ async function handleTelegramUpdate(request: NextRequest) {
    * what the comment above always claimed and the code never did.
    */
   const resolveGrant = async (): Promise<TelegramGrant | undefined> => {
-    if (topicRoute) {
+    // The Director topic works ACROSS everything. It is answered elsewhere,
+    // before this runs, so it never needs a single project pinned to it.
+    if (topicRoute?.kind === 'director') return undefined
+
+    if (topicRoute?.kind === 'brand') {
       return grants.find(
         (candidate) =>
           candidate.grantId === topicRoute.grantId && candidate.projectId === topicRoute.projectId,
@@ -951,9 +966,43 @@ async function handleTelegramUpdate(request: NextRequest) {
   const grant = await resolveGrant()
 
   if (!grant) {
+    /**
+     * The Director topic is the front door and answers across everything.
+     *
+     * It is not "no project chosen" — it is a project-agnostic conversation,
+     * which is what the owner asked for: talk to the Director about the whole
+     * agency, and drop into a brand topic when the work belongs to one brand.
+     * Sending this down the "pick a project" path is what made the Director
+     * look like it only ever knew whichever business was last selected.
+     */
+    if (topicRoute?.kind === 'director') {
+      // Naming a brand here means that brand — he should not have to change
+      // topic mid-thought just because he mentioned one.
+      const named = namedProjectIn(intent.message ?? '', grants)
+      const scope = named ?? grants[0]
+
+      if (!scope) {
+        await reply('You have no projects switched on for Telegram yet. Turn one on in NRS Settings.')
+        return NextResponse.json({ received: true, status: 'no_projects' })
+      }
+
+      await queueTelegramDirectorWork({
+        admin,
+        account,
+        grant: scope,
+        message: (intent.message || 'What should we do next?')
+          + (named ? '' : buildDirectorTopicDirective(grants)),
+        botToken: config.botToken,
+        chatId: inbound.chatId,
+        ...(inbound.threadId !== undefined ? { threadId: inbound.threadId } : {}),
+        ...(named ? {} : { acknowledgement: directorTopicAcknowledgement(grants) }),
+      })
+      return NextResponse.json({ received: true, status: named ? 'director_topic_named' : 'director_topic' })
+    }
+
     // The topic names a real project, but not one this person was let in for.
     // Say that, rather than a generic "pick a project" that reads as a fault.
-    if (topicRoute) {
+    if (topicRoute?.kind === 'brand') {
       await reply('That topic is for a project your Telegram access does not cover. Post in a topic you have access to, and nothing here has changed.')
       return NextResponse.json({ received: true, status: 'topic_not_permitted' })
     }

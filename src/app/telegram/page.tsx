@@ -219,8 +219,20 @@ export default function TelegramMiniAppPage() {
     if (!node || events.length === 0) return
 
     const newestId = events[events.length - 1].id
-    const changed = newestIdRef.current !== null && newestIdRef.current !== newestId
+    const firstPaint = newestIdRef.current === null
+    const changed = !firstPaint && newestIdRef.current !== newestId
     newestIdRef.current = newestId
+
+    // Open on the newest message, always. A chat that opens at the top of
+    // weeks of history and makes you scroll to find today is not a chat.
+    // Done after paint so the height being measured is the real one.
+    if (firstPaint) {
+      requestAnimationFrame(() => {
+        node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight)
+      })
+      followingRef.current = true
+      return
+    }
 
     const top = nextScrollTop({
       following: followingRef.current,
@@ -468,10 +480,10 @@ export default function TelegramMiniAppPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--tg-theme-bg-color,#0e151c)] text-[var(--tg-theme-text-color,#f2f4f6)]">
+    <main className="h-screen overflow-hidden bg-[var(--tg-theme-bg-color,#0e151c)] text-[var(--tg-theme-text-color,#f2f4f6)]">
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
-      <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 py-5 sm:px-6">
-        <header className="mb-5 flex items-start justify-between gap-4">
+      <div className="mx-auto flex h-full w-full max-w-2xl flex-col px-4 pb-2 pt-4 sm:px-6">
+        <header className="mb-3 flex shrink-0 items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--tg-theme-hint-color,#82909f)]">NRS Director</p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">{firstName ? `What are we moving forward, ${firstName}?` : 'What are we moving forward?'}</h1>
@@ -495,7 +507,7 @@ export default function TelegramMiniAppPage() {
         */}
         {!loading && projects.length > 0 && (
           <>
-            <section aria-labelledby="projects-heading" className="mb-5">
+            <section aria-labelledby="projects-heading" className="mb-3 shrink-0">
               <div className="mb-2 flex items-center justify-between">
                 <h2 id="projects-heading" className="text-sm font-medium">Working on</h2>
                 <span className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">Choose a workspace</span>
@@ -522,7 +534,7 @@ export default function TelegramMiniAppPage() {
               which is why a clip from the morning sat below an afternoon
               message and above a clip from an hour earlier.
             */}
-            <section className="relative flex-1 overflow-hidden">
+            <section className="relative min-h-0 flex-1 overflow-hidden">
               <div
                 ref={scrollRef}
                 onScroll={onScroll}
@@ -564,7 +576,7 @@ export default function TelegramMiniAppPage() {
               )}
             </section>
 
-            <div className="sticky bottom-0 mt-5 bg-[var(--tg-theme-bg-color,#0e151c)] py-2">
+            <div className="shrink-0 pt-3 bg-[var(--tg-theme-bg-color,#0e151c)]">
             {staged.length > 0 && (
               <div className="mb-2 space-y-1">
                 {staged.map((item) => (

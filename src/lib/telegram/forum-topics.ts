@@ -14,10 +14,15 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export interface TopicRoute {
-  grantId: string
-  projectId: string
-}
+/**
+ * What a topic means.
+ *
+ * `director` is a deliberate answer, not an absence: the front door works
+ * across every project the person holds, and only narrows when they name one.
+ */
+export type TopicRoute =
+  | { kind: 'brand'; grantId: string; projectId: string }
+  | { kind: 'director' }
 
 /** Read the forum thread id off an incoming message, if it is in one. */
 export function readThreadId(message: Record<string, unknown>): number | null {
@@ -55,7 +60,16 @@ export async function routeByTopic(
     .maybeSingle()
 
   if (error || !data) return null
+
+  // A topic with no brand is the DIRECTOR topic — the front door. It is a real
+  // mapping, not a missing one, and it means "work across everything unless I
+  // name a project". Returning null here would send it down the guessing path
+  // and land it on whichever brand was last selected, which is exactly the
+  // behaviour that made the Director look like it only knew one business.
+  if (data.brand_id === null) return { kind: 'director' }
+
   return {
+    kind: 'brand',
     grantId: data.project_access_grant_id as string,
     projectId: data.brand_id as string,
   }

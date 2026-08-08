@@ -64,7 +64,7 @@ test('a topic is looked up by the chat it lives in, not by the person posting', 
 
   const route = await routeByTopic(supabase, '-1001234567890', 8)
 
-  assert.deepEqual(route, { grantId: 'grant-1', projectId: 'brand-1' })
+  assert.deepEqual(route, { kind: 'brand', grantId: 'grant-1', projectId: 'brand-1' })
   assert.ok(seen.some(([c, v]) => c === 'telegram_chat_id' && v === '-1001234567890'))
   assert.ok(seen.some(([c, v]) => c === 'message_thread_id' && v === 8))
   assert.ok(!seen.some(([c]) => c === 'telegram_account_id'), 'must not key on the account')
@@ -118,4 +118,27 @@ test("Telegram's own refusals are translated, not repeated verbatim", () => {
   // from an API is exactly how internal detail leaks out.
   assert.equal(safeTelegramReason('Bad Request: PEER_ID_INVALID'), 'Telegram refused to create it')
   assert.equal(safeTelegramReason(undefined), 'Telegram refused to create it')
+})
+
+/**
+ * A topic with no brand is the Director topic — the front door. Treating it as
+ * "unmapped" sent it down the guessing path and landed it on whichever brand
+ * was last selected, which is why the Director appeared to know only one
+ * business no matter what it was asked.
+ */
+test('a topic with no brand is the front door, not a missing mapping', async () => {
+  const supabase = {
+    from() {
+      const chain: Record<string, unknown> = {}
+      chain.select = () => chain
+      chain.eq = () => chain
+      chain.maybeSingle = async () => ({
+        data: { project_access_grant_id: null, brand_id: null },
+        error: null,
+      })
+      return chain
+    },
+  } as unknown as Parameters<typeof routeByTopic>[0]
+
+  assert.deepEqual(await routeByTopic(supabase, '-100', 1), { kind: 'director' })
 })
