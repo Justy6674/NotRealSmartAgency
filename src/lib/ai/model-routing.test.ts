@@ -140,3 +140,36 @@ test('charges an unknown custom model at the conservative frontier rate', () => 
   assert.equal(estimate.budgetCents, 3)
   assert.equal(estimate.pricingModel, 'anthropic/claude-opus-5')
 })
+
+test('each department runs the model its work actually needs', () => {
+  // agentType was accepted and ignored, so all fourteen agents ran Sonnet 5
+  // whether they were writing a caption or scoring a health claim.
+  const tierFor = (agentType: string) =>
+    resolveAgentModelRoute({ agentType, input: 'summarise this week' }).tier
+
+  // Regulatory judgement is the one place being wrong is not cosmetic.
+  assert.equal(tierFor('compliance'), 'frontier')
+
+  // Bulk extraction from scraped pages — the tokens are input, not craft.
+  assert.equal(tierFor('competitor'), 'fast')
+  assert.equal(tierFor('website'), 'fast')
+  assert.equal(tierFor('analytics'), 'fast')
+
+  // Integrations and payloads are engineering work.
+  assert.equal(tierFor('automation'), 'code')
+
+  // Everything else keeps the writing default rather than being enumerated.
+  assert.equal(tierFor('content'), 'agency')
+  assert.equal(tierFor('overall'), 'agency')
+})
+
+test('a healthcare escalation still outranks the department default', () => {
+  // The competitor agent is cheap by default, but an AHPRA question asked of it
+  // must not be answered on the cheap tier just because of who was asked.
+  const route = resolveAgentModelRoute({
+    agentType: 'competitor',
+    input: 'does this AHPRA regulatory claim need a disclaimer',
+    isHealthBrand: true,
+  })
+  assert.equal(route.tier, 'frontier')
+})

@@ -57,6 +57,43 @@ const GATEWAY_FALLBACKS: Record<GatewayModelTier, readonly string[]> = {
   code: ['anthropic/claude-sonnet-5', 'openai/gpt-5.6-terra'],
 }
 
+/**
+ * Which tier each department runs on, and why.
+ *
+ * `agentType` was accepted by the router and never read — one reference in the
+ * whole file, the type declaration. So all fourteen agents ran the same model
+ * whether they were writing an Instagram caption, reading a competitor's site
+ * or scoring a health claim against AHPRA. The tools were specialised from the
+ * start; the models never were.
+ *
+ * Only departments with a REAL reason to differ appear here. Everything absent
+ * falls through to `agency` (Sonnet 5), which is the right default for writing
+ * and judgement — this is a list of exceptions, not a config file to fill in.
+ *
+ *   compliance → frontier. It reads copy against AHPRA and TGA advertising
+ *     rules for the health brands. It is the one place where being wrong is a
+ *     regulatory matter rather than a bad caption, and the cost difference is
+ *     cents on a check that runs once per draft.
+ *
+ *   competitor / website → fast. Both chew through whole pages of scraped
+ *     HTML, where the work is extraction rather than craft. Haiku is a fifth
+ *     of Sonnet's price on input, which is where nearly all of their tokens go.
+ *
+ *   analytics → fast. Reads numbers out of structured query results. There is
+ *     no prose to get right.
+ *
+ *   automation → code. It reasons about integrations, payloads and failures,
+ *     which is engineering work, and gpt-5.3-codex is the current best codex
+ *     in the catalogue.
+ */
+const TIER_BY_AGENT: Partial<Record<AgentType, GatewayModelTier>> = {
+  compliance: 'frontier',
+  competitor: 'fast',
+  website: 'fast',
+  analytics: 'fast',
+  automation: 'code',
+}
+
 interface GatewayModelPricing {
   input: number
   output: number
@@ -218,6 +255,7 @@ export function isHighStakesHealthcareWork(input: string, isHealthBrand = false)
  */
 export function resolveAgentModelRoute(input: AgentModelRouteInput): GatewayModelRoute {
   const registeredModel = input.registeredModel?.trim()
+  const byDepartment = TIER_BY_AGENT[input.agentType as AgentType]
 
   if (isCodeWork(input.input)) {
     return {
@@ -243,6 +281,15 @@ export function resolveAgentModelRoute(input: AgentModelRouteInput): GatewayMode
       // while every agent uses a managed default, which is exactly why it went
       // stale unnoticed when the others were upgraded.
       fallbacks: [GATEWAY_MODELS.agency, 'openai/gpt-5.6-terra'],
+    }
+  }
+
+  // The department's own tier, when it has a reason to differ from the default.
+  if (byDepartment) {
+    return {
+      tier: byDepartment,
+      model: GATEWAY_MODELS[byDepartment],
+      fallbacks: GATEWAY_FALLBACKS[byDepartment],
     }
   }
 
