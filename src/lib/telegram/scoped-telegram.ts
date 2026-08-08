@@ -73,6 +73,35 @@ export function buildScopedProjectKeyboard(
   }
 }
 
+/**
+ * Link THIS topic to a project, in one tap.
+ *
+ * A separate callback from the ordinary project picker because it does a
+ * different thing: choosing a project sets what the next message is about,
+ * whereas this binds a Telegram topic to a project permanently. Telling the
+ * two apart matters — the topic id has to survive the round trip, and Telegram
+ * gives back only the callback string.
+ */
+export function buildTopicLinkKeyboard(
+  grants: ReadonlyArray<{ grantId: string; projectName: string }>,
+  threadId: number,
+): TelegramInlineKeyboard {
+  return {
+    inline_keyboard: grants.map((grant) => [{
+      text: grant.projectName,
+      callback_data: `nrs_topic:${threadId}:${grant.grantId}`,
+    }]),
+  }
+}
+
+/** "nrs_topic:5393:<grantId>" → the pieces, or null. */
+export function parseTopicLink(callbackData: string): { threadId: number; grantId: string } | null {
+  const match = /^nrs_topic:(\d+):(.+)$/.exec(callbackData)
+  if (!match) return null
+  const threadId = Number(match[1])
+  return Number.isFinite(threadId) && match[2] ? { threadId, grantId: match[2] } : null
+}
+
 export function addMiniAppButton(keyboard: TelegramInlineKeyboard, url = 'https://www.notrealsmart.com.au/telegram'): TelegramInlineKeyboard {
   return { inline_keyboard: [...keyboard.inline_keyboard, [{ text: 'Open NRS Mini App', web_app: { url } }]] }
 }

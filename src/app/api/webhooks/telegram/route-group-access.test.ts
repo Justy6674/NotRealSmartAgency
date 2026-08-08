@@ -45,12 +45,25 @@ test('someone with one project is never asked which project', () => {
  * else entirely. Posting in a topic states which project is meant, and a stale
  * selection must never override it.
  */
-test('an unlinked topic asks rather than falling back to the last selection', () => {
+test('an unlinked topic asks rather than falling back — in a GROUP', () => {
+  // Narrowed deliberately, and the reason is worth keeping.
+  //
+  // In a shared group the topic IS how people tell brands apart, so falling
+  // back to a stale selection could post Scent Sell copy to Downscale's page.
+  // The refusal belongs there and stays.
+  //
+  // In a PRIVATE chat it was catastrophic. Telegram's threaded DMs create a
+  // topic on their own, and clearing the chat history deletes the links — so
+  // every message afterwards landed in an unlinked topic and was refused
+  // before the Director was ever called. Six messages in a row produced ZERO
+  // jobs: no reply, no typing indicator, nothing. The bot looked dead, and to
+  // the second person on the account it was.
   const source = route()
-  assert.match(source, /if \(inATopic\) return undefined/)
+  assert.match(source, /if \(inATopic && inbound\.fromGroup\) return undefined/)
   assert.match(source, /status: 'topic_unlinked'/)
-  // The fallback must come AFTER the refusal, so it cannot be reached from a topic.
-  const refusal = source.indexOf('if (inATopic) return undefined')
+  // The fallback must still sit after the refusal, so a GROUP topic cannot
+  // reach it.
+  const refusal = source.indexOf('if (inATopic && inbound.fromGroup) return undefined')
   const fallback = source.indexOf('const session = await getActiveSession(admin, account.id)', refusal)
   assert.ok(refusal > -1 && fallback > refusal, 'the stale-selection fallback must sit after the topic refusal')
 })

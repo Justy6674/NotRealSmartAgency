@@ -30,6 +30,7 @@ import {
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
 import { keepTyping, sendTypingAction } from '@/lib/telegram/typing'
 import { parseReaction } from '@/lib/telegram/reactions'
+import { buildTopicLinkKeyboard, parseTopicLink } from '@/lib/telegram/scoped-telegram'
 import { recordReaction } from '@/lib/telegram/handle-reaction'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
@@ -805,7 +806,22 @@ async function handleTelegramUpdate(request: NextRequest) {
       })
   }
 
-  const intent = parseScopedTelegramIntent(inbound.text, inbound.callbackData)
+  // A photo's words live in its CAPTION, not in `text`.
+  //
+  // Reading only `text` meant every photo sent with a caption parsed as
+  // "ignore" and was dropped at the gate below — the attachment handler
+  // further down was never reached. The owner sent a carousel with a full
+  // brief attached to it and got silence.
+  //
+  // And a file sent with NO words is still a request: "here, do something with
+  // this". It must reach the attachment handler rather than being discarded
+  // for having nothing to parse.
+  const intent = inbound.text || !inbound.attachment
+    ? parseScopedTelegramIntent(inbound.text, inbound.callbackData)
+    : parseScopedTelegramIntent(
+      inbound.attachment.caption?.trim() || 'Have a look at this.',
+      inbound.callbackData,
+    )
   let account = await getTelegramAccount(admin, inbound)
 
   // Every reply goes back to the topic the request came from. In a group with
@@ -872,6 +888,39 @@ async function handleTelegramUpdate(request: NextRequest) {
   if (intent.kind === 'choose_project') {
     await sendProjectPicker({ botToken: config.botToken, chatId: inbound.chatId, grants, ...thread })
     return NextResponse.json({ received: true, status: 'project_picker' })
+  }
+
+  // Binding a topic to a project, from the buttons offered when it was unlinked.
+  //
+  // Handled before the ordinary project selection because it is a different
+  // act: choosing a project sets what the NEXT message is about; this makes
+  // the topic itself mean a project, for good.
+  const topicLink = inbound.callbackData ? parseTopicLink(inbound.callbackData) : null
+  if (topicLink) {
+    const grant = grants.find((candidate) => candidate.grantId === topicLink.grantId)
+    if (!grant) {
+      await reply('That project is not available to this Telegram account.')
+      return NextResponse.json({ received: true, status: 'topic_link_denied' })
+    }
+
+    const { error: linkError } = await admin.from('telegram_project_sessions').insert({
+      telegram_account_id: account.id,
+      project_access_grant_id: grant.grantId,
+      brand_id: grant.projectId,
+      status: 'topic',
+      message_thread_id: topicLink.threadId,
+      telegram_chat_id: inbound.chatId,
+      selected_at: new Date().toISOString(),
+    })
+
+    if (linkError) {
+      console.error('[topic-link]', linkError.message)
+      await reply('That could not be linked just then. Try the buttons again.')
+      return NextResponse.json({ received: true, status: 'topic_link_failed' })
+    }
+
+    await reply(`Linked. Everything in this topic is ${grant.projectName} from now on.`)
+    return NextResponse.json({ received: true, status: 'topic_linked' })
   }
 
   if (intent.kind === 'select_project') {
@@ -1011,8 +1060,17 @@ async function handleTelegramUpdate(request: NextRequest) {
     // Someone let in for one brand should never be asked which brand.
     if (grants.length === 1) return grants[0]
 
-    // An unlinked topic: refuse to guess.
-    if (inATopic) return undefined
+    // An unlinked topic in a PRIVATE chat is not ambiguous — it is just a
+    // thread in a one-to-one conversation, and the selected project applies to
+    // it exactly as it does everywhere else in that chat.
+    //
+    // Refusing here dead-ended the whole bot. Telegram's threaded DMs create a
+    // topic on their own, clearing the chat history deletes them, and every
+    // message afterwards landed in a topic with no link — so the answer to
+    // everything, including "why did you remove topics", was the same refusal
+    // to guess. A shared GROUP is different: there the topic IS how people
+    // tell brands apart, and guessing could post one brand's copy to another.
+    if (inATopic && inbound.fromGroup) return undefined
 
     const session = await getActiveSession(admin, account.id)
     return session
@@ -1072,9 +1130,18 @@ async function handleTelegramUpdate(request: NextRequest) {
     // by whoever taps it. So in a group, say what to do instead of sending a
     // picker that cannot be used.
     // An unlinked topic gets the one instruction that fixes it for good.
-    if (inATopic) {
+    if (inATopic && inbound.fromGroup) {
+      // Offer the list, do not demand a rename.
+      //
+      // This used to answer "rename the topic to one of these and I will link
+      // it" — technically correct, and useless: it makes the owner go and do
+      // admin in another menu to answer a question he already asked here. The
+      // buttons are already built for the private chat; a topic is no reason
+      // to withhold them.
       await reply(
-        `This topic is not linked to a project, so I will not guess which one you mean.\n\nRename it to one of these and I will link it straight away: ${grants.map((candidate) => candidate.projectName).join(', ')}.`,
+        'This topic is not linked to a project yet. Pick one and I will link it'
+        + ' permanently — everything posted in this topic goes there from now on.',
+        buildTopicLinkKeyboard(grants, inbound.threadId as number),
       )
       return NextResponse.json({ received: true, status: 'topic_unlinked' })
     }
