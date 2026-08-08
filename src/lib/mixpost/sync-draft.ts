@@ -119,10 +119,15 @@ export async function ensureMediaInMixpost(
   // the version without them would be the worst possible outcome — it looks
   // like it worked right up until the post is live.
   const itemMetadata = (item.metadata as Record<string, unknown> | null) ?? {}
+  // Order matters: captioned is built ON TOP of tightened, so it is the most
+  // finished file there is. Publishing a tightened copy after captions were
+  // asked for would drop them silently.
   const captionedUrl = (itemMetadata.captioned as { url?: string } | undefined)?.url
+  const tightenedUrl = (itemMetadata.tightened as { url?: string } | undefined)?.url
   const deliveryUrl = (itemMetadata.delivery as { url?: string } | undefined)?.url
   const publishUrl =
     (typeof captionedUrl === 'string' && captionedUrl)
+    || (typeof tightenedUrl === 'string' && tightenedUrl)
     || (typeof deliveryUrl === 'string' && deliveryUrl)
     || item.file_url
 

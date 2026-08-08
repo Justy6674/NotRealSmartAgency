@@ -67,7 +67,16 @@ export function createCaptionVideoTool(brandId: string, userId: string) {
         }
       }
 
-      const words = metadata.transcript_words as TranscriptionWord[] | undefined
+      // Caption whatever will actually publish. If the clip was tightened, the
+      // original word timings no longer describe it — every cut moved the
+      // speech earlier, so captions burnt from them drift further out with
+      // each one. The tighten stored re-timed words for exactly this.
+      const tightened = metadata.tightened as { url?: string; words?: TranscriptionWord[] } | undefined
+      const sourceUrl = tightened?.url ?? item.file_url
+      const words = (tightened?.url && Array.isArray(tightened.words) && tightened.words.length > 0)
+        ? tightened.words
+        : metadata.transcript_words as TranscriptionWord[] | undefined
+
       if (!Array.isArray(words) || words.length === 0) {
         return {
           error:
@@ -78,7 +87,7 @@ export function createCaptionVideoTool(brandId: string, userId: string) {
 
       let result
       try {
-        result = await burnSubtitlesFromUrl(item.file_url, words)
+        result = await burnSubtitlesFromUrl(sourceUrl, words)
       } catch (error) {
         console.error(`[caption_video:${media_item_id}]`, error)
         return { error: 'The captions could not be rendered. The original clip is untouched.' }
@@ -123,6 +132,7 @@ export function createCaptionVideoTool(brandId: string, userId: string) {
         // The full text back, so a misheard brand or fragrance name can be
         // spotted here rather than after it is published.
         lines: buildCues(words).map((cue) => cue.text),
+        captioned_the_tightened_version: Boolean(tightened?.url),
         note:
           'Captioned. This version is what will publish now. Read the lines back — anything'
           + ' misheard needs fixing before this goes out.',
