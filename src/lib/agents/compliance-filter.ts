@@ -14,8 +14,8 @@ import type { ComplianceFlags, BrandDNAConstraints } from '@/types/database'
 import { buildAbeRegulatoryContext, searchAbeRegulatoryCorpus } from '@/lib/abeai/regulatory-corpus'
 import {
   estimateGatewayCost,
-  getGatewayModel,
-  getGatewayProviderOptions,
+  getGatewayRouteProviderOptions,
+  resolveAgentModelRoute,
 } from '@/lib/ai/model-routing'
 
 export interface GuardianResult {
@@ -183,7 +183,13 @@ Evaluate the provided marketing content against the following regulations:`
 Analyse the text and return JSON indicating if it is compliant with regulations AND brand voice rules.`
 
   const regulated = Boolean(flags.ahpra || flags.tga)
-  const model = getGatewayModel('fast')
+  const modelRoute = resolveAgentModelRoute({
+    agentType: 'compliance',
+    input: content,
+    isHealthBrand: regulated,
+    taskCapability: 'compliance_review',
+  })
+  const model = modelRoute.model
 
   try {
     const { object, usage } = await generateObject({
@@ -193,7 +199,7 @@ Analyse the text and return JSON indicating if it is compliant with regulations 
       // fallback when a provider was down — for regulated work, an outage
       // stops publishing entirely — and, worse, the only health call sent
       // without the no-training and zero-retention controls the rest carry.
-      providerOptions: getGatewayProviderOptions('fast', {
+      providerOptions: getGatewayRouteProviderOptions(modelRoute, {
         tags: ['compliance-review', regulated ? 'regulated' : 'unregulated'],
         zeroDataRetention: regulated,
       }),

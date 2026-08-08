@@ -491,7 +491,19 @@ async function queueTelegramDirectorWork({
       policy_version: execution.policyVersion,
       job_type: 'director_chat',
       status: 'queued',
-      input: { brand_id: execution.projectId, message },
+      input: {
+        brand_id: execution.projectId,
+        message,
+        // A queued Telegram job must carry its own return address. `after()`
+        // normally owns delivery, but a reclaimed job cannot reconstruct a
+        // group topic or private chat from the original HTTP request.
+        delivery: {
+          telegram_chat_id: chatId,
+          ...(threadId !== undefined ? { telegram_thread_id: threadId } : {}),
+          ...(execution.projectName ? { project_name: execution.projectName } : {}),
+          deliver_text: execution.deliverText !== false,
+        },
+      },
     })
     .select('id')
     .single()

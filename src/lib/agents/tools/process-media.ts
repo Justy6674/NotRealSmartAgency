@@ -24,7 +24,7 @@
 import { tool } from 'ai'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
-import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
+import { getGatewayRouteProviderOptions, resolveAgentModelRoute } from '@/lib/ai/model-routing'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Brand, PostPlatform } from '@/types/database'
@@ -236,9 +236,15 @@ export function createProcessMediaTool(
 
       let content: z.infer<typeof PlatformContentSchema>
       try {
+        const modelRoute = resolveAgentModelRoute({
+          agentType: 'content',
+          input: transcription,
+          isHealthBrand: Boolean((brand as Brand).compliance_flags?.ahpra || (brand as Brand).compliance_flags?.tga),
+          taskCapability: 'caption_hashtag_analysis',
+        })
         const { object } = await generateObject({
-          model: gateway(getGatewayModel('agency')),
-          providerOptions: getGatewayProviderOptions('agency'),
+          model: gateway(modelRoute.model),
+          providerOptions: getGatewayRouteProviderOptions(modelRoute),
           system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions from video transcriptions.
 
 ${brandContext}

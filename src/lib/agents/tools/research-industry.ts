@@ -6,14 +6,14 @@
  * search tool for multi-step research) → generateObject (structured synthesis)
  * → proforma update.
  *
- * Cost: ~$0.005 per brand (Haiku for search + synthesis).
+ * Cost: governed by the shared current-research model policy plus search use.
  */
 
 import { tool, generateText, generateObject, stepCountIs } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
+import { getGatewayRouteProviderOptions, resolveAgentModelRoute } from '@/lib/ai/model-routing'
 
 // ---------------------------------------------------------------------------
 // Structured output schema for industry knowledge
@@ -59,12 +59,17 @@ export async function researchIndustryCore(
   const industry = brand.niche || 'general business'
   const brandName = brand.name || 'this brand'
 
-  // 2. Research phase — use Haiku + Perplexity search
+  // 2. Research phase — current-research policy + Perplexity search
   const maxSteps = depth === 'deep' ? 4 : 2
+  const modelRoute = resolveAgentModelRoute({
+    agentType: 'seo',
+    input: `${industry}\n${brandName}\n${depth}`,
+    taskCapability: 'current_research',
+  })
 
   const { text: researchText } = await generateText({
-    model: gateway(getGatewayModel('fast')),
-    providerOptions: getGatewayProviderOptions('fast'),
+    model: gateway(modelRoute.model),
+    providerOptions: getGatewayRouteProviderOptions(modelRoute),
     tools: {
       web_search: gateway.tools.perplexitySearch({
         maxResults: 5,
@@ -102,8 +107,8 @@ Compile everything into a comprehensive research brief.`,
 
   // 3. Synthesis phase — structure the research into proforma-ready knowledge
   const { object: knowledge } = await generateObject({
-    model: gateway(getGatewayModel('fast')),
-    providerOptions: getGatewayProviderOptions('fast'),
+    model: gateway(modelRoute.model),
+    providerOptions: getGatewayRouteProviderOptions(modelRoute),
     schema: industryKnowledgeSchema,
     prompt: `You are a marketing strategist synthesising research into structured intelligence for a "${industry}" brand called "${brandName}".
 

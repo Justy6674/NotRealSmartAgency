@@ -15,6 +15,12 @@ export interface AgentModelRouteInput {
   input: string
   isHealthBrand?: boolean
   registeredModel?: string | null
+  /**
+   * A concrete task capability takes precedence over a broad department
+   * default. It keeps task-specific policy visible without pretending an
+   * unmeasured model is universally "best".
+   */
+  taskCapability?: string | null
 }
 
 export interface GatewayRequestOptions {
@@ -92,6 +98,21 @@ const TIER_BY_AGENT: Partial<Record<AgentType, GatewayModelTier>> = {
   website: 'fast',
   analytics: 'fast',
   automation: 'code',
+}
+
+/**
+ * Task policy is intentionally smaller than the department policy. These are
+ * the workflows whose evidence shape materially changes the model needed for
+ * the synthesis, regardless of which channel submitted the job.
+ */
+const TIER_BY_TASK_CAPABILITY: Record<string, GatewayModelTier> = {
+  website_evidence: 'fast',
+  competitor_research: 'agency',
+  current_research: 'agency',
+  video_evidence: 'agency',
+  canva_asset: 'agency',
+  caption_hashtag_analysis: 'agency',
+  compliance_review: 'frontier',
 }
 
 interface GatewayModelPricing {
@@ -256,6 +277,9 @@ export function isHighStakesHealthcareWork(input: string, isHealthBrand = false)
 export function resolveAgentModelRoute(input: AgentModelRouteInput): GatewayModelRoute {
   const registeredModel = input.registeredModel?.trim()
   const byDepartment = TIER_BY_AGENT[input.agentType as AgentType]
+  const byTaskCapability = input.taskCapability
+    ? TIER_BY_TASK_CAPABILITY[input.taskCapability]
+    : undefined
 
   if (isCodeWork(input.input)) {
     return {
@@ -281,6 +305,14 @@ export function resolveAgentModelRoute(input: AgentModelRouteInput): GatewayMode
       // while every agent uses a managed default, which is exactly why it went
       // stale unnoticed when the others were upgraded.
       fallbacks: [GATEWAY_MODELS.agency, 'openai/gpt-5.6-terra'],
+    }
+  }
+
+  if (byTaskCapability) {
+    return {
+      tier: byTaskCapability,
+      model: GATEWAY_MODELS[byTaskCapability],
+      fallbacks: GATEWAY_FALLBACKS[byTaskCapability],
     }
   }
 

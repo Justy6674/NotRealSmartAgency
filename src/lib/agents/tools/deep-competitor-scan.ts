@@ -9,7 +9,7 @@ import { z } from 'zod/v3'
 import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
+import { getGatewayRouteProviderOptions, resolveAgentModelRoute } from '@/lib/ai/model-routing'
 import { scanWebsiteCore } from './scan-website'
 
 // ---------------------------------------------------------------------------
@@ -259,9 +259,14 @@ export function createDeepCompetitorScanTool(
       const focusInstructions = buildFocusInstructions(focus as FocusArea[])
 
       // 3. Use generateObject to produce structured analysis
+      const modelRoute = resolveAgentModelRoute({
+        agentType: 'competitor',
+        input: `${competitor_url}\n${focus.join(' ')}`,
+        taskCapability: 'competitor_research',
+      })
       const { object: analysis } = await generateObject({
-        model: gateway(getGatewayModel('agency')),
-        providerOptions: getGatewayProviderOptions('agency'),
+        model: gateway(modelRoute.model),
+        providerOptions: getGatewayRouteProviderOptions(modelRoute),
         schema: analysisSchema,
         prompt: `You are an expert competitive intelligence analyst. Analyse the following competitor website data and compare it to our brand.
 

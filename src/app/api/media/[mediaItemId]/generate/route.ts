@@ -5,7 +5,7 @@ import { generateObject } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
-import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
+import { getGatewayRouteProviderOptions, resolveAgentModelRoute } from '@/lib/ai/model-routing'
 import type { Brand } from '@/types/database'
 
 const VIBE_GUIDANCE: Record<string, string> = {
@@ -155,9 +155,15 @@ export async function POST(
       ? '\nFORMAT: This is a FULL-LENGTH video. Write SEO-optimised YouTube descriptions with timestamps/chapters if the transcript suggests segments. LinkedIn and Facebook get thoughtful, detailed captions. Prioritise discoverability.'
       : ''
 
+    const modelRoute = resolveAgentModelRoute({
+      agentType: 'content',
+      input: [mediaItem.transcription, mediaItem.ai_description, mediaItem.file_name].filter(Boolean).join('\n'),
+      isHealthBrand: Boolean(brand.compliance_flags?.ahpra || brand.compliance_flags?.tga),
+      taskCapability: 'caption_hashtag_analysis',
+    })
     const { object: content } = await generateObject({
-      model: gateway(getGatewayModel('agency')),
-      providerOptions: getGatewayProviderOptions('agency'),
+      model: gateway(modelRoute.model),
+      providerOptions: getGatewayRouteProviderOptions(modelRoute),
       system: `You are a social media content specialist for an Australian marketing agency. Write in Australian English. Generate platform-specific, publish-ready captions.
 
 ${brandContext}

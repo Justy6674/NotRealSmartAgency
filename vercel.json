@@ -5,6 +5,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/recover-director-jobs",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/daily-intel",
       "schedule": "0 20 * * *"
     },

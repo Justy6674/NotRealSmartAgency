@@ -69,6 +69,12 @@ import {
   matchesDirectorJobScope,
   type DirectorExecutionScope,
 } from '@/lib/agents/director-execution'
+import {
+  buildDirectorCapabilityContext,
+  executeDirectorTaskPlan,
+  planDirectorTask,
+  type DirectorTaskPlanExecution,
+} from '@/lib/agents/task-capability-plan'
 
 export interface DirectorJobInput {
   brand_id: string
@@ -96,6 +102,15 @@ export interface DirectorJobResult {
   actions?: string[]
   /** Telegram message ids, so a later 👍 can be tied to what it was about. */
   telegram_message_ids?: number[]
+  /** The capability contract that actually ran before the Director answered. */
+  task_capabilities?: Array<{
+    capability: string
+    department: string
+    model: string
+    tools_used: string[]
+    evidence_satisfied: boolean
+    error?: string
+  }>
 }
 
 /**
@@ -294,6 +309,64 @@ export async function runDirectorJob(
       }
     }
 
+    // The Director is the one voice, not the only worker. A recognised
+    // evidence-heavy request runs its accountable specialists before the
+    // conversational synthesis, whether it arrived from Telegram, the Mini
+    // App, or another project through MCP.
+    const taskPlan = planDirectorTask(telegramWorkMessage)
+    let capabilityExecution: DirectorTaskPlanExecution | null = null
+    if (taskPlan.requirements.length > 0) {
+      await logAudit({
+        supabase,
+        userId,
+        agentId: registry?.id,
+        action: 'director_task_plan_created',
+        entityType: 'director_job',
+        entityId: jobId,
+        detail: {
+          channel: execution.channel,
+          request: telegramWorkMessage.slice(0, 500),
+          capabilities: taskPlan.requirements.map((requirement) => ({
+            capability: requirement.capability,
+            department: requirement.agentType,
+            requiredAnyToolNames: requirement.requiredAnyToolNames ?? [],
+          })),
+        },
+      })
+
+      capabilityExecution = await executeDirectorTaskPlan(taskPlan, {
+        supabase,
+        userId,
+        brandId: brand_id,
+        brand: brand as Brand,
+        conversationId: input.conversation_id ?? null,
+      })
+
+      await logAudit({
+        supabase,
+        userId,
+        agentId: registry?.id,
+        action: 'director_task_plan_completed',
+        entityType: 'director_job',
+        entityId: jobId,
+        detail: {
+          channel: execution.channel,
+          totalCostCents: capabilityExecution.totalCostCents,
+          totalTokens: capabilityExecution.totalTokens,
+          durationMs: capabilityExecution.durationMs,
+          capabilities: capabilityExecution.capabilities.map((capability) => ({
+            capability: capability.capability,
+            department: capability.agentType,
+            model: capability.model,
+            toolsUsed: capability.toolNames,
+            evidenceSatisfied: capability.evidenceSatisfied,
+            error: capability.error,
+          })),
+        },
+        costCents: capabilityExecution.totalCostCents,
+      })
+    }
+
     // Build system prompt with memory
     const activeGoal = await getActiveGoal(supabase, userId, brand_id)
     let { prompt: systemPrompt } = await buildSystemPromptWithMemory(
@@ -313,6 +386,12 @@ export async function runDirectorJob(
     const routingContext = websiteScanDirective ? null : buildRoutingContext(routing, multiRouting)
     if (routingContext) {
       systemPrompt += '\n\n---\n\n' + routingContext
+    }
+    const capabilityContext = capabilityExecution
+      ? buildDirectorCapabilityContext(capabilityExecution)
+      : null
+    if (capabilityContext) {
+      systemPrompt += '\n\n---\n\n' + capabilityContext
     }
     systemPrompt += `\n\n---\n\n${buildMarketingSkillContext(message, execution.channel)}`
 
@@ -690,6 +769,9 @@ That's the difference between a marketing director and a tech support agent. Def
       throw new Error(completion.reason)
     }
     let response = completion.response
+    const gatewayModelAttempts = (
+      result.providerMetadata as { gateway?: { modelAttempts?: unknown } } | undefined
+    )?.gateway?.modelAttempts
 
     // A reply that says the draft was updated, when nothing was, is
     // indistinguishable from success — the owner finds out by opening Mixpost.
@@ -806,7 +888,7 @@ That's the difference between a marketing director and a tech support agent. Def
       model: actualModel,
       cost_usd: costUsd,
       metadata: {
-        source: 'mcp',
+        source: execution.channel,
         job_id: jobId,
         gateway: {
           tier: modelRoute.tier,
@@ -815,7 +897,19 @@ That's the difference between a marketing director and a tech support agent. Def
           cache_read_tokens: primaryCost.cacheReadTokens + repairCacheReadTokens,
           cache_write_tokens: primaryCost.cacheWriteTokens + repairCacheWriteTokens,
           budget_charge_cents: costCents,
+          ...(gatewayModelAttempts !== undefined ? { model_attempts: gatewayModelAttempts } : {}),
         },
+        channel: execution.channel,
+        ...(capabilityExecution ? {
+          task_capabilities: capabilityExecution.capabilities.map((capability) => ({
+            capability: capability.capability,
+            department: capability.agentType,
+            model: capability.model,
+            tools_used: capability.toolNames,
+            evidence_satisfied: capability.evidenceSatisfied,
+            ...(capability.error ? { error: capability.error } : {}),
+          })),
+        } : {}),
       },
     })
 
@@ -836,6 +930,17 @@ That's the difference between a marketing director and a tech support agent. Def
         cacheReadTokens: primaryCost.cacheReadTokens + repairCacheReadTokens,
         cacheWriteTokens: primaryCost.cacheWriteTokens + repairCacheWriteTokens,
         durationMs,
+        ...(gatewayModelAttempts !== undefined ? { gatewayModelAttempts } : {}),
+        ...(capabilityExecution ? {
+          taskCapabilities: capabilityExecution.capabilities.map((capability) => ({
+            capability: capability.capability,
+            department: capability.agentType,
+            model: capability.model,
+            toolsUsed: capability.toolNames,
+            evidenceSatisfied: capability.evidenceSatisfied,
+            error: capability.error,
+          })),
+        } : {}),
       },
       costCents,
     })
@@ -877,6 +982,16 @@ That's the difference between a marketing director and a tech support agent. Def
       // it the Director can only see its own prose, and prose is not evidence
       // of action — which is how one request became six drafts.
       ...(turnActions.length > 0 ? { actions: turnActions } : {}),
+      ...(capabilityExecution ? {
+        task_capabilities: capabilityExecution.capabilities.map((capability) => ({
+          capability: capability.capability,
+          department: capability.agentType,
+          model: capability.model,
+          tools_used: capability.toolNames,
+          evidence_satisfied: capability.evidenceSatisfied,
+          ...(capability.error ? { error: capability.error } : {}),
+        })),
+      } : {}),
     }
 
     await supabase

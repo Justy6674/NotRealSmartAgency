@@ -71,6 +71,14 @@ export async function POST(request: Request) {
       brand_id: execution.projectId,
       message,
       ...(clientEventId ? { client_event_id: clientEventId } : {}),
+      // Persist the delivery target with the job, not only in the ephemeral
+      // route continuation. The recovery cron can then finish an interrupted
+      // Mini App request without inventing a Telegram destination.
+      delivery: {
+        telegram_chat_id: context.auth.telegramUserId,
+        deliver_text: false,
+        project_name: grant.projectName,
+      },
     },
   }).select('id').single()
 

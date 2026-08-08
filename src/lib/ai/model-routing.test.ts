@@ -173,3 +173,19 @@ test('a healthcare escalation still outranks the department default', () => {
   })
   assert.equal(route.tier, 'frontier')
 })
+
+test('a required task capability upgrades cheap departments for evidence work', () => {
+  const competitorResearch = resolveAgentModelRoute({
+    agentType: 'competitor',
+    input: 'Review the competitor landscape.',
+    taskCapability: 'competitor_research',
+  })
+  const complianceReview = resolveAgentModelRoute({
+    agentType: 'compliance',
+    input: 'Review the compliance risk.',
+    taskCapability: 'compliance_review',
+  })
+
+  assert.equal(competitorResearch.tier, 'agency')
+  assert.equal(complianceReview.tier, 'frontier')
+})

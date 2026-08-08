@@ -67,6 +67,10 @@ export interface WorkerResult {
   durationMs: number
   /** Tools actually executed, used by code gates for autonomous workflows. */
   toolNames: string[]
+  /** The explicit capability the Director required, when this was planned work. */
+  taskCapability?: string
+  /** Whether this worker actually used one of the required evidence tools. */
+  evidenceSatisfied?: boolean
   error?: string
 }
 
@@ -83,6 +87,10 @@ export interface WorkerOptions {
   departmentBrief?: string
   /** Max tool-use steps (default: MAX_WORKER_STEPS) */
   maxSteps?: number
+  /** Concrete task capability, used by the model policy and audit trail. */
+  taskCapability?: string
+  /** At least one of these tools must run for the result to count as evidence. */
+  requiredAnyToolNames?: readonly string[]
 }
 
 // ─── Output type mapping ────────────────────────────────────────────────────
@@ -142,6 +150,7 @@ export async function runAgentWorker(
       input: task,
       isHealthBrand,
       registeredModel: registry?.model,
+      taskCapability: options.taskCapability,
     })
     const model = modelRoute.model
 
@@ -237,7 +246,12 @@ Rules:
     // 9. Gateway options — THIS agent's tags
     const gatewayOptions = getGatewayRouteProviderOptions(modelRoute, {
       user: ctx.userId,
-      tags: [dept, ctx.brand.slug, options.meetingDepartments ? 'meeting' : 'delegation'],
+      tags: [
+        dept,
+        ctx.brand.slug,
+        options.meetingDepartments ? 'meeting' : 'delegation',
+        ...(options.taskCapability ? [`capability:${options.taskCapability}`] : []),
+      ],
       zeroDataRetention: isHealthBrand,
     })
 
@@ -261,6 +275,11 @@ Rules:
       const toolName = (call as { toolName?: unknown }).toolName
       return typeof toolName === 'string' ? [toolName] : []
     })
+    const evidenceSatisfied = !options.requiredAnyToolNames?.length
+      || toolNames.some((toolName) => options.requiredAnyToolNames?.includes(toolName))
+    const gatewayModelAttempts = (
+      result.providerMetadata as { gateway?: { modelAttempts?: unknown } } | undefined
+    )?.gateway?.modelAttempts
 
     // 11. Set THIS agent's status back to 'idle'
     if (registry) {
@@ -300,7 +319,14 @@ Rules:
           pricing_model: cost.pricingModel,
           cache_read_tokens: cost.cacheReadTokens,
           cache_write_tokens: cost.cacheWriteTokens,
+          ...(gatewayModelAttempts !== undefined ? { model_attempts: gatewayModelAttempts } : {}),
         },
+        ...(options.taskCapability ? {
+          task_capability: options.taskCapability,
+          evidence_satisfied: evidenceSatisfied,
+          required_any_tool_names: options.requiredAnyToolNames ?? [],
+          tools_used: toolNames,
+        } : {}),
       },
     })
 
@@ -324,6 +350,13 @@ Rules:
         maxSteps,
         resultLength: result.text.length,
         durationMs: Date.now() - startTime,
+        ...(options.taskCapability ? {
+          taskCapability: options.taskCapability,
+          evidenceSatisfied,
+          requiredAnyToolNames: options.requiredAnyToolNames ?? [],
+          toolsUsed: toolNames,
+        } : {}),
+        ...(gatewayModelAttempts !== undefined ? { gatewayModelAttempts } : {}),
       },
       costCents,
     })
@@ -367,6 +400,10 @@ Rules:
       model,
       durationMs: Date.now() - startTime,
       toolNames,
+      ...(options.taskCapability ? {
+        taskCapability: options.taskCapability,
+        evidenceSatisfied,
+      } : {}),
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'

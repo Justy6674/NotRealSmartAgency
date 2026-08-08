@@ -1,6 +1,6 @@
 import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
-import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
+import { getGatewayRouteProviderOptions, resolveAgentModelRoute } from '@/lib/ai/model-routing'
 
 export interface VisualAnalysis {
   scenes: string[]
@@ -27,6 +27,11 @@ export async function analyseVideoFrames(
   if (!frameUrls.length) return null
 
   try {
+    const modelRoute = resolveAgentModelRoute({
+      agentType: 'video',
+      input: transcription ?? 'Analyse video frames for marketing use.',
+      taskCapability: 'video_evidence',
+    })
     // Build multimodal content with frame images
     const imageContent = frameUrls.map((url) => ({
       type: 'image' as const,
@@ -38,8 +43,8 @@ export async function analyseVideoFrames(
       : ''
 
     const { text } = await generateText({
-      model: gateway(getGatewayModel('agency')),
-      providerOptions: getGatewayProviderOptions('agency'),
+      model: gateway(modelRoute.model),
+      providerOptions: getGatewayRouteProviderOptions(modelRoute),
       messages: [
         {
           role: 'user',

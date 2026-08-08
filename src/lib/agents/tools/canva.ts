@@ -403,7 +403,7 @@ export function createDesignGraphicTool(
 ) {
   return tool({
     description:
-      'Create a graphic design using Canva. Supports social media posts, stories, presentations, thumbnails, and documents. Optionally use a brand_kit_id (from list_brand_kits) for on-brand colours and fonts.',
+      'Create an editable blank Canva canvas at the requested size. This prepares the design surface but does not generate image pixels from the prompt; use generate_image for a new image asset, then upload_asset_from_url or a Canva template/autofill tool to place it.',
     inputSchema: z.object({
       prompt: z
         .string()
@@ -499,7 +499,7 @@ export function createDesignGraphicTool(
           dimensions: `${dims.width}x${dims.height}`,
           title: designTitle,
           brand_kit_applied: !!brand_kit_id,
-          message: `I've created a ${dims.title_suffix} design${resolvedBrandName ? ` for ${resolvedBrandName}` : ''}${brand_kit_id ? ' using your brand kit colours and fonts' : ''} in Canva. You can open and edit it here: ${editUrl}\n\nDesign prompt: "${prompt}"\n\nOnce you're happy with it, tell me to export it and I'll download it as a PNG, JPG, or PDF.`,
+          message: `I've created a blank ${dims.title_suffix} canvas${resolvedBrandName ? ` for ${resolvedBrandName}` : ''}${brand_kit_id ? ' using your brand kit colours and fonts' : ''} in Canva. You can open and edit it here: ${editUrl}\n\nCreative brief recorded for the next asset/design step: "${prompt}"\n\nUse generate_image to make a new image asset, or a Canva template/autofill workflow to turn the brief into a finished design.`,
         }
       } catch (err) {
         return {
