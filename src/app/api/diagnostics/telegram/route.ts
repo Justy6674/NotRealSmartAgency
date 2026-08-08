@@ -75,8 +75,27 @@ export async function POST(request: Request) {
   // has been called — until then they are invisible and you have to already
   // know they exist, which for a tool used one-handed is the same as not
   // having them.
-  const { data: brands } = await createAdminClient()
-    .from('brands').select('name').eq('is_active', true).order('name')
+  // Only the projects switched ON for Telegram.
+  //
+  // Every active brand is the wrong list: the owner deliberately restricted
+  // Telegram to seven, and a command for a project he cannot reach from here
+  // is a dead entry cluttering a menu meant to make things faster. The switch
+  // is `telegram_accounts.allowed_brand_ids`, which is the same thing the
+  // project picker obeys.
+  const admin = createAdminClient()
+  const { data: accounts } = await admin
+    .from('telegram_accounts').select('allowed_brand_ids').is('revoked_at', null)
+
+  const enabled = new Set<string>()
+  for (const account of accounts ?? []) {
+    for (const id of (account.allowed_brand_ids as string[] | null) ?? []) enabled.add(id)
+  }
+
+  const { data: brands } = enabled.size > 0
+    ? await admin.from('brands').select('name').in('id', [...enabled]).order('name')
+    // No restriction set anywhere means every project is allowed, which is
+    // what an unrestricted account means everywhere else in NRS.
+    : await admin.from('brands').select('name').eq('is_active', true).order('name')
 
   const commands = fullCommandList((brands ?? []).map((brand) => ({ projectName: brand.name as string })))
   const problems = invalidCommands(commands)
