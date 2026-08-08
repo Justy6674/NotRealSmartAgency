@@ -30,6 +30,7 @@ import {
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
 import { keepTyping, sendTypingAction } from '@/lib/telegram/typing'
 import { parseReaction } from '@/lib/telegram/reactions'
+import { argsIn, commandIn, expandCommand, fullCommandList } from '@/lib/telegram/command-suite'
 import { buildTopicLinkKeyboard, parseTopicLink } from '@/lib/telegram/scoped-telegram'
 import { recordReaction } from '@/lib/telegram/handle-reaction'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
@@ -781,7 +782,7 @@ async function handleTelegramUpdate(request: NextRequest) {
     })
   }
 
-  const inbound = parseInbound(update)
+  let inbound = parseInbound(update)
   if (!inbound) return NextResponse.json({ received: true, status: 'ignored' })
 
   // Show the dots the moment a message lands, not when the job finally starts.
@@ -805,6 +806,18 @@ async function handleTelegramUpdate(request: NextRequest) {
         if (error) console.error('[telegram] could not record the group:', error.message)
       })
   }
+
+  // A slash command becomes the request it stands for.
+  //
+  // Expanded here, before anything else reads the text, so everything
+  // downstream — the Director, its tools, the name checking, the approval gate
+  // — sees an ordinary well-written request and behaves exactly as it does for
+  // a typed one. The expansion is the value: "/idea" beats typing the same
+  // paragraph at nine at night on a phone, and gets a better answer because it
+  // was written once and carefully.
+  const slash = commandIn(inbound.text)
+  const expanded = slash ? expandCommand(slash, argsIn(inbound.text)) : null
+  if (expanded) inbound = { ...inbound, text: expanded }
 
   // A photo's words live in its CAPTION, not in `text`.
   //

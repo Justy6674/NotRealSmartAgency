@@ -19,6 +19,8 @@
 import { NextResponse } from 'next/server'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { SUBSCRIBED_UPDATES, missingUpdates } from '@/lib/telegram/subscribed-updates'
+import { fullCommandList, invalidCommands } from '@/lib/telegram/command-suite'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -69,9 +71,39 @@ export async function POST(request: Request) {
   }).then((r) => r.json() as Promise<{ ok: boolean; description?: string }>)
     .catch((error: unknown) => ({ ok: false, description: String(error) }))
 
+  // The ⌘ menu, at the same time. Commands only appear once `setMyCommands`
+  // has been called — until then they are invisible and you have to already
+  // know they exist, which for a tool used one-handed is the same as not
+  // having them.
+  const { data: brands } = await createAdminClient()
+    .from('brands').select('name').eq('is_active', true).order('name')
+
+  const commands = fullCommandList((brands ?? []).map((brand) => ({ projectName: brand.name as string })))
+  const problems = invalidCommands(commands)
+  if (problems.length > 0) {
+    // Telegram rejects the WHOLE list for one bad entry and says nothing
+    // useful about which. Better to keep the existing menu than to wipe it.
+    return NextResponse.json({ error: 'command list is invalid', problems }, { status: 500 })
+  }
+
+  const menu = await fetch(`https://api.telegram.org/bot${config.botToken}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      commands: commands.map(({ command, description }) => ({ command, description })),
+    }),
+  }).then((r) => r.json() as Promise<{ ok: boolean; description?: string }>)
+    .catch((error: unknown) => ({ ok: false, description: String(error) }))
+
   return NextResponse.json(
     response.ok
-      ? { updated: true, url, allowed_updates: SUBSCRIBED_UPDATES }
+      ? {
+        updated: true,
+        url,
+        allowed_updates: SUBSCRIBED_UPDATES,
+        commands_registered: menu.ok ? commands.length : 0,
+        ...(menu.ok ? {} : { commands_error: menu.description }),
+      }
       : { error: response.description ?? 'setWebhook failed' },
     { status: response.ok ? 200 : 502 },
   )
@@ -149,6 +181,15 @@ export async function GET(request: Request) {
       ? `subscribed: ${allowed.join(', ')}`
       : `NOT subscribed to: ${missing.join(', ')} — those updates never arrive`
         + (allowed.length === 0 ? ' (allowed_updates is empty, so Telegram sends its default set)' : ''),
+  }
+
+  const menu = await api('getMyCommands').catch(() => null)
+  const registered = Array.isArray(menu?.result) ? menu.result as Array<{ command?: string }> : []
+  checks.commands = {
+    ok: registered.length > 0,
+    detail: registered.length > 0
+      ? `${registered.length} registered: ${registered.map((c) => `/${c.command}`).slice(0, 8).join(' ')}…`
+      : 'NO COMMANDS REGISTERED — the ⌘ menu is empty and nothing is discoverable',
   }
 
   // Can the dots actually be sent? Needs a chat, so this only runs when one is
