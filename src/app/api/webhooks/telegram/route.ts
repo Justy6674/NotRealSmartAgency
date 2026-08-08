@@ -28,6 +28,7 @@ import {
   describeTopicSetup,
 } from '@/lib/telegram/forum-topics'
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
+import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
   addMiniAppButton,
   buildScopedProjectKeyboard,
@@ -575,6 +576,20 @@ async function handleTelegramUpdate(request: NextRequest) {
   }
 
   const update = await request.json().catch(() => null)
+
+  // Being added to a group, or promoted in one, arrives as `my_chat_member`
+  // rather than as a message. Without answering it the bot lands in silence
+  // and whoever added it is left guessing which of three settings comes next.
+  const membership = parseMyChatMember(update)
+  if (membership) {
+    const said = describeGroupStatus(membership)
+    if (said) {
+      await sendTelegramText({ botToken: config.botToken, chatId: membership.chatId, text: said })
+        .catch((err) => console.error('[telegram] group greeting failed:', err instanceof Error ? err.message : err))
+    }
+    return NextResponse.json({ received: true, status: `membership:${membership.status}` })
+  }
+
   const inbound = parseInbound(update)
   if (!inbound) return NextResponse.json({ received: true, status: 'ignored' })
 
