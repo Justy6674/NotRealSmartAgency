@@ -1,5 +1,5 @@
 import ffmpeg from 'fluent-ffmpeg'
-import ffmpegPath from 'ffmpeg-static'
+import { ffmpegBinary } from './ffmpeg-path'
 import { mkdtemp, readFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,6 +17,7 @@ import { join } from 'node:path'
  * a transcode, and it finishes in seconds because ffmpeg streams the input.
  */
 
+const ffmpegPath = ffmpegBinary()
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath)
 }

@@ -21,7 +21,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import ffmpegPath from 'ffmpeg-static'
+import { ffmpegBinary } from '@/lib/video/ffmpeg-path'
 import ffmpeg from 'fluent-ffmpeg'
 import { execFile } from 'node:child_process'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
@@ -48,6 +48,7 @@ export async function GET(request: Request) {
   }
 
   const checks: Record<string, Check> = {}
+  const ffmpegPath = ffmpegBinary()
 
   // 1. Is the binary there, and will it run? A path is not a program: the
   //    executable bit can be lost in packaging, which fails identically.

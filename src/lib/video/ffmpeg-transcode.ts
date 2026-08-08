@@ -14,12 +14,13 @@
  * Vercel Node runtime only — ffmpeg-static is a native binary.
  */
 
-import ffmpegPath from 'ffmpeg-static'
+import { ffmpegBinary } from './ffmpeg-path'
 import ffmpeg from 'fluent-ffmpeg'
 import { readFile, unlink, mkdtemp, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+const ffmpegPath = ffmpegBinary()
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath)
 }

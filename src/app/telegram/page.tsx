@@ -610,9 +610,9 @@ export default function TelegramMiniAppPage() {
   }
 
   return (
-    <main className="h-screen overflow-hidden bg-[var(--tg-theme-bg-color,#0e151c)] text-[var(--tg-theme-text-color,#f2f4f6)]">
+    <main className="h-[100dvh] overflow-hidden overscroll-none bg-[var(--tg-theme-bg-color,#0e151c)] text-[var(--tg-theme-text-color,#f2f4f6)]">
       <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
-      <div className="mx-auto flex h-full w-full max-w-2xl flex-col px-4 pb-2 pt-2 sm:px-6">
+      <div className="mx-auto flex h-full w-full max-w-2xl flex-col overflow-x-hidden px-4 pb-2 pt-2 sm:px-6">
 
         {loading && <p className="rounded-xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] p-4 text-sm">Opening your NRS workspace…</p>}
         {error && (
@@ -743,7 +743,7 @@ export default function TelegramMiniAppPage() {
             )}
             <form onSubmit={sendMessage} className="flex items-end gap-2">
               <label className="sr-only" htmlFor="telegram-message">Message the NRS Director</label>
-              <textarea id="telegram-message" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!selectedProject || sending} rows={2} placeholder={staged.length > 0 ? 'What is this one about?' : selectedProject ? `Ask about ${selectedProject.name}…` : 'Choose a project first'} className="min-h-12 flex-1 resize-none rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm outline-none ring-1 ring-black/10 dark:ring-white/10 placeholder:text-[var(--tg-theme-hint-color,#82909f)] focus:border-[var(--tg-theme-button-color,#2aabee)]" />
+              <textarea id="telegram-message" value={draft} onChange={(event) => setDraft(event.target.value)} disabled={!selectedProject || sending} rows={2} placeholder={staged.length > 0 ? 'What is this one about?' : selectedProject ? `Ask about ${selectedProject.name}…` : 'Choose a project first'} className="min-h-12 flex-1 resize-none rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-base outline-none ring-1 ring-black/10 dark:ring-white/10 placeholder:text-[var(--tg-theme-hint-color,#82909f)] focus:ring-[var(--tg-theme-button-color,#2aabee)]" />
               <label className={`flex cursor-pointer items-center justify-center rounded-2xl bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-4 py-3 text-sm ring-1 ring-black/10 dark:ring-white/10 ${!selectedProject || sending ? 'opacity-40' : ''}`} title="Send a video, photo or recording">
                 <span aria-hidden>+</span>
                 <span className="sr-only">Attach a video, photo or recording</span>

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import ffmpegPath from 'ffmpeg-static'
+import { ffmpegBinary } from './ffmpeg-path'
 
 /**
  * Everything video depends on a native binary that Next cannot see.
@@ -57,7 +57,16 @@ test('the subtitle font ships with anything that can burn captions', () => {
 test('the binary this asserts about actually exists', () => {
   // Otherwise the two tests above are checking a config entry for a file that
   // is not there, and passing means nothing.
-  assert.ok(ffmpegPath, 'ffmpeg-static resolved no path at all')
-  assert.ok(existsSync(ffmpegPath!), `${ffmpegPath} is missing from node_modules`)
-  assert.match(ffmpegPath!, /ffmpeg-static/, 'the traced path must match the resolved one')
+  const path = ffmpegBinary()
+  assert.ok(path, 'no ffmpeg binary could be found at all')
+  assert.ok(existsSync(path!), `${path} does not exist`)
+})
+
+test('ffmpeg is kept out of the bundle, or it cannot find itself', () => {
+  // Bundled, `path.join(__dirname, 'ffmpeg')` resolves to the webpack chunk
+  // directory. Shipping the binary does not help — the code looks somewhere
+  // else entirely, which is exactly how the first fix for this changed nothing.
+  const config = readFileSync(join(process.cwd(), 'next.config.ts'), 'utf8')
+  assert.match(config, /serverExternalPackages:[^\]]*'ffmpeg-static'/,
+    'ffmpeg-static must be external, or __dirname lies about where the binary is')
 })

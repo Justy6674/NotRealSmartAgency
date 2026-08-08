@@ -12,12 +12,13 @@
  * Vercel Node runtime requirement: do not import this from Edge routes.
  */
 
-import ffmpegPath from 'ffmpeg-static'
+import { ffmpegBinary } from './ffmpeg-path'
 import ffmpeg from 'fluent-ffmpeg'
 import { writeFile, readFile, unlink, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+const ffmpegPath = ffmpegBinary()
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath)
 }

@@ -30,6 +30,15 @@ const nextConfig: NextConfig = {
     '/api/brands/\\[brandId\\]/review': ['node_modules/@sparticuz/chromium/bin/**'],
     '/api/integrations/github/callback': ['node_modules/@sparticuz/chromium/bin/**'],
   },
+  // Keep ffmpeg unbundled, or it cannot find itself.
+  //
+  // `ffmpeg-static` locates its binary with path.join(__dirname, 'ffmpeg').
+  // Bundled by webpack, __dirname becomes .next/server/chunks, so it looks for
+  // /var/task/.next/server/chunks/ffmpeg — a path that has never existed.
+  // Tracing the real binary in does not help on its own: the file lands under
+  // node_modules and the code goes on looking in the chunks folder, which is
+  // why the first attempt at this fixed nothing.
+  serverExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg'],
   transpilePackages: ['three'],
   images: {
     remotePatterns: [
