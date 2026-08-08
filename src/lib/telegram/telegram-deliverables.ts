@@ -33,7 +33,7 @@ interface MediaRow {
   id: string
   file_url: string | null
   file_type: string | null
-  file_size: number | null
+  file_size_bytes: number | null
 }
 
 function toDeliverable(row: MediaRow): DeliverableMedia | null {
@@ -47,7 +47,7 @@ function toDeliverable(row: MediaRow): DeliverableMedia | null {
   // an image row here but Telegram treats it as an animation in a media group,
   // where it is rejected — leave it for the media library.
   if (type === 'image/gif') return null
-  if (typeof row.file_size === 'number' && row.file_size > TELEGRAM_REMOTE_PHOTO_LIMIT_BYTES) return null
+  if (typeof row.file_size_bytes === 'number' && row.file_size_bytes > TELEGRAM_REMOTE_PHOTO_LIMIT_BYTES) return null
   return { mediaItemId: row.id, url: row.file_url, kind: 'photo' }
 }
 
@@ -98,10 +98,14 @@ export async function findJobDeliverables({
       .filter((id): id is string => typeof id === 'string' && id.length > 0)
 
     if (ids.length > 0) {
-      const { data: rows } = await supabase
+      const { data: rows, error } = await supabase
         .from('media_items')
-        .select('id, file_url, file_type, file_size')
+        .select('id, file_url, file_type, file_size_bytes')
         .in('id', ids)
+
+      // Discarding this is what hid a wrong column name for a week: every
+      // query failed, the result was null, and it read as "nothing to send".
+      if (error) console.error('[deliverables] media lookup failed:', error.message)
 
       const ordered = orderByIds((rows ?? []) as MediaRow[], ids)
       const media = ordered.flatMap((row) => {
@@ -122,13 +126,15 @@ export async function findJobDeliverables({
 
   // No draft, but the Director may still have generated images — a set of
   // concepts to look at, say. Those are worth handing over too.
-  const { data: fresh } = await supabase
+  const { data: fresh, error: freshError } = await supabase
     .from('media_items')
-    .select('id, file_url, file_type, file_size, created_at')
+    .select('id, file_url, file_type, file_size_bytes, created_at')
     .eq('brand_id', brandId)
     .gte('created_at', since)
     .order('created_at', { ascending: true })
     .limit(limit)
+
+  if (freshError) console.error('[deliverables] recent media lookup failed:', freshError.message)
 
   const media = ((fresh ?? []) as MediaRow[]).flatMap((row) => {
     const item = toDeliverable(row)

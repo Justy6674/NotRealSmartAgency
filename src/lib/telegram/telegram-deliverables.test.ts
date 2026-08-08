@@ -48,9 +48,9 @@ test('a draft hands its slides over in the order the carousel was built', async 
     supabase: fakeSupabase({
       drafts: [{ id: 'post-1', platform: 'instagram', media_item_ids: ['c', 'a', 'b'], media_item_id: 'c' }],
       media: [
-        { id: 'a', file_url: 'https://x/a.jpg', file_type: 'image/jpeg', file_size: 1000 },
-        { id: 'b', file_url: 'https://x/b.jpg', file_type: 'image/jpeg', file_size: 1000 },
-        { id: 'c', file_url: 'https://x/c.jpg', file_type: 'image/jpeg', file_size: 1000 },
+        { id: 'a', file_url: 'https://x/a.jpg', file_type: 'image/jpeg', file_size_bytes: 1000 },
+        { id: 'b', file_url: 'https://x/b.jpg', file_type: 'image/jpeg', file_size_bytes: 1000 },
+        { id: 'c', file_url: 'https://x/c.jpg', file_type: 'image/jpeg', file_size_bytes: 1000 },
       ],
     }),
     brandId: 'brand-1',
@@ -68,8 +68,8 @@ test('a photo Telegram would refuse is left behind and counted', async () => {
     supabase: fakeSupabase({
       drafts: [{ id: 'post-1', platform: 'instagram', media_item_ids: ['big', 'ok'], media_item_id: 'big' }],
       media: [
-        { id: 'big', file_url: 'https://x/big.jpg', file_type: 'image/jpeg', file_size: TELEGRAM_REMOTE_PHOTO_LIMIT_BYTES + 1 },
-        { id: 'ok', file_url: 'https://x/ok.jpg', file_type: 'image/jpeg', file_size: 500 },
+        { id: 'big', file_url: 'https://x/big.jpg', file_type: 'image/jpeg', file_size_bytes: TELEGRAM_REMOTE_PHOTO_LIMIT_BYTES + 1 },
+        { id: 'ok', file_url: 'https://x/ok.jpg', file_type: 'image/jpeg', file_size_bytes: 500 },
       ],
     }),
     brandId: 'brand-1',
@@ -85,7 +85,7 @@ test('a video is sent as a video, not a photo', async () => {
   const result = await findJobDeliverables({
     supabase: fakeSupabase({
       drafts: [{ id: 'post-1', platform: 'tiktok', media_item_ids: ['v'], media_item_id: 'v' }],
-      media: [{ id: 'v', file_url: 'https://x/v.mp4', file_type: 'video/mp4', file_size: 5000 }],
+      media: [{ id: 'v', file_url: 'https://x/v.mp4', file_type: 'video/mp4', file_size_bytes: 5000 }],
     }),
     brandId: 'brand-1',
     since: '2026-08-02T00:00:00Z',
@@ -100,8 +100,8 @@ test('generated images still come back when no draft was made', async () => {
     supabase: fakeSupabase({
       drafts: [],
       freshMedia: [
-        { id: 'g1', file_url: 'https://x/g1.png', file_type: 'image/png', file_size: 900 },
-        { id: 'g2', file_url: 'https://x/g2.png', file_type: 'image/png', file_size: 900 },
+        { id: 'g1', file_url: 'https://x/g1.png', file_type: 'image/png', file_size_bytes: 900 },
+        { id: 'g2', file_url: 'https://x/g2.png', file_type: 'image/png', file_size_bytes: 900 },
       ],
     }),
     brandId: 'brand-1',

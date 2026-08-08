@@ -45,7 +45,7 @@ export async function researchIndustryCore(
   // 1. Fetch brand
   const { data: brand, error: brandError } = await supabase
     .from('brands')
-    .select('name, niche, industry, website_url, github_url, description, extra_context, products_services, business_stage')
+    .select('name, niche, website_url, github_url, description, extra_context, products_services, business_stage')
     .eq('id', brandId)
     .single()
 
@@ -53,7 +53,10 @@ export async function researchIndustryCore(
     return { success: false, summary: '', error: 'Brand not found.' }
   }
 
-  const industry = brand.niche || brand.industry || 'general business'
+  // `brand.industry` was read here and asked for in the select above, and no
+  // such column exists — so the WHOLE query failed and this tool ran with no
+  // brand context at all, every time. `niche` is the real field.
+  const industry = brand.niche || 'general business'
   const brandName = brand.name || 'this brand'
 
   // 2. Research phase — use Haiku + Perplexity search

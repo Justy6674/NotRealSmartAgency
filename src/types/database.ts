@@ -325,6 +325,12 @@ export interface Brand {
   name: string
   /** The full descriptive name, for a first mention. Null means use `name`. */
   name_full: string | null
+  /** Vercel project serving this brand's site, for real visitor numbers. */
+  vercel_project?: string | null
+  vercel_team?: string | null
+  /** Mixpost tag mirroring this brand. */
+  mixpost_tag_id?: number | null
+  mixpost_tag_uuid?: string | null
   /**
    * Spellings that mean this brand but must never be printed — run-together
    * forms and known speech-to-text mishearings. The owner's list, not a guess:
@@ -705,6 +711,8 @@ export interface MediaItem {
   is_archived: boolean
   created_at: string
   updated_at: string
+  /** Cached Mixpost media id, so a re-used file is not uploaded twice. */
+  mixpost_media_id?: string | null
 }
 
 export interface MediaItemWithUsage extends MediaItem {
