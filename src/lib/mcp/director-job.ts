@@ -40,7 +40,7 @@ import {
 } from '@/lib/agents/website-scan-directive'
 import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
-import { userSafeError } from '@/lib/errors/user-safe'
+import { userSafeError, diagnosticOf } from '@/lib/errors/user-safe'
 import { buildTelegramExecutionContract } from '@/lib/telegram/telegram-execution-contract'
 import { needsTelegramResearchBeforeDeliver } from '@/lib/telegram/telegram-research-contract'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
@@ -788,7 +788,7 @@ That's the difference between a marketing director and a tech support agent. Def
       err,
       'That did not complete. Nothing was published — try again.',
     )
-    await markJobError(supabase, jobId, message, startTime)
+    await markJobError(supabase, jobId, message, startTime, diagnosticOf('director-job', err))
 
     if (execution.channel === 'telegram' && execution.telegramChatId) {
       await deliverTelegramResult(
@@ -890,6 +890,15 @@ async function markJobError(
   jobId: string,
   errorMsg: string,
   startTime: number,
+  /**
+   * The real cause, for later.
+   *
+   * `error` is read back to the owner so it can only ever hold the safe
+   * message. Without this, the only record of what actually broke is a
+   * platform log that rolls in minutes — which is why a failure from earlier
+   * today could not be explained at all, only guessed at.
+   */
+  diagnostic?: Record<string, unknown>,
 ): Promise<void> {
   await supabase
     .from('mcp_jobs')
@@ -898,6 +907,7 @@ async function markJobError(
       error: errorMsg,
       duration_ms: Date.now() - startTime,
       completed_at: new Date().toISOString(),
+      ...(diagnostic ? { result: { diagnostic } } : {}),
     })
     .eq('id', jobId)
 }

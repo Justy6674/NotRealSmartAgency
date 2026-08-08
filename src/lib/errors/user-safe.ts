@@ -72,6 +72,32 @@ export function userSafeError(scope: string, err: unknown, fallback: string): st
 }
 
 /**
+ * The real cause, kept somewhere it can still be read tomorrow.
+ *
+ * The owner asked "is this because of you?" about a failure forty minutes old
+ * and there was no way to answer. The safe message is all that gets stored;
+ * the real one goes to the platform log, which had already rolled. A failure
+ * nobody can diagnose after the fact gets guessed at instead — and guessing is
+ * how the last three of these went.
+ *
+ * Kept out of `error`, which is read straight back to the owner. This goes in
+ * a field only a query can reach.
+ */
+export function diagnosticOf(scope: string, err: unknown): {
+  scope: string
+  message: string
+  stack: string | null
+  at: string
+} {
+  return {
+    scope,
+    message: messageOf(err),
+    stack: err instanceof Error && err.stack ? err.stack.split('\n').slice(0, 8).join('\n') : null,
+    at: new Date().toISOString(),
+  }
+}
+
+/**
  * For the few cases where an upstream message IS worth repeating — a platform
  * saying "caption too long", say — but only when it is demonstrably not
  * internal, and only up to a sane length.

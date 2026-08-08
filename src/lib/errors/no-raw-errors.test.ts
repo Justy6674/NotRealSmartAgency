@@ -79,3 +79,27 @@ test('the guard is not vacuously passing', () => {
     'the pattern must match the shape it exists to catch',
   )
 })
+
+test('a failed job keeps the real cause somewhere it can still be read', () => {
+  // The owner asked "is this because of you?" about a forty-minute-old
+  // failure and there was no way to answer: the safe message is all that was
+  // stored, and the platform log holding the real one had already rolled.
+  const source = readFileSync(join(process.cwd(), 'src/lib/mcp/director-job.ts'), 'utf8')
+  const handler = source.slice(source.indexOf('async function markJobError'))
+  assert.match(handler, /diagnostic/, 'markJobError must be able to record the real cause')
+
+  const call = source.match(/await markJobError\(supabase, jobId, message, startTime[^)]*\)/)
+  assert.ok(call, 'the catch-all failure path is gone or renamed')
+  assert.match(call[0], /diagnosticOf/, 'the catch-all failure path records nothing diagnosable')
+})
+
+test('the diagnostic never becomes the message shown to the owner', () => {
+  const source = readFileSync(join(process.cwd(), 'src/lib/mcp/director-job.ts'), 'utf8')
+  const handler = source.slice(source.indexOf('async function markJobError'))
+  // `error` is read straight back to whoever asked, so a stack trace landing
+  // there would be the exact leak this file exists to prevent.
+  assert.ok(
+    !/error:\s*(JSON\.stringify|diagnostic)/.test(handler),
+    'the raw cause must not be written to the field the owner reads',
+  )
+})
