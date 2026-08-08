@@ -10,6 +10,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { refreshDraftMedia } from '@/lib/mixpost/refresh-draft-media'
 import { tightenFromUrl } from '@/lib/video/tighten-video'
 import type { TranscriptionWord } from '@/lib/transcription/transcribe'
 
@@ -132,9 +133,13 @@ export function createTightenVideoTool(brandId: string, userId: string) {
         return { error: 'The edit rendered but could not be attached to the clip. Try again.' }
       }
 
+      const refreshed = await refreshDraftMedia({ oldUrl: item.file_url, newUrl: record.url })
+        .catch(() => ({ updated: 0, failed: 1, noneFound: false }))
+
       return {
         url: record.url,
         cuts: record.cuts,
+        drafts_updated: refreshed.updated,
         seconds_removed: record.seconds_removed,
         was: Math.round(result.plan.originalSeconds),
         now: Math.round(result.plan.tightenedSeconds),
@@ -142,6 +147,11 @@ export function createTightenVideoTool(brandId: string, userId: string) {
           `Cut ${record.seconds_removed}s of dead air across ${record.cuts} edit`
           + `${record.cuts === 1 ? '' : 's'} — ${Math.round(result.plan.originalSeconds)}s down to`
           + ` ${Math.round(result.plan.tightenedSeconds)}s. This version is what will publish now.`
+          + (refreshed.noneFound ? ''
+            : refreshed.failed > 0
+              ? ` WARNING: ${refreshed.failed} existing draft(s) still hold the ORIGINAL and could`
+                + ' not be updated — say so plainly.'
+              : ` ${refreshed.updated} existing draft(s) updated.`)
           + ' Worth watching back before it goes out.',
       }
     },

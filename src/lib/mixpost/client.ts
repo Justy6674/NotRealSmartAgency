@@ -261,7 +261,14 @@ export function resolveAccountIdsForPlatform(
 export interface MixpostPost {
   id: number
   uuid: string
-  status: number // 0=draft, 1=scheduled, 2=published, 3=failed
+  /**
+   * Mixpost returns a WORD here — 'draft', 'scheduled', 'publishing',
+   * 'published', 'failed' — not the number this was declared as for a long
+   * time. Comparing it to 0 silently matched nothing, which is how a routine
+   * that swaps the video in every draft found no drafts at all and reported
+   * "nothing to do" against three of them.
+   */
+  status: string
   accounts: Array<{ id: number; provider: string; name: string }>
   versions: MixpostVersion[]
   tags: Array<{ id: number; name: string; hex_color: string }>

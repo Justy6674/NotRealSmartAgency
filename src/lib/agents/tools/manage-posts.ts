@@ -615,12 +615,9 @@ export function createManagePostsTool(
 
         const mixpostPost = await fetchMixpostPost(mixpostUuid(post) ?? '')
 
-        const MIXPOST_STATUS_LABELS: Record<number, string> = {
-          0: 'draft',
-          1: 'scheduled',
-          2: 'published',
-          3: 'failed',
-        }
+        // Mixpost reports a word, not a number. This used to map 0-3 to
+        // labels, so every real status came back as "unknown (draft)" and the
+        // sync check reported OUT OF SYNC on posts that were perfectly in sync.
 
         if (!mixpostPost) {
           return {
@@ -631,7 +628,7 @@ export function createManagePostsTool(
           }
         }
 
-        const mixpostLabel = MIXPOST_STATUS_LABELS[mixpostPost.status] ?? `unknown (${mixpostPost.status})`
+        const mixpostLabel = String(mixpostPost.status || 'unknown')
         const synced = post.status === mixpostLabel
 
         return {

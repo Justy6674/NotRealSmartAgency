@@ -15,6 +15,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { refreshDraftMedia } from '@/lib/mixpost/refresh-draft-media'
 import { burnSubtitlesFromUrl } from '@/lib/video/burn-subtitles'
 import { buildCues } from '@/lib/video/subtitles'
 import type { TranscriptionWord } from '@/lib/transcription/transcribe'
@@ -126,16 +127,31 @@ export function createCaptionVideoTool(brandId: string, userId: string) {
         return { error: 'The captions rendered but could not be attached to the clip. Try again.' }
       }
 
+      // Mixpost copies the file when a draft is made, so a draft created
+      // before this ran is still holding the bare video. Publishing preferring
+      // the captioned copy only helps a draft that does not exist yet.
+      const refreshed = await refreshDraftMedia({ oldUrl: item.file_url, newUrl: record.url })
+        .catch(() => ({ updated: 0, failed: 1, noneFound: false }))
+
       return {
         url: record.url,
         cues: record.cues,
+        drafts_updated: refreshed.updated,
         // The full text back, so a misheard brand or fragrance name can be
         // spotted here rather than after it is published.
         lines: buildCues(words).map((cue) => cue.text),
         captioned_the_tightened_version: Boolean(tightened?.url),
         note:
-          'Captioned. This version is what will publish now. Read the lines back — anything'
-          + ' misheard needs fixing before this goes out.',
+          'Captioned. '
+          + (refreshed.noneFound
+            ? 'Nothing has been drafted from this clip yet, so the next draft will use it.'
+            : refreshed.failed > 0
+              // Never let this pass as done. A draft still holding the bare
+              // video is exactly the failure that looks like success.
+              ? `WARNING: ${refreshed.failed} existing draft(s) still hold the version WITHOUT`
+                + ' captions and could not be updated. Say so plainly and offer to redo the draft.'
+              : `${refreshed.updated} existing draft(s) updated to the captioned version.`)
+          + ' Read the lines back — anything misheard needs fixing before this goes out.',
       }
     },
   })
