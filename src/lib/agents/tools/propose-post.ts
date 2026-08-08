@@ -22,6 +22,7 @@ import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { runAgentWorker } from '@/lib/agents/worker'
 import type { Brand } from '@/types/database'
+import { resolveMentions, mentionsPrompt } from '@/lib/products/transcript-mentions'
 
 const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'] as const
 type Platform = (typeof PLATFORMS)[number]
@@ -169,6 +170,25 @@ CRITICAL: never supply the caption or hashtags yourself. Pass the user's angle h
         ? `\n\n### Previous proposal (iterate on this):\n${previous_proposal}\n\n### User feedback on the previous proposal:\n"${user_feedback ?? '(no specific feedback — they said "try again")'}"\n\nAdjust the hook, caption, hashtags, or post_type based on the feedback. Keep what's working. Change what isn't.`
         : ''
 
+      // Checked against the owner's own catalogue BEFORE the brief is written.
+
+      // The instruction below tells the worker to call verify_product, and it
+
+      // usually does — but 'usually' published "Birredo Blanche" under the
+
+      // owner's brand. A deterministic pass cannot be skipped.
+
+      const ownNames = [typedBrand.name, typedBrand.name_full, ...(typedBrand.name_never ?? [])]
+
+        .filter((name): name is string => Boolean(name))
+
+      const resolvedNames = mentionsPrompt(
+
+        await resolveMentions(descriptors.map((d) => d.transcription ?? '').join('\n'), ownNames),
+
+      )
+
+
       const brief = [
         `You are being asked to propose a ${platform} post for ${typedBrand.name}.`,
         '',
@@ -203,6 +223,7 @@ CRITICAL: never supply the caption or hashtags yourself. Pass the user's angle h
         // "Bijou Saffron" once and "Bijou Zafran" the next — two inventions,
         // both confident, neither real. A proposal is where the name first gets
         // written down, so the check belongs here and not only downstream.
+        ...(resolvedNames ? [resolvedNames, ''] : []),
         'PRODUCT NAMES — CHECK, DO NOT GUESS.',
         'Collect EVERY uncertain product or brand name from the media and check them ALL in ONE verify_product call, passing the `products` array. A walkthrough names a dozen; one call each exhausts the step budget before the copy is written and the captions come out unverified.',
         'Only write a name whose verdict came back "exists". If it comes back not_found or uncertain, do NOT print it — refer to it naturally ("this one", "today\'s scent of the day") and say in the rationale that the owner needs to confirm which product it was.',

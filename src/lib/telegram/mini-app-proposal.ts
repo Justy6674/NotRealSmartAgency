@@ -2,6 +2,7 @@ import { generateText } from 'ai'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createProposePostTool } from '@/lib/agents/tools/propose-post'
+import { resolveMentions, mentionsPrompt } from '@/lib/products/transcript-mentions'
 import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 
 /**
@@ -53,6 +54,7 @@ async function writeOpener({
   fileName,
   postType,
   brandName,
+  productRules,
 }: {
   transcript: string | null
   fileName: string
@@ -66,6 +68,16 @@ async function writeOpener({
    * misspelt back to him by his own marketing platform.
    */
   brandName: string | null
+  /**
+   * Product names already checked against the catalogue.
+   *
+   * This writer has no tools — it is one `generateText` call over a raw
+   * transcript — so it cannot verify anything itself. It wrote "you've layered
+   * Mulan Cha and Birredo Blanche" straight to the owner: Byredo is one of the
+   * best-known houses there is, and the app that markets a fragrance
+   * marketplace could not spell it. The checking is done before we get here.
+   */
+  productRules: string | null
 }): Promise<string> {
   if (!transcript?.trim()) {
     return `Got ${fileName}, but I couldn't make out any speech in it. Tell me what's in it and what you want, and I'll write from that.`
@@ -80,6 +92,7 @@ async function writeOpener({
         '1. What the video is actually about — specific enough to prove you watched it.',
         `2. Offer the obvious next move and ask which he wants. A ${postType} draft is already written and waiting below.`,
         'Do not write a caption. Do not repeat the draft. Under 45 words.',
+        ...(productRules ? ['', productRules] : []),
         ...(brandName
           ? [
               '',
@@ -171,16 +184,28 @@ export async function proposeAndStore({
 
   const [{ data: mediaRow }, { data: brandRow }] = await Promise.all([
     supabase.from('media_items').select('transcription').eq('id', mediaItemId).maybeSingle(),
-    supabase.from('brands').select('name').eq('id', brandId).maybeSingle(),
+    supabase.from('brands').select('name, name_full, name_never').eq('id', brandId).maybeSingle(),
   ])
 
   const brandName = typeof brandRow?.name === 'string' ? brandRow.name : null
+  const transcript = typeof mediaRow?.transcription === 'string' ? mediaRow.transcription : null
   const postType = typeof raw.post_type === 'string' ? raw.post_type : 'single'
+
+  // Resolved against the owner's own 75,000-entry catalogue before a word is
+  // written, rather than hoping a model chooses to check.
+  const ownNames = [
+    brandName,
+    typeof brandRow?.name_full === 'string' ? brandRow.name_full : null,
+    ...(Array.isArray(brandRow?.name_never) ? (brandRow.name_never as string[]) : []),
+  ].filter((name): name is string => Boolean(name))
+  const mentions = await resolveMentions(transcript, ownNames)
+
   const opener = await writeOpener({
-    transcript: typeof mediaRow?.transcription === 'string' ? mediaRow.transcription : null,
+    transcript,
     fileName,
     postType,
     brandName,
+    productRules: mentionsPrompt(mentions),
   })
 
   const proposal: StoredProposal = {
