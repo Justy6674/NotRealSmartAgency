@@ -39,6 +39,47 @@ export interface TimelineSource<Row> {
 /** How long a proposal may be missing before a clip stops saying "listening". */
 const PROPOSAL_GRACE_MS = 10 * 60 * 1000
 
+/**
+ * Say what actually went wrong, in his words rather than the system's.
+ *
+ * A generic "try again" is worse than no message when trying again cannot
+ * work: it puts the owner in a loop, sending the same thing into the same wall
+ * and concluding the product is broken — which, in the way that matters, it
+ * was. The stored error is written for a log; this turns it into a sentence
+ * that tells him what to DO.
+ */
+export function explainJobError(error: string | null | undefined): string {
+  const raw = error?.trim() ?? ''
+
+  if (/budget/i.test(raw)) {
+    // The number is deliberately not shown. "10003c / 10000c" is the shape of
+    // the bug, not of the answer he needs.
+    return 'The monthly spend limit for this account has been reached, so nothing will run'
+      + ' until it is raised. This is not something you can fix by resending — tell me and'
+      + ' I will lift it.'
+  }
+
+  if (/rate.?limit|429|too many requests/i.test(raw)) {
+    return 'The AI is rate-limited for a moment. Give it about a minute, then send it again.'
+  }
+
+  if (/timeout|timed out|ETIMEDOUT/i.test(raw)) {
+    return 'That took too long and was stopped. Nothing else changed — send it again.'
+  }
+
+  return 'That did not complete. Nothing else changed — try again.'
+}
+
+/**
+ * Whether "Send it again" should even be offered.
+ *
+ * Offering a retry that is guaranteed to fail is how the owner spent an
+ * evening pressing a button against a spend cap.
+ */
+export function canRetry(error: string | null | undefined): boolean {
+  return !/budget/i.test(error?.trim() ?? '')
+}
+
 interface JobRow {
   id: string
   status: string | null
@@ -135,10 +176,13 @@ export const directorJobSource: TimelineSource<JobRow> = {
           payload: {
             kind: 'director_error',
             jobId: row.id,
-            text: row.error?.trim()
-              ? 'That did not complete. Nothing else changed — try again.'
-              : 'That did not complete. Nothing else changed — try again.',
-            retryText: message || null,
+            // Both branches of this used to say the same generic sentence, so
+            // the real reason was read, tested for, and thrown away. The
+            // Director spent a day rejecting every message with "Budget
+            // exceeded — 10003c / 10000c monthly limit" while the owner was
+            // told to try again, which was the one thing that could not work.
+            text: explainJobError(row.error),
+            retryText: canRetry(row.error) ? (message || null) : null,
             retryClientEventId: clientEventId,
           },
         })
