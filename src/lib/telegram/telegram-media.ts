@@ -228,6 +228,31 @@ export async function storeTelegramMedia({
 }
 
 /** What to say back the moment a file arrives, before any processing. */
+/**
+ * A photo sent as a PHOTO has already been squashed by Telegram.
+ *
+ * Telegram re-encodes anything sent down the photo path — the owner's brand
+ * card arrived as a 48 KB JPEG at 1024x1280 and looked soft in the draft. On a
+ * snapshot that is fine; on a text-heavy graphic it destroys the fine lines
+ * and small type, and nothing downstream can recover it.
+ *
+ * Sending the same file as a FILE keeps it untouched, and Telegram makes that
+ * a single different tap. Worth one sentence, because the alternative is
+ * publishing a blurry brand asset and only noticing afterwards.
+ *
+ * Only said for compressed photos. A document already came through clean, and
+ * a video is a different path entirely.
+ */
+export function compressionWarning(attachment: TelegramAttachment): string | null {
+  if (attachment.kind !== 'photo') return null
+  // A document carries a real mime type; the compressed photo path is always
+  // re-encoded to JPEG, which is how the two are told apart here.
+  if (attachment.mimeType !== 'image/jpeg') return null
+  return 'Telegram compressed that photo on the way in, so fine text and thin lines will be soft.'
+    + ' If it is a designed graphic, send it again with the paperclip as a FILE rather than a'
+    + ' photo and it arrives at full quality.'
+}
+
 export function acknowledgeAttachment(attachment: TelegramAttachment, projectName: string): string {
   const noun =
     attachment.kind === 'video' ? 'video'
@@ -235,7 +260,10 @@ export function acknowledgeAttachment(attachment: TelegramAttachment, projectNam
     : attachment.kind === 'photo' ? 'photo'
     : 'file'
 
-  return attachment.kind === 'video' || attachment.kind === 'audio'
+  const base = attachment.kind === 'video' || attachment.kind === 'audio'
     ? `Got the ${noun} for ${projectName}. Transcribing it, then I'll write captions from what you actually said.`
     : `Got the ${noun} for ${projectName}. Reading it, then I'll come back with captions.`
+
+  const warning = compressionWarning(attachment)
+  return warning ? `${base}\n\n${warning}` : base
 }

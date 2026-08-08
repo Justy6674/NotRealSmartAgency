@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { acknowledgeAttachment, readAttachment, TELEGRAM_FILE_LIMIT_BYTES } from './telegram-media.ts'
+import { acknowledgeAttachment, compressionWarning, readAttachment, TELEGRAM_FILE_LIMIT_BYTES, type TelegramAttachment } from './telegram-media.ts'
 
 test('a video sent as media is recognised', () => {
   // The bot ignored anything that was not text, so a video sent to it simply
@@ -52,4 +52,38 @@ test('the acknowledgement says what will happen, in his words', () => {
 
 test('the size limit is what Telegram actually allows a bot', () => {
   assert.equal(TELEGRAM_FILE_LIMIT_BYTES, 20 * 1024 * 1024)
+})
+
+test('a Telegram-compressed photo says so, because the damage is unrecoverable', () => {
+  // The owner's brand card arrived as a 48 KB JPEG at 1024x1280 and looked
+  // soft in the draft. Telegram re-encodes anything sent down the photo path;
+  // sending the same file as a FILE keeps it untouched, and that is one tap.
+  const warning = compressionWarning({
+    fileId: 'x', kind: 'photo', mimeType: 'image/jpeg',
+  } as TelegramAttachment)
+  assert.ok(warning)
+  assert.match(warning!, /as a FILE/)
+})
+
+test('a document is not warned about — it already arrived clean', () => {
+  assert.equal(compressionWarning({
+    fileId: 'x', kind: 'photo', mimeType: 'image/png',
+  } as TelegramAttachment), null)
+})
+
+test('video and audio are a different path and are left alone', () => {
+  for (const kind of ['video', 'audio'] as const) {
+    assert.equal(compressionWarning({
+      fileId: 'x', kind, mimeType: 'video/mp4',
+    } as TelegramAttachment), null)
+  }
+})
+
+test('the warning rides along with the acknowledgement, not instead of it', () => {
+  const said = acknowledgeAttachment(
+    { fileId: 'x', kind: 'photo', mimeType: 'image/jpeg' } as TelegramAttachment,
+    'Scent Sell',
+  )
+  assert.match(said, /Got the photo for Scent Sell/)
+  assert.match(said, /send it again with the paperclip as a FILE/)
 })
