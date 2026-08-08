@@ -10,6 +10,7 @@ import { memorySearchV2 } from '@/lib/memory/store'
 import { getNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
 import { getSessionMemoryForPrompt } from '@/lib/memory/session-memory'
 import { buildGoalDirective, type ActiveGoal } from './goal-loop'
+import { socialHandlesPrompt } from '@/lib/brand/social-handles'
 
 export interface ProjectPromptOptions {
   proformaSummary?: string | null
@@ -316,10 +317,12 @@ function buildBrandContext(brand: Brand): string {
   if (brand.description) lines.push(`**Description:** ${brand.description}`)
   if (brand.website_url) lines.push(`**Website:** ${brand.website_url}`)
   if (brand.github_url) lines.push(`**GitHub:** ${brand.github_url}`)
-  if (brand.social_urls && Object.keys(brand.social_urls).length > 0) {
-    const socials = Object.entries(brand.social_urls).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(', ')
-    if (socials) lines.push(`**Social Media:** ${socials}`)
-  }
+  // Handles, per platform — not a dump of the raw record.
+  //
+  // That dump was printing Mixpost's internal account ids and a retired
+  // Instagram account into the prompt as though both were accounts to tag.
+  const socials = socialHandlesPrompt(brand.social_urls)
+  if (socials) lines.push(socials)
   lines.push(`**Niche:** ${brand.niche}`)
   if (brand.business_stage) {
     const stageDescriptions: Record<string, string> = {
