@@ -18,6 +18,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { parseMemoryValue } from '@/lib/memory/memory-value'
 
 export type CorrectionKind = 'brand_name' | 'unbacked_claim' | 'wrong_product'
 
@@ -73,7 +74,11 @@ export async function recordCorrection(
       .eq('brand_id', brandId)
       .maybeSingle()
 
-    const previous = (existing?.value ?? null) as CorrectionRecord | null
+    // Parsed, not cast. Casting a string of JSON to a record gave `undefined`
+    // for `count`, so every correction wrote 1 and the tally never grew — the
+    // brand name was misspelled repeatedly and the record said it happened
+    // once, each time.
+    const previous = parseMemoryValue<CorrectionRecord>(existing?.value)
     const examples = [detail, ...(previous?.examples ?? [])]
       // Deduped: the same wrong spelling caught twenty times is one example
       // and a count of twenty, not twenty identical lines crowding the prompt.
@@ -131,7 +136,7 @@ export async function correctionsForPrompt(
     .eq('source', 'nrs-self-correction')
 
   const records = (data ?? [])
-    .map((row) => row.value as CorrectionRecord | null)
+    .map((row) => parseMemoryValue<CorrectionRecord>(row.value))
     .filter((record): record is CorrectionRecord => Boolean(record?.lesson))
     .sort((a, b) => b.count - a.count)
 

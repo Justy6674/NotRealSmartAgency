@@ -44,10 +44,24 @@ test('the line is read back as a timestamp', async () => {
   assert.equal(await readThreadStart(client, who), Date.parse('2026-08-08T06:00:00.000Z'))
 })
 
+test('the line is read back when the row holds a STRING of JSON', async () => {
+  // This is the shape production actually returns, and the reason Start fresh
+  // appeared to do nothing: the boundary was written on every press and thrown
+  // away on every read, so the timeline reloaded the entire argument. The test
+  // above passed the whole time because it handed the reader an object the
+  // database never gives it. Assert against the real row, verbatim.
+  const { client } = fakeDb([{ value: '{"started_at":"2026-08-08T20:36:48.048Z"}' }])
+  assert.equal(await readThreadStart(client, who), Date.parse('2026-08-08T20:36:48.048Z'))
+})
+
 test('a corrupt value shows everything rather than nothing', async () => {
   // A bad row must not empty the screen. Everything is preferable to a blank
   // conversation the owner cannot explain.
-  for (const value of [{ started_at: 'not a date' }, { started_at: 42 }, {}, null]) {
+  for (const value of [
+    { started_at: 'not a date' }, { started_at: 42 }, {}, null,
+    // Malformed JSON must fail the same way — open, not blank.
+    'not json at all', '{"started_at":', '{"started_at":42}',
+  ]) {
     const { client } = fakeDb([{ value }])
     assert.equal(await readThreadStart(client, who), null)
   }

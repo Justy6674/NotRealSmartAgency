@@ -41,3 +41,6 @@ supabase/.temp
 
 # GitHub App credentials pulled from Vercel — never commit
 .env.github-app
+
+# Local Hermes attachments — large media, never belongs in git
+.hermes/

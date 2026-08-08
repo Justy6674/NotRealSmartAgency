@@ -12,6 +12,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { parseMemoryValue } from '@/lib/memory/memory-value'
 import { lessonFrom, type ReactionEvent } from './reactions'
 
 export interface ReactionOutcome {
@@ -106,7 +107,7 @@ export async function reactionLessonsForPrompt(
     .limit(limit)
 
   const lessons = (data ?? [])
-    .map((row) => (row.value as { lesson?: unknown } | null)?.lesson)
+    .map((row) => parseMemoryValue<{ lesson?: unknown }>(row.value)?.lesson)
     .filter((lesson): lesson is string => typeof lesson === 'string' && lesson.length > 0)
 
   if (lessons.length === 0) return null

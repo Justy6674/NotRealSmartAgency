@@ -690,7 +690,7 @@ export default function TelegramMiniAppPage() {
               edge is how you know there are more to the side. Clipped inside a
               padded box it just looked broken.
             */}
-            <section aria-label="Choose a project" className="-mx-4 mb-2 flex shrink-0 items-center gap-2 pr-4 sm:-mx-6 sm:pr-6">
+            <section aria-label="Choose a project" className="-mx-4 mb-2 flex shrink-0 items-center gap-3 pr-4 sm:-mx-6 sm:pr-6">
               <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:px-6 [&::-webkit-scrollbar]:hidden">
                 {projects.map((project) => (
                   <button
@@ -718,9 +718,19 @@ export default function TelegramMiniAppPage() {
                 onClick={() => void startNewThread()}
                 disabled={!selectedProject || startingNew || sending}
                 title="Save what we settled and clear the screen. Nothing is deleted."
-                className="mb-2 shrink-0 rounded-full bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-3 py-1.5 text-sm font-medium text-[var(--tg-theme-hint-color,#82909f)] ring-1 ring-black/10 disabled:opacity-40 dark:ring-white/10"
+                className="mb-2 flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-current px-3 py-1.5 text-sm font-medium text-[var(--tg-theme-link-color,#2aabee)] disabled:opacity-40"
               >
-                {startingNew ? 'Saving…' : 'Start fresh'}
+                {/*
+                  A broom, and a dashed outline.
+
+                  This sat in the brand strip styled exactly like a brand chip,
+                  at the far right past the projects — so the one control the
+                  owner had asked for a hundred times was indistinguishable
+                  from a project name he had never heard of. It has to look
+                  like an ACTION, not a place.
+                */}
+                <span aria-hidden>🧹</span>
+                {startingNew ? 'Saving…' : 'Clear chat'}
               </button>
             </section>
 

@@ -36,6 +36,28 @@ export function boundaryNamespace(brandSlug: string): string {
  * Null means never reset — show everything, which is the right answer for a
  * brand that has only ever had one thread.
  */
+/**
+ * Read `started_at` out of the stored value, whatever shape it came back in.
+ *
+ * `agent_memories.value` returns a STRING of JSON, not an object — so the
+ * obvious `value.started_at` is `undefined`, this function used to return
+ * null, and null means "never cleared, show everything". The boundary was
+ * written correctly every time and discarded on every read: the owner pressed
+ * Start fresh, the screen emptied, the next refresh put the entire argument
+ * back, and the button looked like a lie. It was not — this line was.
+ *
+ * Both shapes are accepted rather than one being "fixed", because rows already
+ * written in the old shape must keep working.
+ */
+function startedAtFrom(value: unknown): string | null {
+  const parsed = typeof value === 'string'
+    ? (() => { try { return JSON.parse(value) } catch { return null } })()
+    : value
+
+  const startedAt = (parsed as { started_at?: unknown } | null)?.started_at
+  return typeof startedAt === 'string' ? startedAt : null
+}
+
 export async function readThreadStart(
   admin: SupabaseClient,
   { brandId, brandSlug, userId }: { brandId: string; brandSlug: string; userId: string },
@@ -49,7 +71,7 @@ export async function readThreadStart(
     .eq('brand_id', brandId)
     .maybeSingle()
 
-  const raw = (data?.value as { started_at?: unknown } | null)?.started_at
+  const raw = startedAtFrom(data?.value)
   if (typeof raw !== 'string') return null
   const ms = Date.parse(raw)
   return Number.isFinite(ms) ? ms : null
