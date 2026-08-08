@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
 import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
+import { startVideoBrief } from '@/lib/telegram/video-brief-run'
 import { proposeAndStore } from '@/lib/telegram/mini-app-proposal'
 
 /**
@@ -165,14 +166,32 @@ export async function POST(request: Request) {
       /* a proposal off the file name alone is still better than nothing */
     })
 
-    await proposeAndStore({
-      supabase: admin,
-      userId: context.actorUserId,
-      brandId: grant.projectId,
-      mediaItemId: media.id,
-      fileName,
-      ...(instructionGiven ? { angle: instruction } : {}),
-    })
+    // A video starts a conversation, not a caption.
+    //
+    // This used to write a finished post for one platform before the owner had
+    // said a word — no idea what it was for, who it was for, or where it was
+    // going — so the only thing to do with it was accept it or complain. Now
+    // NRS says what it heard and asks the first question.
+    //
+    // Typing an instruction alongside the file is a different matter: that IS
+    // a brief, so it goes straight to the copy as it always did.
+    if (instructionGiven) {
+      await proposeAndStore({
+        supabase: admin,
+        userId: context.actorUserId,
+        brandId: grant.projectId,
+        mediaItemId: media.id,
+        fileName,
+        angle: instruction,
+      })
+    } else {
+      await startVideoBrief({
+        admin,
+        userId: context.actorUserId,
+        brandId: grant.projectId,
+        mediaItemId: media.id,
+      })
+    }
   })
 
   return NextResponse.json({

@@ -6,6 +6,7 @@ import { createTelegramDirectorExecution } from '@/lib/agents/director-execution
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
+import { advanceVideoBrief } from '@/lib/telegram/video-brief-run'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -95,6 +96,32 @@ export async function POST(request: Request) {
   if (error || !job) return NextResponse.json({ error: 'NRS could not start that request.' }, { status: 500 })
 
   after(async () => {
+    // A clip mid-conversation owns the reply.
+    //
+    // Handing "yes" or "all three" to the general Director loses it: it has no
+    // idea which question it answers, so it either asks again or invents a
+    // task. The step machine knows exactly what was outstanding.
+    try {
+      const brief = await advanceVideoBrief({
+        admin,
+        userId: execution.actorUserId,
+        brandId: execution.projectId,
+        message,
+      })
+      if (brief.handled && brief.reply) {
+        await admin.from('mcp_jobs').update({
+          status: 'done',
+          result: { response: brief.reply },
+          completed_at: new Date().toISOString(),
+        }).eq('id', job.id)
+        return
+      }
+    } catch (error) {
+      // A fault in the brief must not eat the message. Fall through to the
+      // Director, which is worse at this but always answers.
+      console.error('[mini-app:brief]', error)
+    }
+
     await runDirectorJob(job.id, execution, { brand_id: execution.projectId, message })
   })
   return NextResponse.json({ job_id: job.id, project_name: grant.projectName })

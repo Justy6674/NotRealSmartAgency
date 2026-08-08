@@ -25,6 +25,8 @@ export interface BriefState {
   mediaItemId: string
   /** Null until answered — false is a real answer and must not read as unset. */
   captions: boolean | null
+  /** Cut the dead air. Offered in the same breath as captions, so captured with it. */
+  trim: boolean | null
   feel: string | null
   platforms: string[] | null
   /** Set once the copy has been written, so it is not written twice. */
@@ -36,6 +38,7 @@ export function startBrief(mediaItemId: string, startedAt: string): BriefState {
   return {
     mediaItemId,
     captions: null,
+    trim: null,
     feel: null,
     platforms: null,
     proposedOutputId: null,
@@ -51,7 +54,9 @@ export function startBrief(mediaItemId: string, startedAt: string): BriefState {
  * write half-fails — leaving a brief that asks for a feel it already has.
  */
 export function currentStep(state: BriefState): BriefStep {
-  if (state.captions === null) return 'captions'
+  // Both are offered in one question, so the step is answered when either has
+  // been settled — "just captions" answers both: yes to one, no to the other.
+  if (state.captions === null || state.trim === null) return 'captions'
   if (!state.feel) return 'feel'
   if (!state.platforms || state.platforms.length === 0) return 'platforms'
   if (!state.proposedOutputId) return 'writing'
@@ -70,11 +75,17 @@ export function isOpen(state: BriefState): boolean {
  */
 export function applyAnswer(
   state: BriefState,
-  answer: { captions?: boolean; feel?: string; platforms?: string[] },
+  answer: { captions?: boolean; trim?: boolean; feel?: string; platforms?: string[] },
 ): BriefState {
   const step = currentStep(state)
-  if (step === 'captions' && typeof answer.captions === 'boolean') {
-    return { ...state, captions: answer.captions }
+  if (step === 'captions' && (typeof answer.captions === 'boolean' || typeof answer.trim === 'boolean')) {
+    // "Just captions" says yes to one and no to the other. Only a reply that
+    // settles neither leaves the question outstanding.
+    return {
+      ...state,
+      captions: answer.captions ?? false,
+      trim: answer.trim ?? false,
+    }
   }
   if (step === 'feel' && answer.feel?.trim()) {
     return { ...state, feel: answer.feel.trim() }
@@ -105,13 +116,21 @@ export function stepBrief(step: BriefStep, context: {
   switch (step) {
     case 'captions':
       return [
-        `Say in one or two sentences what the clip is actually about — specific enough to prove`,
-        `you watched it. Then ask ONE question: whether to burn captions into it.`,
+        'Say in one or two sentences what the clip is actually about — specific enough to prove',
+        'you watched it. Where a product name was checked, say so plainly; where it could not be,',
+        'say that too and ask which was meant. Never state a name as fact that was not confirmed.',
+        '',
+        'Then ask ONE question: what to do to the video before it goes out.',
         context.canCaption
-          ? 'Mention that most people watch on mute and that the platforms will not add captions'
-            + ' to anything scheduled, so this is the only chance to have them.'
-          : 'Say plainly that you could not make out any speech, so captions are not possible,'
-            + ' and ask whether to carry on without them.',
+          ? 'Offer exactly two things, because they are the two that exist: burning the words onto'
+            + ' the screen, and cutting the dead air — the fumbling at the start and the long gaps.'
+            + ' Say most people watch on mute and no scheduler can add captions afterwards, so it'
+            + ' is now or not at all. Say "neither" is a fine answer.'
+          : 'Say plainly that you could not make out any speech, so captions are not possible.'
+            + ' Offer to cut the dead air instead, and ask whether to carry on without words on'
+            + ' screen.',
+        'A still is already made from the clip for the thumbnail. If asked about a logo overlay on'
+        + ' video, say honestly that it is not built yet rather than agreeing to it.',
         '',
         'What the clip is about:',
         context.summary,
