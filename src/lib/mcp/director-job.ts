@@ -35,6 +35,7 @@ import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
 import { actionsFrom, enforceClaims } from './claimed-actions'
 import { enforceBrandName } from '@/lib/brand/enforce-name'
+import { brainConfigured } from '@/lib/brain/gbrain'
 import { reactionLessonsForPrompt } from '@/lib/telegram/handle-reaction'
 import {
   buildWebsiteScanGroundingDirective,
@@ -625,6 +626,31 @@ That's the difference between a marketing director and a tech support agent. Def
       brandSlug: typedBrand.slug,
     }).catch(() => null)
     if (reactionLessons) systemPrompt += `\n\n---\n\n${reactionLessons}`
+
+    // Point at the brain, hard.
+    //
+    // Every serious failure on 8 August was already written down in gbrain and
+    // unread: "must never change fragrance names", "no made-up fragrance
+    // descriptions", "founder approval before publishing". A tool the Director
+    // does not think to call is a tool that does not exist, so this says when.
+    if (brainConfigured()) {
+      systemPrompt += `\n\n---\n\n${[
+        "**THE OWNER'S BRAIN — call `search_brain` BEFORE you answer.**",
+        '',
+        'He has written down years of decisions, brand rules, specs and corrections across every',
+        'project. It is the record of what was already settled, and his written rule beats your',
+        'instinct every time.',
+        '',
+        'Call it whenever the answer depends on:',
+        '- how a brand should sound, or what it must never say',
+        '- whether something is allowed, or needs his approval first',
+        '- what was decided before, or why it is done this way',
+        '- anything he has plainly told you more than once',
+        '',
+        'Answering from instinct when the brain already holds the answer is the most expensive',
+        'mistake this system makes. Cite the slug of anything you use.',
+      ].join('\n')}`
+    }
     const isHealthBrand = typedBrand.compliance_flags?.ahpra || typedBrand.compliance_flags?.tga
     const modelRoute = resolveAgentModelRoute({
       agentType: 'overall',
