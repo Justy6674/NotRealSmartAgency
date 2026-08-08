@@ -600,6 +600,14 @@ async function handleTelegramUpdate(request: NextRequest) {
   if (!inbound) return NextResponse.json({ received: true, status: 'ignored' })
 
   const admin = createAdminClient()
+
+  // A group's chat id is not otherwise recorded anywhere, and without it NRS
+  // cannot act on the group by itself — it can only ever react to a message.
+  // Logged so setup can be completed for the owner rather than by him.
+  if (inbound.fromGroup) {
+    console.log(`[telegram] group chat id ${inbound.chatId} (thread ${inbound.threadId ?? 'none'})`)
+  }
+
   const intent = parseScopedTelegramIntent(inbound.text, inbound.callbackData)
   let account = await getTelegramAccount(admin, inbound)
 
