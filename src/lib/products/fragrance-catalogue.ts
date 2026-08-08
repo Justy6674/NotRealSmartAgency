@@ -13,7 +13,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { scoreAgainstEntry, searchTokens } from './phonetic'
+import { scoreAgainstEntry, searchTokens, phoneticSimilarity } from './phonetic'
 
 export interface CatalogueMatch {
   brand: string
@@ -379,4 +379,76 @@ export async function bestMatch(
     if (!existing || hit.score > existing.score) byKey.set(key, hit)
   }
   return [...byKey.values()].sort((a, b) => b.score - a.score).slice(0, 8)
+}
+
+/**
+ * Resolve "<product> by <house>" by searching inside the house.
+ *
+ * The transcript said "Mulan Cha by Nishane" — the product mangled beyond
+ * recognition and the house perfect. Folded together as one phrase they score
+ * worse than either alone, and the answer came back "Nishane Ani Mini".
+ *
+ * An exactly-matching house is the strongest evidence in the sentence. Used
+ * properly it turns 114,000 rows into that house's range — usually under two
+ * hundred — where a mangled product name has nothing left to collide with.
+ */
+export async function matchWithinHouse(
+  product: string,
+  house: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<FuzzyHit[]> {
+  const supabase = catalogueClient(env)
+  if (!supabase) return []
+
+  // Find the house first. A misheard house is not a house to search inside.
+  const { data: brandRows } = await supabase
+    .from('fragrances')
+    .select('brand')
+    .ilike('brand', `%${house.split(/\s+/)[0]}%`)
+    .limit(200)
+
+  const houses = [...new Set((brandRows ?? []).map((row) => String(row.brand ?? '')))]
+    .map((name) => ({ name, score: phoneticSimilarity(house, name) }))
+    .sort((a, b) => b.score - a.score)
+
+  // Below this it is a different house and searching inside it is worse than
+  // not searching at all — it would return a confident answer from the wrong
+  // brand's catalogue.
+  if (houses.length === 0 || houses[0].score < 0.85) return []
+
+  const { data } = await supabase
+    .from('fragrances')
+    .select('brand, name, concentration, scent_family, perfumer')
+    .eq('brand', houses[0].name)
+    .limit(600)
+
+  const seen = new Set<string>()
+  const hits: FuzzyHit[] = []
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    const name = String(row.name ?? '')
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    hits.push({
+      brand: houses[0].name,
+      name,
+      concentration: (row.concentration as string) ?? null,
+      scent_family: (row.scent_family as string) ?? null,
+      perfumer: (row.perfumer as string[]) ?? null,
+      // Scored on the PRODUCT alone. The house is already established, so
+      // letting it contribute would flatter every bottle in the range equally.
+      score: phoneticSimilarity(product, name),
+    })
+  }
+
+  return hits.sort((a, b) => b.score - a.score).slice(0, 8)
+}
+
+/** "Mulan Cha by Nishane" → product and house, or null. */
+export function splitByHouse(phrase: string): { product: string; house: string } | null {
+  const match = phrase.match(/^(.+?)\s+(?:by|from)\s+(.+)$/i)
+  if (!match) return null
+  const product = match[1].trim()
+  const house = match[2].trim()
+  return product && house ? { product, house } : null
 }

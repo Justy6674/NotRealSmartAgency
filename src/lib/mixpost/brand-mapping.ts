@@ -6,7 +6,7 @@
 import type { MixpostAccount } from './client'
 import { friendlyProvider } from './client'
 
-interface BrandStub {
+export interface BrandStub {
   id: string
   name: string
   slug: string

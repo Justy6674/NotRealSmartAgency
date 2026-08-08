@@ -24,7 +24,7 @@
  * A caption that misspells Byredo is what the owner's customers see.
  */
 
-import { bestMatch, catalogueAvailable, type FuzzyHit } from './fragrance-catalogue'
+import { bestMatch, matchWithinHouse, splitByHouse, catalogueAvailable, type FuzzyHit } from './fragrance-catalogue'
 import { fold } from './phonetic'
 
 /**
@@ -112,10 +112,11 @@ export function extractCandidates(transcript: string, limit = 12): string[] {
         parts = parts.slice(1)
       }
       run = []
-      if (parts.length < 2 || parts.length > 4) return
+      if (parts.length < 2 || parts.length > 6) return
       if (parts.every((word) => SENTENCE_STARTERS.has(strip(word).toLowerCase()))) return
 
       const phrase = parts.map(strip).join(' ').trim()
+      if (/^(by|from)\b/i.test(phrase) || /\b(by|from)$/i.test(phrase)) return
       const key = phrase.toLowerCase()
       if (!phrase || seen.has(key)) return
       seen.add(key)
@@ -126,6 +127,16 @@ export function extractCandidates(transcript: string, limit = 12): string[] {
       if (/^[A-Z][A-Za-z'’&+-]*[.,;:!?]?$/.test(word)) {
         if (run.length === 0) run = [word]
         else run.push(word)
+        continue
+      }
+      // "Mulan Cha BY Nishane" — the house is right there, in the next breath,
+      // and splitting on the lower-case "by" threw it away. It is the single
+      // most useful word in the sentence: the transcript mangled the product
+      // and got the house perfect, and the two together resolve when neither
+      // does alone.
+      if (/^(by|from)$/i.test(strip(word)) && run.length > 0
+          && index + 1 < words.length && /^[A-Z]/.test(words[index + 1])) {
+        run.push(word)
         continue
       }
       flush(index - run.length === 0)
@@ -270,6 +281,14 @@ async function bestHits(
   heard: string,
   env: Record<string, string | undefined>,
 ): Promise<FuzzyHit[]> {
+  // "<product> by <house>" is the one shape where the transcript hands us a
+  // second, independent clue. Used first, because it is the strongest.
+  const split = splitByHouse(heard)
+  if (split) {
+    const inHouse = await matchWithinHouse(split.product, split.house, env).catch(() => [])
+    if (inHouse.length > 0 && inHouse[0].score >= WORTH_ASKING) return inHouse
+  }
+
   const full = shareAWord(heard, await bestMatch(heard, env).catch(() => []))
   if (full.length > 0 && full[0].score >= WORTH_ASKING) return full
 
