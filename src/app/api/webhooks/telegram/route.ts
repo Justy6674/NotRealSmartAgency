@@ -30,6 +30,12 @@ import {
 import { checkTopicReadiness, getBotId } from '@/lib/telegram/topic-readiness'
 import { describeGroupStatus, parseMyChatMember } from '@/lib/telegram/group-join'
 import {
+  DIRECTOR_TOPIC_NAME,
+  isTopicSetupRequest,
+  selectTopicProjects,
+  wantsDirectorTopic,
+} from '@/lib/telegram/topic-request'
+import {
   addMiniAppButton,
   buildScopedProjectKeyboard,
   parseScopedTelegramIntent,
@@ -705,7 +711,7 @@ async function handleTelegramUpdate(request: NextRequest) {
   }
 
   // "set up topics" — give every project its own forum topic, once.
-  if (/\b(set ?up|create|make)\b.*\btopics?\b/i.test(inbound.text ?? '')) {
+  if (isTopicSetupRequest(inbound.text)) {
     // Check the three conditions FIRST and name the one that is missing.
     //
     // Telegram's requirements are explicit — the chat must be a forum, and the
@@ -726,18 +732,27 @@ async function handleTelegramUpdate(request: NextRequest) {
       }
     }
 
+    // Only the projects he named. Fourteen brands means fourteen topics in a
+    // group shared with one other person, which is not a workspace, it is a
+    // wall. Naming none still means all, as before.
+    const selection = selectTopicProjects(inbound.text ?? '', grants)
+
     const result = await createTopicsForProjects({
       supabase: admin,
       botToken: config.botToken,
       chatId: inbound.chatId,
       telegramAccountId: account.id,
-      projects: grants.map((candidate) => ({
-        grantId: candidate.grantId,
-        projectId: candidate.projectId,
-        projectName: candidate.projectName,
-      })),
+      projects: selection.selected,
+      directorTopicName: wantsDirectorTopic(inbound.text ?? '') ? DIRECTOR_TOPIC_NAME : null,
     })
-    await reply(describeTopicSetup(result))
+
+    const lines = [describeTopicSetup(result)]
+    if (selection.unknown.length > 0) {
+      lines.push(
+        `I could not find ${selection.unknown.join(', ')} among your projects — check the spelling, or switch it on in NRS Settings.`,
+      )
+    }
+    await reply(lines.join('\n'))
     return NextResponse.json({ received: true, status: 'topics_setup' })
   }
 

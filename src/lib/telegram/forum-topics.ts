@@ -73,12 +73,19 @@ export async function createTopicsForProjects({
   chatId,
   telegramAccountId,
   projects,
+  directorTopicName,
 }: {
   supabase: SupabaseClient
   botToken: string
   chatId: string
   telegramAccountId: string
   projects: Array<{ grantId: string; projectId: string; projectName: string }>
+  /**
+   * A topic that belongs to no single brand — the front door for anything
+   * cross-brand, or for deciding which brand to work on next. Posting there
+   * falls through to the selected project rather than being pinned to one.
+   */
+  directorTopicName?: string | null
 }): Promise<{ created: string[]; existing: string[]; failed: Array<{ name: string; reason: string }> }> {
   const created: string[] = []
   const existing: string[] = []
@@ -91,6 +98,43 @@ export async function createTopicsForProjects({
     .eq('status', 'topic')
 
   const mapped = new Set((alreadyMapped ?? []).map((row) => row.brand_id as string))
+
+  // The Director topic first, so it sits at the top of the group's topic list
+  // where a front door belongs. It is deliberately NOT recorded against a
+  // brand: a message there must fall through to the selected project rather
+  // than be pinned to one.
+  if (directorTopicName) {
+    const { data: existingDirector } = await supabase
+      .from('telegram_project_sessions')
+      .select('id')
+      .eq('telegram_chat_id', chatId)
+      .eq('status', 'topic')
+      .is('brand_id', null)
+      .maybeSingle()
+
+    if (existingDirector) {
+      existing.push(directorTopicName)
+    } else {
+      const response = await fetch(`https://api.telegram.org/bot${botToken}/createForumTopic`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, name: directorTopicName }),
+      })
+      const body = (await response.json()) as {
+        ok?: boolean
+        description?: string
+        result?: { message_thread_id?: number }
+      }
+      if (body.ok && body.result?.message_thread_id) {
+        created.push(directorTopicName)
+      } else {
+        failed.push({
+          name: directorTopicName,
+          reason: body.description ?? 'Telegram refused to create the topic',
+        })
+      }
+    }
+  }
 
   for (const project of projects) {
     if (mapped.has(project.projectId)) {
