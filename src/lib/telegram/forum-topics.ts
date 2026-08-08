@@ -126,11 +126,23 @@ export async function createTopicsForProjects({
         result?: { message_thread_id?: number }
       }
       if (body.ok && body.result?.message_thread_id) {
-        created.push(directorTopicName)
+        const { error } = await supabase.from('telegram_project_sessions').insert({
+          telegram_account_id: telegramAccountId,
+          telegram_chat_id: chatId,
+          status: 'topic',
+          message_thread_id: body.result.message_thread_id,
+        })
+        if (error) {
+          await deleteForumTopic(botToken, chatId, body.result.message_thread_id)
+          console.error('[topics] could not link the Director topic:', error.message)
+          failed.push({ name: directorTopicName, reason: 'could not be linked' })
+        } else {
+          created.push(directorTopicName)
+        }
       } else {
         failed.push({
           name: directorTopicName,
-          reason: body.description ?? 'Telegram refused to create the topic',
+          reason: safeTelegramReason(body.description),
         })
       }
     }
@@ -154,10 +166,7 @@ export async function createTopicsForProjects({
     }
 
     if (!body.ok || !body.result?.message_thread_id) {
-      failed.push({
-        name: project.projectName,
-        reason: body.description ?? 'Telegram refused to create the topic',
-      })
+      failed.push({ name: project.projectName, reason: safeTelegramReason(body.description) })
       continue
     }
 
@@ -171,13 +180,55 @@ export async function createTopicsForProjects({
     })
 
     if (error) {
-      failed.push({ name: project.projectName, reason: `Topic made but not linked: ${error.message}` })
+      // The topic exists in Telegram but points at nothing. Leaving it there
+      // is worse than not creating it: every message in it falls through to
+      // whatever project was last selected, so the group looks like it ignores
+      // which topic you are in. Take it back out so a retry starts clean.
+      await deleteForumTopic(botToken, chatId, body.result.message_thread_id)
+
+      // The database's own words never reach a person. Bec's first sight of
+      // this product was a Postgres check-constraint violation.
+      console.error(`[topics] could not link ${project.projectName}:`, error.message)
+      failed.push({ name: project.projectName, reason: 'could not be linked to the project' })
       continue
     }
     created.push(project.projectName)
   }
 
   return { created, existing, failed }
+}
+
+/**
+ * Undo a topic that could not be linked.
+ *
+ * Never throws: this is cleanup after something already went wrong, and a
+ * failure here must not replace the real reason with a second one.
+ */
+async function deleteForumTopic(botToken: string, chatId: string, threadId: number): Promise<void> {
+  try {
+    await fetch(`https://api.telegram.org/bot${botToken}/deleteForumTopic`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, message_thread_id: threadId }),
+    })
+  } catch (err) {
+    console.error('[topics] could not remove an unlinked topic:', err instanceof Error ? err.message : err)
+  }
+}
+
+/**
+ * Telegram's own refusals are safe to repeat — they are short and about
+ * permissions. Anything else is replaced, because the alternative is a
+ * database error arriving in a group chat.
+ */
+export function safeTelegramReason(description: string | undefined): string {
+  if (!description) return 'Telegram refused to create it'
+  if (/not a forum|topics? (?:are|is) disabled/i.test(description)) return 'Topics are not turned on here'
+  if (/not enough rights|CHAT_ADMIN_REQUIRED|need administrator/i.test(description)) {
+    return 'I do not have the "Manage Topics" right'
+  }
+  if (/too many|TOPICS_TOO_MUCH/i.test(description)) return 'this group has hit Telegram\'s topic limit'
+  return 'Telegram refused to create it'
 }
 
 /** What to say back once setup has run. */

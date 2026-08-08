@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readThreadId, describeTopicSetup, routeByTopic } from './forum-topics'
+import { readThreadId, describeTopicSetup, routeByTopic, safeTelegramReason } from './forum-topics'
 
 /**
  * A topic per project removes the picker: the thread says which brand is meant.
@@ -83,4 +83,39 @@ test('a group without Topics turned on is told where the switch is', () => {
   })
   assert.match(text, /Topics turned on/)
   assert.match(text, /Edit → Topics/)
+})
+
+/**
+ * Bec's first sight of this product was a raw Postgres error:
+ *   new row for relation "telegram_project_sessions" violates check
+ *   constraint "telegram_project_sessions_check"
+ * posted into the group by the bot. Nothing from a database, a stack or an
+ * internal identifier may ever reach a person.
+ */
+test('a database failure never reaches the person reading the chat', () => {
+  const text = describeTopicSetup({
+    created: [],
+    existing: [],
+    failed: [
+      { name: 'Scent Sell', reason: 'could not be linked to the project' },
+      { name: 'Do Today', reason: 'could not be linked to the project' },
+    ],
+  })
+
+  assert.doesNotMatch(text, /violates|constraint|relation|null value|column|pg|postgres|SQLSTATE/i)
+  assert.doesNotMatch(text, /telegram_project_sessions/)
+  assert.match(text, /Scent Sell/)
+  assert.match(text, /Do Today/)
+})
+
+test("Telegram's own refusals are translated, not repeated verbatim", () => {
+  assert.equal(safeTelegramReason('Bad Request: the chat is not a forum'), 'Topics are not turned on here')
+  assert.equal(
+    safeTelegramReason('Bad Request: not enough rights to manage topics'),
+    'I do not have the "Manage Topics" right',
+  )
+  // Anything unrecognised is replaced rather than echoed — an unknown string
+  // from an API is exactly how internal detail leaks out.
+  assert.equal(safeTelegramReason('Bad Request: PEER_ID_INVALID'), 'Telegram refused to create it')
+  assert.equal(safeTelegramReason(undefined), 'Telegram refused to create it')
 })
