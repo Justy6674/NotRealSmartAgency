@@ -24,16 +24,24 @@
  * A caption that misspells Byredo is what the owner's customers see.
  */
 
-import { fuzzyMatch, catalogueAvailable, type FuzzyHit } from './fragrance-catalogue'
+import { bestMatch, catalogueAvailable, type FuzzyHit } from './fragrance-catalogue'
+import { fold } from './phonetic'
 
 /**
  * Good enough to correct silently.
  *
- * Deliberately below `verifyFragrance`'s bar. The input here is known to be
- * garbled, and the alternative to correcting a strong near-miss is not "get it
- * right" — it is "say nothing", which loses the product from the copy.
+ * Set where sound-matching makes it safe and no lower. "Birredo Blanche"
+ * folds to exactly the same sounds as Byredo Blanche and scores 1.00; "Ormond
+ * Janes Bijous Saffron" scores 0.91 against Ormonde Jayne Bijou Zafran and
+ * runs 0.24 clear of anything else. Both of those are certain enough to fix
+ * without asking.
+ *
+ * "Mulan Cha" scores 0.75 against Nishane Wulong Cha — the right answer, and
+ * top of the list — but only 0.08 clear of Mulan Rouge, a different house.
+ * That is a question, not a correction. Writing the wrong bottle confidently
+ * is the failure being fixed; writing nothing and asking is not.
  */
-export const CORRECT_SILENTLY = 0.58
+export const CORRECT_SILENTLY = 0.85
 /** Worth putting to the owner as a question, never worth publishing. */
 export const WORTH_ASKING = 0.34
 
@@ -44,7 +52,7 @@ export const WORTH_ASKING = 0.34
  * and picking the alphabetically-luckier one is how you confidently publish
  * the wrong bottle.
  */
-export const REQUIRED_MARGIN = 0.05
+export const REQUIRED_MARGIN = 0.1
 
 /** Words that start a sentence and are not a fragrance house. */
 const SENTENCE_STARTERS = new Set([
@@ -233,6 +241,23 @@ export async function resolveMentions(
 }
 
 /**
+ * Drop candidates that merely sound vaguely similar overall.
+ *
+ * Sound-folding is generous by design, so "Mulan Cha" scores 0.71 against Puma
+ * Challenge — no shared word, just a similar shape. Requiring one whole word
+ * to survive intact removes that entirely, and costs nothing real: in a
+ * garbled name at least one word almost always does survive, which is what
+ * made it findable in the first place.
+ */
+function shareAWord(heard: string, hits: readonly FuzzyHit[]): FuzzyHit[] {
+  const heardWords = new Set(heard.split(/\s+/).map(fold).filter((word) => word.length >= 2))
+  if (heardWords.size === 0) return [...hits]
+
+  return hits.filter((hit) =>
+    `${hit.brand} ${hit.name}`.split(/\s+/).map(fold).some((word) => heardWords.has(word)))
+}
+
+/**
  * Query the catalogue, falling back to the house on its own.
  *
  * "Ormond Janes Bijous Saffron" is four garbled words and scores near zero as
@@ -245,14 +270,14 @@ async function bestHits(
   heard: string,
   env: Record<string, string | undefined>,
 ): Promise<FuzzyHit[]> {
-  const full = await fuzzyMatch(heard, env).catch(() => [])
+  const full = shareAWord(heard, await bestMatch(heard, env).catch(() => []))
   if (full.length > 0 && full[0].score >= WORTH_ASKING) return full
 
   const words = heard.split(/\s+/)
   if (words.length < 3) return full
 
   const windows = [words.slice(0, 2).join(' '), words.slice(-2).join(' ')]
-  const partial = (await Promise.all(windows.map((w) => fuzzyMatch(w, env).catch(() => []))))
+  const partial = (await Promise.all(windows.map((w) => bestMatch(w, env).catch(() => []))))
     .flat()
     .sort((a, b) => b.score - a.score)
 

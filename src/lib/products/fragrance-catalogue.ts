@@ -13,6 +13,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { scoreAgainstEntry, searchTokens } from './phonetic'
 
 export interface CatalogueMatch {
   brand: string
@@ -277,4 +278,105 @@ export async function verifyFragrance(
     canonical: (nameHasBrand ? best.name : `${best.brand} ${best.name}`).trim(),
     match: best,
   }
+}
+
+/**
+ * Find candidates by SOUND, not by spelling.
+ *
+ * The trigram matcher scores "Mulan Cha" against Nishane Wulong Cha at zero —
+ * they share almost no letters — and hands back Western Valley Mulan Rouge
+ * instead. A different house, a different bottle, and what the owner's own
+ * marketing app told him he was wearing.
+ *
+ * Retrieval works off the words that survived. In a garbled name at least one
+ * usually does — "Mulan CHA", "Birredo BLANCHE" — and that word pulls a few
+ * hundred rows out of 114,000 cheaply. Sound comparison then does the ranking.
+ */
+export async function phoneticMatch(
+  query: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<FuzzyHit[]> {
+  const supabase = catalogueClient(env)
+  if (!supabase) return []
+
+  const tokens = searchTokens(query)
+  if (tokens.length === 0) return []
+
+  const batches = await Promise.all(
+    tokens.slice(0, 4).map(async (token) => {
+      const [byName, byBrand, byTrigram] = await Promise.all([
+        supabase.from('fragrances').select('brand, name, concentration, scent_family, perfumer')
+          .ilike('name', `%${token}%`).limit(150),
+        // Deliberately generous. A token that matches a HOUSE is the strongest
+        // signal there is, and the house's whole range is the search space:
+        // capping it at sixty unordered rows is why "Ormond Janes Bijous
+        // Saffron" came back with three Ormonde Jaynes and not the one it
+        // plainly meant. Bijou Zafran was simply never fetched.
+        supabase.from('fragrances').select('brand, name, concentration, scent_family, perfumer')
+          .ilike('brand', `%${token}%`).limit(500),
+        // And the trigram index per token, because a heard word is often the
+        // right word with an extra letter — "Bijous" for Bijou, "Saffron" for
+        // Zafran. `ilike` demands the substring be exact; this does not.
+        supabase.rpc('search_fragrances_fuzzy', {
+          query_text: token, match_threshold: 0.3, max_results: 40,
+        }),
+      ])
+      return [
+        ...(byName.data ?? []),
+        ...(byBrand.data ?? []),
+        ...(Array.isArray(byTrigram.data) ? byTrigram.data : []),
+      ]
+    }),
+  )
+
+  const seen = new Set<string>()
+  const hits: FuzzyHit[] = []
+  for (const row of batches.flat() as Array<Record<string, unknown>>) {
+    const brand = String(row.brand ?? '')
+    const name = String(row.name ?? '')
+    const key = `${brand}|${name}`.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const score = scoreAgainstEntry(query, brand, name)
+    // Below this the "match" is two names that merely share a common word.
+    if (score < 0.5) continue
+
+    hits.push({
+      brand,
+      name,
+      concentration: (row.concentration as string) ?? null,
+      scent_family: (row.scent_family as string) ?? null,
+      perfumer: (row.perfumer as string[]) ?? null,
+      score,
+    })
+  }
+
+  return hits.sort((a, b) => b.score - a.score).slice(0, 8)
+}
+
+/**
+ * Both matchers, best answer first.
+ *
+ * Kept separate rather than blended. A trigram score and a sound score measure
+ * different things, and averaging them would let a strong letter match on the
+ * wrong bottle outvote a strong sound match on the right one — which is
+ * exactly the failure being fixed.
+ */
+export async function bestMatch(
+  query: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<FuzzyHit[]> {
+  const [trigram, phonetic] = await Promise.all([
+    fuzzyMatch(query, env).catch(() => []),
+    phoneticMatch(query, env).catch(() => []),
+  ])
+
+  const byKey = new Map<string, FuzzyHit>()
+  for (const hit of [...trigram, ...phonetic]) {
+    const key = `${hit.brand}|${hit.name}`.toLowerCase()
+    const existing = byKey.get(key)
+    if (!existing || hit.score > existing.score) byKey.set(key, hit)
+  }
+  return [...byKey.values()].sort((a, b) => b.score - a.score).slice(0, 8)
 }
