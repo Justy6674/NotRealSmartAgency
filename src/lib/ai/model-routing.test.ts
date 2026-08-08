@@ -19,7 +19,7 @@ test('uses Sonnet 5 with cross-provider fallbacks for ordinary agency work', () 
   assert.deepEqual(route, {
     tier: 'agency',
     model: 'anthropic/claude-sonnet-5',
-    fallbacks: ['openai/gpt-5.4', 'google/gemini-3-flash'],
+    fallbacks: ['openai/gpt-5.6-terra', 'google/gemini-3-flash'],
   })
 })
 
@@ -32,7 +32,7 @@ test('escalates only high-stakes healthcare governance work to Opus 5', () => {
 
   assert.equal(route.tier, 'frontier')
   assert.equal(route.model, 'anthropic/claude-opus-5')
-  assert.deepEqual(route.fallbacks, ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'])
+  assert.deepEqual(route.fallbacks, ['anthropic/claude-sonnet-5', 'openai/gpt-5.6-terra'])
 })
 
 test('routes repository and code work to GPT-5.3 Codex rather than marketing chat', () => {
@@ -43,7 +43,7 @@ test('routes repository and code work to GPT-5.3 Codex rather than marketing cha
 
   assert.equal(route.tier, 'code')
   assert.equal(route.model, 'openai/gpt-5.3-codex')
-  assert.deepEqual(route.fallbacks, ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'])
+  assert.deepEqual(route.fallbacks, ['anthropic/claude-sonnet-5', 'openai/gpt-5.6-terra'])
 })
 
 test('does not mistake ordinary marketing implementation for code work', () => {
@@ -65,12 +65,12 @@ test('keeps a deliberate non-legacy registry model and centralises direct tiers'
 
   assert.equal(route.tier, 'custom')
   assert.equal(route.model, 'google/gemini-3-flash')
-  assert.deepEqual(route.fallbacks, ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'])
+  assert.deepEqual(route.fallbacks, ['anthropic/claude-sonnet-5', 'openai/gpt-5.6-terra'])
   assert.equal(getGatewayModel('fast'), 'anthropic/claude-haiku-4.5')
-  assert.deepEqual(getGatewayFallbackModels('fast'), ['google/gemini-3-flash', 'openai/gpt-5.4-nano'])
+  assert.deepEqual(getGatewayFallbackModels('fast'), ['google/gemini-3-flash', 'openai/gpt-5.6-luna'])
   assert.deepEqual(getGatewayProviderOptions('fast'), {
     gateway: {
-      models: ['google/gemini-3-flash', 'openai/gpt-5.4-nano'],
+      models: ['google/gemini-3-flash', 'openai/gpt-5.6-luna'],
       caching: 'auto',
       disallowPromptTraining: true,
     },
@@ -86,7 +86,7 @@ test('preserves the custom route fallback policy under shared Gateway controls',
 
   assert.deepEqual(getGatewayRouteProviderOptions(route, { user: 'user-123' }), {
     gateway: {
-      models: ['anthropic/claude-sonnet-5', 'openai/gpt-5.4'],
+      models: ['anthropic/claude-sonnet-5', 'openai/gpt-5.6-terra'],
       caching: 'auto',
       disallowPromptTraining: true,
       user: 'user-123',
@@ -103,7 +103,7 @@ test('uses current Gateway caching, no-training, privacy, and attribution contro
     }),
     {
       gateway: {
-        models: ['openai/gpt-5.4', 'google/gemini-3-flash'],
+        models: ['openai/gpt-5.6-terra', 'google/gemini-3-flash'],
         caching: 'auto',
         disallowPromptTraining: true,
         user: 'user-123',

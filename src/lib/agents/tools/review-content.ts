@@ -10,7 +10,8 @@
  */
 
 import { generateObject } from 'ai'
-import { anthropic } from '@ai-sdk/anthropic'
+import { gateway } from '@ai-sdk/gateway'
+import { getGatewayModel } from '@/lib/ai/model-routing'
 import { z } from 'zod/v3'
 import { tool } from 'ai'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -121,10 +122,20 @@ Evaluate platform-appropriateness (length, tone, hashtag usage, hook quality).`
 
       const userPrompt = `Review this ${platform} post:\n\nCaption:\n${caption}\n\nHashtags: ${hashtags.length ? hashtags.map(h => `#${h}`).join(' ') : '(none)'}`
 
-      // 4. Run the review via Claude Haiku
+      // 4. Run the review via the Gateway, like every other AI call here.
+      //
+      // This tool called Anthropic directly, and there is no Anthropic key in
+      // production — so it has returned "Review failed: Anthropic API key is
+      // missing" on every invocation since 12 April. The failure was caught
+      // and reported as a bland "Review failed", which reads as a hiccup
+      // rather than a feature that has never once run. The model it asked for,
+      // claude-3-5-haiku-latest, no longer exists in the catalogue either.
+      //
+      // This is the AHPRA/TGA check. A regulatory review that silently does
+      // nothing is worse than no review, because the absence is invisible.
       try {
         const { object: review } = await generateObject({
-          model: anthropic('claude-3-5-haiku-latest'),
+          model: gateway(getGatewayModel('fast')),
           system: systemPrompt,
           prompt: userPrompt,
           schema: reviewSchema,

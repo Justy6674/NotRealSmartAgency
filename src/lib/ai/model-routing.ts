@@ -239,7 +239,10 @@ export function resolveAgentModelRoute(input: AgentModelRouteInput): GatewayMode
     return {
       tier: 'custom',
       model: registeredModel,
-      fallbacks: [GATEWAY_MODELS.agency, 'openai/gpt-5.4'],
+      // Kept in step with GATEWAY_FALLBACKS above. This branch is unreachable
+      // while every agent uses a managed default, which is exactly why it went
+      // stale unnoticed when the others were upgraded.
+      fallbacks: [GATEWAY_MODELS.agency, 'openai/gpt-5.6-terra'],
     }
   }
 
