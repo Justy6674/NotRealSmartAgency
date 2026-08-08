@@ -25,6 +25,15 @@
  *
  * READ ONLY. Nothing here writes to the brain. A marketing agent must never be
  * able to alter the record of what was decided.
+ *
+ * AND FEDERATED SOURCES ONLY. gbrain holds one source per repo — Obsidian,
+ * dotoday, notrealsmart, sniffopotamus and a dozen more — and marks each one
+ * federated or ISOLATED. Isolated is not a label, it is an instruction:
+ * abeai-consulting (719 pages), pathway-to-np (1,312) and
+ * endorseme-regulatory-corpus (25) are walled off deliberately. The first
+ * version of this file queried every source, which would have let consulting
+ * material and NP regulatory records surface inside Scent Sell marketing copy.
+ * The owner drew that boundary; a marketing agent does not get to cross it.
  */
 
 import { Client } from 'pg'
@@ -93,6 +102,11 @@ export async function searchBrain(
          FROM pages
         WHERE deleted_at IS NULL
           AND search_vector @@ websearch_to_tsquery('english', $1)
+          -- Federated only. An isolated source is walled off on purpose, and
+          -- reading it here would quietly undo that decision.
+          AND source_id IN (
+            SELECT id FROM sources WHERE config->>'federated' = 'true' AND archived = false
+          )
         ORDER BY rank DESC, updated_at DESC NULLS LAST
         LIMIT $2`,
       [question.trim(), Math.min(Math.max(limit, 1), 20)],
