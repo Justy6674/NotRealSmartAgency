@@ -315,9 +315,14 @@ async function redeemPairCode({
   admin: ReturnType<typeof createAdminClient>
   inbound: TelegramInbound
   code: string
-}): Promise<{ actorUserId: string; accountId: string } | null> {
+}): Promise<{ actorUserId: string; accountId: string } | 'already_paired' | 'in_group' | null> {
+  // Pairing in a GROUP would store the group's chat id as this person's
+  // private chat, and every later private-chat lookup would miss. Worse, the
+  // code would be spent doing it. Refuse before anything is claimed.
+  if (inbound.fromGroup) return 'in_group'
+
   const existing = await getTelegramAccount(admin, inbound)
-  if (existing) return null
+  if (existing) return 'already_paired'
 
   const now = new Date().toISOString()
   const { data: pairCode } = await admin
@@ -335,6 +340,23 @@ async function redeemPairCode({
     : []
   if (!pair || typeof pair.actor_user_id !== 'string' || projectIds.length === 0) return null
 
+  /**
+   * Give the code back if the rest fails.
+   *
+   * The claim above is atomic, which is right — two simultaneous redemptions
+   * must not both succeed. But it happened BEFORE the work, and nothing put it
+   * back, so any failure afterwards spent a single-use code on nothing. The
+   * person then retried, was told "invalid, expired or already used", and was
+   * locked out permanently by a message blaming them.
+   */
+  const releaseCode = async (why: string) => {
+    console.error(`[telegram] pairing failed after claiming the code (${why}); releasing it`)
+    await admin
+      .from('telegram_pair_codes')
+      .update({ used_at: null })
+      .eq('code_hash', hashTelegramPairCode(code))
+  }
+
   const { error: grantsError } = await admin
     .from('project_access_grants')
     .upsert(projectIds.map((brandId) => ({
@@ -347,7 +369,10 @@ async function redeemPairCode({
       revoked_at: null,
     })), { onConflict: 'actor_user_id,brand_id,channel' })
 
-  if (grantsError) return null
+  if (grantsError) {
+    await releaseCode(grantsError.message)
+    return null
+  }
 
   const { data: account, error: accountError } = await admin
     .from('telegram_accounts')
@@ -359,7 +384,11 @@ async function redeemPairCode({
     .select('id')
     .single()
 
-  if (accountError || !account) return null
+  if (accountError || !account) {
+    await releaseCode(accountError?.message ?? 'no account row returned')
+    return null
+  }
+
   return { actorUserId: pair.actor_user_id, accountId: account.id }
 }
 
@@ -736,8 +765,19 @@ async function handleTelegramUpdate(request: NextRequest) {
       return NextResponse.json({ received: true, status: 'already_paired' })
     }
     const paired = await redeemPairCode({ admin, inbound, code: intent.code })
+
+    // Say which of these it was. "Invalid, expired or already used" covers
+    // three very different situations and blames the person for all of them.
+    if (paired === 'in_group') {
+      await reply('Pairing has to happen in a direct chat with me, not in a group. Open a chat with me on your own and send it there — your code is still good.')
+      return NextResponse.json({ received: true, status: 'pairing_in_group' })
+    }
+    if (paired === 'already_paired') {
+      await reply('You are already paired with NRS, so there is nothing to do. Open the menu button to start working.')
+      return NextResponse.json({ received: true, status: 'already_paired' })
+    }
     if (!paired) {
-      await reply('That pairing command is invalid, expired or already used. Create a new one in NRS Settings.')
+      await reply('That pairing command did not work. It may have expired — create a fresh one in NRS Settings and send it here.')
       return NextResponse.json({ received: true, status: 'pairing_denied' })
     }
     account = { id: paired.accountId, actor_user_id: paired.actorUserId }

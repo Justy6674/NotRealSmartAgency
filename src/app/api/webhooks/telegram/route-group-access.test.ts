@@ -93,3 +93,38 @@ test('a reply that cannot be delivered does not abandon the work', () => {
   assert.match(source, /const reply = async \(text: string/)
   assert.match(source, /\[telegram\] reply failed:/)
 })
+
+/**
+ * A single-use pairing code was marked used BEFORE the work that consumes it.
+ * Any failure afterwards spent the code on nothing, and the retry was answered
+ * with "invalid, expired or already used" — locking the person out for good
+ * and blaming them for it. That person was the owner's colleague.
+ */
+test('a pairing code is given back when the work after it fails', () => {
+  const source = route()
+  assert.match(source, /const releaseCode = async/)
+  assert.match(source, /\.update\(\{ used_at: null \}\)/)
+
+  // Both failure paths must release it, not just one.
+  const releases = source.match(/await releaseCode\(/g) ?? []
+  assert.ok(releases.length >= 2, 'every failure after the claim must release the code')
+})
+
+test('pairing is refused in a group, before the code is claimed', () => {
+  const source = route()
+  const refusal = source.indexOf("if (inbound.fromGroup) return 'in_group'")
+  const claim = source.indexOf("update({ used_at: now })")
+  assert.ok(refusal > -1, 'a group must be refused')
+  assert.ok(claim > refusal, 'the refusal must come BEFORE the code is spent')
+})
+
+test('the three different pairing failures are told apart', () => {
+  const source = route()
+  assert.match(source, /status: 'pairing_in_group'/)
+  assert.match(source, /status: 'already_paired'/)
+  assert.match(source, /status: 'pairing_denied'/)
+  // The old catch-all blamed the person for a fault that was often ours. It
+  // may still appear in a comment explaining the history — what must be gone
+  // is the message SENT to them.
+  assert.doesNotMatch(source, /reply\('That pairing command is invalid/)
+})
