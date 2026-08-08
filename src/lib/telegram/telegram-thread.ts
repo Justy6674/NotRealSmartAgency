@@ -14,6 +14,18 @@ export interface TelegramThreadTurn {
   userMessage: string
   assistantResponse: string
   completedAt: string
+  /**
+   * What the Director actually DID that turn, not what it said about it.
+   *
+   * The single biggest hole in this history. Only the prose survived, so the
+   * Director could read "I've created the drafts" and have no record that a
+   * draft tool ever ran — which is how one request produced six drafts and how
+   * "you did them already" was answered with two more. Its own words are not
+   * evidence of its own actions.
+   */
+  actions?: string[]
+  /** The turn failed. Kept, because "that didn't work" needs a referent. */
+  failed?: boolean
 }
 
 export interface TelegramModelMessage {
@@ -59,18 +71,34 @@ export function parseTelegramJobTurn(row: {
   input?: unknown
   result?: unknown
   completed_at?: string | null
+  status?: string | null
 }): TelegramThreadTurn | null {
   const input = row.input && typeof row.input === 'object' ? row.input as Record<string, unknown> : null
   const result = row.result && typeof row.result === 'object' ? row.result as Record<string, unknown> : null
   const userMessage = typeof input?.message === 'string' ? input.message.trim() : ''
   const assistantResponse = typeof result?.response === 'string' ? result.response.trim() : ''
-  if (!userMessage || !assistantResponse || !row.completed_at) return null
+
+  // A turn survives if EITHER side said something.
+  //
+  // Requiring both dropped every turn where NRS spoke first — the upload
+  // acknowledgements, the questions it asked, the "working on it" — and every
+  // turn that failed. So the history handed to the model had holes in exactly
+  // the places the conversation mattered, and it looked to the owner like the
+  // Director had no memory at all.
+  if (!userMessage && !assistantResponse) return null
+  if (!row.completed_at) return null
+
+  const actions = Array.isArray(result?.actions)
+    ? (result.actions as unknown[]).filter((a): a is string => typeof a === 'string')
+    : []
 
   return {
     jobId: row.id,
     userMessage,
     assistantResponse,
     completedAt: row.completed_at,
+    ...(actions.length > 0 ? { actions } : {}),
+    ...(row.status === 'error' ? { failed: true } : {}),
   }
 }
 
@@ -86,8 +114,26 @@ export function buildTelegramModelMessages(
   const messages: TelegramModelMessage[] = []
 
   for (const turn of recent) {
-    messages.push({ role: 'user', content: turn.userMessage })
-    messages.push({ role: 'assistant', content: turn.assistantResponse })
+    // NRS speaking first is a real turn. Skipping it left the model reading
+    // an answer with no question above it.
+    if (turn.userMessage) messages.push({ role: 'user', content: turn.userMessage })
+
+    if (turn.failed && !turn.assistantResponse) {
+      // A failure is context. "That didn't work, try again" needs something to
+      // refer to, and silence reads as though it never happened.
+      messages.push({ role: 'assistant', content: '[that attempt failed and produced nothing]' })
+      continue
+    }
+    if (!turn.assistantResponse) continue
+
+    // The actions are appended to the reply the model sees, so its own record
+    // of what it DID sits right beside what it SAID. Without this it re-does
+    // work it has already done and tells the owner it is doing it for the
+    // first time.
+    const actions = turn.actions?.length
+      ? `\n\n[what I actually did: ${turn.actions.join('; ')}]`
+      : ''
+    messages.push({ role: 'assistant', content: turn.assistantResponse + actions })
   }
 
   messages.push({ role: 'user', content: currentMessage.trim() })
@@ -162,7 +208,9 @@ export async function loadTelegramThreadHistory(
     .eq('brand_id', scope.brandId)
     .eq('channel', scope.channel ?? 'telegram')
     .eq('project_access_grant_id', scope.grantId)
-    .eq('status', 'done')
+    // Errored turns are kept. A failure the owner watched happen is part of
+    // the conversation, and hiding it makes "try again" meaningless.
+    .in('status', ['done', 'error'])
     .neq('id', scope.excludeJobId)
 
   if (scope.conversationId) {

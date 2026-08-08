@@ -33,7 +33,7 @@ import { getDirectorCompletion } from './director-completion'
 import { keepTyping } from '@/lib/telegram/typing'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { scanWebsiteCore } from '@/lib/agents/tools/scan-website'
-import { enforceClaims } from './claimed-actions'
+import { actionsFrom, enforceClaims } from './claimed-actions'
 import { enforceBrandName } from '@/lib/brand/enforce-name'
 import { reactionLessonsForPrompt } from '@/lib/telegram/handle-reaction'
 import {
@@ -83,6 +83,16 @@ export interface DirectorJobResult {
   duration_ms: number
   input_tokens: number
   output_tokens: number
+  /**
+   * The write tools this turn actually ran.
+   *
+   * Read back as history by the next turn. The Director could always see what
+   * it SAID and never what it DID, which is how one request produced six
+   * drafts and how "you did them already" was answered by doing it twice more.
+   */
+  actions?: string[]
+  /** Telegram message ids, so a later 👍 can be tied to what it was about. */
+  telegram_message_ids?: number[]
 }
 
 /**
@@ -657,6 +667,10 @@ That's the difference between a marketing director and a tech support agent. Def
       response = naming.text
     }
 
+    // Recorded so the NEXT turn can read what this one changed, rather than
+    // inferring it from prose that may be wrong.
+    const turnActions = actionsFrom((result as { steps?: unknown }).steps)
+
     const claims = enforceClaims(response, (result as { steps?: unknown }).steps)
     if (claims.corrected) {
       console.warn(`[director-job] unbacked claim corrected: "${claims.evidence}"`)
@@ -793,6 +807,10 @@ That's the difference between a marketing director and a tech support agent. Def
       duration_ms: durationMs,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
+      // What this turn actually changed, for the NEXT turn to read. Without
+      // it the Director can only see its own prose, and prose is not evidence
+      // of action — which is how one request became six drafts.
+      ...(turnActions.length > 0 ? { actions: turnActions } : {}),
     }
 
     await supabase
@@ -843,7 +861,9 @@ That's the difference between a marketing director and a tech support agent. Def
           // Best-effort: feedback plumbing must never fail a finished answer.
           if (messageIds.length > 0) {
             await supabase.from('mcp_jobs')
-              .update({ result: { response, telegram_message_ids: messageIds } })
+              // Spread, never replace: overwriting the result here would drop
+              // the recorded actions and the cost figures written moments ago.
+              .update({ result: { ...jobResult, telegram_message_ids: messageIds } })
               .eq('id', jobId)
               .then(({ error }) => {
                 if (error) console.error('[director-job] message ids not stored:', error.message)

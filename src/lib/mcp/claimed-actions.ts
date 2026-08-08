@@ -70,6 +70,43 @@ export function toolNamesFrom(steps: unknown): string[] {
   return names
 }
 
+/**
+ * A short record of what this turn actually changed.
+ *
+ * Kept beside the reply so the NEXT turn can read it. The Director could
+ * always see what it SAID and never what it DID — which is how one request
+ * became six drafts, and how "you did them already" was answered by doing it
+ * twice more. Its own prose is not evidence of its own actions.
+ *
+ * Only writes. A read tells the next turn nothing it cannot see in the answer.
+ */
+export function actionsFrom(steps: unknown): string[] {
+  if (!Array.isArray(steps)) return []
+  const actions: string[] = []
+
+  for (const step of steps as Array<{
+    toolCalls?: Array<{ toolName?: unknown; input?: unknown }>
+  }>) {
+    for (const call of step.toolCalls ?? []) {
+      const name = typeof call.toolName === 'string' ? call.toolName : null
+      if (!name || !WRITE_TOOLS.has(name)) continue
+
+      // A hint of WHAT it acted on, so "drafted for instagram" is
+      // distinguishable from "drafted for facebook" a turn later.
+      const input = (call.input ?? {}) as Record<string, unknown>
+      const detail = [input.platform, input.media_item_id, input.post_id]
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        .slice(0, 2)
+        .join(' ')
+
+      actions.push(detail ? `${name} (${detail})` : name)
+    }
+  }
+
+  // Deduped: the same tool twice in one turn is one fact worth carrying.
+  return [...new Set(actions)]
+}
+
 export function checkClaims(response: string, toolNames: readonly string[]): ClaimCheck {
   const backed = toolNames.some((name) => WRITE_TOOLS.has(name))
 
