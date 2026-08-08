@@ -18,23 +18,69 @@
 
 import { NextResponse } from 'next/server'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
+import { SUBSCRIBED_UPDATES, missingUpdates } from '@/lib/telegram/subscribed-updates'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+/**
+ * Re-register the webhook with the update types NRS actually needs.
+ *
+ * Separate verb because it CHANGES something. The probe stays read-only so it
+ * can be run at any time without wondering what it might have altered.
+ *
+ * Needed because `setWebhook` without `allowed_updates` subscribes to
+ * Telegram's default set, which excludes reactions. The emoji-reaction
+ * learning the owner asked for could never have received a single event, and
+ * an unsubscribed update looks exactly like nobody having reacted.
+ */
+export async function POST(request: Request) {
+  if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
+
+  const config = getNRSTelegramConfig()
+  if (!config) return NextResponse.json({ error: 'Telegram is not configured.' }, { status: 503 })
+
+  const current = await fetch(`https://api.telegram.org/bot${config.botToken}/getWebhookInfo`)
+    .then((response) => response.json() as Promise<{ result?: { url?: string } }>)
+    .catch(() => null)
+
+  const url = current?.result?.url
+  if (!url) {
+    // Registering a URL we guessed would be worse than leaving it alone.
+    return NextResponse.json(
+      { error: 'No webhook is registered, so there is no URL to re-register with.' },
+      { status: 409 },
+    )
+  }
+
+  const response = await fetch(`https://api.telegram.org/bot${config.botToken}/setWebhook`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      secret_token: config.webhookSecret,
+      // Explicit. Anything omitted here stops arriving.
+      allowed_updates: SUBSCRIBED_UPDATES,
+      // Never drop what is already queued to fix a subscription.
+      drop_pending_updates: false,
+    }),
+  }).then((r) => r.json() as Promise<{ ok: boolean; description?: string }>)
+    .catch((error: unknown) => ({ ok: false, description: String(error) }))
+
+  return NextResponse.json(
+    response.ok
+      ? { updated: true, url, allowed_updates: SUBSCRIBED_UPDATES }
+      : { error: response.description ?? 'setWebhook failed' },
+    { status: response.ok ? 200 : 502 },
+  )
+}
 
 interface Check {
   ok: boolean
   detail: string
 }
-
-/**
- * Updates NRS cannot work without.
- *
- * An empty `allowed_updates` means Telegram sends the default set — which
- * EXCLUDES message reactions. So emoji reactions would silently never arrive,
- * and the absence looks identical to nobody having reacted.
- */
-const NEEDED_UPDATES = ['message', 'my_chat_member', 'message_reaction']
 
 export async function GET(request: Request) {
   if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -96,10 +142,7 @@ export async function GET(request: Request) {
   }
 
   const allowed = hook?.allowed_updates ?? []
-  const missing = allowed.length === 0
-    // Default set: everything except reactions and a few others.
-    ? ['message_reaction']
-    : NEEDED_UPDATES.filter((type) => !allowed.includes(type))
+  const missing = missingUpdates(allowed)
   checks.updateTypes = {
     ok: missing.length === 0,
     detail: missing.length === 0
