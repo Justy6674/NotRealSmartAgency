@@ -717,10 +717,10 @@ export default function TelegramMiniAppPage() {
                 type="button"
                 onClick={() => void startNewThread()}
                 disabled={!selectedProject || startingNew || sending}
-                title="Save what we settled and start something new"
+                title="Save what we settled and clear the screen. Nothing is deleted."
                 className="mb-2 shrink-0 rounded-full bg-[var(--tg-theme-secondary-bg-color,#17212b)] px-3 py-1.5 text-sm font-medium text-[var(--tg-theme-hint-color,#82909f)] ring-1 ring-black/10 disabled:opacity-40 dark:ring-white/10"
               >
-                {startingNew ? 'Saving…' : '+ New'}
+                {startingNew ? 'Saving…' : 'Start fresh'}
               </button>
             </section>
 
