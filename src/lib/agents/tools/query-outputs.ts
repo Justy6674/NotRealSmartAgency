@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -48,7 +49,7 @@ export function createQueryOutputsTool(
       const { data, error } = await query.limit(limit)
 
       if (error) {
-        return `Could not fetch outputs: ${error.message}`
+        return userSafeError('query-outputs', error, 'Could not read your saved work just now. Try again in a moment.')
       }
 
       if (!data || data.length === 0) {

@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -106,7 +107,7 @@ export function createQueryCalendarTool(
       const { data: posts, error } = await query.limit(30)
 
       if (error) {
-        return `Could not fetch calendar: ${error.message}`
+        return userSafeError('query-calendar', error, 'Could not read the calendar just now. Try again in a moment.')
       }
 
       if (!posts || posts.length === 0) {

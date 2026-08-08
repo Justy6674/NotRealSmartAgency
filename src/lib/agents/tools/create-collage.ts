@@ -10,6 +10,7 @@
  */
 
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildCollage, type CollageShape } from '@/lib/media/collage'
@@ -45,7 +46,7 @@ export function createCollageTool(
         .in('id', media_item_ids)
         .eq('brand_id', brandId)
 
-      if (error) return { success: false, error: `Could not read the media: ${error.message}` }
+      if (error) return { success: false, error: userSafeError('create-collage', error, 'Could not read those images.') }
 
       // Keep the caller's order — the query returns rows in whatever order it likes.
       const ordered = media_item_ids
@@ -84,7 +85,7 @@ export function createCollageTool(
       } catch (err) {
         return {
           success: false,
-          error: `The collage could not be built: ${err instanceof Error ? err.message : String(err)}`,
+          error: userSafeError('create-collage', err, 'The collage could not be built. Your images are untouched.'),
         }
       }
 

@@ -38,6 +38,7 @@ import {
 } from '@/lib/agents/website-scan-directive'
 import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { buildTelegramExecutionContract } from '@/lib/telegram/telegram-execution-contract'
 import { needsTelegramResearchBeforeDeliver } from '@/lib/telegram/telegram-research-contract'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
@@ -762,8 +763,13 @@ That's the difference between a marketing director and a tech support agent. Def
       }
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('[director-job] Failed:', message)
+    // Stored on the job row, and director-job-tool reads it straight back to
+    // whoever asked. It must already be safe by the time it is written.
+    const message = userSafeError(
+      'director-job',
+      err,
+      'That did not complete. Nothing was published — try again.',
+    )
     await markJobError(supabase, jobId, message, startTime)
 
     if (execution.channel === 'telegram' && execution.telegramChatId) {

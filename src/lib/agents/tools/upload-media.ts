@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -177,7 +178,7 @@ export function createUploadMediaTool(
           message: `${mediaType} saved to library (${sizeKb}KB).${tagList} URL: ${publicUrl}\n\nUse this URL with publish_to_social to include it in posts.`,
         }
       } catch (err) {
-        return `Upload failed: ${err instanceof Error ? err.message : String(err)}`
+        return userSafeError('upload-media', err, 'That upload did not finish. Nothing was saved — try again.')
       }
     },
   })

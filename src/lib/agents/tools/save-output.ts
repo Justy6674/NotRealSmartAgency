@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { runComplianceFilter } from '../compliance-filter'
@@ -111,7 +112,7 @@ export function createSaveOutputTool(
         console.error('[save_output] insert failed:', error.code, error.message)
         return {
           saved: false,
-          error: `NOT SAVED — ${error.message}. Tell the user their content was not stored and offer to try again. Do not claim it was saved.`,
+          error: `${userSafeError('save-output', error, 'NOT SAVED.')} Tell the user their content was not stored and offer to try again. Do not claim it was saved.`,
         }
       }
 

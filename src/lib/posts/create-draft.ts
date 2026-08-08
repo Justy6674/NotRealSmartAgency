@@ -24,6 +24,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncDraftToMixpost } from '@/lib/mixpost/sync-draft'
+import { userSafeError } from '@/lib/errors/user-safe'
 import type { PostPlatform, PostType, ScheduledPostStatus } from '@/types/database'
 
 /**
@@ -226,7 +227,11 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     .single()
 
   if (error || !data) {
-    throw new Error(`Could not save the draft: ${error?.message ?? 'unknown error'}`)
+    // Four callers relay this straight to the owner, including the prewritten
+    // calendar summary. The database's own words must not travel that far.
+    throw new Error(
+      userSafeError('create-draft', error, 'Could not save the draft. Nothing was published — try again.'),
+    )
   }
 
   const postId = data.id as string
@@ -323,7 +328,9 @@ export function describeMixpostOutcome(result: CreateDraftResult): string {
     case 'pending':
       return 'Saved in NRS. Still uploading to Mixpost — it will appear in Review shortly.'
     case 'failed':
-      return `Saved in NRS, but it did NOT reach Mixpost${result.mixpostError ? ` (${result.mixpostError})` : ''}.`
+      // The reason is logged where the sync failed. Repeating it here puts a
+      // Mixpost stack trace in front of someone deciding whether to post.
+      return 'Saved in NRS, but it did NOT reach Mixpost. It is safe to try again.'
     case 'skipped':
       return 'Saved in NRS.'
   }

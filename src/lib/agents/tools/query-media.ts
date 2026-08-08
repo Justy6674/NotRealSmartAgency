@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -63,7 +64,7 @@ export function createQueryMediaTool(
       const { data: items, error } = await query.limit(limit)
 
       if (error) {
-        return `Could not fetch media library: ${error.message}`
+        return userSafeError('query-media', error, 'Could not read the media library just now. Try again in a moment.')
       }
 
       if (!items || items.length === 0) {

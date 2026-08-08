@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
@@ -51,7 +52,7 @@ export function createBlotatoListAccountsTool(supabase: SupabaseClient, userId: 
         const accounts = await blotatoListAccounts(apiKey, platform)
         return { success: true, data: accounts }
       } catch (e) {
-        return { success: false, error: `Blotato error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato', e, 'Blotato could not be reached. Nothing was sent.') }
       }
     },
   })
@@ -76,7 +77,7 @@ export function createBlotatoPublishTool(supabase: SupabaseClient, userId: strin
         const result = await blotatoCreatePost(apiKey, { accounts, text, mediaUrls, scheduledAt })
         return { success: true, data: result }
       } catch (e) {
-        return { success: false, error: `Blotato publish error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato-publish', e, 'Blotato could not publish that. Nothing went out.') }
       }
     },
   })
@@ -102,7 +103,7 @@ export function createBlotatoExtractContentTool(supabase: SupabaseClient, userId
         // If still processing, return the sourceId for manual status check
         return { success: true, data: source, note: 'If status is "processing", use blotato_source_status to check completion.' }
       } catch (e) {
-        return { success: false, error: `Blotato extract error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato-extract', e, 'Blotato could not read that link.') }
       }
     },
   })
@@ -123,7 +124,7 @@ export function createBlotatoSourceStatusTool(supabase: SupabaseClient, userId: 
         const status = await blotatoGetSourceStatus(apiKey, sourceId)
         return { success: true, data: status }
       } catch (e) {
-        return { success: false, error: `Blotato error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato', e, 'Blotato could not be reached. Nothing was sent.') }
       }
     },
   })
@@ -145,7 +146,7 @@ export function createBlotatoListTemplatesTool(supabase: SupabaseClient, userId:
         const templates = await blotatoListTemplates(apiKey, query)
         return { success: true, data: templates }
       } catch (e) {
-        return { success: false, error: `Blotato error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato', e, 'Blotato could not be reached. Nothing was sent.') }
       }
     },
   })
@@ -166,7 +167,7 @@ export function createBlotatoCreateVisualTool(supabase: SupabaseClient, userId: 
         const visual = await blotatoCreateVisual(apiKey, { templateId, prompt })
         return { success: true, data: visual, note: 'If status is not "completed", use blotato_visual_status to check progress.' }
       } catch (e) {
-        return { success: false, error: `Blotato error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato', e, 'Blotato could not be reached. Nothing was sent.') }
       }
     },
   })
@@ -185,7 +186,7 @@ export function createBlotatoVisualStatusTool(supabase: SupabaseClient, userId: 
         const status = await blotatoGetVisualStatus(apiKey, visualId)
         return { success: true, data: status }
       } catch (e) {
-        return { success: false, error: `Blotato error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato', e, 'Blotato could not be reached. Nothing was sent.') }
       }
     },
   })
@@ -206,7 +207,7 @@ export function createBlotatoPostStatusTool(supabase: SupabaseClient, userId: st
         const status = await blotatoGetPostStatus(apiKey, postSubmissionId)
         return { success: true, data: status }
       } catch (e) {
-        return { success: false, error: `Blotato error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+        return { success: false, error: userSafeError('blotato', e, 'Blotato could not be reached. Nothing was sent.') }
       }
     },
   })

@@ -1,6 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { relayIfSafe } from '@/lib/errors/user-safe'
 import {
   dateWindow,
   getEventsBy,
@@ -108,9 +109,12 @@ export function createQuerySiteTrafficTool(
         ].join('\n')
       } catch (err) {
         if (err instanceof VercelAnalyticsError) {
-          // Report the real reason. Inventing numbers here would be worse than
-          // saying the connection is not ready.
-          return `Could not read visitor numbers for ${brand.name}: ${err.message} Report this to the owner rather than estimating.`
+          // These messages are OURS — written for a person, about a setting.
+          // relayIfSafe passes them through and refuses anything that turns
+          // out to carry internal detail, so a new Vercel error string cannot
+          // become the next leak.
+          const reason = relayIfSafe('query-site-traffic', err, 'the connection is not ready')
+          return `Could not read visitor numbers for ${brand.name}: ${reason} Report this to the owner rather than estimating.`
         }
         return `Could not read visitor numbers for ${brand.name}. Say so plainly rather than estimating.`
       }

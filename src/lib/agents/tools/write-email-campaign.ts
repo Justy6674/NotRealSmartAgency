@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { userSafeError } from '@/lib/errors/user-safe'
 import { generateObject } from 'ai'
 import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
@@ -175,7 +176,7 @@ Generate the full campaign now. Remember:
       } catch (err) {
         return {
           success: false,
-          error: `Failed to generate campaign: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          error: userSafeError('write-email-campaign', err, 'The campaign could not be written. Nothing was sent.'),
         }
       }
 
