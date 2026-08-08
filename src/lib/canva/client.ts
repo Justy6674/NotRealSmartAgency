@@ -3,10 +3,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 const CANVA_API_BASE = 'https://api.canva.com/rest/v1'
 
 /**
- * Get a valid Canva access token, auto-refreshing if expired.
- * Checks user_integrations first (OAuth tokens from connected accounts),
- * then falls back to the platform-wide CANVA_API_KEY env var.
- * Returns null if Canva is not configured.
+ * Get a valid Canva access token, refreshing it if expired.
+ *
+ * There is deliberately NO fallback to CANVA_API_KEY. Canva Connect is OAuth
+ * only — it issues no static API keys — and the value in the environment
+ * returns 401 for every request. Handing it out meant every caller believed it
+ * had a token, so "never connected" was reported as "connected but failing",
+ * which is a far harder thing for anyone to act on. Null means not connected,
+ * and callers must say so rather than try anyway.
  */
 export async function getCanvaToken(
   supabase: SupabaseClient,
@@ -19,9 +23,7 @@ export async function getCanvaToken(
     .eq('provider', 'canva')
     .single()
 
-  if (!integration?.cached_data) {
-    return process.env.CANVA_API_KEY ?? null
-  }
+  if (!integration?.cached_data) return null
 
   const cachedData = integration.cached_data as Record<string, unknown>
   let token = cachedData.api_key as string | undefined
@@ -38,7 +40,7 @@ export async function getCanvaToken(
     }
   }
 
-  return token ?? process.env.CANVA_API_KEY ?? null
+  return token ?? null
 }
 
 /**

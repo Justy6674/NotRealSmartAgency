@@ -29,14 +29,26 @@ export function ConnectionsPanel() {
     setState((s) => ({ ...s, loading: true }))
 
     const [canva, mixpost] = await Promise.all([
+      // Read the BODY, not just whether the request succeeded. The route
+      // answers 200 with a state, so `r.ok` only ever meant "the server
+      // replied" — and a Canva connection that was rejecting every call
+      // rendered as "Connected — 0 brand kits" for weeks.
       fetch('/api/canva/brand-kits', { cache: 'no-store' })
         .then(async (r) => {
-          if (r.ok) {
-            const data = await r.json().catch(() => ({}))
-            const count = Array.isArray(data.brand_kits) ? data.brand_kits.length : null
-            return { connected: true, detail: count === null ? 'Connected' : `Connected — ${count} brand kit${count === 1 ? '' : 's'}` }
+          const data = await r.json().catch(() => ({}))
+          if (!r.ok || data.connected !== true) {
+            return {
+              connected: false,
+              detail: typeof data.message === 'string'
+                ? data.message
+                : 'Not connected — designs and brand templates are unavailable',
+            }
           }
-          return { connected: false, detail: 'Not connected — designs and brand templates are unavailable' }
+          const count = Array.isArray(data.brand_kits) ? data.brand_kits.length : null
+          return {
+            connected: true,
+            detail: count === null ? 'Connected' : `Connected — ${count} brand kit${count === 1 ? '' : 's'}`,
+          }
         })
         .catch(() => ({ connected: false, detail: 'Could not be checked just now' })),
 

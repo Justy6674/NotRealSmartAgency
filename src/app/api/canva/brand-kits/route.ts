@@ -88,13 +88,17 @@ export async function GET() {
   const refreshToken = (integration?.cached_data?.refresh_token as string) ?? null
   const expiresAt = (integration?.cached_data?.expires_at as string) ?? null
 
-  // Fall back to platform-wide key
+  // NO fallback to CANVA_API_KEY. Canva Connect is OAuth only — it issues no
+  // static API keys, and the value in the environment returns 401 for every
+  // request. Handing it out turned "never connected" into "connected but
+  // failing", which is a far harder thing for anyone to act on.
   if (!apiKey) {
-    apiKey = process.env.CANVA_API_KEY ?? null
-  }
-
-  if (!apiKey) {
-    return NextResponse.json({ brand_kits: [], configured: false })
+    return NextResponse.json({
+      connected: false,
+      state: 'not_connected',
+      brand_kits: [],
+      message: 'Canva is not connected. Connect it to use your brand templates.',
+    })
   }
 
   // Check if token is expired and refresh proactively
@@ -134,20 +138,23 @@ export async function GET() {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       console.error('[canva/brand-kits] API error:', res.status, err)
+      // `connected: false` is the field the UI reads. This used to answer 200
+      // with an `error` in the body and nothing else, and the panel — which
+      // only checked whether the REQUEST succeeded — rendered a dead
+      // connection as "Connected — 0 brand kits".
       return NextResponse.json(
         {
-          configured: true,
+          connected: false,
+          state: res.status === 401 ? 'expired' : res.status === 403 ? 'missing_scope' : 'unavailable',
           brand_kits: [],
-          error:
+          message:
             res.status === 401
-              ? 'Canva session expired — visit /api/canva/auth to reconnect'
+              ? 'Canva sign-in has expired. Reconnect to use your brand templates.'
               : res.status === 403
-                ? 'Brand kits not available — OAuth scope may not include brand_kit:read'
-                : `Canva API error: ${res.status}`,
+                ? 'Connected, but NRS was not granted permission to read brand kits. Reconnect and allow brand kit access.'
+                : 'Canva did not respond just now. Try again shortly.',
         },
-        {
-          headers: { 'Cache-Control': 'private, max-age=300' }, // 5 min on error
-        },
+        { headers: { 'Cache-Control': 'private, max-age=60' } },
       )
     }
 
@@ -161,7 +168,7 @@ export async function GET() {
     }))
 
     return NextResponse.json(
-      { configured: true, brand_kits: brandKits },
+      { connected: true, state: 'ready', brand_kits: brandKits },
       {
         headers: { 'Cache-Control': 'private, max-age=3600' }, // 1 hour cache
       },
@@ -169,9 +176,10 @@ export async function GET() {
   } catch (err) {
     console.error('[canva/brand-kits] Error:', err)
     return NextResponse.json({
-      configured: true,
+      connected: false,
+      state: 'unavailable',
       brand_kits: [],
-      error: 'Failed to fetch Canva brand kits',
+      message: 'Canva could not be reached just now. Try again shortly.',
     })
   }
 }
