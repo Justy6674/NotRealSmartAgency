@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import test from 'node:test'
 import {
   completedCanvaDesignFromJob,
@@ -48,4 +50,17 @@ test('refuses an Autofill request that invents a field not in the Canva template
     validateCanvaAutofillData({ HEADLINE: 'Price it for today' }, { BODY: { type: 'text' } }),
     /not a field/i,
   )
+})
+
+test('brand-template reads and writes are fenced to the active NRS brand', () => {
+  const source = readFileSync(resolve(process.cwd(), 'src/lib/agents/tools/canva.ts'), 'utf8')
+  const registry = readFileSync(resolve(process.cwd(), 'src/lib/agents/tools/index.ts'), 'utf8')
+
+  assert.match(source, /filterCanvaTemplatesForBrand/)
+  assert.match(source, /isCanvaTemplateAllowed\(scope\.contract, brand_template_id\)/)
+  assert.match(source, /will not create a design from a cross-brand Canva template/i)
+  assert.match(source, /template-locked visual identity/i)
+  assert.match(registry, /createListBrandKitsTool\(ctx\.supabase, ctx\.userId, ctx\.brandId\)/)
+  assert.match(registry, /createGetBrandTemplateDatasetTool\(ctx\.supabase, ctx\.userId, ctx\.brandId\)/)
+  assert.match(registry, /createGenerateDesignStructuredTool\(ctx\.supabase, ctx\.userId, ctx\.brandId\)/)
 })

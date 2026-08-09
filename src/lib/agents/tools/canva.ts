@@ -3,6 +3,12 @@ import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { canvaFetch } from '@/lib/canva/client'
 import { getCanvaState } from '@/lib/canva/status'
+import {
+  filterCanvaTemplatesForBrand,
+  isCanvaTemplateAllowed,
+  readCanvaTemplateContract,
+  type CanvaTemplateContract,
+} from '@/lib/canva/template-contract'
 
 const FORMAT_DIMENSIONS: Record<string, { width: number; height: number; title_suffix: string }> = {
   instagram_post: { width: 1080, height: 1080, title_suffix: 'Instagram Post' },
@@ -29,6 +35,43 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+type BrandTemplateScope =
+  | { brandName: string; contract: CanvaTemplateContract }
+  | { error: string }
+
+/**
+ * Canva exposes the whole connected account rather than an owner/project
+ * column for each Brand Template.  A title such as "Heading" is never enough
+ * to establish ownership, so every template write is scoped through the NRS
+ * brand's explicit contract before Canva is called.
+ */
+async function loadBrandTemplateScope(
+  supabase: SupabaseClient,
+  userId: string,
+  brandId: string,
+): Promise<BrandTemplateScope> {
+  const { data: brand, error } = await supabase
+    .from('brands')
+    .select('name, brand_dna_constraints')
+    .eq('id', brandId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error || !brand) {
+    return { error: 'Could not read the active NRS brand contract. No Canva template was used.' }
+  }
+
+  const contract = readCanvaTemplateContract(brand.brand_dna_constraints)
+  if (!contract) {
+    return {
+      error:
+        `${brand.name} has no explicit Canva template mapping. NRS will not use account-wide templates or invent another brand’s look. No design was created.`,
+    }
+  }
+
+  return { brandName: brand.name, contract }
 }
 
 /** Convert the convenient text form used by NRS into Canva's documented data shape. */
@@ -386,13 +429,17 @@ export function createListFolderItemsTool(
 // ---------------------------------------------------------------------------
 export function createListBrandKitsTool(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  brandId: string,
 ) {
   return tool({
     description:
-      "List the brand templates in the connected Canva account — the owner's own branded layouts, with their colours, fonts and logos already applied. Use this to find a template to build a carousel or post on, and pass its id to create a design from it.",
+      'List only the Canva templates explicitly mapped to the active NRS brand. Canva account-wide templates are deliberately hidden: a name, colour or shared workspace is not proof that another brand may use it.',
     inputSchema: z.object({}),
     execute: async () => {
+      const scope = await loadBrandTemplateScope(supabase, userId, brandId)
+      if ('error' in scope) return { success: false, error: scope.error }
+
       const canva = await requireCanva(supabase, userId)
       if ('error' in canva) return canva
       const apiKey = canva.token
@@ -407,33 +454,37 @@ export function createListBrandKitsTool(
          */
         const res = await canvaFetch(apiKey, '/brand-templates?limit=100')
         const data = await res.json()
-        const kits = data.items ?? []
+        const kits = filterCanvaTemplatesForBrand(
+          (data.items ?? []) as Array<{ id?: unknown; title?: string; name?: string; thumbnail?: { url?: string }; view_url?: string }>,
+          scope.contract,
+        )
 
         if (kits.length === 0) {
           return {
-            success: true,
+            success: false,
             count: 0,
             message:
-              'No brand templates found in Canva. Create one at canva.com (Brand → Templates) and it will appear here. Do NOT invent a template or claim to have seen one.',
+              `${scope.brandName} has ${scope.contract.templates.length} mapped Canva template(s), but none are available in the connected Canva account right now. NRS will not substitute another brand’s template or invent a visual.`,
           }
         }
 
-        const results = kits.map(
-          (k: { id: string; title?: string; name?: string; thumbnail?: { url?: string }; view_url?: string }) => ({
+        const results = kits.flatMap((k) => {
+          if (typeof k.id !== 'string') return []
+          return [{
             id: k.id,
             // Brand templates carry `title`; the old code read `name`, which
             // would have printed "undefined" even once the URL was right.
             name: k.title ?? k.name ?? 'Untitled template',
             thumbnail: k.thumbnail?.url,
             view_url: k.view_url,
-          })
-        )
+          }]
+        })
 
         return {
           success: true,
           count: results.length,
           brand_templates: results,
-          message: `Found ${results.length} brand template(s):\n${results.map((k: { name: string; id: string }, i: number) => `${i + 1}. **${k.name}** (ID: ${k.id})`).join('\n')}\n\nPass one of these ids to build a design on it, so the layout, colours and fonts are the owner's own.`,
+          message: `Found ${results.length} mapped ${scope.brandName} template(s):\n${results.map((k: { name: string; id: string }, i: number) => `${i + 1}. **${k.name}** (ID: ${k.id})`).join('\n')}\n\nOnly these mapped templates may be used. Do not infer ownership from a title, Canva workspace, colour, or shared team.`,
         }
       } catch (err) {
         return {
@@ -451,6 +502,7 @@ export function createListBrandKitsTool(
 export function createGetBrandTemplateDatasetTool(
   supabase: SupabaseClient,
   userId: string,
+  brandId: string,
 ) {
   return tool({
     description:
@@ -459,6 +511,15 @@ export function createGetBrandTemplateDatasetTool(
       brand_template_id: z.string().describe('Canva brand template ID from list_brand_templates'),
     }),
     execute: async ({ brand_template_id }) => {
+      const scope = await loadBrandTemplateScope(supabase, userId, brandId)
+      if ('error' in scope) return { success: false, error: scope.error }
+      if (!isCanvaTemplateAllowed(scope.contract, brand_template_id)) {
+        return {
+          success: false,
+          error: `${brand_template_id} is not mapped to ${scope.brandName}. NRS will not inspect or use a cross-brand Canva template.`,
+        }
+      }
+
       const canva = await requireCanva(supabase, userId)
       if ('error' in canva) return canva
 
@@ -579,6 +640,15 @@ export function createDesignGraphicTool(
         .describe('Canva brand kit ID for on-brand colours and fonts (from list_brand_kits)'),
     }),
     execute: async ({ prompt, format, brand_name, brand_kit_id }) => {
+      const scope = await loadBrandTemplateScope(supabase, userId, brandId)
+      if (!('error' in scope) && scope.contract.requireTemplateForSocialVisuals) {
+        return {
+          success: false,
+          error:
+            `${scope.brandName} uses a template-locked visual identity. NRS will not create an improvised blank Canva design; use one of its mapped brand templates instead.`,
+        }
+      }
+
       const canva = await requireCanva(supabase, userId)
       if ('error' in canva) return canva
       const apiKey = canva.token
@@ -1734,7 +1804,8 @@ export function createResolveShortlinkTool(
 // ---------------------------------------------------------------------------
 export function createGenerateDesignStructuredTool(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  brandId: string,
 ) {
   return tool({
     description:
@@ -1752,6 +1823,15 @@ export function createGenerateDesignStructuredTool(
         .describe('Exact dataset field names mapped to text strings, or documented Canva text/image field objects.'),
     }),
     execute: async ({ brand_template_id, data }) => {
+      const scope = await loadBrandTemplateScope(supabase, userId, brandId)
+      if ('error' in scope) return { success: false, error: scope.error }
+      if (!isCanvaTemplateAllowed(scope.contract, brand_template_id)) {
+        return {
+          success: false,
+          error: `${brand_template_id} is not mapped to ${scope.brandName}. NRS will not create a design from a cross-brand Canva template.`,
+        }
+      }
+
       const canva = await requireCanva(supabase, userId)
       if ('error' in canva) return canva
       const apiKey = canva.token
