@@ -34,7 +34,7 @@ test('regulated content keeps its retention and training controls', () => {
     'a health call must not be sent without zero-retention routing',
   )
   assert.ok(
-    source.includes('getGatewayProviderOptions'),
+    source.includes('getGatewayRouteProviderOptions'),
     'the shared Gateway policy carries the no-training setting',
   )
 })

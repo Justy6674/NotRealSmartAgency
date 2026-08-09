@@ -9,10 +9,25 @@ function withCachedData(cached: unknown): SupabaseClient {
       const chain: Record<string, unknown> = {}
       chain.select = () => chain
       chain.eq = () => chain
+      chain.update = () => chain
       chain.maybeSingle = async () => ({ data: cached === undefined ? null : { cached_data: cached }, error: null })
+      chain.single = async () => ({ data: cached === undefined ? null : { cached_data: cached }, error: null })
       return chain
     },
   } as unknown as SupabaseClient
+}
+
+async function withMockedFetch<T>(
+  fetchMock: typeof fetch,
+  run: () => Promise<T>,
+): Promise<T> {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = fetchMock
+  try {
+    return await run()
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 }
 
 test('never connected says so, and forbids pretending otherwise', async () => {
@@ -35,18 +50,22 @@ test('the environment key is NEVER used as a fallback', async () => {
   delete process.env.CANVA_API_KEY
 })
 
-test('a stored token is used', async () => {
-  const state = await getCanvaState(withCachedData({ api_key: 'real-oauth-token' }), 'user')
+test('a stored token is ready only after Canva accepts it', async () => {
+  const state = await withMockedFetch(
+    async () => new Response(JSON.stringify({ items: [] }), { status: 200 }),
+    () => getCanvaState(withCachedData({ api_key: 'real-oauth-token' }), 'user'),
+  )
   assert.deepEqual(state, { state: 'ready', token: 'real-oauth-token' })
 })
 
-test('a live token that has not expired is still ready', async () => {
+test('a token Canva rejects is never reported ready', async () => {
   const future = new Date(Date.now() + 3_600_000).toISOString()
-  const state = await getCanvaState(
-    withCachedData({ api_key: 'tok', expires_at: future, refresh_token: 'r' }),
-    'user',
+  const state = await withMockedFetch(
+    async () => new Response(JSON.stringify({ message: 'Unauthorised' }), { status: 401 }),
+    () => getCanvaState(withCachedData({ api_key: 'tok', expires_at: future }), 'user'),
   )
-  assert.equal(state.state, 'ready')
+  assert.equal(state.state, 'expired')
+  assert.match(state.message!, /Reconnect it/)
 })
 
 test('expired with no way to refresh asks for a reconnect', async () => {
@@ -56,13 +75,48 @@ test('expired with no way to refresh asks for a reconnect', async () => {
   assert.match(state.message!, /Reconnect it/)
 })
 
-test('expired but refreshable is left to the refresh path', async () => {
-  const past = new Date(Date.now() - 3_600_000).toISOString()
-  const state = await getCanvaState(
-    withCachedData({ api_key: 'tok', expires_at: past, refresh_token: 'r' }),
-    'user',
-  )
-  assert.equal(state.state, 'ready')
+test('a rejected token is refreshed once before a reconnect is requested', async () => {
+  const originalClientId = process.env.CANVA_CLIENT_ID
+  const originalClientSecret = process.env.CANVA_CLIENT_SECRET
+  process.env.CANVA_CLIENT_ID = 'test-client-id'
+  process.env.CANVA_CLIENT_SECRET = 'test-client-secret'
+
+  const requests: string[] = []
+  try {
+    const state = await withMockedFetch(
+      async (input) => {
+        const url = String(input)
+        requests.push(url)
+        if (url.endsWith('/brand-templates?limit=1') && requests.length === 1) {
+          return new Response(JSON.stringify({ message: 'Unauthorised' }), { status: 401 })
+        }
+        if (url.endsWith('/oauth/token')) {
+          return new Response(JSON.stringify({
+            access_token: 'fresh-token',
+            refresh_token: 'fresh-refresh-token',
+            expires_in: 3600,
+          }), { status: 200 })
+        }
+        return new Response(JSON.stringify({ items: [] }), { status: 200 })
+      },
+      () => getCanvaState(
+        withCachedData({ api_key: 'rejected-token', refresh_token: 'refresh-token' }),
+        'user',
+      ),
+    )
+
+    assert.deepEqual(state, { state: 'ready', token: 'fresh-token' })
+    assert.deepEqual(requests.map((url) => new URL(url).pathname), [
+      '/rest/v1/brand-templates',
+      '/rest/v1/oauth/token',
+      '/rest/v1/brand-templates',
+    ])
+  } finally {
+    if (originalClientId === undefined) delete process.env.CANVA_CLIENT_ID
+    else process.env.CANVA_CLIENT_ID = originalClientId
+    if (originalClientSecret === undefined) delete process.env.CANVA_CLIENT_SECRET
+    else process.env.CANVA_CLIENT_SECRET = originalClientSecret
+  }
 })
 
 test('a 401 from Canva is a reconnect, not "try again"', () => {

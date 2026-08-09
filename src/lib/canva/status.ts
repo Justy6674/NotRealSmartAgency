@@ -16,6 +16,9 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { refreshCanvaToken } from './client'
+
+const CANVA_API_BASE = 'https://api.canva.com/rest/v1'
 
 export type CanvaState =
   /** No OAuth token has ever been stored. Nothing is wrong; it is not set up. */
@@ -26,6 +29,8 @@ export type CanvaState =
   | { state: 'ready'; token: string }
   /** Canva itself is unreachable or erroring. */
   | { state: 'unavailable'; message: string }
+
+export type CanvaFailureState = Exclude<CanvaState, { state: 'ready'; token: string }>
 
 const CONNECT_HINT =
   'Canva is not connected to NRS yet, so I cannot see your brand templates. ' +
@@ -40,9 +45,10 @@ const RECONNECT_HINT =
 /**
  * Read the stored OAuth token, and say what state Canva is in.
  *
- * Deliberately does NOT fall back to the environment key. A credential that
- * cannot work is worse than none: it turns "not set up" into "mysteriously
- * broken", which is the harder problem to act on.
+ * A stored token is only a cache entry, not proof that Canva still accepts it.
+ * Every caller goes through this live probe before it is allowed to claim a
+ * connection is ready. If Canva rejects a token, refresh it once and probe the
+ * refreshed token before asking the owner to reconnect.
  */
 export async function getCanvaState(
   supabase: SupabaseClient,
@@ -63,13 +69,53 @@ export async function getCanvaState(
   const expiresAt = typeof cached?.expires_at === 'string' ? cached.expires_at : null
   const refreshToken = typeof cached?.refresh_token === 'string' ? cached.refresh_token : null
 
-  // Expired with nothing to refresh from is the same as disconnected, and
-  // saying "expired" without a refresh path just leaves someone waiting.
-  if (expiresAt && new Date(expiresAt).getTime() < Date.now() && !refreshToken) {
+  let usableToken = token
+  let refreshed = false
+  const expiresSoon = expiresAt
+    ? new Date(expiresAt).getTime() < Date.now() + 60_000
+    : false
+
+  // Expired with nothing to refresh from cannot become usable. Do this before
+  // a network request so the user gets the one action that will help.
+  if (expiresSoon && !refreshToken) {
     return { state: 'expired', message: RECONNECT_HINT }
   }
 
-  return { state: 'ready', token }
+  if (expiresSoon && refreshToken) {
+    const newToken = await refreshCanvaToken(supabase, userId, refreshToken)
+    if (!newToken) return { state: 'expired', message: RECONNECT_HINT }
+    usableToken = newToken
+    refreshed = true
+  }
+
+  const probe = (accessToken: string) =>
+    fetch(`${CANVA_API_BASE}/brand-templates?limit=1`, {
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+  try {
+    let response = await probe(usableToken)
+
+    if (response.ok) return { state: 'ready', token: usableToken }
+
+    // OAuth tokens can be revoked before their advertised expiry. Treat a
+    // rejected cached token exactly like an elapsed one: refresh once, then
+    // only say reconnect when the refreshed credential is also rejected.
+    if ((response.status === 401 || response.status === 403) && refreshToken && !refreshed) {
+      const newToken = await refreshCanvaToken(supabase, userId, refreshToken)
+      if (newToken) {
+        response = await probe(newToken)
+        if (response.ok) return { state: 'ready', token: newToken }
+      }
+    }
+
+    return describeCanvaFailure(response.status)
+  } catch {
+    return describeCanvaFailure(503)
+  }
 }
 
 /**
@@ -78,7 +124,7 @@ export async function getCanvaState(
  * A 401 here means the stored token stopped working — that is a reconnect,
  * not a fault the owner can fix by trying again.
  */
-export function describeCanvaFailure(status: number): CanvaState {
+export function describeCanvaFailure(status: number): CanvaFailureState {
   if (status === 401 || status === 403) {
     return { state: 'expired', message: RECONNECT_HINT }
   }

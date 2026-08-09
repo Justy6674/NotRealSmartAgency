@@ -122,6 +122,11 @@ export async function canvaFetch(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        'Canva no longer accepts this sign-in. Reconnect Canva in NRS Settings before continuing.'
+      )
+    }
     throw new Error(
       `Canva API error (${res.status}): ${err.message || err.code || 'Unknown error'}`
     )
