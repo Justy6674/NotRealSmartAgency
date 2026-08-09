@@ -74,3 +74,27 @@ test('collects every tool step and counts only completed Canva design receipts',
   assert.equal(evidence.importedCanvaMedia.length, 1)
   assert.equal(evidence.carouselProposal?.outputId, 'proposal-1')
 })
+
+test('counts a successful goal-progress write only when the tool reports it updated state', () => {
+  const evidence = collectWorkerToolEvidence([
+    {
+      toolCalls: [{ toolName: 'update_goal_progress' }],
+      toolResults: [{
+        type: 'tool-result',
+        toolName: 'update_goal_progress',
+        output: { updated: true },
+      }],
+    },
+    {
+      toolCalls: [{ toolName: 'update_goal_progress' }],
+      toolResults: [{
+        type: 'tool-result',
+        toolName: 'update_goal_progress',
+        output: { updated: false, error: 'No active goal' },
+      }],
+    },
+  ])
+
+  assert.deepEqual(evidence.toolNames, ['update_goal_progress', 'update_goal_progress'])
+  assert.deepEqual(evidence.successfulToolNames, ['update_goal_progress'])
+})

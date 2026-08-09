@@ -61,7 +61,14 @@ export function collectWorkerToolEvidence(steps: readonly unknown[] | undefined)
       if (!resultRecord || resultRecord.type !== 'tool-result') continue
       const toolName = resultRecord.toolName
       const output = record(resultRecord.output)
-      if (typeof toolName !== 'string' || output?.success !== true) continue
+      // Tools predate a single success envelope. Accept the established
+      // durable-write receipts as successful, but never equate a tool call
+      // with a successful tool result.
+      const succeeded = output?.success === true
+        || output?.updated === true
+        || output?.created === true
+        || output?.requested === true
+      if (typeof toolName !== 'string' || !succeeded) continue
 
       successfulToolNames.push(toolName)
       if (toolName === 'generate_design_structured') {

@@ -1,7 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { AgentAvatar } from './AgentAvatar'
 import type { Task, AgentType } from '@/types/database'
+import { sendToDirector } from '@/lib/chat-dispatch'
+import { useAgencyStore } from '@/stores/agency-store'
 
 interface TaskCardProps {
   task: Task & {
@@ -28,6 +31,38 @@ const PRIORITY_COLOURS: Record<string, string> = {
 }
 
 export function TaskCard({ task }: TaskCardProps) {
+  const setBrand = useAgencyStore((state) => state.setBrand)
+  const setConversation = useAgencyStore((state) => state.setConversation)
+  const [continuing, setContinuing] = useState(false)
+  const [continueError, setContinueError] = useState<string | null>(null)
+
+  const continueWithDirector = async () => {
+    setContinuing(true)
+    setContinueError(null)
+
+    try {
+      const response = await fetch(`/api/tasks/${task.id}/continue-goal-review`, { method: 'POST' })
+      const body = await response.json() as { directorPrompt?: string; error?: string }
+      if (!response.ok || !body.directorPrompt) {
+        throw new Error(body.error ?? 'NRS could not continue this review. Please try again.')
+      }
+
+      if (task.brand_id) {
+        setBrand(task.brand_id)
+        setConversation(null)
+      }
+
+      window.setTimeout(() => {
+        sendToDirector(body.directorPrompt!)
+      }, 300)
+      window.dispatchEvent(new Event('nrs-task-updated'))
+    } catch (error) {
+      setContinueError(error instanceof Error ? error.message : 'NRS could not continue this review. Please try again.')
+    } finally {
+      setContinuing(false)
+    }
+  }
+
   return (
     <div className="rounded-lg border border-border bg-card p-3 transition-colors hover:border-border/80">
       <div className="flex items-start justify-between gap-2">
@@ -58,6 +93,20 @@ export function TaskCard({ task }: TaskCardProps) {
           <span>${(task.cost_cents / 100).toFixed(2)}</span>
         )}
       </div>
+
+      {task.status === 'review' && (
+        <button
+          type="button"
+          onClick={() => void continueWithDirector()}
+          disabled={continuing}
+          className="mt-3 rounded-md border border-amber-500/30 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-500/10 dark:text-amber-300"
+        >
+          {continuing ? 'Opening the Director…' : 'Choose next step with the Director'}
+        </button>
+      )}
+      {continueError && (
+        <p className="mt-2 text-xs text-red-500" role="alert">{continueError}</p>
+      )}
     </div>
   )
 }

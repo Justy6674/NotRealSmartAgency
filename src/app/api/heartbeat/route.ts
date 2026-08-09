@@ -10,13 +10,170 @@ import {
   markGoalReadyForReview,
   nextGoalReviewAt,
   releaseGoalReviewClaim,
-  validateGoalReviewFollowUp,
 } from '@/lib/agents/goal-loop'
+import {
+  describeGoalReviewOwnerReview,
+  resolveGoalReviewOutcome,
+  type GoalReviewOwnerReviewCode,
+} from '@/lib/agents/goal-review-controller'
 
 // Fluid Compute — allow up to 5 minutes for processing multiple agents
 export const maxDuration = 300
 
 const GOAL_REVIEW_DEFER_HOURS = 4
+const GOAL_REVIEW_TOOL_NAMES = [
+  'query_outputs',
+  'query_calendar',
+  'query_analytics',
+  'query_social_analytics',
+  'query_media',
+  'read_proforma',
+  'project_brief',
+  'inspect_project_marketing_backend',
+  'search_brain',
+  'update_goal_progress',
+  'create_task',
+  'request_approval',
+] as const
+
+interface GoalReviewState {
+  goalStatus: string | null
+  followUpTaskCount: number
+  reviewApprovalCount: number
+}
+
+async function readGoalReviewState(
+  supabase: ReturnType<typeof createAdminClient>,
+  task: Task,
+): Promise<GoalReviewState> {
+  if (!task.goal_id) throw new Error('Goal review is missing its parent goal.')
+
+  const [goalStateResult, followUpTasksResult, approvalResult] = await Promise.all([
+    supabase
+      .from('goals')
+      .select('status')
+      .eq('id', task.goal_id)
+      .eq('user_id', task.user_id)
+      .maybeSingle(),
+    supabase
+      .from('tasks')
+      .select('id')
+      .eq('goal_id', task.goal_id)
+      .neq('id', task.id)
+      .in('status', ['assigned', 'in_progress', 'review']),
+    supabase
+      .from('approval_queue')
+      .select('id')
+      .eq('task_id', task.id)
+      .eq('status', 'pending'),
+  ])
+
+  if (goalStateResult.error || !goalStateResult.data) {
+    throw new Error(goalStateResult.error?.message ?? 'Goal review could not confirm the parent outcome.')
+  }
+  if (followUpTasksResult.error) throw new Error(followUpTasksResult.error.message)
+  if (approvalResult.error) throw new Error(approvalResult.error.message)
+
+  return {
+    goalStatus: goalStateResult.data.status,
+    followUpTaskCount: followUpTasksResult.data?.length ?? 0,
+    reviewApprovalCount: approvalResult.data?.length ?? 0,
+  }
+}
+
+async function moveGoalReviewToOwner(
+  supabase: ReturnType<typeof createAdminClient>,
+  task: Task,
+  registry: AgentRegistryEntry,
+  result: Awaited<ReturnType<typeof runAgentWorker>>,
+  code: GoalReviewOwnerReviewCode,
+): Promise<void> {
+  const ownerMessage = describeGoalReviewOwnerReview(code)
+  const { error } = await supabase
+    .from('tasks')
+    .update({
+      status: 'review',
+      description: ownerMessage,
+      result: {
+        text: result.result,
+        goal_review: {
+          state: 'needs_owner_direction',
+          code,
+          recorded_at: new Date().toISOString(),
+        },
+      },
+      tokens_used: result.tokensUsed,
+      cost_cents: result.costCents,
+    })
+    .eq('id', task.id)
+
+  if (error) throw new Error(error.message)
+
+  await logAudit({
+    supabase,
+    userId: task.user_id,
+    agentId: registry.id,
+    taskId: task.id,
+    action: 'heartbeat_goal_review_needs_owner',
+    entityType: 'task',
+    entityId: task.id,
+    detail: {
+      code,
+      model: result.model,
+      tokensUsed: result.tokensUsed,
+      costCents: result.costCents,
+      durationMs: result.durationMs,
+      toolsUsed: result.toolNames,
+      successfulTools: result.successfulToolNames ?? [],
+    },
+    costCents: result.costCents,
+  })
+}
+
+/**
+ * Prior versions marked an incomplete review as blocked and immediately made
+ * the same goal due again. Cancel only those null-result rows from that known
+ * failure mode; task history remains intact and new failures keep diagnostics.
+ */
+async function reconcileHistoricalGoalReviewLoop(
+  supabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+  goalId: string,
+): Promise<number> {
+  let recovered = 0
+  const now = new Date().toISOString()
+
+  for (let batch = 0; batch < 20; batch++) {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('goal_id', goalId)
+      .eq('status', 'blocked')
+      .contains('context', { kind: 'goal_review' })
+      .is('result', null)
+      .limit(500)
+
+    if (error) throw new Error(error.message)
+    const ids = (data ?? []).map((task) => task.id)
+    if (ids.length === 0) return recovered
+
+    const { data: recoveredRows, error: updateError } = await supabase
+      .from('tasks')
+      .update({ status: 'cancelled', completed_at: now })
+      .in('id', ids)
+      .eq('status', 'blocked')
+      .select('id')
+    if (updateError) throw new Error(updateError.message)
+
+    const recoveredThisBatch = recoveredRows?.length ?? 0
+    recovered += recoveredThisBatch
+    if (ids.length < 500) return recovered
+    if (recoveredThisBatch === 0) return recovered
+  }
+
+  throw new Error('Goal review recovery exceeded its bounded batch limit.')
+}
 
 /**
  * A goal review is the bridge between completed activity and the next useful
@@ -48,6 +205,15 @@ async function enqueueDueGoalReviews(
     const goal = await claimDueGoalReview(supabase, candidate.id)
     if (!goal) continue
 
+    let recoveredLoopTasks = 0
+    try {
+      recoveredLoopTasks = await reconcileHistoricalGoalReviewLoop(supabase, candidate.user_id, goal.id)
+    } catch (recoveryError) {
+      console.error('[heartbeat] Failed to reconcile historical goal reviews:', recoveryError)
+      await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(GOAL_REVIEW_DEFER_HOURS))
+      continue
+    }
+
     const { data: openWork, error: openWorkError } = await supabase
       .from('tasks')
       .select('id')
@@ -70,6 +236,18 @@ async function enqueueDueGoalReviews(
     if (!director) {
       await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(1))
       continue
+    }
+
+    if (recoveredLoopTasks > 0) {
+      await logAudit({
+        supabase,
+        userId: candidate.user_id,
+        agentId: director.id,
+        action: 'goal_review_loop_recovered',
+        entityType: 'goal',
+        entityId: goal.id,
+        detail: { recoveredTaskCount: recoveredLoopTasks },
+      })
     }
 
     const { error: taskError } = await supabase
@@ -213,49 +391,41 @@ export async function GET(request: Request) {
         const result = await runAgentWorker(registry.agent_type, taskPrompt, workerCtx, {
           timeoutMs: 240000, // Allow more time for heartbeat tasks
           maxSteps: 5, // Heartbeat tasks may need more tool iterations (e.g., scan + save + create_task)
+          ...(isGoalReview ? {
+            allowedToolNames: GOAL_REVIEW_TOOL_NAMES,
+            requiredAllToolNames: ['update_goal_progress'],
+          } : {}),
         })
+
+        if (isGoalReview) {
+          const reviewState = await readGoalReviewState(supabase, task)
+          const outcome = resolveGoalReviewOutcome({
+            workerError: result.error ?? null,
+            progressRecorded: (result.successfulToolNames ?? []).includes('update_goal_progress'),
+            ...reviewState,
+          })
+
+          if (outcome.kind === 'needs_owner_review') {
+            await moveGoalReviewToOwner(supabase, task, registry, result, outcome.code)
+            if (heartbeat) {
+              await supabase
+                .from('heartbeats')
+                .update({
+                  status: 'succeeded',
+                  tasks_actioned: 1,
+                  tasks_checked: 1,
+                  duration_ms: Date.now() - startTime,
+                  finished_at: new Date().toISOString(),
+                })
+                .eq('id', heartbeat.id)
+            }
+            totalActioned++
+            continue
+          }
+        }
 
         if (result.error) {
           throw new Error(result.error)
-        }
-        if (isGoalReview && !result.toolNames.includes('update_goal_progress')) {
-          throw new Error('Goal review did not record evidence-based progress.')
-        }
-        if (isGoalReview) {
-          if (!task.goal_id) throw new Error('Goal review is missing its parent goal.')
-
-          const [goalStateResult, followUpTasksResult, approvalResult] = await Promise.all([
-            supabase
-              .from('goals')
-              .select('status')
-              .eq('id', task.goal_id)
-              .eq('user_id', task.user_id)
-              .maybeSingle(),
-            supabase
-              .from('tasks')
-              .select('id')
-              .eq('goal_id', task.goal_id)
-              .neq('id', task.id)
-              .in('status', ['assigned', 'in_progress', 'review']),
-            supabase
-              .from('approval_queue')
-              .select('id')
-              .eq('task_id', task.id)
-              .eq('status', 'pending'),
-          ])
-
-          if (goalStateResult.error || !goalStateResult.data) {
-            throw new Error(goalStateResult.error?.message ?? 'Goal review could not confirm the parent outcome.')
-          }
-          if (followUpTasksResult.error) throw new Error(followUpTasksResult.error.message)
-          if (approvalResult.error) throw new Error(approvalResult.error.message)
-
-          const nextActionError = validateGoalReviewFollowUp(
-            goalStateResult.data.status,
-            followUpTasksResult.data?.length ?? 0,
-            approvalResult.data?.length ?? 0,
-          )
-          if (nextActionError) throw new Error(nextActionError)
         }
 
         // Update task as done
@@ -313,14 +483,27 @@ export async function GET(request: Request) {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error'
 
-        // Mark task as blocked
+        // A genuine system failure remains visible. Goal-review failures defer
+        // before retrying; they never recreate the former immediate loop.
         await supabase
           .from('tasks')
-          .update({ status: 'blocked' })
+          .update({
+            status: 'blocked',
+            result: { heartbeat_error: message, recorded_at: new Date().toISOString() },
+          })
           .eq('id', task.id)
 
         if (task.goal_id) {
-          await markGoalReadyForReview(supabase, task.user_id, task.goal_id)
+          if (isGoalReview) {
+            await supabase
+              .from('goals')
+              .update({ next_review_at: nextGoalReviewAt(GOAL_REVIEW_DEFER_HOURS) })
+              .eq('id', task.goal_id)
+              .eq('user_id', task.user_id)
+              .eq('status', 'active')
+          } else {
+            await markGoalReadyForReview(supabase, task.user_id, task.goal_id)
+          }
         }
 
         // Update heartbeat as failed

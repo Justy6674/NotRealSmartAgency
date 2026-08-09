@@ -9,6 +9,7 @@ const STATUS_TABS: { value: TaskStatus | 'all'; label: string }[] = [
   { value: 'backlog', label: 'Backlog' },
   { value: 'assigned', label: 'Assigned' },
   { value: 'in_progress', label: 'In Progress' },
+  { value: 'review', label: 'Needs you' },
   { value: 'done', label: 'Done' },
   { value: 'blocked', label: 'Blocked' },
 ]
@@ -24,14 +25,20 @@ export function TaskBoard() {
   const [activeStatus, setActiveStatus] = useState<TaskStatus | 'all'>('all')
 
   useEffect(() => {
-    const url = activeStatus === 'all'
-      ? '/api/tasks'
-      : `/api/tasks?status=${activeStatus}`
+    const loadTasks = () => {
+      const url = activeStatus === 'all'
+        ? '/api/tasks'
+        : `/api/tasks?status=${activeStatus}`
 
-    fetch(url)
-      .then(res => res.json())
-      .then(data => { setTasks(data); setLoading(false) })
-      .catch(() => setLoading(false))
+      fetch(url)
+        .then(res => res.json())
+        .then(data => { setTasks(data); setLoading(false) })
+        .catch(() => setLoading(false))
+    }
+
+    loadTasks()
+    window.addEventListener('nrs-task-updated', loadTasks)
+    return () => window.removeEventListener('nrs-task-updated', loadTasks)
   }, [activeStatus])
 
   return (

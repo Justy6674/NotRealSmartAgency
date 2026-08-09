@@ -68,6 +68,8 @@ export interface WorkerResult {
   durationMs: number
   /** Tools actually executed, used by code gates for autonomous workflows. */
   toolNames: string[]
+  /** Tools whose result recorded a durable successful outcome. */
+  successfulToolNames?: string[]
   /** The explicit capability the Director required, when this was planned work. */
   taskCapability?: string
   /** Whether this worker actually used one of the required evidence tools. */
@@ -102,6 +104,8 @@ export interface WorkerOptions {
   minimumCanvaMedia?: number
   /** Require a durable unapproved carousel review record. */
   requiresCarouselProposal?: boolean
+  /** Restrict a structured workflow to its exact action space. */
+  allowedToolNames?: readonly string[]
 }
 
 // ─── Output type mapping ────────────────────────────────────────────────────
@@ -245,17 +249,24 @@ Rules:
     })
 
     // 8. Add web search — auto-detect if agent type needs it, or honour explicit option
+    const selectedDepartmentTools = options.allowedToolNames
+      ? Object.fromEntries(
+          Object.entries(departmentTools).filter(([toolName]) => options.allowedToolNames?.includes(toolName)),
+        )
+      : departmentTools
     const shouldAddWebSearch = options.withWebSearch ?? WEB_SEARCH_AGENTS.has(dept)
+    const canUseWebSearch = !options.allowedToolNames || options.allowedToolNames.includes('web_search')
     const tools = shouldAddWebSearch
+      && canUseWebSearch
       ? {
-          ...departmentTools,
+          ...selectedDepartmentTools,
           web_search: gateway.tools.perplexitySearch({
             maxResults: 5,
             searchLanguageFilter: ['en'],
             searchRecencyFilter: 'month',
           }),
         }
-      : departmentTools
+      : selectedDepartmentTools
 
     // 9. Gateway options — THIS agent's tags
     const gatewayOptions = getGatewayRouteProviderOptions(modelRoute, {
@@ -287,10 +298,11 @@ Rules:
     clearTimeout(timeout)
     const toolEvidence = collectWorkerToolEvidence(result.steps)
     const toolNames = toolEvidence.toolNames
+    const successfulToolNames = toolEvidence.successfulToolNames
     const hasRequiredAnyTool = !options.requiredAnyToolNames?.length
-      || toolNames.some((toolName) => options.requiredAnyToolNames?.includes(toolName))
+      || successfulToolNames.some((toolName) => options.requiredAnyToolNames?.includes(toolName))
     const hasRequiredAllTools = !options.requiredAllToolNames?.length
-      || options.requiredAllToolNames.every((toolName) => toolNames.includes(toolName))
+      || options.requiredAllToolNames.every((toolName) => successfulToolNames.includes(toolName))
     const hasRequiredCanvaDesigns = !options.minimumCanvaDesigns
       || toolEvidence.completedCanvaDesigns.length >= options.minimumCanvaDesigns
     const hasRequiredCanvaMedia = !options.minimumCanvaMedia
@@ -434,6 +446,7 @@ Rules:
       model,
       durationMs: Date.now() - startTime,
       toolNames,
+      successfulToolNames,
       ...(options.taskCapability ? {
         taskCapability: options.taskCapability,
         evidenceSatisfied,
@@ -463,6 +476,7 @@ Rules:
       model: 'none',
       durationMs: Date.now() - startTime,
       toolNames: [],
+      successfulToolNames: [],
       error: message,
       ...(options.taskCapability ? { taskCapability: options.taskCapability, evidenceSatisfied: false } : {}),
     }
@@ -513,6 +527,7 @@ export async function runParallelAgents(
           model: 'none',
           durationMs: 0,
           toolNames: [],
+          successfulToolNames: [],
           error: res.reason?.message ?? 'Unknown failure',
         })
       }
