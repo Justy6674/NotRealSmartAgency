@@ -176,6 +176,51 @@ async function reconcileHistoricalGoalReviewLoop(
 }
 
 /**
+ * Recovery must not wait for a goal's next scheduled review. A previous
+ * heartbeat could have already queued paused work and pushed that timestamp
+ * forward, leaving the historic loop visible for another day.
+ */
+async function recoverHistoricalGoalReviewLoops(
+  supabase: ReturnType<typeof createAdminClient>,
+): Promise<number> {
+  const { data: activeGoals, error } = await supabase
+    .from('goals')
+    .select('id, user_id')
+    .eq('level', 'objective')
+    .eq('status', 'active')
+    .limit(20)
+
+  if (error) {
+    console.error('[heartbeat] Failed to find active goals for historical recovery:', error.message)
+    return 0
+  }
+
+  let recovered = 0
+  for (const goal of activeGoals ?? []) {
+    try {
+      const recoveredForGoal = await reconcileHistoricalGoalReviewLoop(supabase, goal.user_id, goal.id)
+      recovered += recoveredForGoal
+      if (recoveredForGoal === 0) continue
+
+      const director = await getOrCreateAgentRegistry(supabase, goal.user_id, 'overall')
+      await logAudit({
+        supabase,
+        userId: goal.user_id,
+        agentId: director?.id,
+        action: 'goal_review_loop_recovered',
+        entityType: 'goal',
+        entityId: goal.id,
+        detail: { recoveredTaskCount: recoveredForGoal },
+      })
+    } catch (recoveryError) {
+      console.error('[heartbeat] Failed to reconcile historical goal reviews:', recoveryError)
+    }
+  }
+
+  return recovered
+}
+
+/**
  * A goal review is the bridge between completed activity and the next useful
  * action. Claiming the goal first makes this safe when Vercel overlaps cron
  * invocations; the claim expires automatically if a process dies mid-run.
@@ -205,15 +250,6 @@ async function enqueueDueGoalReviews(
     const goal = await claimDueGoalReview(supabase, candidate.id)
     if (!goal) continue
 
-    let recoveredLoopTasks = 0
-    try {
-      recoveredLoopTasks = await reconcileHistoricalGoalReviewLoop(supabase, candidate.user_id, goal.id)
-    } catch (recoveryError) {
-      console.error('[heartbeat] Failed to reconcile historical goal reviews:', recoveryError)
-      await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(GOAL_REVIEW_DEFER_HOURS))
-      continue
-    }
-
     const { data: openWork, error: openWorkError } = await supabase
       .from('tasks')
       .select('id')
@@ -236,18 +272,6 @@ async function enqueueDueGoalReviews(
     if (!director) {
       await releaseGoalReviewClaim(supabase, goal.id, nextGoalReviewAt(1))
       continue
-    }
-
-    if (recoveredLoopTasks > 0) {
-      await logAudit({
-        supabase,
-        userId: candidate.user_id,
-        agentId: director.id,
-        action: 'goal_review_loop_recovered',
-        entityType: 'goal',
-        entityId: goal.id,
-        detail: { recoveredTaskCount: recoveredLoopTasks },
-      })
     }
 
     const { error: taskError } = await supabase
@@ -290,6 +314,7 @@ export async function GET(request: Request) {
   let totalChecked = 0
   let totalActioned = 0
   let goalReviewsQueued = 0
+  let historicalGoalReviewLoopsRecovered = 0
 
   try {
     // Monthly budget reset on 1st of month
@@ -300,6 +325,11 @@ export async function GET(request: Request) {
         .update({ spent_monthly_cents: 0 })
         .neq('spent_monthly_cents', 0)
     }
+
+    // Remove only the known historic loop rows before checking schedules. This
+    // is intentionally independent of next_review_at so a paused task cannot
+    // keep the old broken history visible until tomorrow.
+    historicalGoalReviewLoopsRecovered = await recoverHistoricalGoalReviewLoops(supabase)
 
     // Establish the next safe action for any active outcome with no open work
     // before fetching the assigned queue, so newly-created reviews can run in
@@ -535,6 +565,7 @@ export async function GET(request: Request) {
     tasksChecked: totalChecked,
     tasksActioned: totalActioned,
     goalReviewsQueued,
+    historicalGoalReviewLoopsRecovered,
     durationMs: Date.now() - startTime,
   })
 }

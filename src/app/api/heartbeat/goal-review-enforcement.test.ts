@@ -18,6 +18,7 @@ test('heartbeat only cancels the historical null-result retry-loop rows', () => 
   const route = readFileSync(resolve(process.cwd(), 'src/app/api/heartbeat/route.ts'), 'utf8')
 
   assert.match(route, /reconcileHistoricalGoalReviewLoop/)
+  assert.match(route, /recoverHistoricalGoalReviewLoops\(supabase\)/)
   assert.match(route, /\.contains\('context', \{ kind: 'goal_review' \}\)/)
   assert.match(route, /\.is\('result', null\)/)
   assert.match(route, /\.eq\('status', 'blocked'\)/)
