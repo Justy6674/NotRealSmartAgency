@@ -33,6 +33,34 @@ test('requires the catalogue before ScentSell captions make a product claim', ()
   assert.deepEqual(plan.requirements[1]?.requiredAnyToolNames, ['verify_product'])
 })
 
+test('treats a Canva template carousel as a real three-design deliverable', () => {
+  const plan = planDirectorTask(
+    'Use the same templates we have set in Canva and do a carousel of three slides about sensible secondhand fragrance pricing.',
+  )
+  const requirement = plan.requirements.find((item) => item.capability === 'canva_asset')
+
+  assert.ok(requirement)
+  assert.equal(requirement.agentType, 'brand')
+  assert.deepEqual(requirement.requiredAllToolNames, [
+    'list_brand_templates',
+    'get_brand_template_dataset',
+    'generate_design_structured',
+  ])
+  assert.equal(requirement.minimumCanvaDesigns, 3)
+  assert.equal(requirement.maxSteps, 8)
+  assert.equal(requirement.timeoutMs, 180_000)
+})
+
+test('keeps a normal image request on the image-generation path', () => {
+  const plan = planDirectorTask('Create an image for a Scent Sell Instagram post.')
+  const requirement = plan.requirements.find((item) => item.capability === 'canva_asset')
+
+  assert.ok(requirement)
+  assert.deepEqual(requirement.requiredAnyToolNames, ['generate_image', 'generate_design_structured'])
+  assert.equal(requirement.requiredAllToolNames, undefined)
+  assert.equal(requirement.minimumCanvaDesigns, undefined)
+})
+
 test('marks missing specialist evidence explicitly in Director context', () => {
   const context = buildDirectorCapabilityContext({
     plan: planDirectorTask('Audit our website'),

@@ -4,6 +4,7 @@ import {
   type WorkerContext,
   type WorkerResult,
 } from './worker'
+import type { CanvaDesignReceipt } from './worker-evidence'
 
 /**
  * A small, explicit contract for work that must not be answered from the
@@ -26,6 +27,14 @@ export interface CapabilityRequirement {
   agentType: AgentType
   /** A specialist may use one of these tools; a prose-only answer is not evidence. */
   requiredAnyToolNames?: readonly string[]
+  /** A specialist must run every named tool before the work counts. */
+  requiredAllToolNames?: readonly string[]
+  /** A completed Canva design requires a provider-issued design ID and edit URL. */
+  minimumCanvaDesigns?: number
+  /** Capability-specific cap for bounded multi-step provider work. */
+  maxSteps?: number
+  /** Provider work that waits for completed assets needs more than a prose turn. */
+  timeoutMs?: number
   withWebSearch?: boolean
   summary: string
 }
@@ -48,6 +57,7 @@ export interface CapabilityExecution {
   agentType: AgentType
   model: string
   toolNames: string[]
+  canvaDesigns?: CanvaDesignReceipt[]
   evidenceSatisfied: boolean
   result: string
   error?: string
@@ -69,8 +79,10 @@ const CURRENT_RESEARCH_REQUEST = /\b(?:current|latest|recent|today|202[5-9]|goog
 // the owner actually supplies or refers to video/media/transcript material.
 const VIDEO_REQUEST = /\b(?:video|reel|clip|footage|subtitles?|transcri(?:be|ption)|uploaded\s+media)\b/i
 const VIDEO_EVIDENCE_REQUEST = /\b(?:analyse|analyze|review|repurpose|caption|subtitle|transcri(?:be|ption)|uploaded|media)\b/i
-const CANVA_REQUEST = /\b(?:canva|graphic|creative|visual|image)\b/i
+const CANVA_TEMPLATE_REQUEST = /\b(?:canva|brand\s+templates?)\b/i
+const VISUAL_REQUEST = /\b(?:graphic|creative|visual|image)\b/i
 const CANVA_ACTION = /\b(?:create|generate|design|make|build)\b/i
+const CANVA_CAROUSEL_REQUEST = /\b(?:carousel|slides?)\b/i
 const CAPTION_REQUEST = /\b(?:caption|captions|hashtags?|hook|social copy|post copy)\b/i
 const COMPLIANCE_REQUEST = /\b(?:ahpra|tga|compliance|regulat(?:ion|ory)|health claim|therapeutic claim)\b/i
 const PRODUCT_LANGUAGE = /\b(?:product|fragrance|perfume|scent|cologne|bottle|notes?)\b/i
@@ -138,15 +150,33 @@ export function planDirectorTask(
     })
   }
 
-  if (hasAny(request, CANVA_REQUEST) && hasAny(request, CANVA_ACTION)) {
+  if (hasAny(request, CANVA_TEMPLATE_REQUEST) && (hasAny(request, CANVA_ACTION) || CANVA_CAROUSEL_REQUEST.test(request))) {
+    const carousel = CANVA_CAROUSEL_REQUEST.test(request)
     addRequirement(requirements, {
       capability: 'canva_asset',
       agentType: 'brand',
-      // `design_graphic` only opens a blank editable Canva canvas. It must not
-      // make a request look complete when no actual asset or structured design
-      // was produced.
+      // `design_graphic` only opens a blank editable Canva canvas. A template
+      // request must enumerate templates, inspect its actual fields, then wait
+      // for Canva to issue editable design receipts. Copy in the NRS library is
+      // not a finished visual deliverable.
+      requiredAllToolNames: [
+        'list_brand_templates',
+        'get_brand_template_dataset',
+        'generate_design_structured',
+      ],
+      minimumCanvaDesigns: carousel ? 3 : 1,
+      maxSteps: carousel ? 8 : 3,
+      ...(carousel ? { timeoutMs: 180_000 } : {}),
+      summary: carousel
+        ? 'Create exactly three editable Canva designs from the owner\'s real brand templates. First list templates, then inspect each template dataset, then wait for Canva Autofill to return three design IDs and edit URLs. If any design is absent, say it was not created; never present saved copy as a finished carousel.'
+        : 'Create a verified editable Canva design. First inspect the brand template dataset, then wait for Canva Autofill to return a design ID and edit URL. If no receipt arrives, say the asset was not created.',
+    })
+  } else if (hasAny(request, VISUAL_REQUEST) && hasAny(request, CANVA_ACTION)) {
+    addRequirement(requirements, {
+      capability: 'canva_asset',
+      agentType: 'brand',
       requiredAnyToolNames: ['generate_image', 'generate_design_structured'],
-      summary: 'Use the Brand specialist and a real asset/design action for Canva or image work.',
+      summary: 'Use the Brand specialist and a real image or design action for this visual deliverable.',
     })
   }
 
@@ -183,15 +213,13 @@ export function planDirectorTask(
 }
 
 function toExecution(requirement: CapabilityRequirement, worker: WorkerResult): CapabilityExecution {
-  const expected = requirement.requiredAnyToolNames ?? []
-  const evidenceSatisfied = !expected.length || worker.toolNames.some((toolName) => expected.includes(toolName))
-
   return {
     capability: requirement.capability,
     agentType: requirement.agentType,
     model: worker.model,
     toolNames: worker.toolNames,
-    evidenceSatisfied,
+    evidenceSatisfied: Boolean(worker.evidenceSatisfied),
+    ...(worker.canvaDesigns?.length ? { canvaDesigns: worker.canvaDesigns } : {}),
     result: worker.result,
     ...(worker.error ? { error: worker.error } : {}),
   }
@@ -214,7 +242,11 @@ export async function executeDirectorTaskPlan(
         taskCapability: requirement.capability,
         withWebSearch: requirement.withWebSearch,
         requiredAnyToolNames: requirement.requiredAnyToolNames,
-        contextOverride: `## REQUIRED CAPABILITY\n${requirement.summary}\n\nReturn evidence and conclusions for the Director. Do not claim a tool or source was used unless it ran in this turn.`,
+        requiredAllToolNames: requirement.requiredAllToolNames,
+        minimumCanvaDesigns: requirement.minimumCanvaDesigns,
+        maxSteps: requirement.maxSteps,
+        timeoutMs: requirement.timeoutMs,
+        contextOverride: `## REQUIRED CAPABILITY\n${requirement.summary}\n\nReturn evidence and conclusions for the Director. Do not claim a tool or source was used unless it ran successfully in this turn.`,
       },
     })),
     ctx,
@@ -264,8 +296,11 @@ export function buildDirectorCapabilityContext(execution: DirectorTaskPlanExecut
         ? 'COMPLETED WITH REQUIRED EVIDENCE'
         : 'COMPLETED WITHOUT THE REQUIRED EVIDENCE'
     const tools = capability.toolNames.length ? capability.toolNames.join(', ') : 'none'
+    const designs = capability.canvaDesigns?.length
+      ? `Canva design receipts:\n${capability.canvaDesigns.map((design) => `- ${design.designId}: ${design.editUrl}`).join('\n')}\n`
+      : ''
     const result = capability.result.trim() || 'No specialist output was returned.'
-    return `### ${capability.capability} — ${status}\nDepartment: ${capability.agentType}\nModel: ${capability.model}\nTools actually used: ${tools}\n\n${result}`
+    return `### ${capability.capability} — ${status}\nDepartment: ${capability.agentType}\nModel: ${capability.model}\nTools actually used: ${tools}\n${designs}\n${result}`
   })
 
   return [

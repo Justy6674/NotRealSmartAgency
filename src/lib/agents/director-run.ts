@@ -57,7 +57,9 @@ export function statusForEvidence(
   if (capabilities.length === 0) return { status: 'completed', claimStatus: 'not_applicable' }
 
   const hardFailure = capabilities.some((capability) =>
-    (capability.capability === 'product_identity' || capability.capability === 'compliance_review')
+    (capability.capability === 'product_identity'
+      || capability.capability === 'compliance_review'
+      || capability.capability === 'canva_asset')
     && (!capability.evidenceSatisfied || Boolean(capability.error)),
   )
   if (hardFailure) return { status: 'blocked', claimStatus: 'blocked' }

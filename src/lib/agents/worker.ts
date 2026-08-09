@@ -28,6 +28,7 @@ import { extractAndStoreMemories } from '@/lib/ruflo/memory-extractor'
 import { extractFacts } from '@/lib/memory/fact-extractor'
 import { memoryStoreV2 } from '@/lib/memory/store'
 import { getActiveGoal } from './goal-loop'
+import { collectWorkerToolEvidence, type CanvaDesignReceipt } from './worker-evidence'
 import {
   estimateGatewayCost,
   getGatewayRouteProviderOptions,
@@ -71,6 +72,8 @@ export interface WorkerResult {
   taskCapability?: string
   /** Whether this worker actually used one of the required evidence tools. */
   evidenceSatisfied?: boolean
+  /** Concrete Canva design receipts, never inferred from model prose. */
+  canvaDesigns?: CanvaDesignReceipt[]
   error?: string
 }
 
@@ -91,6 +94,10 @@ export interface WorkerOptions {
   taskCapability?: string
   /** At least one of these tools must run for the result to count as evidence. */
   requiredAnyToolNames?: readonly string[]
+  /** Every one of these tools must run for the result to count as evidence. */
+  requiredAllToolNames?: readonly string[]
+  /** Minimum number of completed Canva designs with an editable URL. */
+  minimumCanvaDesigns?: number
 }
 
 // ─── Output type mapping ────────────────────────────────────────────────────
@@ -274,12 +281,15 @@ Rules:
       abortSignal: controller.signal,
     })
     clearTimeout(timeout)
-    const toolNames = (result.toolCalls ?? []).flatMap((call) => {
-      const toolName = (call as { toolName?: unknown }).toolName
-      return typeof toolName === 'string' ? [toolName] : []
-    })
-    const evidenceSatisfied = !options.requiredAnyToolNames?.length
+    const toolEvidence = collectWorkerToolEvidence(result.steps)
+    const toolNames = toolEvidence.toolNames
+    const hasRequiredAnyTool = !options.requiredAnyToolNames?.length
       || toolNames.some((toolName) => options.requiredAnyToolNames?.includes(toolName))
+    const hasRequiredAllTools = !options.requiredAllToolNames?.length
+      || options.requiredAllToolNames.every((toolName) => toolNames.includes(toolName))
+    const hasRequiredCanvaDesigns = !options.minimumCanvaDesigns
+      || toolEvidence.completedCanvaDesigns.length >= options.minimumCanvaDesigns
+    const evidenceSatisfied = hasRequiredAnyTool && hasRequiredAllTools && hasRequiredCanvaDesigns
     const gatewayModelAttempts = (
       result.providerMetadata as { gateway?: { modelAttempts?: unknown } } | undefined
     )?.gateway?.modelAttempts
@@ -328,7 +338,10 @@ Rules:
           task_capability: options.taskCapability,
           evidence_satisfied: evidenceSatisfied,
           required_any_tool_names: options.requiredAnyToolNames ?? [],
+          required_all_tool_names: options.requiredAllToolNames ?? [],
+          minimum_canva_designs: options.minimumCanvaDesigns ?? 0,
           tools_used: toolNames,
+          canva_designs: toolEvidence.completedCanvaDesigns,
         } : {}),
       },
     })
@@ -357,7 +370,10 @@ Rules:
           taskCapability: options.taskCapability,
           evidenceSatisfied,
           requiredAnyToolNames: options.requiredAnyToolNames ?? [],
+          requiredAllToolNames: options.requiredAllToolNames ?? [],
+          minimumCanvaDesigns: options.minimumCanvaDesigns ?? 0,
           toolsUsed: toolNames,
+          canvaDesigns: toolEvidence.completedCanvaDesigns,
         } : {}),
         ...(gatewayModelAttempts !== undefined ? { gatewayModelAttempts } : {}),
       },
@@ -406,6 +422,9 @@ Rules:
       ...(options.taskCapability ? {
         taskCapability: options.taskCapability,
         evidenceSatisfied,
+        ...(toolEvidence.completedCanvaDesigns.length > 0
+          ? { canvaDesigns: toolEvidence.completedCanvaDesigns }
+          : {}),
       } : {}),
     }
   } catch (error) {

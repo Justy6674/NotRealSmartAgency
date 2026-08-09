@@ -16,6 +16,13 @@ test('limits ordinary evidence gaps but does not call them verified', () => {
   }]), { status: 'partial', claimStatus: 'limited' })
 })
 
+test('blocks a Director claim when a required Canva asset was not created', () => {
+  assert.deepEqual(statusForEvidence([{
+    capability: 'canva_asset', agentType: 'brand', model: 'none',
+    toolNames: ['list_brand_templates'], evidenceSatisfied: false, result: '',
+  }]), { status: 'blocked', claimStatus: 'blocked' })
+})
+
 test('has no verification claim for ordinary conversation', () => {
   assert.deepEqual(statusForEvidence([]), { status: 'completed', claimStatus: 'not_applicable' })
 })

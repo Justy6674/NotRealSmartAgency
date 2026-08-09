@@ -16,6 +16,108 @@ const FORMAT_DIMENSIONS: Record<string, { width: number; height: number; title_s
   a4_document: { width: 595, height: 842, title_suffix: 'A4 Document' },
 }
 
+const AUTOFILL_POLL_INTERVAL_MS = 500
+const AUTOFILL_POLL_ATTEMPTS = 60
+
+type CanvaAutofillValue = string | Record<string, unknown>
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : null
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Convert the convenient text form used by NRS into Canva's documented data shape. */
+export function normaliseCanvaAutofillData(
+  data: Record<string, CanvaAutofillValue>,
+): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(data).map(([field, value]) => [
+    field,
+    typeof value === 'string' ? { type: 'text', text: value } : value,
+  ]))
+}
+
+/** Validate against Canva's live template definition before any write is attempted. */
+export function validateCanvaAutofillData(
+  data: Record<string, CanvaAutofillValue>,
+  dataset: Record<string, unknown>,
+): string | null {
+  const fields = Object.entries(dataset)
+  if (fields.length === 0) {
+    return 'This Canva template has no published Autofill fields, so NRS cannot safely replace its copy automatically. No design was created.'
+  }
+  if (Object.keys(data).length === 0) {
+    return 'No Canva Autofill values were supplied. No design was created.'
+  }
+
+  const normalised = normaliseCanvaAutofillData(data)
+  for (const [fieldName, value] of Object.entries(normalised)) {
+    const expected = asRecord(dataset[fieldName])
+    if (!expected || typeof expected.type !== 'string') {
+      return `"${fieldName}" is not a field in this Canva template. No design was created.`
+    }
+    const supplied = asRecord(value)
+    if (!supplied || supplied.type !== expected.type) {
+      return `"${fieldName}" must use Canva's ${expected.type} field type. No design was created.`
+    }
+    if (expected.type === 'text' && (typeof supplied.text !== 'string' || !supplied.text.trim())) {
+      return `"${fieldName}" needs non-empty text. No design was created.`
+    }
+    if (expected.type === 'image' && (typeof supplied.asset_id !== 'string' || !supplied.asset_id)) {
+      return `"${fieldName}" needs a Canva image asset ID. No design was created.`
+    }
+  }
+
+  return null
+}
+
+export interface CompletedCanvaDesign {
+  jobId: string
+  designId: string
+  editUrl: string
+}
+
+function designIdFromEditUrl(editUrl: string): string | null {
+  try {
+    const parts = new URL(editUrl).pathname.split('/').filter(Boolean)
+    const designIndex = parts.indexOf('design')
+    return designIndex >= 0 ? parts[designIndex + 1] ?? null : null
+  } catch {
+    return null
+  }
+}
+
+/** Return a receipt only after Canva says the async Autofill job succeeded. */
+export function completedCanvaDesignFromJob(job: unknown): CompletedCanvaDesign | null {
+  const jobRecord = asRecord(job)
+  if (!jobRecord || jobRecord.status !== 'success' || typeof jobRecord.id !== 'string') return null
+
+  const design = asRecord(asRecord(jobRecord.result)?.design)
+  const urls = asRecord(design?.urls)
+  const editUrl = typeof design?.url === 'string'
+    ? design.url
+    : typeof urls?.edit_url === 'string'
+      ? urls.edit_url
+      : null
+  if (!editUrl) return null
+
+  const designId = typeof design?.id === 'string' ? design.id : designIdFromEditUrl(editUrl)
+  return designId ? { jobId: jobRecord.id, designId, editUrl } : null
+}
+
+function autofillJob(value: unknown): Record<string, unknown> | null {
+  const response = asRecord(value)
+  return asRecord(response?.job) ?? response
+}
+
+function terminalAutofillFailure(job: Record<string, unknown>): boolean {
+  return typeof job.status === 'string' && ['failed', 'error', 'cancelled'].includes(job.status)
+}
+
 /**
  * Every Canva tool starts here.
  *
@@ -337,6 +439,50 @@ export function createListBrandKitsTool(
         return {
           success: false,
           error: err instanceof Error ? err.message : 'Failed to list brand kits',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Get brand template dataset
+// ---------------------------------------------------------------------------
+export function createGetBrandTemplateDatasetTool(
+  supabase: SupabaseClient,
+  userId: string,
+) {
+  return tool({
+    description:
+      'Read the actual Autofill fields in one Canva brand template before creating a design. Use the exact field keys and data types returned here; never guess template fields.',
+    inputSchema: z.object({
+      brand_template_id: z.string().describe('Canva brand template ID from list_brand_templates'),
+    }),
+    execute: async ({ brand_template_id }) => {
+      const canva = await requireCanva(supabase, userId)
+      if ('error' in canva) return canva
+
+      try {
+        const res = await canvaFetch(canva.token, `/brand-templates/${brand_template_id}/dataset`)
+        const data = await res.json() as Record<string, unknown>
+        const dataset = asRecord(data.dataset) ?? {}
+        const fields: Array<Record<string, unknown> & { name: string }> = Object.entries(dataset).map(([name, definition]) => ({
+          name,
+          ...(asRecord(definition) ?? {}),
+        }))
+
+        return {
+          success: true,
+          brand_template_id,
+          fields,
+          message: fields.length
+            ? `Template ${brand_template_id} has ${fields.length} Autofill field(s): ${fields.map((field) => `${field.name} (${String(field.type ?? 'unknown')})`).join(', ')}. Use these exact field names in generate_design_structured.`
+            : `Template ${brand_template_id} has no published Autofill fields. It cannot be populated automatically until fields are configured in Canva.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Failed to read Canva template Autofill fields',
         }
       }
     },
@@ -1592,47 +1738,81 @@ export function createGenerateDesignStructuredTool(
 ) {
   return tool({
     description:
-      'Generate a Canva design using structured autofill — provide template data fields and the API fills them into a template automatically.',
+      'Generate a Canva design with structured Autofill. Call get_brand_template_dataset first and use its exact field names and types. This tool waits for the asynchronous Canva job and only succeeds when Canva returns an editable design ID and URL.',
     inputSchema: z.object({
       brand_template_id: z
         .string()
         .describe('Canva brand template ID to autofill'),
       data: z
-        .record(z.string(), z.string())
-        .describe('Key-value pairs mapping template field names to values'),
-      title: z
-        .string()
-        .optional()
-        .describe('Optional title for the generated design'),
+        .record(z.string(), z.union([
+          z.string(),
+          z.object({ type: z.literal('text'), text: z.string() }).passthrough(),
+          z.object({ type: z.literal('image'), asset_id: z.string() }).passthrough(),
+        ]))
+        .describe('Exact dataset field names mapped to text strings, or documented Canva text/image field objects.'),
     }),
-    execute: async ({ brand_template_id, data, title }) => {
+    execute: async ({ brand_template_id, data }) => {
       const canva = await requireCanva(supabase, userId)
       if ('error' in canva) return canva
       const apiKey = canva.token
 
       try {
-        const body: Record<string, unknown> = {
+        const datasetResponse = await canvaFetch(apiKey, `/brand-templates/${brand_template_id}/dataset`)
+        const datasetPayload = await datasetResponse.json() as Record<string, unknown>
+        const dataset = asRecord(datasetPayload.dataset) ?? {}
+        const validationError = validateCanvaAutofillData(data, dataset)
+        if (validationError) return { success: false, error: validationError }
+
+        const body = {
           brand_template_id,
-          data,
+          data: normaliseCanvaAutofillData(data),
         }
-        if (title) body.title = title
 
         const res = await canvaFetch(apiKey, '/autofills', {
           method: 'POST',
           body: JSON.stringify(body),
         })
-        const result = await res.json()
-        const job = result.job ?? result
+        let job = autofillJob(await res.json())
+        if (!job || typeof job.id !== 'string') {
+          return { success: false, error: 'Canva did not return an Autofill job ID. No design was created.' }
+        }
+
+        for (let attempt = 0; attempt <= AUTOFILL_POLL_ATTEMPTS; attempt++) {
+          const receipt = completedCanvaDesignFromJob(job)
+          if (receipt) {
+            return {
+              success: true,
+              job_id: receipt.jobId,
+              status: 'success',
+              design_id: receipt.designId,
+              edit_url: receipt.editUrl,
+              message: `Design generated from template. Design ID: ${receipt.designId}\n[Open in Canva](${receipt.editUrl})`,
+            }
+          }
+
+          if (terminalAutofillFailure(job)) {
+            return {
+              success: false,
+              job_id: job.id,
+              status: job.status,
+              error: 'Canva Autofill did not create a design. No design receipt was issued.',
+            }
+          }
+
+          if (attempt === AUTOFILL_POLL_ATTEMPTS) break
+          await delay(AUTOFILL_POLL_INTERVAL_MS)
+          const poll = await canvaFetch(apiKey, `/autofills/${job.id}`)
+          job = autofillJob(await poll.json())
+          if (!job || typeof job.id !== 'string') {
+            return { success: false, error: 'Canva returned an invalid Autofill job while waiting. No design was created.' }
+          }
+        }
 
         return {
-          success: true,
+          success: false,
           job_id: job.id,
           status: job.status,
-          design_id: job.result?.design?.id,
-          edit_url: job.result?.design?.urls?.edit_url,
-          message: job.result?.design?.id
-            ? `Design generated from template. Design ID: ${job.result.design.id}\n[Open in Canva](${job.result.design.urls?.edit_url})`
-            : `Autofill job created (ID: ${job.id}, status: ${job.status}). The design is being generated.`,
+          error: 'Canva Autofill did not finish within 30 seconds. No design receipt was issued, so NRS will not present this as a created asset.',
         }
       } catch (err) {
         return {

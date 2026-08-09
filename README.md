@@ -121,8 +121,8 @@ npm run dev    # http://localhost:3000
 │                                                                    │
 │  ┌──────────────── Integrations ─────────────────────────────┐  │
 │  │  Video toolkit: owned voiceover, image and music assets      │  │
-│  │  Canva:  29 tools (generate, edit, resize, comment, folder, │  │
-│  │          upload, export, brand kits, structured generation)  │  │
+│  │  Canva:  30 tools (generate, edit, resize, comment, folder, │  │
+│  │          upload, export, brand templates, Autofill fields)   │  │
 │  │  Mixpost: 9 tools (analytics, posts, tags, media, templates)│  │
 │  └─────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
@@ -231,8 +231,8 @@ Three-layer memory architecture following Anthropic's Claude Code patterns:
 ### Video Toolkit
 Owned voiceover, image and music endpoints support production briefs and future programmatic rendering without a named video vendor dependency.
 
-### Canva (29 tools, OAuth 2.0 + PKCE)
-Generate, edit (start/perform/commit/cancel transactions), resize, upload assets, import designs, comments, folders, export, brand kits, structured generation, design content reading.
+### Canva (30 tools, OAuth 2.0 + PKCE)
+Generate, edit (start/perform/commit/cancel transactions), resize, upload assets, import designs, comments, folders, export, brand templates, template-dataset inspection, structured generation, design content reading. A template-based asset is only reported as created after Canva returns an editable design receipt; templates need published Autofill fields for NRS to replace copy safely.
 
 ### Mixpost (9 tools, 12 API routes, 1 webhook)
 Self-hosted on BinaryLane VPS (`mixpost.notrealsmart.com.au`). Analytics/reports, post management (create/update/delete/queue/approve), tags, media library, templates, webhook receiver.
