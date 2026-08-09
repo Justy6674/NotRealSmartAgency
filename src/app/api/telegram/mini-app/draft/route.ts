@@ -1,5 +1,5 @@
 /**
- * File a visually reviewed carousel as a draft.
+ * File a visually reviewed social proposal as a draft.
  *
  * The button in the Mini App is the owner's explicit approval to create a
  * draft, not approval to publish. All provider status is returned as an
@@ -8,7 +8,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createDraftPost } from '@/lib/posts/create-draft'
-import type { PostPlatform } from '@/types/database'
+import type { PostPlatform, PostType } from '@/types/database'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
 import { userSafeError } from '@/lib/errors/user-safe'
@@ -53,21 +53,24 @@ export async function POST(request: Request) {
     .eq('brand_id', context.activeSession.projectId)
     .eq('output_type', 'social_post')
     .maybeSingle()
-  if (!proposal) return NextResponse.json({ error: 'That carousel is not available in this project.' }, { status: 404 })
+  if (!proposal) return NextResponse.json({ error: 'That social proposal is not available in this project.' }, { status: 404 })
   if (proposal.is_approved) {
-    return NextResponse.json({ error: 'That carousel has already been filed as a draft.' }, { status: 409 })
+    return NextResponse.json({ error: 'That proposal has already been filed as a draft.' }, { status: 409 })
   }
 
   const metadata = (proposal.metadata ?? {}) as Record<string, unknown>
   const stage = metadata.stage
-  const post_type = metadata.post_type
-  if (stage !== 'proposal' || post_type !== 'carousel') {
-    return NextResponse.json({ error: 'That item is not an unapproved carousel proposal.' }, { status: 409 })
+  const rawPostType = metadata.post_type
+  if (stage !== 'proposal') {
+    return NextResponse.json({ error: 'That item is not an unapproved social proposal.' }, { status: 409 })
   }
   const mediaItemIds = Array.isArray(metadata.media_item_ids)
     ? metadata.media_item_ids.filter((id): id is string => typeof id === 'string')
     : []
-  if (mediaItemIds.length < 2) {
+  const postType: PostType = rawPostType === 'carousel' || rawPostType === 'reel' || rawPostType === 'video'
+    ? rawPostType
+    : 'single'
+  if (postType === 'carousel' && mediaItemIds.length < 2) {
     return NextResponse.json({ error: 'That carousel has no complete set of saved slides.' }, { status: 409 })
   }
   const rawPlatform = typeof metadata.platform === 'string' ? metadata.platform : 'instagram'
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
     ? metadata.hashtags.filter((tag): tag is string => typeof tag === 'string')
     : []
   const caption = proposal.content?.trim() ?? ''
-  if (!caption) return NextResponse.json({ error: 'The carousel has no caption to file.' }, { status: 409 })
+  if (!caption) return NextResponse.json({ error: 'That proposal has no caption to file.' }, { status: 409 })
 
   try {
     const draft = await createDraftPost({
@@ -89,9 +92,9 @@ export async function POST(request: Request) {
       caption,
       hashtags,
       mediaItemIds,
-      postType: 'carousel',
+      postType,
       outputId: proposal.id,
-      metadata: { source: 'telegram_mini_app_carousel', approved_from: proposal.id },
+      metadata: { source: 'telegram_mini_app_review', approved_from: proposal.id },
     })
 
     // A draft exists even if Mixpost is pending or failed. Preserve that
@@ -101,12 +104,20 @@ export async function POST(request: Request) {
       is_approved: true,
       metadata: {
         ...metadata,
-        carousel_draft: {
+        telegram_draft: {
           draft_id: draft.id,
           mixpost: draft.mixpost,
           ...(draft.mixpostError ? { mixpost_error: draft.mixpostError } : {}),
           ...(draft.mixpostPostUuid ? { mixpost_post_uuid: draft.mixpostPostUuid } : {}),
         },
+        ...(postType === 'carousel' ? {
+          carousel_draft: {
+            draft_id: draft.id,
+            mixpost: draft.mixpost,
+            ...(draft.mixpostError ? { mixpost_error: draft.mixpostError } : {}),
+            ...(draft.mixpostPostUuid ? { mixpost_post_uuid: draft.mixpostPostUuid } : {}),
+          },
+        } : {}),
       },
     }).eq('id', proposal.id)
 
@@ -119,7 +130,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     return NextResponse.json({
-      error: userSafeError('mini-app-carousel-draft', error, 'The draft could not be created. Nothing was published.'),
+      error: userSafeError('mini-app-social-draft', error, 'The draft could not be created. Nothing was published.'),
     }, { status: 500 })
   }
 }

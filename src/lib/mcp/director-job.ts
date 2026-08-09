@@ -46,7 +46,7 @@ import {
 import type { Brand, AgentConfig } from '@/types/database'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { userSafeError, diagnosticOf } from '@/lib/errors/user-safe'
-import { buildTelegramExecutionContract } from '@/lib/telegram/telegram-execution-contract'
+import { buildTelegramExecutionContract, isTelegramCaptionRequest } from '@/lib/telegram/telegram-execution-contract'
 import { needsTelegramResearchBeforeDeliver } from '@/lib/telegram/telegram-research-contract'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
 import {
@@ -65,6 +65,7 @@ import {
   resolveTelegramWorkMessage,
 } from '@/lib/telegram/telegram-thread'
 import { stripMediaDirective } from '@/lib/telegram/telegram-album'
+import { storeTelegramSocialProposal } from '@/lib/telegram/text-proposal'
 import {
   matchesDirectorJobScope,
   type DirectorExecutionScope,
@@ -79,6 +80,8 @@ export interface DirectorJobInput {
    * Omitted = continue the most recent thread on this project grant.
    */
   conversation_id?: string
+  /** Exact media the owner attached to this Mini App request. */
+  media_item_ids?: string[]
 }
 
 export interface DirectorJobResult {
@@ -97,6 +100,8 @@ export interface DirectorJobResult {
   actions?: string[]
   /** Telegram message ids, so a later 👍 can be tied to what it was about. */
   telegram_message_ids?: number[]
+  /** Saved review item replacing a transient Telegram caption bubble. */
+  telegram_proposal_output_id?: string
   /** The capability contract that actually ran before the Director answered. */
   task_capabilities?: Array<{
     capability: string
@@ -145,7 +150,7 @@ export async function runDirectorJob(
     : null
 
   try {
-    const { brand_id, message } = input
+    const { brand_id, message, media_item_ids: mediaItemIds = [] } = input
 
     if (brand_id !== execution.projectId) {
       await markJobError(supabase, jobId, 'Job project does not match its execution scope.', startTime)
@@ -919,6 +924,24 @@ That's the difference between a marketing director and a tech support agent. Def
       }
     }
 
+    // A caption request on Telegram must become a visible, durable review item.
+    // Without this, the owner could copy useful text but could not edit it,
+    // see its state, or send the exact approved version to Mixpost.
+    const telegramProposalOutputId = execution.channel === 'telegram'
+      && isTelegramCaptionRequest(telegramWorkMessage)
+      && turnActions.length === 0
+      && inspectMarketingInput(response).allowed
+      ? await storeTelegramSocialProposal({
+          supabase,
+          userId,
+          brandId: typedBrand.id,
+          jobId,
+          ownerMessage: telegramWorkMessage,
+          response,
+          mediaItemIds,
+        })
+      : null
+
     // Mark done
     const jobResult: DirectorJobResult = {
       response,
@@ -930,6 +953,7 @@ That's the difference between a marketing director and a tech support agent. Def
       // it the Director can only see its own prose, and prose is not evidence
       // of action — which is how one request became six drafts.
       ...(turnActions.length > 0 ? { actions: turnActions } : {}),
+      ...(telegramProposalOutputId ? { telegram_proposal_output_id: telegramProposalOutputId } : {}),
       ...(directorTurn.execution ? {
         task_capabilities: directorTurn.execution.capabilities.map((capability) => ({
           capability: capability.capability,

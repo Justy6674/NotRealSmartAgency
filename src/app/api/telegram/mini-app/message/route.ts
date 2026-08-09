@@ -181,7 +181,11 @@ export async function POST(request: Request) {
       }
     }
 
-    await runDirectorJob(job.id, execution, { brand_id: execution.projectId, message: messageWithMedia })
+    await runDirectorJob(job.id, execution, {
+      brand_id: execution.projectId,
+      message: messageWithMedia,
+      ...(mediaItemIds.length > 0 ? { media_item_ids: mediaItemIds } : {}),
+    })
   })
   return NextResponse.json({ job_id: job.id, project_name: grant.projectName })
 }

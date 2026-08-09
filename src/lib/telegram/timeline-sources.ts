@@ -241,17 +241,20 @@ export const directorJobSource: TimelineSource<JobRow> = {
       const completedAtMs = toUtcMs(row.completed_at)
 
       if (row.status === 'done' && response) {
-        events.push({
-          id: answerId,
-          kind: 'director_reply',
-          groupParentId: parent,
-          // Its own instant, for the day separator. The GROUP anchor is what
-          // it sorts by, and that is the question's instant — see timeline.ts.
-          occurredAtMs: completedAtMs ?? askedAtMs,
-          side: 'director',
-          brandId,
-          payload: { kind: 'director_reply', jobId: row.id, text: response, withheld: false },
-        })
+        const hasStoredTelegramProposal = typeof row.result?.telegram_proposal_output_id === 'string'
+        if (!hasStoredTelegramProposal) {
+          events.push({
+            id: answerId,
+            kind: 'director_reply',
+            groupParentId: parent,
+            // Its own instant, for the day separator. The GROUP anchor is what
+            // it sorts by, and that is the question's instant — see timeline.ts.
+            occurredAtMs: completedAtMs ?? askedAtMs,
+            side: 'director',
+            brandId,
+            payload: { kind: 'director_reply', jobId: row.id, text: response, withheld: false },
+          })
+        }
         const carousel = carouselDeliveryFromJobResult(row.result)
         if (carousel) {
           events.push({
@@ -500,7 +503,9 @@ export const proposalSource: TimelineSource<OutputRow> = {
       return [{
         id: `output:${row.id}`,
         kind: 'proposal' as const,
-        groupParentId: mediaItemIds.length > 0 ? `clip:${mediaItemIds[0]}` : null,
+        groupParentId: typeof meta.telegram_job_id === 'string'
+          ? `ask:${meta.telegram_job_id}`
+          : mediaItemIds.length > 0 ? `clip:${mediaItemIds[0]}` : null,
         occurredAtMs: atMs,
         side: 'director' as const,
         brandId,
@@ -516,7 +521,16 @@ export const proposalSource: TimelineSource<OutputRow> = {
             ? meta.hashtags.filter((tag): tag is string => typeof tag === 'string')
             : [],
           postType: typeof meta.post_type === 'string' ? meta.post_type : 'single',
+          platform: typeof meta.platform === 'string' ? meta.platform : 'instagram',
           approved: Boolean(row.is_approved),
+          mixpost: (() => {
+            const draft = meta.telegram_draft ?? meta.carousel_draft
+            if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return null
+            const state = (draft as Record<string, unknown>).mixpost
+            return state === 'synced' || state === 'pending' || state === 'failed' || state === 'skipped' || state === 'duplicate'
+              ? state
+              : null
+          })(),
           withheld: false,
         },
       }]

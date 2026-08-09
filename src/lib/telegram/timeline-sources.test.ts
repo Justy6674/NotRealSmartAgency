@@ -17,6 +17,23 @@ test('a completed Director job replaces Working with its stored response', () =>
   assert.equal(events.some((event) => event.payload.kind === 'director_pending'), false)
 })
 
+test('a saved Telegram caption replaces raw chat with its durable review card', () => {
+  const events = directorJobSource.map([{
+    id: 'job-caption',
+    status: 'done',
+    input: { message: 'Write a TikTok description for this image.' },
+    result: {
+      response: 'A copy-ready caption that is now stored for review.\n\n#scentsell',
+      telegram_proposal_output_id: 'proposal-caption-1',
+    },
+    error: null,
+    created_at: '2026-08-09T02:21:49.530Z',
+    completed_at: '2026-08-09T02:23:52.018Z',
+  }], { brandId: 'brand-1', nowMs: Date.parse('2026-08-09T02:24:00.000Z') })
+
+  assert.deepEqual(events.map((event) => event.payload.kind), ['user_message'])
+})
+
 test('a completed carousel job exposes its actual saved slides for Mini App review', () => {
   const events = directorJobSource.map([{
     id: 'job-carousel',
@@ -74,4 +91,29 @@ test('a stored carousel proposal becomes a visual review event, not a text-only 
   if (events[0]?.payload.kind !== 'carousel_delivery') return
   assert.equal(events[0].payload.outputId, 'carousel-proposal-1')
   assert.equal(events[0].payload.slides.length, 3)
+})
+
+test('a stored Telegram caption stays attached to the request that created it', () => {
+  const events = proposalSource.map([{
+    id: 'caption-proposal-1',
+    title: 'TikTok caption ready to review',
+    content: 'Build your own fragrance lists for free.',
+    is_approved: false,
+    created_at: '2026-08-09T02:23:52.018Z',
+    metadata: {
+      stage: 'proposal',
+      post_type: 'single',
+      platform: 'tiktok',
+      hashtags: ['scentsell'],
+      telegram_job_id: 'job-caption',
+      delivery_source: 'telegram_mini_app',
+    },
+  }], { brandId: 'brand-1', nowMs: Date.parse('2026-08-09T02:24:00.000Z') })
+
+  assert.equal(events.length, 1)
+  assert.equal(events[0]?.groupParentId, 'ask:job-caption')
+  assert.equal(events[0]?.payload.kind, 'proposal')
+  if (events[0]?.payload.kind !== 'proposal') return
+  assert.equal(events[0].payload.postType, 'single')
+  assert.equal(events[0].payload.platform, 'tiktok')
 })

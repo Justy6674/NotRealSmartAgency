@@ -77,7 +77,7 @@ test('tool names are read out of the step record', () => {
 })
 
 test('the write list covers the tools that change stored things', () => {
-  for (const name of ['draft_post', 'publish_to_social', 'manage_posts', 'caption_video']) {
+  for (const name of ['draft_post', 'publish_to_social', 'manage_posts', 'caption_video', 'create_carousel_proposal']) {
     assert.ok(WRITE_TOOLS.has(name), `${name} changes something and must count as backing a claim`)
   }
   // Read-only tools must NOT back a claim, or the check is decorative.

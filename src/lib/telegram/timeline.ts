@@ -93,7 +93,9 @@ export type TimelineEventPayload =
       caption: string
       hashtags: string[]
       postType: string
+      platform: string
       approved: boolean
+      mixpost: 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate' | null
       withheld: boolean
     }
 

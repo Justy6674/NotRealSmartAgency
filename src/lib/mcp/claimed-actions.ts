@@ -32,6 +32,10 @@ export const WRITE_TOOLS = new Set([
   'save_output', 'schedule_post', 'update_post', 'caption_video',
   'tighten_video', 'create_collage', 'generate_image', 'upload_media',
   'design_graphic', 'export_design', 'sync_brand_to_canva',
+  // A carousel proposal persists a review record plus the real slide receipts.
+  // It must count as an action so a caption-shaped request does not also create
+  // a second, text-only Telegram proposal for the same work.
+  'create_carousel_proposal',
 ])
 
 /**

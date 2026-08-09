@@ -14,6 +14,7 @@ import { memo, useState } from 'react'
 import type { TimelineEvent } from '@/lib/telegram/timeline'
 
 const DAY = new Intl.DateTimeFormat('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+type MixpostState = 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate' | null
 
 /**
  * The caption, with the two things anyone actually wants to do to it.
@@ -164,9 +165,13 @@ const DirectorBubble = memo(function DirectorBubble({
 }) {
   if (!withheld && isCopyReadySocialText(text)) {
     return (
-      <div className="mr-auto max-w-[92%]">
+      <section className="mr-auto max-w-[92%] overflow-hidden rounded-2xl rounded-bl-md bg-[var(--tg-theme-secondary-bg-color,#17212b)] ring-1 ring-black/10 dark:ring-white/10">
+        <div className="px-4 pb-2 pt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--tg-theme-hint-color,#82909f)]">Social copy</p>
+          <p className="mt-1 text-sm text-[var(--tg-theme-hint-color,#82909f)]">Prepared in this chat · not saved in NRS or Mixpost</p>
+        </div>
         <CaptionBlock hook="" caption={text} hashtags={[]} />
-      </div>
+      </section>
     )
   }
 
@@ -202,13 +207,13 @@ export interface TimelineViewProps {
   /** A corrected caption, typed by the person who spotted the mistake. */
   onEditCaption: (outputId: string, caption: string) => void
   /** Explicit owner approval to create a draft, never to publish. */
-  onSaveCarouselDraft: (outputId: string) => Promise<{
+  onSaveDraft: (outputId: string) => Promise<{
     mixpost: 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate'
     error?: string
   }>
 }
 
-export function TimelineView({ events, onRetry, onEditCaption, onSaveCarouselDraft }: TimelineViewProps) {
+export function TimelineView({ events, onRetry, onEditCaption, onSaveDraft }: TimelineViewProps) {
   let lastDay = ''
 
   return (
@@ -221,10 +226,81 @@ export function TimelineView({ events, onRetry, onEditCaption, onSaveCarouselDra
         return (
           <div key={event.id} className="contents">
             {newDay && <DaySeparator ms={event.groupAnchorMs} />}
-            <EventRow event={event} onRetry={onRetry} onEditCaption={onEditCaption} onSaveCarouselDraft={onSaveCarouselDraft} />
+            <EventRow event={event} onRetry={onRetry} onEditCaption={onEditCaption} onSaveDraft={onSaveDraft} />
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function mixpostLabel(state: MixpostState): string | null {
+  return state === 'synced'
+    ? 'Draft in Mixpost'
+    : state === 'pending'
+      ? 'Draft saved in NRS · Mixpost is still syncing'
+      : state === 'failed'
+        ? 'Draft saved in NRS · Mixpost sync failed'
+        : state === 'duplicate'
+          ? 'Existing Mixpost draft found'
+          : state === 'skipped'
+            ? 'Draft saved in NRS · Mixpost not connected'
+            : null
+}
+
+/** Every saved proposal gets this one honest path to a Mixpost draft. */
+function DraftAction({
+  outputId,
+  approved,
+  mixpost,
+  onSaveDraft,
+}: {
+  outputId: string | null
+  approved: boolean
+  mixpost: MixpostState
+  onSaveDraft: TimelineViewProps['onSaveDraft']
+}) {
+  const [saving, setSaving] = useState(false)
+  const [state, setState] = useState(mixpost)
+  const [error, setError] = useState<string | null>(null)
+
+  const saveDraft = async () => {
+    if (!outputId || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await onSaveDraft(outputId)
+      setState(result.mixpost)
+      if (result.error) setError(result.error)
+    } catch {
+      setError('The draft could not be created. Nothing was published.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const label = mixpostLabel(state)
+  return (
+    <div className="space-y-2">
+      {label ? (
+        <p className={`text-sm ${state === 'failed' ? 'text-red-600 dark:text-red-300' : 'text-[var(--tg-theme-hint-color,#82909f)]'}`}>{label}</p>
+      ) : approved ? (
+        <p className="text-sm text-[var(--tg-theme-hint-color,#82909f)]">Draft filed — checking Mixpost status.</p>
+      ) : (
+        <>
+          <p className="text-sm text-[var(--tg-theme-hint-color,#82909f)]">Saved in NRS · not in Mixpost yet</p>
+          <button
+            type="button"
+            disabled={!outputId || saving}
+            onClick={() => void saveDraft()}
+            className="w-full rounded-xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2.5 text-sm font-semibold text-[var(--tg-theme-button-text-color,#fff)] disabled:opacity-50"
+          >
+            {saving ? 'Saving draft…' : 'Save as Mixpost draft'}
+          </button>
+        </>
+      )}
+      {error && <p className="text-sm text-red-600 dark:text-red-300">{error}</p>}
+      {!approved && !label && <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">Saving a draft never publishes it.</p>}
     </div>
   )
 }
@@ -246,41 +322,10 @@ function CarouselDeliveryCard({
   slides: Array<{ mediaItemId: string; fileUrl: string; fileName: string }>
   outputId: string | null
   approved: boolean
-  mixpost: 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate' | null
+  mixpost: MixpostState
   onEditCaption: TimelineViewProps['onEditCaption']
-  onSaveDraft: TimelineViewProps['onSaveCarouselDraft']
+  onSaveDraft: TimelineViewProps['onSaveDraft']
 }) {
-  const [saving, setSaving] = useState(false)
-  const [state, setState] = useState(mixpost)
-  const [error, setError] = useState<string | null>(null)
-
-  const saveDraft = async () => {
-    if (!outputId || saving) return
-    setSaving(true)
-    setError(null)
-    try {
-      const result = await onSaveDraft(outputId)
-      setState(result.mixpost)
-      if (result.error) setError(result.error)
-    } catch {
-      setError('The draft could not be created. Nothing was published.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const mixpostLabel = state === 'synced'
-    ? 'Draft in Mixpost'
-    : state === 'pending'
-      ? 'Draft saved — Mixpost is still syncing'
-      : state === 'failed'
-        ? 'Draft saved — Mixpost sync failed'
-        : state === 'duplicate'
-          ? 'Existing Mixpost draft found'
-          : state === 'skipped'
-            ? 'Draft saved in NRS — Mixpost not connected'
-            : null
-
   return (
     <section className="mr-auto max-w-[96%] overflow-hidden rounded-2xl rounded-bl-md bg-[var(--tg-theme-secondary-bg-color,#17212b)] ring-1 ring-black/10 dark:ring-white/10">
       <div className="px-4 pb-2 pt-4">
@@ -298,28 +343,13 @@ function CarouselDeliveryCard({
       <div className="space-y-3 border-t border-black/10 px-4 py-3 dark:border-white/10">
         {outputId && <CaptionBlock hook="" caption={caption} hashtags={hashtags} onSave={(next) => onEditCaption(outputId, next)} />}
         {!outputId && <p className="text-sm text-amber-600 dark:text-amber-300">The slides are visible, but NRS has no saved review record to draft safely.</p>}
-        {mixpostLabel ? (
-          <p className={`text-sm ${state === 'failed' ? 'text-red-600 dark:text-red-300' : 'text-[var(--tg-theme-hint-color,#82909f)]'}`}>{mixpostLabel}</p>
-        ) : approved ? (
-          <p className="text-sm text-[var(--tg-theme-hint-color,#82909f)]">Draft filed — checking Mixpost status.</p>
-        ) : (
-          <button
-            type="button"
-            disabled={!outputId || saving}
-            onClick={() => void saveDraft()}
-            className="w-full rounded-xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2.5 text-sm font-semibold text-[var(--tg-theme-button-text-color,#fff)] disabled:opacity-50"
-          >
-            {saving ? 'Saving draft…' : 'Save as Mixpost draft'}
-          </button>
-        )}
-        {error && <p className="text-sm text-red-600 dark:text-red-300">{error}</p>}
-        {!approved && !mixpostLabel && <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">This creates a draft only. Nothing will be published.</p>}
+        <DraftAction outputId={outputId} approved={approved} mixpost={mixpost} onSaveDraft={onSaveDraft} />
       </div>
     </section>
   )
 }
 
-function EventRow({ event, onRetry, onEditCaption, onSaveCarouselDraft }: { event: TimelineEvent; onRetry: TimelineViewProps['onRetry']; onEditCaption: TimelineViewProps['onEditCaption']; onSaveCarouselDraft: TimelineViewProps['onSaveCarouselDraft'] }) {
+function EventRow({ event, onRetry, onEditCaption, onSaveDraft }: { event: TimelineEvent; onRetry: TimelineViewProps['onRetry']; onEditCaption: TimelineViewProps['onEditCaption']; onSaveDraft: TimelineViewProps['onSaveDraft'] }) {
   const payload = event.payload
 
   switch (payload.kind) {
@@ -351,6 +381,7 @@ function EventRow({ event, onRetry, onEditCaption, onSaveCarouselDraft }: { even
     case 'media_upload':
       return (
         <div className="ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2.5 text-[15px] text-[var(--tg-theme-button-text-color,#fff)]">
+          {payload.thumbnailUrl && <img src={payload.thumbnailUrl} alt={`Attached ${payload.fileName}`} className="mb-2 aspect-video w-full rounded-xl object-cover" />}
           <div className="flex items-center justify-between gap-3">
             <span className="truncate font-medium">{payload.fileName}</span>
             <span className="shrink-0 text-xs opacity-80">
@@ -370,24 +401,24 @@ function EventRow({ event, onRetry, onEditCaption, onSaveCarouselDraft }: { even
 
     case 'proposal':
       return (
-        <div className="mr-auto max-w-[92%] space-y-3">
+        <section className="mr-auto max-w-[92%] overflow-hidden rounded-2xl rounded-bl-md bg-[var(--tg-theme-secondary-bg-color,#17212b)] ring-1 ring-black/10 dark:ring-white/10">
           {payload.opener && <DirectorBubble text={payload.opener} withheld={payload.withheld} />}
           {!payload.withheld && (payload.hook || payload.caption) && (
-            <div>
+            <div className="space-y-3 p-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-[var(--tg-theme-hint-color,#82909f)]">{payload.platform} · {payload.postType} · review</p>
+                {payload.aboutFileName && <p className="mt-1 text-xs text-[var(--tg-theme-hint-color,#82909f)]">Made from {payload.aboutFileName}</p>}
+              </div>
               <CaptionBlock
                 hook={payload.hook}
                 caption={payload.caption}
                 hashtags={payload.hashtags}
                 onSave={(next) => onEditCaption(payload.outputId, next)}
               />
-              <div className="mt-2">
-              <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">
-                {payload.postType} · not in Mixpost yet — edit it above, then say approve
-              </p>
-              </div>
+              <DraftAction outputId={payload.outputId} approved={payload.approved} mixpost={payload.mixpost} onSaveDraft={onSaveDraft} />
             </div>
           )}
-        </div>
+        </section>
       )
 
     case 'carousel_delivery':
@@ -401,7 +432,7 @@ function EventRow({ event, onRetry, onEditCaption, onSaveCarouselDraft }: { even
           approved={payload.approved}
           mixpost={payload.mixpost}
           onEditCaption={onEditCaption}
-          onSaveDraft={onSaveCarouselDraft}
+          onSaveDraft={onSaveDraft}
         />
       )
 

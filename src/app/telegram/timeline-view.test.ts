@@ -14,3 +14,13 @@ test('unsaved direct copy cannot present an edit-and-save control', () => {
   assert.match(source, /onSave\?: \(next: string\) => void/)
   assert.match(source, /\{onSave && \(/)
 })
+
+test('stored social proposals expose a clear review state and explicit draft action', () => {
+  assert.match(source, /Saved in NRS · not in Mixpost yet/)
+  assert.match(source, /Save as Mixpost draft/)
+  assert.match(source, /Saving a draft never publishes it/)
+})
+
+test('a fallback chat-only caption says plainly that it has not been saved', () => {
+  assert.match(source, /Prepared in this chat · not saved in NRS or Mixpost/)
+})

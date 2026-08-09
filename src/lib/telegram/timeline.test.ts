@@ -83,7 +83,9 @@ function proposal(id: string, at: string, aboutClip: string, hook: string): Time
       caption: '',
       hashtags: [],
       postType: 'single',
+      platform: 'instagram',
       approved: false,
+      mixpost: null,
       withheld: false,
     },
   }

@@ -83,11 +83,11 @@ test('the job honours a scope that asks for files only', () => {
   assert.ok(album > -1, 'the job must still deliver media')
 })
 
-test('a Mini App carousel is filed through the canonical draft path, never published directly', () => {
+test('a Mini App social proposal is filed through the canonical draft path, never published directly', () => {
   const draft = read('src/app/api/telegram/mini-app/draft/route.ts')
   assert.match(draft, /createDraftPost/)
   assert.match(draft, /stage !== 'proposal'/)
-  assert.match(draft, /post_type !== 'carousel'/)
+  assert.doesNotMatch(draft, /post_type !== 'carousel'/)
   assert.match(draft, /mixpost/)
   assert.doesNotMatch(draft, /publishToSocial|publish_now/)
 })

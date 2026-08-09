@@ -825,7 +825,7 @@ export default function TelegramMiniAppPage() {
                     events={events}
                     onRetry={(text, clientEventId) => void submitMessage(text, clientEventId)}
                     onEditCaption={(outputId, caption) => void saveCaption(outputId, caption)}
-                    onSaveCarouselDraft={saveCarouselDraft}
+                    onSaveDraft={saveCarouselDraft}
                   />
                 )}
               </div>
