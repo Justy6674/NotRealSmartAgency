@@ -53,6 +53,46 @@ Also `~/Obsidian/Decisions/2026-04-08-nrs-complete-architecture-spec.md` and `20
 
 **Order of authority when sources disagree:** Obsidian spec (what to build) → code (what is built) → graphify (how it connects) → this file → `AGENTS.md` / `README.md` / `docs/`.
 
+## External platforms: never from memory, always from the live source
+
+Every platform this app touches versions faster than any model's training data. A model ID, a Graph API version, an endpoint shape or a rate limit recalled from memory is **stale by default**. Fetch it. This is the same rule as the AI Gateway one below, applied everywhere.
+
+### Where to look, per platform
+
+| Platform | Authoritative source (use this, in this order) |
+|---|---|
+| **AI Gateway / models** | `curl -s https://ai-gateway.vercel.sh/v1/models` — live catalogue, no auth needed. Then `vercel:ai-gateway` skill. |
+| **Vercel / Next.js** | `vercel:*` skills — `vercel:nextjs`, `vercel:vercel-functions`, `vercel:deployments-cicd`, `vercel:env-vars`, `vercel:vercel-storage`, `vercel:react-best-practices`. The session-start `vercel:knowledge-update` corrects known-stale model beliefs — trust it over training data. |
+| **Supabase** | `mcp__claude_ai_Supabase__search_docs` (GraphQL; call it even when you think you know), then `list_tables` / `get_advisors` / `get_logs` against the live project. `supabase-postgres-best-practices` skill. |
+| **Anthropic / Claude API** | `claude-api` skill — read it before touching model IDs, pricing, caching or tool definitions. |
+| **Meta (Facebook/Instagram)** | `developers.facebook.com/docs/graph-api/changelog` + the Instagram Platform changelog. Version table lists every version and its sunset date. |
+| **TikTok** | `developers.tiktok.com` Content Posting API + Display API docs. |
+| **LinkedIn** | `learn.microsoft.com/en-us/linkedin/marketing/versioning` — monthly `YYYYMM` versions, minimum one year support. |
+| **YouTube / Google** | `developers.google.com/youtube/v3` + OAuth scope docs. |
+| **X / Twitter** | `docs.x.com` — v2 endpoints and access-tier limits. |
+| **Stripe** | `stripe:stripe-docs` and `stripe:stripe-best-practices` skills. |
+| **Resend** | `resend:resend`, `resend:react-email` skills. |
+| **Canva** | the `mcp__claude_ai_Canva__*` tools are the live surface; `help` describes them. |
+| **Mixpost** | Self-hosted, so the running instance is the truth: the Laravel source on the VPS at `/opt/mixpost/`, plus `~/Obsidian/Reference/nrs-mixpost-*` which were derived from it. Public Mixpost docs lag the Pro build. |
+
+**Fetching method** — follow the web access ladder: official API / changelog endpoint first, then WebClaw (`mcp__webclaw__scrape`, `mcp__webclaw__research`) for extraction, then Browser Harness when a real browser is genuinely needed, then PixelRAG when layout carries the meaning (pricing tables, comparison grids). Never Playwright/Puppeteer/Firecrawl outside a project E2E suite.
+
+### Pinned external versions in this code — check before touching, and re-check on a schedule
+
+These are hard-coded and go stale silently. Verified against live docs on **2026-08-09**:
+
+| Pin | Location | Status at last check |
+|---|---|---|
+| Meta Graph `v21.0` | `src/lib/publishers/meta.ts:25`, `src/app/api/oauth/meta/callback/route.ts:19` | Latest is **v26.0**. v21.0 sunsets **21 Jan 2027**. |
+| `LinkedIn-Version: 202401` | `src/lib/publishers/linkedin.ts:38` | Latest is **202607**. LinkedIn's docs cite `202401` as their example of a *deprecated* header. Note the calls go to `/v2/` (unversioned legacy), not `/rest/`, so the header may be inert — **verify against a live call before changing it**. |
+| LinkedIn `api.linkedin.com/v2` | `src/lib/publishers/linkedin.ts:22`, `oauth/linkedin/callback/route.ts:16` | Legacy unversioned path; versioned API is `/rest/`. |
+| X `api.x.com/2` | `src/lib/publishers/twitter.ts`, `oauth/twitter/callback/route.ts` | v2 is current. |
+| YouTube Data `v3` | `oauth/youtube/callback/route.ts:18` | v3 is current. |
+| Stripe `2026-02-25.clover` | `src/lib/stripe/client.ts:8` | Pinned deliberately — do not bump without reading the Stripe upgrade guide. |
+| Mixpost Pro **v6** workspace-scoped paths | `src/lib/mixpost/client.ts` | `/api/{workspace_uuid}/…`. Confirm against the VPS build before changing path shapes. |
+
+When you touch a publisher, re-verify its pin against the live changelog and update this table with the date you checked. An unchecked pin in a health-brand publishing path is a compliance exposure, not just a bug.
+
 ## Commands
 
 ```bash
