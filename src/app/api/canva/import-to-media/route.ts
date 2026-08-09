@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getCanvaState } from '@/lib/canva/status'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60 // exports can take time
@@ -41,19 +42,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
   }
 
-  // Get Canva token
-  const { data: integration } = await supabase
-    .from('user_integrations')
-    .select('cached_data')
-    .eq('user_id', user.id)
-    .eq('provider', 'canva')
-    .single()
-
-  let apiKey: string | null = (integration?.cached_data?.api_key as string) ?? null
-  if (!apiKey) apiKey = process.env.CANVA_API_KEY ?? null
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Canva not connected' }, { status: 400 })
+  // OAuth health/refresh belongs to one service. A persisted token is not a
+  // connection claim until the shared service has probed Canva successfully.
+  const canva = await getCanvaState(supabase, user.id)
+  if (canva.state !== 'ready') {
+    return NextResponse.json({ error: canva.message, state: canva.state }, { status: 409 })
   }
+  const apiKey = canva.token
 
   try {
     // Step 1: Get design info

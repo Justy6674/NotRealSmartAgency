@@ -14,6 +14,7 @@
 
 import { runComplianceFilter } from './compliance-filter'
 import type { ComplianceFlags, BrandDNAConstraints } from '@/types/database'
+import { validateScentSellProductClaims } from '@/lib/products/scent-sell-product-gate'
 
 export interface PublishGateResult {
   /** False means do not publish. Always check this before calling a platform. */
@@ -33,9 +34,9 @@ function regimeOf(flags: ComplianceFlags): string {
 /**
  * Decide whether content may be published for a project.
  *
- * Unregulated projects pass straight through — the check exists for health
- * advertising, and running an LLM over every fragrance caption would add cost
- * and latency for no regulatory benefit.
+ * Unregulated projects pass straight through after deterministic product-name
+ * protection. The check exists for health advertising, and it does not run an
+ * LLM over ordinary fragrance captions.
  *
  * For a regulated project this fails closed in both directions: a review that
  * found violations blocks, and a review that could not run also blocks. The
@@ -46,11 +47,22 @@ function regimeOf(flags: ComplianceFlags): string {
 export async function checkPublishAllowed(input: {
   content: string
   complianceFlags: ComplianceFlags | null | undefined
+  /** Required for the ScentSell catalogue gate; other brands pass through. */
+  brandSlug?: string | null
   brandDNA?: BrandDNAConstraints | null
   /** Included in the block message so the operator knows which post stopped. */
   label?: string
 }): Promise<PublishGateResult> {
   const flags = input.complianceFlags ?? { ahpra: false, tga: false, tga_categories: [] }
+
+  const productGate = await validateScentSellProductClaims(input.brandSlug ?? '', input.content)
+  if (!productGate.allowed) {
+    return {
+      allowed: false,
+      reason: productGate.reason ?? 'Product identity could not be verified. Not published.',
+      warnings: [],
+    }
+  }
 
   if (!flags.ahpra && !flags.tga) return ALLOWED
 

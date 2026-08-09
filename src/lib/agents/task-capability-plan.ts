@@ -18,6 +18,7 @@ export type DirectorTaskCapability =
   | 'competitor_research'
   | 'current_research'
   | 'caption_hashtag_analysis'
+  | 'product_identity'
   | 'compliance_review'
 
 export interface CapabilityRequirement {
@@ -33,6 +34,13 @@ export interface DirectorTaskPlan {
   version: 1
   request: string
   requirements: CapabilityRequirement[]
+}
+
+export interface DirectorTaskPlanOptions {
+  /** The active brand is required for a product-identity gate, never inferred from prose. */
+  brandSlug?: string
+  /** AHPRA/TGA work needs cited corpus evidence instead of a prose-only review. */
+  regulated?: boolean
 }
 
 export interface CapabilityExecution {
@@ -57,12 +65,15 @@ const WEBSITE_REQUEST = /\b(?:website|web\s*site|landing\s*page|site\s*(?:audit|
 const WEBSITE_ACTION = /\b(?:audit|analyse|analyze|scan|review|crawl|map|improve|conversion|seo)\b/i
 const COMPETITOR_REQUEST = /\b(?:competitor|competition|rival|market intelligence|competitive)\b/i
 const CURRENT_RESEARCH_REQUEST = /\b(?:current|latest|recent|today|202[5-9]|google|geo|search\s*(?:result|trend|landscape)|ai\s*(?:trend|landscape|news))\b/i
-const VIDEO_REQUEST = /\b(?:video|reel|clip|footage|subtitles?|captions?|transcri(?:be|ption))\b/i
+// Captions alone are social-copy work. Video evidence is required only when
+// the owner actually supplies or refers to video/media/transcript material.
+const VIDEO_REQUEST = /\b(?:video|reel|clip|footage|subtitles?|transcri(?:be|ption)|uploaded\s+media)\b/i
 const VIDEO_EVIDENCE_REQUEST = /\b(?:analyse|analyze|review|repurpose|caption|subtitle|transcri(?:be|ption)|uploaded|media)\b/i
 const CANVA_REQUEST = /\b(?:canva|graphic|creative|visual|image)\b/i
 const CANVA_ACTION = /\b(?:create|generate|design|make|build)\b/i
 const CAPTION_REQUEST = /\b(?:caption|captions|hashtags?|hook|social copy|post copy)\b/i
 const COMPLIANCE_REQUEST = /\b(?:ahpra|tga|compliance|regulat(?:ion|ory)|health claim|therapeutic claim)\b/i
+const PRODUCT_LANGUAGE = /\b(?:product|fragrance|perfume|scent|cologne|bottle|notes?)\b/i
 
 function hasAny(text: string, ...patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(text))
@@ -82,8 +93,12 @@ function addRequirement(
  * every chat message: ordinary conversation remains cheap and fast. The
  * recognised work below has a concrete evidence or specialist requirement.
  */
-export function planDirectorTask(request: string): DirectorTaskPlan {
+export function planDirectorTask(
+  request: string,
+  options: DirectorTaskPlanOptions = {},
+): DirectorTaskPlan {
   const requirements: CapabilityRequirement[] = []
+  const scentSell = options.brandSlug?.replace(/[^a-z0-9]/gi, '').toLowerCase() === 'scentsell'
 
   if (hasAny(request, WEBSITE_REQUEST) && hasAny(request, WEBSITE_ACTION)) {
     addRequirement(requirements, {
@@ -143,10 +158,23 @@ export function planDirectorTask(request: string): DirectorTaskPlan {
     })
   }
 
+  // ScentSell is the one brand where a plausible-but-wrong product name has
+  // already reached customer-facing copy. Product identity is a required
+  // source receipt before a caption can make named fragrance claims.
+  if (scentSell && CAPTION_REQUEST.test(request) && PRODUCT_LANGUAGE.test(request)) {
+    addRequirement(requirements, {
+      capability: 'product_identity',
+      agentType: 'content',
+      requiredAnyToolNames: ['verify_product'],
+      summary: 'Verify every named fragrance or product with the catalogue before making a ScentSell product claim. Unresolved names must stay unnamed.',
+    })
+  }
+
   if (COMPLIANCE_REQUEST.test(request)) {
     addRequirement(requirements, {
       capability: 'compliance_review',
       agentType: 'compliance',
+      ...(options.regulated ? { requiredAnyToolNames: ['use_abe_ai'] } : {}),
       summary: 'Use the regulatory specialist before making compliance conclusions.',
     })
   }
@@ -192,9 +220,17 @@ export async function executeDirectorTaskPlan(
     ctx,
   )
 
-  const byDepartment = new Map(execution.results.concat(execution.errors).map((result) => [result.department, result]))
+  // Two capabilities can legitimately use the same department. Keying this
+  // map by department silently assigned the last Content result to both the
+  // caption and ScentSell identity requirements.
+  const byCapability = new Map(
+    execution.results
+      .concat(execution.errors)
+      .filter((result) => Boolean(result.taskCapability))
+      .map((result) => [result.taskCapability, result]),
+  )
   const capabilities = plan.requirements.map((requirement) => {
-    const worker = byDepartment.get(requirement.agentType)
+    const worker = byCapability.get(requirement.capability)
     return worker
       ? toExecution(requirement, worker)
       : {

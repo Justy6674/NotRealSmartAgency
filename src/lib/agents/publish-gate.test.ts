@@ -61,9 +61,32 @@ test('the scheduled publisher runs the gate before the platform call', () => {
   assert.match(source, /checkPublishAllowed/)
   // It has to select the flags it passes, or the gate always sees undefined.
   assert.match(source, /compliance_flags/)
+  assert.match(source, /post\.caption/)
+  assert.doesNotMatch(source, /post\.content/)
   assert.match(source, /if \(!gate\.allowed\)/)
   // A blocked post is recorded, not silently skipped.
   assert.match(source, /status: 'failed', error: gate\.reason/)
+})
+
+test('manual publish uses the same gate before a live platform call', () => {
+  const source = readFileSync(
+    new URL('../../app/api/scheduled-posts/publish-now/route.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /checkPublishAllowed/)
+  assert.ok(source.indexOf('checkPublishAllowed') < source.indexOf("status: 'publishing'"))
+  assert.match(source, /compliance_flags/)
+})
+
+test('the shared draft creator enforces ScentSell identity, not only the MCP shortcut', () => {
+  const source = readFileSync(
+    new URL('../posts/create-draft.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /validateScentSellProductClaims/)
+  assert.match(source, /verified_products/)
 })
 
 test('the direct publisher dispatcher runs the gate before any platform call', () => {

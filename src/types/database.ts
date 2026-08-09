@@ -184,6 +184,14 @@ export interface UserIntegration {
   sync_error: string | null
   cached_data: Record<string, unknown>
   is_active: boolean
+  /** Durable, redacted connection health (OAuth secrets stay in cached_data). */
+  last_verified_at: string | null
+  last_refresh_at: string | null
+  last_error_code: string | null
+  last_error_at: string | null
+  refresh_lease_id: string | null
+  refresh_lease_until: string | null
+  refresh_version: number
   created_at: string
   updated_at: string
 }
@@ -775,6 +783,8 @@ export interface DraftSourceMeta {
   intent?: string
   /** For mcp_external drafts: which agent department actually wrote the copy */
   department?: string
+  /** Catalogue-confirmed ScentSell product names used in the draft. */
+  verified_products?: string[]
 }
 
 // ─── MCP Async Jobs ──────────────────────────────────────────────────────────

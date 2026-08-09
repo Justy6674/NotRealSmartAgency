@@ -48,7 +48,11 @@ test('the cost of reviewing regulated content is attributed', () => {
 test('every route to a live account passes the shared publishing gate', () => {
   // A new publisher that forgets the gate is the failure this catches. Both
   // named files reach real accounts.
-  for (const file of ['app/api/cron/publish-posts/route.ts', 'lib/publishers/dispatcher.ts']) {
+  for (const file of [
+    'app/api/cron/publish-posts/route.ts',
+    'app/api/scheduled-posts/publish-now/route.ts',
+    'lib/publishers/dispatcher.ts',
+  ]) {
     assert.ok(
       read(file).includes('checkPublishAllowed'),
       `${file} publishes without the shared gate`,

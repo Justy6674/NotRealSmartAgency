@@ -21,6 +21,7 @@ import { ensureProforma } from '@/lib/proforma/auto-populate'
 import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
+import { prepareDirectorTurn } from '@/lib/agents/director-run'
 import {
   estimateGatewayCost,
   getGatewayRouteProviderOptions,
@@ -130,6 +131,21 @@ export async function POST(request: Request) {
     })
   }
 
+  // Web chat used to skip the deterministic specialist/evidence path that
+  // Telegram and MCP already used. Keep the conversation transport here, but
+  // prepare every Director turn through the shared authority coordinator.
+  const directorTurn = agentType === 'overall'
+    ? await prepareDirectorTurn({
+        supabase,
+        userId: user.id,
+        brand: brand as Brand,
+        conversationId: conversationId ?? null,
+        channel: 'web',
+        request: lastMessageText,
+        agentId: registry?.id ?? null,
+      })
+    : null
+
   // Ordinary project work loads only the active project's proforma. User-wide
   // work context and sibling projects are not prompt context.
   const proformaSections = await ensureProforma(supabase, brand as Brand)
@@ -186,6 +202,9 @@ export async function POST(request: Request) {
     const routingContext = buildRoutingContext(routing, multiRouting)
     if (routingContext) {
       systemPrompt = systemPrompt + '\n\n---\n\n' + routingContext
+    }
+    if (directorTurn?.context) {
+      systemPrompt += '\n\n---\n\n' + directorTurn.context
     }
     systemPrompt += `\n\n---\n\n${buildMarketingSkillContext(lastMessageText, 'web')}`
 
@@ -350,6 +369,7 @@ That's the difference between a marketing director and a tech support agent. Def
     supabase,
     userId: user.id,
     brandId,
+    brand: brand as Brand,
     conversationId: conversationId ?? null,
     agentRegistryId: registry?.id ?? null,
     // What the user actually typed this turn. manage_posts needs it to tell

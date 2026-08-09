@@ -139,6 +139,7 @@ export async function runAgentWorker(
         department: dept, departmentName: deptName, result: '',
         costCents: 0, tokensUsed: 0, model: 'none',
         durationMs: Date.now() - startTime, toolNames: [], error: `Agent ${dept} not configured`,
+        ...(options.taskCapability ? { taskCapability: options.taskCapability, evidenceSatisfied: false } : {}),
       }
     }
 
@@ -164,6 +165,7 @@ export async function runAgentWorker(
           durationMs: Date.now() - startTime,
           toolNames: [],
           error: `${deptName} has exhausted its monthly budget (${budget.spent}/${budget.limit} cents)`,
+          ...(options.taskCapability ? { taskCapability: options.taskCapability, evidenceSatisfied: false } : {}),
         }
       }
     }
@@ -225,6 +227,7 @@ Rules:
       supabase: ctx.supabase,
       userId: ctx.userId,
       brandId: ctx.brandId,
+      brand: ctx.brand,
       conversationId: ctx.conversationId,
       agentRegistryId: registry?.id ?? null,
       taskId: ctx.taskId ?? null,
@@ -427,6 +430,7 @@ Rules:
       durationMs: Date.now() - startTime,
       toolNames: [],
       error: message,
+      ...(options.taskCapability ? { taskCapability: options.taskCapability, evidenceSatisfied: false } : {}),
     }
   }
 }

@@ -1,6 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { validateScentSellProductClaims } from '@/lib/products/scent-sell-product-gate'
 
 /**
  * Publish content directly to social media platforms via Mixpost.
@@ -71,6 +72,16 @@ export function createPublishToSocialTool(
 
         const brandName = brand.name
         const brandSlug = brand.slug
+
+        // This runs before Mixpost is contacted. A wrong perfume name is not a
+        // normal copy error for the marketplace: it is a false product claim.
+        // The catalogue is the authority; an unavailable or near result blocks
+        // the named claim rather than letting a plausible model guess through.
+        const productGate = await validateScentSellProductClaims(
+          brandSlug,
+          hashtags?.length ? `${caption}\n${hashtags.join(' ')}` : caption,
+        )
+        if (!productGate.allowed) return `PRODUCT IDENTITY CHECK FAILED — post NOT published.\n\n${productGate.reason}`
 
         // ── AHPRA/TGA Compliance Gate — runs BEFORE publishing ──
         const complianceFlags = brand?.compliance_flags ?? {}
@@ -519,6 +530,7 @@ export function createPublishToSocialTool(
                 source: 'publish_to_social',
                 created_by: 'Director',
                 ...(hasVideo ? { has_video: true } : {}),
+                ...(productGate.verified.length ? { verified_products: productGate.verified } : {}),
               },
             })
           } catch {

@@ -10,6 +10,7 @@ import {
   type MixpostVersion,
 } from '@/lib/mixpost/client'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
+import { checkPublishAllowed } from '@/lib/agents/publish-gate'
 
 const Schema = z.object({
   postId: z.string().uuid().optional(),
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   // Fetch the posts — user_id check ensures ownership
   const { data: posts, error } = await admin
     .from('scheduled_posts')
-    .select('*, brands(id, name, slug, social_urls, post_signature), media_items(file_url, file_name)')
+    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(file_url, file_name)')
     .in('id', ids)
     .eq('user_id', user.id)
 
@@ -69,6 +70,18 @@ export async function POST(request: Request) {
 
   for (const post of posts) {
     try {
+      const postBrand = post.brands as Record<string, unknown> | null
+      const gate = await checkPublishAllowed({
+        content: [String(post.caption ?? ''), ...((post.hashtags as string[] | null) ?? [])].join('\n'),
+        complianceFlags: postBrand?.compliance_flags as never,
+        brandDNA: postBrand?.brand_dna_constraints as never,
+        brandSlug: typeof postBrand?.slug === 'string' ? postBrand.slug : null,
+        label: `manual post ${post.id}`,
+      })
+      if (!gate.allowed) {
+        throw new Error(gate.reason ?? 'This post did not pass the publishing gate.')
+      }
+
       // Mark as publishing
       await admin
         .from('scheduled_posts')

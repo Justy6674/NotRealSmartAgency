@@ -110,7 +110,7 @@ export async function publishToPlatform(
     const admin = createAdminClient()
     const { data: brand } = await admin
       .from('brands')
-      .select('name, compliance_flags, brand_dna_constraints')
+      .select('name, slug, compliance_flags, brand_dna_constraints')
       .eq('id', req.brand_id)
       .maybeSingle()
 
@@ -118,6 +118,7 @@ export async function publishToPlatform(
       content: [req.caption, ...(req.hashtags ?? [])].join(' ').trim(),
       complianceFlags: brand?.compliance_flags as never,
       brandDNA: brand?.brand_dna_constraints as never,
+      brandSlug: brand?.slug as string | null | undefined,
       label: `${brand?.name ?? req.brand_id} → ${req.platform}`,
     })
 

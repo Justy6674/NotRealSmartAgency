@@ -9,9 +9,17 @@ function withCachedData(cached: unknown): SupabaseClient {
       const chain: Record<string, unknown> = {}
       chain.select = () => chain
       chain.eq = () => chain
+      chain.or = () => chain
       chain.update = () => chain
-      chain.maybeSingle = async () => ({ data: cached === undefined ? null : { cached_data: cached }, error: null })
-      chain.single = async () => ({ data: cached === undefined ? null : { cached_data: cached }, error: null })
+      chain.insert = () => Promise.resolve({ error: null })
+      chain.maybeSingle = async () => ({
+        data: cached === undefined ? null : { id: 'canva-integration', cached_data: cached, refresh_version: 0 },
+        error: null,
+      })
+      chain.single = async () => ({
+        data: cached === undefined ? null : { id: 'canva-integration', cached_data: cached, refresh_version: 0 },
+        error: null,
+      })
       return chain
     },
   } as unknown as SupabaseClient

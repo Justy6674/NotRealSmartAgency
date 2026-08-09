@@ -69,12 +69,7 @@ import {
   matchesDirectorJobScope,
   type DirectorExecutionScope,
 } from '@/lib/agents/director-execution'
-import {
-  buildDirectorCapabilityContext,
-  executeDirectorTaskPlan,
-  planDirectorTask,
-  type DirectorTaskPlanExecution,
-} from '@/lib/agents/task-capability-plan'
+import { prepareDirectorTurn } from '@/lib/agents/director-run'
 
 export interface DirectorJobInput {
   brand_id: string
@@ -309,63 +304,18 @@ export async function runDirectorJob(
       }
     }
 
-    // The Director is the one voice, not the only worker. A recognised
-    // evidence-heavy request runs its accountable specialists before the
-    // conversational synthesis, whether it arrived from Telegram, the Mini
-    // App, or another project through MCP.
-    const taskPlan = planDirectorTask(telegramWorkMessage)
-    let capabilityExecution: DirectorTaskPlanExecution | null = null
-    if (taskPlan.requirements.length > 0) {
-      await logAudit({
-        supabase,
-        userId,
-        agentId: registry?.id,
-        action: 'director_task_plan_created',
-        entityType: 'director_job',
-        entityId: jobId,
-        detail: {
-          channel: execution.channel,
-          request: telegramWorkMessage.slice(0, 500),
-          capabilities: taskPlan.requirements.map((requirement) => ({
-            capability: requirement.capability,
-            department: requirement.agentType,
-            requiredAnyToolNames: requirement.requiredAnyToolNames ?? [],
-          })),
-        },
-      })
-
-      capabilityExecution = await executeDirectorTaskPlan(taskPlan, {
-        supabase,
-        userId,
-        brandId: brand_id,
-        brand: brand as Brand,
-        conversationId: input.conversation_id ?? null,
-      })
-
-      await logAudit({
-        supabase,
-        userId,
-        agentId: registry?.id,
-        action: 'director_task_plan_completed',
-        entityType: 'director_job',
-        entityId: jobId,
-        detail: {
-          channel: execution.channel,
-          totalCostCents: capabilityExecution.totalCostCents,
-          totalTokens: capabilityExecution.totalTokens,
-          durationMs: capabilityExecution.durationMs,
-          capabilities: capabilityExecution.capabilities.map((capability) => ({
-            capability: capability.capability,
-            department: capability.agentType,
-            model: capability.model,
-            toolsUsed: capability.toolNames,
-            evidenceSatisfied: capability.evidenceSatisfied,
-            error: capability.error,
-          })),
-        },
-        costCents: capabilityExecution.totalCostCents,
-      })
-    }
+    // Telegram, Mini App and MCP all enter through the same authority path as
+    // web chat. The queue job remains a transport concern; planning, evidence
+    // receipts and claim limits live in prepareDirectorTurn().
+    const directorTurn = await prepareDirectorTurn({
+      supabase,
+      userId,
+      brand: brand as Brand,
+      conversationId: input.conversation_id ?? null,
+      channel: execution.channel,
+      request: telegramWorkMessage,
+      agentId: registry?.id ?? null,
+    })
 
     // Build system prompt with memory
     const activeGoal = await getActiveGoal(supabase, userId, brand_id)
@@ -387,11 +337,8 @@ export async function runDirectorJob(
     if (routingContext) {
       systemPrompt += '\n\n---\n\n' + routingContext
     }
-    const capabilityContext = capabilityExecution
-      ? buildDirectorCapabilityContext(capabilityExecution)
-      : null
-    if (capabilityContext) {
-      systemPrompt += '\n\n---\n\n' + capabilityContext
+    if (directorTurn.context) {
+      systemPrompt += '\n\n---\n\n' + directorTurn.context
     }
     systemPrompt += `\n\n---\n\n${buildMarketingSkillContext(message, execution.channel)}`
 
@@ -665,6 +612,7 @@ That's the difference between a marketing director and a tech support agent. Def
       supabase,
       userId,
       brandId: brand_id,
+      brand: brand as Brand,
       conversationId: null,
       agentRegistryId: registry?.id ?? null,
       // The owner's OWN words, with NRS's media directive taken back out.
@@ -900,8 +848,8 @@ That's the difference between a marketing director and a tech support agent. Def
           ...(gatewayModelAttempts !== undefined ? { model_attempts: gatewayModelAttempts } : {}),
         },
         channel: execution.channel,
-        ...(capabilityExecution ? {
-          task_capabilities: capabilityExecution.capabilities.map((capability) => ({
+        ...(directorTurn.execution ? {
+          task_capabilities: directorTurn.execution.capabilities.map((capability) => ({
             capability: capability.capability,
             department: capability.agentType,
             model: capability.model,
@@ -931,8 +879,8 @@ That's the difference between a marketing director and a tech support agent. Def
         cacheWriteTokens: primaryCost.cacheWriteTokens + repairCacheWriteTokens,
         durationMs,
         ...(gatewayModelAttempts !== undefined ? { gatewayModelAttempts } : {}),
-        ...(capabilityExecution ? {
-          taskCapabilities: capabilityExecution.capabilities.map((capability) => ({
+        ...(directorTurn.execution ? {
+          taskCapabilities: directorTurn.execution.capabilities.map((capability) => ({
             capability: capability.capability,
             department: capability.agentType,
             model: capability.model,
@@ -982,8 +930,8 @@ That's the difference between a marketing director and a tech support agent. Def
       // it the Director can only see its own prose, and prose is not evidence
       // of action — which is how one request became six drafts.
       ...(turnActions.length > 0 ? { actions: turnActions } : {}),
-      ...(capabilityExecution ? {
-        task_capabilities: capabilityExecution.capabilities.map((capability) => ({
+      ...(directorTurn.execution ? {
+        task_capabilities: directorTurn.execution.capabilities.map((capability) => ({
           capability: capability.capability,
           department: capability.agentType,
           model: capability.model,

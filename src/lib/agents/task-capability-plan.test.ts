@@ -22,6 +22,17 @@ test('keeps ordinary conversation out of the expensive specialist path', () => {
   assert.equal(planDirectorTask('Thanks, make that a little friendlier.').requirements.length, 0)
 })
 
+test('requires the catalogue before ScentSell captions make a product claim', () => {
+  const plan = planDirectorTask('Write an Instagram caption for a fragrance bottle product.', {
+    brandSlug: 'scent-sell',
+  })
+  assert.deepEqual(plan.requirements.map((item) => item.capability), [
+    'caption_hashtag_analysis',
+    'product_identity',
+  ])
+  assert.deepEqual(plan.requirements[1]?.requiredAnyToolNames, ['verify_product'])
+})
+
 test('marks missing specialist evidence explicitly in Director context', () => {
   const context = buildDirectorCapabilityContext({
     plan: planDirectorTask('Audit our website'),

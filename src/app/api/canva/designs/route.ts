@@ -1,209 +1,102 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { describeCanvaFailure, getCanvaState } from '@/lib/canva/status'
 
 export const dynamic = 'force-dynamic'
 
 const CANVA_BASE_URL = 'https://api.canva.com/rest/v1'
 
 /**
- * Refresh an expired Canva OAuth token using the refresh_token.
- * Returns the new access token, or null if refresh fails.
- */
-async function refreshCanvaToken(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  userId: string,
-  refreshToken: string,
-): Promise<string | null> {
-  const clientId = process.env.CANVA_CLIENT_ID
-  const clientSecret = process.env.CANVA_CLIENT_SECRET
-  if (!clientId || !clientSecret) return null
-
-  try {
-    const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
-    const res = await fetch('https://api.canva.com/rest/v1/oauth/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${credentials}`,
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-      }),
-    })
-
-    if (!res.ok) {
-      console.error('[canva] Token refresh failed:', res.status, await res.text().catch(() => ''))
-      return null
-    }
-
-    const data = await res.json()
-    const { access_token, refresh_token: newRefreshToken, expires_in } = data
-    const expiresAt = new Date(Date.now() + (expires_in ?? 3600) * 1000).toISOString()
-
-    // Update stored tokens
-    await supabase
-      .from('user_integrations')
-      .update({
-        cached_data: {
-          api_key: access_token,
-          refresh_token: newRefreshToken ?? refreshToken,
-          expires_at: expiresAt,
-          token_type: 'oauth',
-        },
-      })
-      .eq('user_id', userId)
-      .eq('provider', 'canva')
-
-    console.log('[canva] Token refreshed successfully')
-    return access_token
-  } catch (err) {
-    console.error('[canva] Token refresh error:', err)
-    return null
-  }
-}
-
-/**
- * GET /api/canva/designs?brandId=xxx
+ * Fetch recent Canva designs for the selected brand.
  *
- * Fetches recent Canva designs. Auto-refreshes expired OAuth tokens.
+ * Connection health and refresh live in one service. This route never uses a
+ * legacy environment token, and it never performs its own OAuth refresh.
  */
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-  }
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const brandId = req.nextUrl.searchParams.get('brandId')
-  if (!brandId) {
-    return NextResponse.json({ error: 'brandId required' }, { status: 400 })
-  }
-  // showAll param removed — we sort brand-matching first instead of filtering
+  if (!brandId) return NextResponse.json({ error: 'brandId required' }, { status: 400 })
 
-  // Get Canva token from user_integrations
-  const { data: integration } = await supabase
-    .from('user_integrations')
-    .select('cached_data')
-    .eq('user_id', user.id)
-    .eq('provider', 'canva')
-    .single()
-
-  let apiKey: string | null = (integration?.cached_data?.api_key as string) ?? null
-  const refreshToken = (integration?.cached_data?.refresh_token as string) ?? null
-  const expiresAt = (integration?.cached_data?.expires_at as string) ?? null
-
-  // Fall back to platform-wide key
-  if (!apiKey) {
-    apiKey = process.env.CANVA_API_KEY ?? null
+  let state = await getCanvaState(supabase, user.id)
+  if (state.state !== 'ready') {
+    return NextResponse.json({
+      configured: state.state !== 'not_connected',
+      state: state.state,
+      designs: [],
+      message: state.message,
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   }
 
-  if (!apiKey) {
-    return NextResponse.json({ configured: false, designs: [] })
-  }
-
-  // Check if token is expired and refresh proactively
-  if (expiresAt && refreshToken) {
-    const isExpired = new Date(expiresAt).getTime() < Date.now() + 60000 // 1 min buffer
-    if (isExpired) {
-      const newToken = await refreshCanvaToken(supabase, user.id, refreshToken)
-      if (newToken) {
-        apiKey = newToken
-      }
-    }
-  }
-
-  // Read pagination / search params
   const query = req.nextUrl.searchParams.get('query') ?? undefined
   const continuation = req.nextUrl.searchParams.get('continuation') ?? undefined
   const sortBy = req.nextUrl.searchParams.get('sort_by') ?? 'modified_descending'
-
-  // Fetch designs with pagination support
   const fetchDesigns = async (token: string) => {
-    const params = new URLSearchParams({
-      ownership: 'owned',
-      sort_by: sortBy,
-    })
+    const params = new URLSearchParams({ ownership: 'owned', sort_by: sortBy })
     if (query) params.set('query', query)
     if (continuation) params.set('continuation', continuation)
-
-    const res = await fetch(`${CANVA_BASE_URL}/designs?${params.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    return fetch(`${CANVA_BASE_URL}/designs?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     })
-    return res
   }
 
   try {
-    let res = await fetchDesigns(apiKey)
-
-    // If 401, try refreshing the token once
-    if (res.status === 401 && refreshToken) {
-      const newToken = await refreshCanvaToken(supabase, user.id, refreshToken)
-      if (newToken) {
-        apiKey = newToken
-        res = await fetchDesigns(newToken)
-      }
+    let response = await fetchDesigns(state.token)
+    // The token may expire between the cheap health probe and this endpoint.
+    // Re-enter the shared service once instead of duplicating a refresh here.
+    if (response.status === 401 || response.status === 403) {
+      state = await getCanvaState(supabase, user.id)
+      if (state.state === 'ready' && state.token !== undefined) response = await fetchDesigns(state.token)
     }
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      console.error('[canva/designs] API error:', res.status, err)
+    if (!response.ok) {
+      const failure = state.state === 'ready'
+        ? describeCanvaFailure(response.status)
+        : state
       return NextResponse.json({
-        configured: true,
+        configured: failure.state !== 'not_connected',
+        state: failure.state,
         designs: [],
-        error: res.status === 401 ? 'Canva session expired — visit /api/canva/auth to reconnect' : `Canva API error: ${res.status}`,
-      })
+        message: failure.message,
+      }, { headers: { 'Cache-Control': 'private, no-store' } })
     }
 
-    const data = await res.json()
-    const items = data.items ?? data.designs ?? []
-    const nextContinuation: string | undefined = data.continuation ?? undefined
-
-    const designs = items.map((d: Record<string, unknown>) => ({
-      id: d.id,
-      title: (d.title as string) ?? 'Untitled',
-      thumbnail_url: (d.thumbnail as Record<string, unknown>)?.url ?? (d.thumbnail_url as string) ?? null,
-      edit_url: (d.urls as Record<string, unknown>)?.edit_url ?? d.edit_url ?? null,
-      view_url: (d.urls as Record<string, unknown>)?.view_url ?? d.view_url ?? null,
-      updated_at: d.updated_at ?? d.created_at ?? null,
+    const data = await response.json() as Record<string, unknown>
+    const items = (data.items ?? data.designs ?? []) as Array<Record<string, unknown>>
+    const designs = items.map((design) => ({
+      id: design.id,
+      title: (design.title as string) ?? 'Untitled',
+      thumbnail_url: (design.thumbnail as Record<string, unknown> | undefined)?.url ?? design.thumbnail_url ?? null,
+      edit_url: (design.urls as Record<string, unknown> | undefined)?.edit_url ?? design.edit_url ?? null,
+      view_url: (design.urls as Record<string, unknown> | undefined)?.view_url ?? design.view_url ?? null,
+      updated_at: design.updated_at ?? design.created_at ?? null,
     }))
 
-    // Sort brand-matching designs first (don't hide non-matches)
-    let brandName: string | null = null
-    const { data: brand } = await supabase
-      .from('brands')
-      .select('name')
-      .eq('id', brandId)
-      .single()
-    brandName = brand?.name ?? null
-
-    let sortedDesigns = designs
-    if (brandName) {
-      const needle = brandName.toLowerCase()
-      const matching = designs.filter((d: { title: string }) =>
-        d.title.toLowerCase().includes(needle)
-      )
-      const rest = designs.filter((d: { title: string }) =>
-        !d.title.toLowerCase().includes(needle)
-      )
-      sortedDesigns = [...matching, ...rest]
-    }
+    const { data: brand } = await supabase.from('brands').select('name').eq('id', brandId).single()
+    const brandName = brand?.name ?? null
+    const sortedDesigns = brandName
+      ? [
+          ...designs.filter((design) => design.title.toLowerCase().includes(brandName.toLowerCase())),
+          ...designs.filter((design) => !design.title.toLowerCase().includes(brandName.toLowerCase())),
+        ]
+      : designs
 
     return NextResponse.json({
       configured: true,
+      state: 'ready',
       designs: sortedDesigns,
       brandName,
-      ...(nextContinuation ? { continuation: nextContinuation } : {}),
-    })
-  } catch (err) {
-    console.error('[canva/designs] Error:', err)
+      ...(typeof data.continuation === 'string' ? { continuation: data.continuation } : {}),
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
+  } catch (error) {
+    console.error('[canva/designs] Error:', error)
     return NextResponse.json({
       configured: true,
+      state: 'unavailable',
       designs: [],
-      error: 'Failed to fetch Canva designs',
-    })
+      message: 'Canva could not be reached just now. Try again shortly.',
+    }, { headers: { 'Cache-Control': 'private, no-store' } })
   }
 }

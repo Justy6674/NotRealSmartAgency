@@ -30,6 +30,12 @@ const CACHE_MAX = 100
 
 const cache = new Map<string, number[]>()
 
+export interface EmbeddingOutcome {
+  embedding: number[]
+  /** A stable, non-secret diagnostic for resumable maintenance jobs. */
+  errorCode?: 'empty_input' | 'dimension_mismatch' | 'provider_unavailable'
+}
+
 function cacheSet(key: string, value: number[]): void {
   // Evict oldest entry if cache is full
   if (cache.size >= CACHE_MAX) {
@@ -43,13 +49,13 @@ function cacheSet(key: string, value: number[]): void {
  * Embed a single text string into a 1536-dimensional vector.
  * Returns an empty array on failure (never throws).
  */
-export async function embedText(text: string): Promise<number[]> {
+export async function embedTextDetailed(text: string): Promise<EmbeddingOutcome> {
   const trimmed = text.trim()
-  if (!trimmed) return []
+  if (!trimmed) return { embedding: [], errorCode: 'empty_input' }
 
   // Check cache
   const cached = cache.get(trimmed)
-  if (cached) return cached
+  if (cached) return { embedding: cached }
 
   try {
     const { embedding } = await embed({
@@ -68,15 +74,20 @@ export async function embedText(text: string): Promise<number[]> {
       console.error(
         `[memory/v2] ${EMBEDDING_MODEL} returned ${embedding.length} dimensions, expected ${EMBEDDING_DIMENSIONS} — refusing to store`,
       )
-      return []
+      return { embedding: [], errorCode: 'dimension_mismatch' }
     }
 
     cacheSet(trimmed, embedding)
-    return embedding
+    return { embedding }
   } catch (err) {
     console.error('[memory/v2] embedText failed:', err)
-    return []
+    return { embedding: [], errorCode: 'provider_unavailable' }
   }
+}
+
+/** Embed a single text string, preserving the legacy empty-array contract. */
+export async function embedText(text: string): Promise<number[]> {
+  return (await embedTextDetailed(text)).embedding
 }
 
 /**

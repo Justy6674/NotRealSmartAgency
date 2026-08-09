@@ -191,6 +191,13 @@ Analyse the text and return JSON indicating if it is compliant with regulations 
   })
   const model = modelRoute.model
 
+  const reviewSchema = z.object({
+    isValid: z.boolean().describe('True if no critical violations found'),
+    flags: z.array(z.string()).describe('Critical violations. Empty if none.'),
+    warnings: z.array(z.string()).describe('Potential risks or warnings. Empty if none.'),
+    voiceIssues: z.array(z.string()).describe('Brand voice rule violations. Empty if none.'),
+  })
+
   try {
     const { object, usage } = await generateObject({
       model: gateway(model),
@@ -205,19 +212,20 @@ Analyse the text and return JSON indicating if it is compliant with regulations 
       }),
       system: systemPrompt,
       prompt: `Content to evaluate:\n\n${content}`,
-      schema: z.object({
-        isValid: z.boolean().describe('True if no critical violations found'),
-        flags: z.array(z.string()).describe('Critical violations. Empty if none.'),
-        warnings: z.array(z.string()).describe('Potential risks or warnings. Empty if none.'),
-        voiceIssues: z.array(z.string()).describe('Brand voice rule violations. Empty if none.'),
-      }),
+      // Some Gateway/provider combinations wrap the requested object in
+      // `{ content: ... }`. Accept that transport envelope, then unwrap it
+      // below. The actual review shape remains just as strict; rejecting a
+      // real regulatory verdict because of the envelope is a false outage.
+      schema: z.union([reviewSchema, z.object({ content: reviewSchema })]),
     })
 
+    const review = 'content' in object ? object.content : object
+
     // Merge LLM results with local checks
-    if (!object.isValid) result.isValid = false
-    result.flags.push(...object.flags)
-    result.warnings.push(...object.warnings)
-    result.brandVoiceIssues.push(...object.voiceIssues)
+    if (!review.isValid) result.isValid = false
+    result.flags.push(...review.flags)
+    result.warnings.push(...review.warnings)
+    result.brandVoiceIssues.push(...review.voiceIssues)
     result.checkCompleted = true
 
     const cost = estimateGatewayCost(model, usage ?? {})

@@ -27,6 +27,7 @@ import { syncDraftToMixpost } from '@/lib/mixpost/sync-draft'
 import { userSafeError } from '@/lib/errors/user-safe'
 import type { PostPlatform, PostType, ScheduledPostStatus } from '@/types/database'
 import { enforceBrandName } from '@/lib/brand/enforce-name'
+import { validateScentSellProductClaims } from '@/lib/products/scent-sell-product-gate'
 
 /**
  * How long a caller waits for Mixpost before it reports 'pending' and moves on.
@@ -243,7 +244,7 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
   // from a hand edit, and the copy that goes to a customer must be correct
   // whichever door it came through. URLs and handles are left alone.
   const { data: namingBrand } = await supabase
-    .from('brands').select('name, name_never').eq('id', brandId).maybeSingle()
+    .from('brands').select('name, name_never, slug').eq('id', brandId).maybeSingle()
 
   const naming = namingBrand?.name
     ? enforceBrandName(caption, {
@@ -256,6 +257,14 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     console.warn(`[create-draft] brand name corrected in caption: ${naming.corrected.join(', ')}`)
   }
   const correctedCaption = naming.text
+
+  // This is the single draft creation path, so product identity is enforced
+  // here for every agent and UI caller, not merely described in a prompt.
+  const productGate = await validateScentSellProductClaims(
+    String(namingBrand?.slug ?? ''),
+    [correctedCaption, ...hashtags].join('\n'),
+  )
+  if (!productGate.allowed) throw new Error(productGate.reason)
 
   // Has this exact post already been drafted?
   //
@@ -347,6 +356,7 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     metadata: {
       ...metadata,
       source: metadata.source ?? 'unknown',
+      ...(productGate.verified.length ? { verified_products: productGate.verified } : {}),
     },
   }
 

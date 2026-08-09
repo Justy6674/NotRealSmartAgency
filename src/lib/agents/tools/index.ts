@@ -65,6 +65,8 @@ export interface ToolContext {
   supabase: SupabaseClient
   userId: string
   brandId: string
+  /** Used to remove regulated-only tools from non-regulated brand runs. */
+  brand?: Pick<Brand, 'slug' | 'compliance_flags'>
   conversationId: string | null
   agentRegistryId?: string | null
   /** Present for autonomous heartbeat work; approval requests retain this link. */
@@ -210,12 +212,18 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const getBrandKit = createGetBrandKitTool(ctx.supabase, ctx.userId, ctx.brandId)
   const reviewContent = createReviewContentTool(ctx.supabase, ctx.userId, ctx.brandId)
   const inspectProjectMarketingBackend = createInspectProjectMarketingBackendTool(ctx.supabase, ctx.brandId)
-  const abeAi = createAbeAiTool({
-    supabase: ctx.supabase,
-    userId: ctx.userId,
-    agentRegistryId: ctx.agentRegistryId ?? null,
-    taskId: ctx.taskId ?? null,
-  })
+  // The regulatory corpus is not general marketing memory. Do not expose its
+  // tool to ScentSell or another unregulated brand and rely on prompt prose to
+  // stop a model from using it.
+  const regulated = Boolean(ctx.brand?.compliance_flags?.ahpra || ctx.brand?.compliance_flags?.tga)
+  const abeAi = regulated
+    ? createAbeAiTool({
+        supabase: ctx.supabase,
+        userId: ctx.userId,
+        agentRegistryId: ctx.agentRegistryId ?? null,
+        taskId: ctx.taskId ?? null,
+      })
+    : null
   const picoSearch = createPicoSearchTool({
     supabase: ctx.supabase,
     userId: ctx.userId,
@@ -331,7 +339,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       extract_brand_kit: extractBrandKit,
       review_content: reviewContent,
       inspect_project_marketing_backend: inspectProjectMarketingBackend,
-      use_abe_ai: abeAi,
+      ...(abeAi ? { use_abe_ai: abeAi } : {}),
       use_pico_search: picoSearch,
       set_active_goal: setActiveGoal,
       update_goal_progress: updateGoalProgress,
@@ -351,7 +359,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
     strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, query_social_analytics: querySocialAnalytics, manage_tags: manageTags, request_outline_review: requestOutlineReview, import_design_from_url: importDesignFromUrl, get_presenter_notes: getPresenterNotes, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, analyse_content_gaps: analyseContentGaps, publish_to_social: publishToSocial, manage_collections: manageCollections, manage_media_tags: manageMediaTags, research_industry: researchIndustry, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, research_industry: researchIndustry, ...managementTools },
     website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
-    compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, get_design_content: getDesignContent, get_design_pages: getDesignPages, comment_on_design: commentOnDesign, list_comments: listComments, reply_to_comment: replyToComment, review_content: reviewContent, ...managementTools },
+    compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, get_design_content: getDesignContent, get_design_pages: getDesignPages, comment_on_design: commentOnDesign, list_comments: listComments, reply_to_comment: replyToComment, review_content: reviewContent, ...(abeAi ? { use_abe_ai: abeAi } : {}), ...managementTools },
     seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, write_blog: writeBlog, ...managementTools },
     paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, search_designs: searchDesigns, list_brand_templates: listBrandKits, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },

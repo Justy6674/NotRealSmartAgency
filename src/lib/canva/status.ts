@@ -1,33 +1,17 @@
-/**
- * Whether Canva is actually connected — asked plainly, answered plainly.
- *
- * `getCanvaToken` falls back to `process.env.CANVA_API_KEY` when no OAuth
- * token is stored. That fallback can NEVER work: Canva Connect is OAuth only,
- * it has no static API keys, and the value in the environment returns 401 for
- * every request. Verified against api.canva.com.
- *
- * So every Canva tool got a token, tried it, and failed with an opaque API
- * error — which the Director then reported as though Canva were connected but
- * misbehaving. The owner was told "the Canva connection is failing on my side"
- * with no way to know that nothing had ever been connected at all.
- *
- * The distinction that matters to a person is: is this MY setup, or is it
- * broken? Those need different words and different next steps.
- */
-
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { refreshCanvaToken } from './client'
+import {
+  getCanvaIntegration,
+  recordCanvaHealth,
+  refreshCanvaToken,
+  type CanvaHealthState,
+} from './client'
 
 const CANVA_API_BASE = 'https://api.canva.com/rest/v1'
 
 export type CanvaState =
-  /** No OAuth token has ever been stored. Nothing is wrong; it is not set up. */
   | { state: 'not_connected'; message: string }
-  /** A token exists but Canva rejected it — reconnect. */
   | { state: 'expired'; message: string }
-  /** Connected and usable. */
   | { state: 'ready'; token: string }
-  /** Canva itself is unreachable or erroring. */
   | { state: 'unavailable'; message: string }
 
 export type CanvaFailureState = Exclude<CanvaState, { state: 'ready'; token: string }>
@@ -42,94 +26,107 @@ const RECONNECT_HINT =
   'Reconnect it in NRS Settings → Integrations → Canva. ' +
   'Do NOT claim to have looked at a Canva template — say this plainly instead.'
 
-/**
- * Read the stored OAuth token, and say what state Canva is in.
- *
- * A stored token is only a cache entry, not proof that Canva still accepts it.
- * Every caller goes through this live probe before it is allowed to claim a
- * connection is ready. If Canva rejects a token, refresh it once and probe the
- * refreshed token before asking the owner to reconnect.
- */
-export async function getCanvaState(
+function cachedString(cached: Record<string, unknown>, key: string): string | null {
+  const value = cached[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+async function recordFailure(
   supabase: SupabaseClient,
   userId: string,
-): Promise<CanvaState> {
-  const { data: integration } = await supabase
-    .from('user_integrations')
-    .select('cached_data')
-    .eq('user_id', userId)
-    .eq('provider', 'canva')
-    .maybeSingle()
-
-  const cached = (integration?.cached_data ?? null) as Record<string, unknown> | null
-  const token = typeof cached?.api_key === 'string' ? cached.api_key : null
-
-  if (!token) return { state: 'not_connected', message: CONNECT_HINT }
-
-  const expiresAt = typeof cached?.expires_at === 'string' ? cached.expires_at : null
-  const refreshToken = typeof cached?.refresh_token === 'string' ? cached.refresh_token : null
-
-  let usableToken = token
-  let refreshed = false
-  const expiresSoon = expiresAt
-    ? new Date(expiresAt).getTime() < Date.now() + 60_000
-    : false
-
-  // Expired with nothing to refresh from cannot become usable. Do this before
-  // a network request so the user gets the one action that will help.
-  if (expiresSoon && !refreshToken) {
-    return { state: 'expired', message: RECONNECT_HINT }
-  }
-
-  if (expiresSoon && refreshToken) {
-    const newToken = await refreshCanvaToken(supabase, userId, refreshToken)
-    if (!newToken) return { state: 'expired', message: RECONNECT_HINT }
-    usableToken = newToken
-    refreshed = true
-  }
-
-  const probe = (accessToken: string) =>
-    fetch(`${CANVA_API_BASE}/brand-templates?limit=1`, {
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
-
-  try {
-    let response = await probe(usableToken)
-
-    if (response.ok) return { state: 'ready', token: usableToken }
-
-    // OAuth tokens can be revoked before their advertised expiry. Treat a
-    // rejected cached token exactly like an elapsed one: refresh once, then
-    // only say reconnect when the refreshed credential is also rejected.
-    if ((response.status === 401 || response.status === 403) && refreshToken && !refreshed) {
-      const newToken = await refreshCanvaToken(supabase, userId, refreshToken)
-      if (newToken) {
-        response = await probe(newToken)
-        if (response.ok) return { state: 'ready', token: newToken }
-      }
-    }
-
-    return describeCanvaFailure(response.status)
-  } catch {
-    return describeCanvaFailure(503)
-  }
+  integrationId: string | null,
+  state: Exclude<CanvaHealthState, 'ready'>,
+  errorCode: string,
+): Promise<CanvaFailureState> {
+  await recordCanvaHealth(supabase, userId, integrationId, state, errorCode)
+  return state === 'not_connected'
+    ? { state, message: CONNECT_HINT }
+    : state === 'expired'
+      ? { state, message: RECONNECT_HINT }
+      : {
+          state,
+          message:
+            'Canva did not respond just now, so I could not read your templates. ' +
+            'Try again shortly. Do NOT claim to have seen a template.',
+        }
 }
 
 /**
- * Turn a Canva HTTP failure into something worth reading.
- *
- * A 401 here means the stored token stopped working — that is a reconnect,
- * not a fault the owner can fix by trying again.
+ * Verify Canva live before any caller says it is connected. A stored token is
+ * merely a cache entry. Refresh is leased in client.ts, so simultaneous page
+ * loads cannot rotate the same OAuth credential twice.
  */
-export function describeCanvaFailure(status: number): CanvaFailureState {
-  if (status === 401 || status === 403) {
-    return { state: 'expired', message: RECONNECT_HINT }
+export async function getCanvaState(supabase: SupabaseClient, userId: string): Promise<CanvaState> {
+  const integration = await getCanvaIntegration(supabase, userId)
+  if (!integration) return recordFailure(supabase, userId, null, 'not_connected', 'integration_missing')
+
+  const token = cachedString(integration.cachedData, 'api_key')
+  const refreshToken = cachedString(integration.cachedData, 'refresh_token')
+  const expiresAt = cachedString(integration.cachedData, 'expires_at')
+  const expiresSoon = expiresAt ? new Date(expiresAt).getTime() < Date.now() + 60_000 : false
+
+  if (!token) return recordFailure(supabase, userId, integration.id, 'not_connected', 'access_token_missing')
+  if (expiresSoon && !refreshToken) return recordFailure(supabase, userId, integration.id, 'expired', 'refresh_token_missing')
+
+  let usableToken = token
+  let refreshed = false
+  if (expiresSoon) {
+    const refreshedToken = await refreshCanvaToken(supabase, userId)
+    if (!refreshedToken) return recordFailure(supabase, userId, integration.id, 'expired', 'refresh_failed')
+    usableToken = refreshedToken
+    refreshed = true
   }
+
+  const probe = (accessToken: string) => fetch(`${CANVA_API_BASE}/brand-templates?limit=1`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
+  })
+
+  try {
+    let response = await probe(usableToken)
+    if (response.ok) {
+      await recordCanvaHealth(supabase, userId, integration.id, 'ready')
+      return { state: 'ready', token: usableToken }
+    }
+
+    // A provider can revoke a token before the advertised expiry. One leased
+    // refresh/re-probe is safe; a second is a loop and would hide a real revoke.
+    if ((response.status === 401 || response.status === 403) && refreshToken && !refreshed) {
+      const refreshedToken = await refreshCanvaToken(supabase, userId)
+      if (refreshedToken) {
+        response = await probe(refreshedToken)
+        if (response.ok) {
+          await recordCanvaHealth(supabase, userId, integration.id, 'ready')
+          return { state: 'ready', token: refreshedToken }
+        }
+      }
+    }
+
+    return describeCanvaFailure(response.status, supabase, userId, integration.id)
+  } catch {
+    return recordFailure(supabase, userId, integration.id, 'unavailable', 'probe_transport_error')
+  }
+}
+
+/** Backwards-compatible pure form for call sites/tests without a database client. */
+export function describeCanvaFailure(status: number): CanvaFailureState
+export function describeCanvaFailure(
+  status: number,
+  supabase: SupabaseClient,
+  userId: string,
+  integrationId: string,
+): Promise<CanvaFailureState>
+export function describeCanvaFailure(
+  status: number,
+  supabase?: SupabaseClient,
+  userId?: string,
+  integrationId?: string,
+): CanvaFailureState | Promise<CanvaFailureState> {
+  const state: Exclude<CanvaHealthState, 'ready'> = status === 401 || status === 403 ? 'expired' : 'unavailable'
+  const code = state === 'expired' ? `probe_http_${status}` : `probe_http_${status || 503}`
+  if (supabase && userId && integrationId) return recordFailure(supabase, userId, integrationId, state, code)
+  if (state === 'expired') return { state, message: RECONNECT_HINT }
   return {
-    state: 'unavailable',
+    state,
     message:
       'Canva did not respond just now, so I could not read your templates. ' +
       'Try again shortly. Do NOT claim to have seen a template.',

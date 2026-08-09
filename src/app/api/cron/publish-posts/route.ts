@@ -155,9 +155,10 @@ export async function GET(request: Request) {
       // be published.
       const postBrand = post.brands as Record<string, unknown> | null
       const gate = await checkPublishAllowed({
-        content: String(post.content ?? ''),
+        content: [String(post.caption ?? ''), ...((post.hashtags as string[] | null) ?? [])].join('\n'),
         complianceFlags: postBrand?.compliance_flags as never,
         brandDNA: postBrand?.brand_dna_constraints as never,
+        brandSlug: typeof postBrand?.slug === 'string' ? postBrand.slug : null,
         label: `scheduled post ${post.id}`,
       })
       if (!gate.allowed) {

@@ -20,7 +20,7 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
-  const state = await getCanvaState(supabase, user.id)
+  let state = await getCanvaState(supabase, user.id)
   if (state.state !== 'ready') {
     return NextResponse.json({
       connected: false,
@@ -40,17 +40,25 @@ export async function GET() {
    * never did.
    */
   try {
-    const res = await fetch(`${CANVA_BASE_URL}/brand-templates?limit=100`, {
+    const fetchTemplates = (token: string) => fetch(`${CANVA_BASE_URL}/brand-templates?limit=100`, {
       headers: {
-        Authorization: `Bearer ${state.token}`,
+        Authorization: `Bearer ${token}`,
         Accept: 'application/json',
       },
     })
 
+    let res = await fetchTemplates(state.token)
+    // Avoid a second refresh implementation. If the credential changes in the
+    // tiny window after the health probe, re-enter the shared leased service.
+    if (res.status === 401 || res.status === 403) {
+      state = await getCanvaState(supabase, user.id)
+      if (state.state === 'ready') res = await fetchTemplates(state.token)
+    }
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       console.error('[canva/brand-kits] API error:', res.status, err)
-      const failure = describeCanvaFailure(res.status)
+      const failure = state.state === 'ready' ? describeCanvaFailure(res.status) : state
       return NextResponse.json(
         {
           connected: false,
