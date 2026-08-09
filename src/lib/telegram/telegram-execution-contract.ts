@@ -34,6 +34,7 @@ export function buildTelegramExecutionContract(message: string, workMessage: str
 TELEGRAM CAPTION CONTRACT
 The owner asked for publishable social copy (caption, description, hashtags and/or angle).
 - After the research step above, write the finished caption using verified project evidence plus brand voice. Do not ask for product, platform, angle, or outcome first.
+- When the image or owner asks you to mention a product feature, offer, price, availability, or capability (for example that a Scent Sell list is free to create and customisable), call read_proforma before writing. If the record verifies it, make that benefit clear in the caption; if it does not, leave it out rather than inventing it.
 - If platform is unnamed, default to the brand's primary social surface and write one ready caption; mention the assumed platform in one plain line after the caption only if needed.
 - If a specific bottle or notes are missing after research tools ran, write a brand-correct caption from verified marketplace/house context without inventing notes. Do not stall for a form.
 - Output shape: (1) the caption exactly as it would post, (2) one trailing hashtag line (3–5 searchable niche tags), (3) one short angle line only if they asked for an angle — not a strategy essay.

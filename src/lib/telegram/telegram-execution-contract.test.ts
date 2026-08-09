@@ -27,6 +27,8 @@ test('caption and hashtag asks are execution requests with a caption contract', 
   const contract = buildTelegramExecutionContract('Need a caption and hashtags for this video')
   assert.match(contract, /TELEGRAM CAPTION CONTRACT/)
   assert.match(contract, /After the research step above, write the finished caption/i)
+  assert.match(contract, /free to create and customisable/i)
+  assert.match(contract, /call read_proforma before writing/i)
   assert.match(contract, /Do not ask "sales, engagement, or awareness/i)
   assert.match(contract, /Never ask "What result would make the next 90 days a win/i)
   assert.match(contract, /query_media/)
