@@ -31,6 +31,10 @@ export interface CapabilityRequirement {
   requiredAllToolNames?: readonly string[]
   /** A completed Canva design requires a provider-issued design ID and edit URL. */
   minimumCanvaDesigns?: number
+  /** Every reviewable slide requires an NRS media receipt, not an expiring Canva URL. */
+  minimumCanvaMedia?: number
+  /** A completed carousel must have one durable, unapproved review item. */
+  requiresCarouselProposal?: boolean
   /** Capability-specific cap for bounded multi-step provider work. */
   maxSteps?: number
   /** Provider work that waits for completed assets needs more than a prose turn. */
@@ -163,12 +167,15 @@ export function planDirectorTask(
         'list_brand_templates',
         'get_brand_template_dataset',
         'generate_design_structured',
+        'import_canva_design_to_media',
+        'create_carousel_proposal',
       ],
       minimumCanvaDesigns: carousel ? 3 : 1,
+      ...(carousel ? { minimumCanvaMedia: 3, requiresCarouselProposal: true } : {}),
       maxSteps: carousel ? 8 : 3,
       ...(carousel ? { timeoutMs: 180_000 } : {}),
       summary: carousel
-        ? 'Create exactly three editable Canva designs from the owner\'s real brand templates. First list templates, then inspect each template dataset, then wait for Canva Autofill to return three design IDs and edit URLs. If any design is absent, say it was not created; never present saved copy as a finished carousel.'
+        ? 'Create exactly three editable Canva designs from the owner\'s real brand templates. First list templates, then inspect each template dataset, then wait for Canva Autofill to return three design IDs and edit URLs. Export each one into NRS media, then create one unapproved carousel review record from those three media receipts. If any receipt is absent, say it was not created; never present saved copy as a finished carousel.'
         : 'Create a verified editable Canva design. First inspect the brand template dataset, then wait for Canva Autofill to return a design ID and edit URL. If no receipt arrives, say the asset was not created.',
     })
   } else if (hasAny(request, VISUAL_REQUEST) && hasAny(request, CANVA_ACTION)) {
@@ -244,6 +251,8 @@ export async function executeDirectorTaskPlan(
         requiredAnyToolNames: requirement.requiredAnyToolNames,
         requiredAllToolNames: requirement.requiredAllToolNames,
         minimumCanvaDesigns: requirement.minimumCanvaDesigns,
+        minimumCanvaMedia: requirement.minimumCanvaMedia,
+        requiresCarouselProposal: requirement.requiresCarouselProposal,
         maxSteps: requirement.maxSteps,
         timeoutMs: requirement.timeoutMs,
         contextOverride: `## REQUIRED CAPABILITY\n${requirement.summary}\n\nReturn evidence and conclusions for the Director. Do not claim a tool or source was used unless it ran successfully in this turn.`,

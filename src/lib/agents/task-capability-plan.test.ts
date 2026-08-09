@@ -45,8 +45,12 @@ test('treats a Canva template carousel as a real three-design deliverable', () =
     'list_brand_templates',
     'get_brand_template_dataset',
     'generate_design_structured',
+    'import_canva_design_to_media',
+    'create_carousel_proposal',
   ])
   assert.equal(requirement.minimumCanvaDesigns, 3)
+  assert.equal(requirement.minimumCanvaMedia, 3)
+  assert.equal(requirement.requiresCarouselProposal, true)
   assert.equal(requirement.maxSteps, 8)
   assert.equal(requirement.timeoutMs, 180_000)
 })

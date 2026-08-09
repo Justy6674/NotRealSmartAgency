@@ -90,6 +90,87 @@ interface JobRow {
   completed_at: string | null
 }
 
+interface CarouselDelivery {
+  title: string
+  outputId: string | null
+  platform: string
+  caption: string
+  hashtags: string[]
+  slides: Array<{ mediaItemId: string; fileUrl: string; fileName: string }>
+}
+
+/**
+ * A job is not a carousel merely because its prose says it is. The Mini App
+ * may show a review card only after NRS has persisted at least two real media
+ * files. This is the same distinction as a Mixpost receipt: words are not the
+ * thing the owner needs to inspect.
+ */
+export function carouselDeliveryFromJobResult(result: Record<string, unknown> | null): CarouselDelivery | null {
+  const raw = result?.carousel_delivery
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const value = raw as Record<string, unknown>
+  const media = Array.isArray(value.media) ? value.media : []
+  const slides = media.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const row = item as Record<string, unknown>
+    if (
+      typeof row.media_item_id !== 'string' ||
+      typeof row.file_url !== 'string' ||
+      typeof row.file_name !== 'string'
+    ) return []
+    return [{ mediaItemId: row.media_item_id, fileUrl: row.file_url, fileName: row.file_name }]
+  })
+  if (slides.length < 2) return null
+
+  return {
+    title: typeof value.title === 'string' && value.title.trim() ? value.title : 'Carousel ready to review',
+    outputId: typeof value.output_id === 'string' ? value.output_id : null,
+    platform: typeof value.platform === 'string' && value.platform ? value.platform : 'instagram',
+    caption: typeof value.caption === 'string' ? value.caption : '',
+    hashtags: Array.isArray(value.hashtags)
+      ? value.hashtags.filter((tag): tag is string => typeof tag === 'string')
+      : [],
+    slides,
+  }
+}
+
+/**
+ * Carousel proposals are durable Review records. Their slide receipts are
+ * written by NRS, rather than inferred from a title or a model response, so a
+ * reload still shows the exact assets that will be sent to Mixpost.
+ */
+function carouselDeliveryFromProposal(row: OutputRow): CarouselDelivery | null {
+  const metadata = row.metadata ?? {}
+  if (metadata.post_type !== 'carousel') return null
+  const rawSlides = Array.isArray(metadata.carousel_slides) ? metadata.carousel_slides : []
+  const slides = rawSlides.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const slide = item as Record<string, unknown>
+    if (
+      typeof slide.media_item_id !== 'string'
+      || typeof slide.file_url !== 'string'
+      || typeof slide.file_name !== 'string'
+    ) return []
+    return [{
+      mediaItemId: slide.media_item_id,
+      fileUrl: slide.file_url,
+      fileName: slide.file_name,
+    }]
+  })
+  if (slides.length < 2) return null
+
+  return {
+    title: row.title?.trim() || 'Carousel ready to review',
+    outputId: row.id,
+    platform: typeof metadata.platform === 'string' && metadata.platform ? metadata.platform : 'instagram',
+    caption: row.content ?? '',
+    hashtags: Array.isArray(metadata.hashtags)
+      ? metadata.hashtags.filter((tag): tag is string => typeof tag === 'string')
+      : [],
+    slides,
+  }
+}
+
 /**
  * The owner's messages and the Director's answers.
  *
@@ -162,6 +243,29 @@ export const directorJobSource: TimelineSource<JobRow> = {
           brandId,
           payload: { kind: 'director_reply', jobId: row.id, text: response, withheld: false },
         })
+        const carousel = carouselDeliveryFromJobResult(row.result)
+        if (carousel) {
+          events.push({
+            id: `carousel:${row.id}`,
+            kind: 'carousel_delivery',
+            groupParentId: answerId,
+            occurredAtMs: completedAtMs ?? askedAtMs,
+            side: 'director',
+            brandId,
+            payload: {
+              kind: 'carousel_delivery',
+              jobId: row.id,
+              title: carousel.title,
+              outputId: carousel.outputId,
+              platform: carousel.platform,
+              caption: carousel.caption,
+              hashtags: carousel.hashtags,
+              slides: carousel.slides,
+              approved: false,
+              mixpost: null,
+            },
+          })
+        }
         continue
       }
 
@@ -266,7 +370,7 @@ export const miniAppMediaSource: TimelineSource<MediaRow> = {
   },
 
   map(rows, { brandId, nowMs }) {
-    return rows.flatMap((row) => {
+    return rows.flatMap<TimelineSourceEvent>((row) => {
       const atMs = toUtcMs(row.created_at)
       if (atMs === null) return []
 
@@ -344,11 +448,42 @@ export const proposalSource: TimelineSource<OutputRow> = {
   },
 
   map(rows, { brandId }) {
-    return rows.flatMap((row) => {
+    return rows.flatMap<TimelineSourceEvent>((row) => {
       const meta = row.metadata ?? {}
       if (meta.stage !== 'proposal') return []
 
       const atMs = toUtcMs(row.created_at)
+      const carousel = carouselDeliveryFromProposal(row)
+      if (carousel) {
+        return [{
+          id: `carousel-output:${row.id}`,
+          kind: 'carousel_delivery' as const,
+          groupParentId: null,
+          occurredAtMs: atMs,
+          side: 'director' as const,
+          brandId,
+          payload: {
+            kind: 'carousel_delivery' as const,
+            jobId: `proposal:${row.id}`,
+            title: carousel.title,
+            outputId: carousel.outputId,
+            platform: carousel.platform,
+            caption: carousel.caption,
+            hashtags: carousel.hashtags,
+            slides: carousel.slides,
+            approved: Boolean(row.is_approved),
+            mixpost: (() => {
+              const draft = meta.carousel_draft
+              if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return null
+              const state = (draft as Record<string, unknown>).mixpost
+              return state === 'synced' || state === 'pending' || state === 'failed' || state === 'skipped' || state === 'duplicate'
+                ? state
+                : null
+            })(),
+          },
+        }]
+      }
+
       const mediaItemIds = Array.isArray(meta.media_item_ids)
         ? meta.media_item_ids.filter((id): id is string => typeof id === 'string')
         : []

@@ -98,6 +98,10 @@ export interface WorkerOptions {
   requiredAllToolNames?: readonly string[]
   /** Minimum number of completed Canva designs with an editable URL. */
   minimumCanvaDesigns?: number
+  /** Minimum number of Canva exports persisted in NRS media. */
+  minimumCanvaMedia?: number
+  /** Require a durable unapproved carousel review record. */
+  requiresCarouselProposal?: boolean
 }
 
 // ─── Output type mapping ────────────────────────────────────────────────────
@@ -289,7 +293,14 @@ Rules:
       || options.requiredAllToolNames.every((toolName) => toolNames.includes(toolName))
     const hasRequiredCanvaDesigns = !options.minimumCanvaDesigns
       || toolEvidence.completedCanvaDesigns.length >= options.minimumCanvaDesigns
-    const evidenceSatisfied = hasRequiredAnyTool && hasRequiredAllTools && hasRequiredCanvaDesigns
+    const hasRequiredCanvaMedia = !options.minimumCanvaMedia
+      || toolEvidence.importedCanvaMedia.length >= options.minimumCanvaMedia
+    const hasRequiredCarouselProposal = !options.requiresCarouselProposal || Boolean(toolEvidence.carouselProposal)
+    const evidenceSatisfied = hasRequiredAnyTool
+      && hasRequiredAllTools
+      && hasRequiredCanvaDesigns
+      && hasRequiredCanvaMedia
+      && hasRequiredCarouselProposal
     const gatewayModelAttempts = (
       result.providerMetadata as { gateway?: { modelAttempts?: unknown } } | undefined
     )?.gateway?.modelAttempts
@@ -340,6 +351,8 @@ Rules:
           required_any_tool_names: options.requiredAnyToolNames ?? [],
           required_all_tool_names: options.requiredAllToolNames ?? [],
           minimum_canva_designs: options.minimumCanvaDesigns ?? 0,
+          minimum_canva_media: options.minimumCanvaMedia ?? 0,
+          requires_carousel_proposal: options.requiresCarouselProposal ?? false,
           tools_used: toolNames,
           canva_designs: toolEvidence.completedCanvaDesigns,
         } : {}),
@@ -372,6 +385,8 @@ Rules:
           requiredAnyToolNames: options.requiredAnyToolNames ?? [],
           requiredAllToolNames: options.requiredAllToolNames ?? [],
           minimumCanvaDesigns: options.minimumCanvaDesigns ?? 0,
+          minimumCanvaMedia: options.minimumCanvaMedia ?? 0,
+          requiresCarouselProposal: options.requiresCarouselProposal ?? false,
           toolsUsed: toolNames,
           canvaDesigns: toolEvidence.completedCanvaDesigns,
         } : {}),

@@ -178,9 +178,14 @@ export interface TimelineViewProps {
   onRetry: (text: string, clientEventId: string | null) => void
   /** A corrected caption, typed by the person who spotted the mistake. */
   onEditCaption: (outputId: string, caption: string) => void
+  /** Explicit owner approval to create a draft, never to publish. */
+  onSaveCarouselDraft: (outputId: string) => Promise<{
+    mixpost: 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate'
+    error?: string
+  }>
 }
 
-export function TimelineView({ events, onRetry, onEditCaption }: TimelineViewProps) {
+export function TimelineView({ events, onRetry, onEditCaption, onSaveCarouselDraft }: TimelineViewProps) {
   let lastDay = ''
 
   return (
@@ -193,7 +198,7 @@ export function TimelineView({ events, onRetry, onEditCaption }: TimelineViewPro
         return (
           <div key={event.id} className="contents">
             {newDay && <DaySeparator ms={event.groupAnchorMs} />}
-            <EventRow event={event} onRetry={onRetry} onEditCaption={onEditCaption} />
+            <EventRow event={event} onRetry={onRetry} onEditCaption={onEditCaption} onSaveCarouselDraft={onSaveCarouselDraft} />
           </div>
         )
       })}
@@ -201,7 +206,97 @@ export function TimelineView({ events, onRetry, onEditCaption }: TimelineViewPro
   )
 }
 
-function EventRow({ event, onRetry, onEditCaption }: { event: TimelineEvent; onRetry: TimelineViewProps['onRetry']; onEditCaption: TimelineViewProps['onEditCaption'] }) {
+function CarouselDeliveryCard({
+  title,
+  caption,
+  hashtags,
+  slides,
+  outputId,
+  approved,
+  mixpost,
+  onEditCaption,
+  onSaveDraft,
+}: {
+  title: string
+  caption: string
+  hashtags: string[]
+  slides: Array<{ mediaItemId: string; fileUrl: string; fileName: string }>
+  outputId: string | null
+  approved: boolean
+  mixpost: 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate' | null
+  onEditCaption: TimelineViewProps['onEditCaption']
+  onSaveDraft: TimelineViewProps['onSaveCarouselDraft']
+}) {
+  const [saving, setSaving] = useState(false)
+  const [state, setState] = useState(mixpost)
+  const [error, setError] = useState<string | null>(null)
+
+  const saveDraft = async () => {
+    if (!outputId || saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await onSaveDraft(outputId)
+      setState(result.mixpost)
+      if (result.error) setError(result.error)
+    } catch {
+      setError('The draft could not be created. Nothing was published.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const mixpostLabel = state === 'synced'
+    ? 'Draft in Mixpost'
+    : state === 'pending'
+      ? 'Draft saved — Mixpost is still syncing'
+      : state === 'failed'
+        ? 'Draft saved — Mixpost sync failed'
+        : state === 'duplicate'
+          ? 'Existing Mixpost draft found'
+          : state === 'skipped'
+            ? 'Draft saved in NRS — Mixpost not connected'
+            : null
+
+  return (
+    <section className="mr-auto max-w-[96%] overflow-hidden rounded-2xl rounded-bl-md bg-[var(--tg-theme-secondary-bg-color,#17212b)] ring-1 ring-black/10 dark:ring-white/10">
+      <div className="px-4 pb-2 pt-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--tg-theme-hint-color,#82909f)]">Carousel · {slides.length} slides</p>
+        <h3 className="mt-1 text-[16px] font-semibold">{title}</h3>
+      </div>
+      <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-3" aria-label={`${title} slides`}>
+        {slides.map((slide, index) => (
+          <figure key={slide.mediaItemId} className="w-[78vw] max-w-[320px] shrink-0 snap-center overflow-hidden rounded-xl bg-black/10">
+            <img src={slide.fileUrl} alt={`Slide ${index + 1}: ${slide.fileName}`} className="aspect-square w-full object-cover" />
+            <figcaption className="px-2 py-1.5 text-xs text-[var(--tg-theme-hint-color,#82909f)]">Slide {index + 1} of {slides.length}</figcaption>
+          </figure>
+        ))}
+      </div>
+      <div className="space-y-3 border-t border-black/10 px-4 py-3 dark:border-white/10">
+        {outputId && <CaptionBlock hook="" caption={caption} hashtags={hashtags} onSave={(next) => onEditCaption(outputId, next)} />}
+        {!outputId && <p className="text-sm text-amber-600 dark:text-amber-300">The slides are visible, but NRS has no saved review record to draft safely.</p>}
+        {mixpostLabel ? (
+          <p className={`text-sm ${state === 'failed' ? 'text-red-600 dark:text-red-300' : 'text-[var(--tg-theme-hint-color,#82909f)]'}`}>{mixpostLabel}</p>
+        ) : approved ? (
+          <p className="text-sm text-[var(--tg-theme-hint-color,#82909f)]">Draft filed — checking Mixpost status.</p>
+        ) : (
+          <button
+            type="button"
+            disabled={!outputId || saving}
+            onClick={() => void saveDraft()}
+            className="w-full rounded-xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2.5 text-sm font-semibold text-[var(--tg-theme-button-text-color,#fff)] disabled:opacity-50"
+          >
+            {saving ? 'Saving draft…' : 'Save as Mixpost draft'}
+          </button>
+        )}
+        {error && <p className="text-sm text-red-600 dark:text-red-300">{error}</p>}
+        {!approved && !mixpostLabel && <p className="text-xs text-[var(--tg-theme-hint-color,#82909f)]">This creates a draft only. Nothing will be published.</p>}
+      </div>
+    </section>
+  )
+}
+
+function EventRow({ event, onRetry, onEditCaption, onSaveCarouselDraft }: { event: TimelineEvent; onRetry: TimelineViewProps['onRetry']; onEditCaption: TimelineViewProps['onEditCaption']; onSaveCarouselDraft: TimelineViewProps['onSaveCarouselDraft'] }) {
   const payload = event.payload
 
   switch (payload.kind) {
@@ -270,6 +365,21 @@ function EventRow({ event, onRetry, onEditCaption }: { event: TimelineEvent; onR
             </div>
           )}
         </div>
+      )
+
+    case 'carousel_delivery':
+      return (
+        <CarouselDeliveryCard
+          title={payload.title}
+          caption={payload.caption}
+          hashtags={payload.hashtags}
+          slides={payload.slides}
+          outputId={payload.outputId}
+          approved={payload.approved}
+          mixpost={payload.mixpost}
+          onEditCaption={onEditCaption}
+          onSaveDraft={onSaveCarouselDraft}
+        />
       )
 
     default: {

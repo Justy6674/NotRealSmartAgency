@@ -524,6 +524,24 @@ export default function TelegramMiniAppPage() {
     }
   }, [initData, refreshTimeline])
 
+  /** The owner pressed the visual carousel's explicit draft button. */
+  const saveCarouselDraft = useCallback(async (outputId: string) => {
+    const response = await fetch('/api/telegram/mini-app/draft', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ init_data: initData, output_id: outputId }),
+    })
+    const data = (await response.json().catch(() => ({}))) as {
+      mixpost?: 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate'
+      error?: string
+    }
+    if (!response.ok || !data.mixpost) {
+      throw new Error(data.error ?? 'The draft could not be created. Nothing was published.')
+    }
+    await refreshTimeline()
+    return { mixpost: data.mixpost, ...(data.error ? { error: data.error } : {}) }
+  }, [initData, refreshTimeline])
+
   const sendMessage = async (event: FormEvent) => {
     event.preventDefault()
     const message = draft.trim()
@@ -774,6 +792,7 @@ export default function TelegramMiniAppPage() {
                     events={events}
                     onRetry={(text, clientEventId) => void submitMessage(text, clientEventId)}
                     onEditCaption={(outputId, caption) => void saveCaption(outputId, caption)}
+                    onSaveCarouselDraft={saveCarouselDraft}
                   />
                 )}
               </div>

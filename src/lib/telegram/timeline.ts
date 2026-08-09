@@ -42,6 +42,7 @@ export type TimelineEventKind =
   | 'director_pending'
   | 'director_reply'
   | 'director_error'
+  | 'carousel_delivery'
   | 'proposal'
 
 export type TimelineGroupKind = 'turn' | 'clip' | 'output'
@@ -62,6 +63,19 @@ export type TimelineEventPayload =
     }
   | { kind: 'director_pending'; jobId: string | null; label: string; waitingSinceMs: number }
   | { kind: 'director_reply'; jobId: string; text: string; withheld: boolean }
+  | {
+      /** A finished, reviewable carousel. This is never emitted from copy alone. */
+      kind: 'carousel_delivery'
+      jobId: string
+      title: string
+      outputId: string | null
+      platform: string
+      caption: string
+      hashtags: string[]
+      slides: Array<{ mediaItemId: string; fileUrl: string; fileName: string }>
+      approved: boolean
+      mixpost: 'synced' | 'pending' | 'failed' | 'skipped' | 'duplicate' | null
+    }
   | {
       kind: 'director_error'
       jobId: string | null
@@ -136,6 +150,7 @@ export const MEMBER_RANK: Record<TimelineEventKind, number> = {
   director_pending: 1,
   director_reply: 1,
   director_error: 1,
+  carousel_delivery: 2,
   proposal: 2,
 }
 
@@ -237,7 +252,11 @@ export function resolveGroupAnchor(
 function ownGroup(event: TimelineSourceEvent): ResolvedGroup | null {
   if (event.occurredAtMs === null) return null
   const prefix: TimelineGroupKind =
-    event.kind === 'media_upload' ? 'clip' : event.kind === 'proposal' ? 'output' : 'turn'
+    event.kind === 'media_upload'
+      ? 'clip'
+      : event.kind === 'proposal' || event.kind === 'carousel_delivery'
+        ? 'output'
+        : 'turn'
   return { groupId: `${prefix}:${event.id}`, anchorMs: event.occurredAtMs }
 }
 

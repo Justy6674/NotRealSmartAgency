@@ -64,6 +64,21 @@ export function sanitiseTimelineEvent(event: TimelineSourceEvent): TimelineSourc
       }
     }
 
+    case 'carousel_delivery': {
+      const suspect = [payload.title, payload.caption, ...payload.hashtags]
+      if (suspect.every(allowed)) return event
+      return {
+        ...event,
+        payload: {
+          ...payload,
+          title: WITHHELD,
+          caption: '',
+          hashtags: [],
+          slides: [],
+        },
+      }
+    }
+
     default: {
       // A new event kind must declare its text fields above before it compiles.
       const exhaustive: never = payload
