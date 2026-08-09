@@ -124,6 +124,48 @@ export interface CompletedCanvaDesign {
   editUrl: string
 }
 
+/** A synchronous receipt returned when Canva makes an editable template copy. */
+export interface CanvaTemplateCopyReceipt {
+  designId: string
+  editUrl: string
+  viewUrl: string | null
+  thumbnailUrl: string | null
+  pageCount: number | null
+}
+
+/**
+ * Canva's documented preview request for copying a Brand Template. Keeping
+ * this small and pure means the exact provider payload is regression-tested.
+ */
+export function buildCanvaBrandTemplateCopyRequest(
+  brandTemplateId: string,
+  pageNumbers?: number[],
+): Record<string, unknown> {
+  return {
+    type: 'brand_template',
+    brand_template_id: brandTemplateId,
+    ...(pageNumbers?.length ? { page_numbers: pageNumbers } : {}),
+  }
+}
+
+/** Read a receipt only when Canva confirms it created an editable design. */
+export function canvaTemplateCopyReceipt(payload: unknown): CanvaTemplateCopyReceipt | null {
+  const design = asRecord(asRecord(payload)?.design)
+  const urls = asRecord(design?.urls)
+  const designId = typeof design?.id === 'string' ? design.id : null
+  const editUrl = typeof urls?.edit_url === 'string' ? urls.edit_url : null
+  if (!designId || !editUrl) return null
+
+  const thumbnail = asRecord(design?.thumbnail)
+  return {
+    designId,
+    editUrl,
+    viewUrl: typeof urls?.view_url === 'string' ? urls.view_url : null,
+    thumbnailUrl: typeof thumbnail?.url === 'string' ? thumbnail.url : null,
+    pageCount: typeof design?.page_count === 'number' ? design.page_count : null,
+  }
+}
+
 function designIdFromEditUrl(editUrl: string): string | null {
   try {
     const parts = new URL(editUrl).pathname.split('/').filter(Boolean)
@@ -497,6 +539,75 @@ export function createListBrandKitsTool(
 }
 
 // ---------------------------------------------------------------------------
+// Create a copy of an explicitly mapped Brand Template
+// ---------------------------------------------------------------------------
+export function createCanvaTemplateCopyTool(
+  supabase: SupabaseClient,
+  userId: string,
+  brandId: string,
+) {
+  return tool({
+    description:
+      'Create an editable copy of an exact Canva Brand Template mapped to the active NRS brand. This preserves the template’s own layout, colours and typography. It never substitutes another brand’s template and never describes an untouched copy as finished social creative.',
+    inputSchema: z.object({
+      brand_template_id: z.string().describe('Exact mapped Canva Brand Template ID from list_brand_templates'),
+      page_numbers: z.array(z.number().int().min(1)).min(1).optional().describe('Optional one-based template pages to copy. Omit to copy every page.'),
+    }),
+    execute: async ({ brand_template_id, page_numbers }) => {
+      const scope = await loadBrandTemplateScope(supabase, userId, brandId)
+      if ('error' in scope) return { success: false, error: scope.error }
+      if (!isCanvaTemplateAllowed(scope.contract, brand_template_id)) {
+        return {
+          success: false,
+          error: `${brand_template_id} is not mapped to ${scope.brandName}. NRS will not copy a cross-brand Canva template.`,
+        }
+      }
+
+      const canva = await requireCanva(supabase, userId)
+      if ('error' in canva) return canva
+
+      try {
+        const response = await canvaFetch(canva.token, '/designs', {
+          method: 'POST',
+          body: JSON.stringify(buildCanvaBrandTemplateCopyRequest(brand_template_id, page_numbers)),
+        })
+        const payload = await response.json() as unknown
+        const receipt = canvaTemplateCopyReceipt(payload)
+        if (!receipt) {
+          return {
+            success: false,
+            error: 'Canva did not return an editable design receipt. No finished creative or Mixpost draft was created.',
+          }
+        }
+
+        const template = scope.contract.templates.find((entry) => entry.id === brand_template_id)
+        return {
+          success: true,
+          status: 'template_copy_created',
+          template: {
+            id: brand_template_id,
+            title: template?.title ?? brand_template_id,
+            role: template?.role ?? null,
+          },
+          design_id: receipt.designId,
+          edit_url: receipt.editUrl,
+          view_url: receipt.viewUrl,
+          thumbnail_url: receipt.thumbnailUrl,
+          page_count: receipt.pageCount,
+          message:
+            `Created an editable copy of ${scope.brandName}'s mapped Canva template “${template?.title ?? brand_template_id}”. Its existing layout and typography are intact. This is a template copy, not a finished social post: the template has no Autofill fields, so NRS has not replaced its copy and has not created a Mixpost draft.`,
+        }
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Canva could not create the template copy. No creative or draft was made.',
+        }
+      }
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Get brand template dataset
 // ---------------------------------------------------------------------------
 export function createGetBrandTemplateDatasetTool(
@@ -724,262 +835,6 @@ export function createDesignGraphicTool(
             err instanceof Error
               ? err.message
               : 'Failed to create Canva design',
-        }
-      }
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Start editing transaction
-// ---------------------------------------------------------------------------
-export function createStartEditingTransactionTool(
-  supabase: SupabaseClient,
-  userId: string
-) {
-  return tool({
-    description:
-      'Start an editing session on a Canva design. Returns a transaction ID needed for all edit operations. Always commit or cancel when done.',
-    inputSchema: z.object({
-      design_id: z.string().describe('Canva design ID to start editing'),
-    }),
-    execute: async ({ design_id }) => {
-      const canva = await requireCanva(supabase, userId)
-      if ('error' in canva) return canva
-      const apiKey = canva.token
-
-      try {
-        const res = await canvaFetch(
-          apiKey,
-          `/designs/${design_id}/editing/transactions`,
-          { method: 'POST', body: JSON.stringify({}) }
-        )
-        const data = await res.json()
-        const transactionId =
-          data.transaction?.id ?? data.id ?? data.transaction_id
-
-        return {
-          success: true,
-          transaction_id: transactionId,
-          design_id,
-          message: `Editing session started on design ${design_id}. Transaction ID: ${transactionId}.\n\nYou can now perform edit operations (replace text, swap images, format text). Remember to commit when done or cancel to discard changes.`,
-        }
-      } catch (err) {
-        return {
-          success: false,
-          error:
-            err instanceof Error
-              ? err.message
-              : 'Failed to start editing transaction',
-        }
-      }
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Perform editing operations
-// ---------------------------------------------------------------------------
-export function createPerformEditingOperationsTool(
-  supabase: SupabaseClient,
-  userId: string
-) {
-  return tool({
-    description:
-      'Perform editing operations on a Canva design — replace text, swap images, format text, delete elements. Requires an active editing transaction.',
-    inputSchema: z.object({
-      design_id: z.string().describe('Canva design ID being edited'),
-      transaction_id: z
-        .string()
-        .describe('Active transaction ID from start_editing_transaction'),
-      operations: z
-        .array(
-          z.object({
-            type: z
-              .enum([
-                'replace_text',
-                'find_and_replace_text',
-                'update_fill',
-                'delete_element',
-                'format_text',
-              ])
-              .describe('Type of editing operation'),
-            target: z
-              .string()
-              .optional()
-              .describe('Element ID to target'),
-            find: z
-              .string()
-              .optional()
-              .describe('Text to find (for find_and_replace)'),
-            replacement: z
-              .string()
-              .optional()
-              .describe('Replacement text'),
-            url: z
-              .string()
-              .optional()
-              .describe('Image/video URL for update_fill'),
-            font_size: z.number().optional().describe('Font size in points'),
-            font_weight: z
-              .string()
-              .optional()
-              .describe('Font weight (e.g. bold, normal)'),
-            color: z
-              .string()
-              .optional()
-              .describe('Hex colour (e.g. #FF0000)'),
-            text_align: z
-              .enum(['left', 'center', 'right'])
-              .optional()
-              .describe('Text alignment'),
-          })
-        )
-        .describe('Array of editing operations to perform'),
-    }),
-    execute: async ({ design_id, transaction_id, operations }) => {
-      const canva = await requireCanva(supabase, userId)
-      if ('error' in canva) return canva
-      const apiKey = canva.token
-
-      try {
-        // Map our schema to Canva's operation format
-        const canvaOps = operations.map((op) => {
-          const canvaOp: Record<string, unknown> = { type: op.type }
-
-          if (op.target) canvaOp.target = { element_id: op.target }
-          if (op.find !== undefined) canvaOp.find = op.find
-          if (op.replacement !== undefined) canvaOp.replacement = op.replacement
-          if (op.url) canvaOp.url = op.url
-
-          // Format text properties
-          const formatting: Record<string, unknown> = {}
-          if (op.font_size) formatting.font_size = op.font_size
-          if (op.font_weight) formatting.font_weight = op.font_weight
-          if (op.color) formatting.color = op.color
-          if (op.text_align) formatting.text_align = op.text_align
-          if (Object.keys(formatting).length > 0)
-            canvaOp.formatting = formatting
-
-          return canvaOp
-        })
-
-        const res = await canvaFetch(
-          apiKey,
-          `/designs/${design_id}/editing/transactions/${transaction_id}/operations`,
-          { method: 'POST', body: JSON.stringify({ operations: canvaOps }) }
-        )
-        const data = await res.json()
-
-        return {
-          success: true,
-          design_id,
-          transaction_id,
-          operations_count: operations.length,
-          result: data,
-          message: `Successfully queued ${operations.length} editing operation(s) on design ${design_id}. Remember to commit the transaction to save changes.`,
-        }
-      } catch (err) {
-        return {
-          success: false,
-          error:
-            err instanceof Error
-              ? err.message
-              : 'Failed to perform editing operations',
-        }
-      }
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Commit editing transaction
-// ---------------------------------------------------------------------------
-export function createCommitEditingTransactionTool(
-  supabase: SupabaseClient,
-  userId: string
-) {
-  return tool({
-    description:
-      'Save all pending changes to a Canva design. Must be called after performing edit operations.',
-    inputSchema: z.object({
-      design_id: z.string().describe('Canva design ID being edited'),
-      transaction_id: z
-        .string()
-        .describe('Active transaction ID to commit'),
-    }),
-    execute: async ({ design_id, transaction_id }) => {
-      const canva = await requireCanva(supabase, userId)
-      if ('error' in canva) return canva
-      const apiKey = canva.token
-
-      try {
-        await canvaFetch(
-          apiKey,
-          `/designs/${design_id}/editing/transactions/${transaction_id}/commit`,
-          { method: 'POST' }
-        )
-
-        return {
-          success: true,
-          design_id,
-          transaction_id,
-          message: `All changes have been saved to design ${design_id}. The editing session is now closed.`,
-        }
-      } catch (err) {
-        return {
-          success: false,
-          error:
-            err instanceof Error
-              ? err.message
-              : 'Failed to commit editing transaction',
-        }
-      }
-    },
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Cancel editing transaction
-// ---------------------------------------------------------------------------
-export function createCancelEditingTransactionTool(
-  supabase: SupabaseClient,
-  userId: string
-) {
-  return tool({
-    description:
-      'Discard all pending changes to a Canva design without saving.',
-    inputSchema: z.object({
-      design_id: z.string().describe('Canva design ID being edited'),
-      transaction_id: z
-        .string()
-        .describe('Active transaction ID to cancel'),
-    }),
-    execute: async ({ design_id, transaction_id }) => {
-      const canva = await requireCanva(supabase, userId)
-      if ('error' in canva) return canva
-      const apiKey = canva.token
-
-      try {
-        await canvaFetch(
-          apiKey,
-          `/designs/${design_id}/editing/transactions/${transaction_id}/cancel`,
-          { method: 'POST' }
-        )
-
-        return {
-          success: true,
-          design_id,
-          transaction_id,
-          message: `All pending changes to design ${design_id} have been discarded. The editing session is now closed.`,
-        }
-      } catch (err) {
-        return {
-          success: false,
-          error:
-            err instanceof Error
-              ? err.message
-              : 'Failed to cancel editing transaction',
         }
       }
     },

@@ -31,7 +31,7 @@ import { createRepurposeContentTool } from './repurpose-content'
 import { createFillCalendarTool } from './fill-calendar'
 import { createSaveBrandInfoTool } from './save-brand-info'
 import { createReadProformaTool, createUpdateProformaTool } from './proforma'
-import { createDesignGraphicTool, createExportDesignTool, createSearchDesignsTool, createSearchFoldersTool, createListFolderItemsTool, createListBrandKitsTool, createGetBrandTemplateDatasetTool, createGetDesignTool, createStartEditingTransactionTool, createPerformEditingOperationsTool, createCommitEditingTransactionTool, createCancelEditingTransactionTool, createGetDesignContentTool, createGetDesignPagesTool, createGetDesignAssetsTool, createResizeDesignTool, createUploadAssetFromUrlTool, createDesignFromCandidateTool, createRequestOutlineReviewTool, createImportDesignFromUrlTool, createCommentOnDesignTool, createListCommentsTool, createListRepliesTool, createReplyToCommentTool, createCreateFolderTool, createMoveItemToFolderTool, createGetExportFormatsTool, createResolveShortlinkTool, createGenerateDesignStructuredTool, createGetPresenterNotesTool } from './canva'
+import { createDesignGraphicTool, createExportDesignTool, createSearchDesignsTool, createSearchFoldersTool, createListFolderItemsTool, createListBrandKitsTool, createCanvaTemplateCopyTool, createGetBrandTemplateDatasetTool, createGetDesignTool, createGetDesignContentTool, createGetDesignPagesTool, createGetDesignAssetsTool, createResizeDesignTool, createUploadAssetFromUrlTool, createDesignFromCandidateTool, createRequestOutlineReviewTool, createImportDesignFromUrlTool, createCommentOnDesignTool, createListCommentsTool, createListRepliesTool, createReplyToCommentTool, createCreateFolderTool, createMoveItemToFolderTool, createGetExportFormatsTool, createResolveShortlinkTool, createGenerateDesignStructuredTool, createGetPresenterNotesTool } from './canva'
 import { createWriteBlogTool } from './write-blog'
 import { createWriteEmailCampaignTool } from './write-email-campaign'
 import { createDeepCompetitorScanTool } from './deep-competitor-scan'
@@ -62,13 +62,14 @@ import { createAbeAiTool } from './abeai'
 import { createPicoSearchTool } from './pico'
 import { createImportCanvaDesignToMediaTool } from './import-canva-design-to-media'
 import { createCarouselProposalTool } from './create-carousel-proposal'
+import { readCanvaTemplateContract } from '@/lib/canva/template-contract'
 
 export interface ToolContext {
   supabase: SupabaseClient
   userId: string
   brandId: string
   /** Used to remove regulated-only tools from non-regulated brand runs. */
-  brand?: Pick<Brand, 'slug' | 'compliance_flags'>
+  brand?: Pick<Brand, 'slug' | 'compliance_flags' | 'brand_dna_constraints'>
   conversationId: string | null
   agentRegistryId?: string | null
   /** Present for autonomous heartbeat work; approval requests retain this link. */
@@ -86,6 +87,8 @@ export interface ToolContext {
 }
 
 export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
+  const templateContract = readCanvaTemplateContract(ctx.brand?.brand_dna_constraints)
+  const templateLockedVisuals = templateContract?.requireTemplateForSocialVisuals === true
   const saveOutput = createSaveOutputTool(
     ctx.supabase,
     ctx.userId,
@@ -162,12 +165,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const searchFolders = createSearchFoldersTool(ctx.supabase, ctx.userId)
   const listFolderItems = createListFolderItemsTool(ctx.supabase, ctx.userId)
   const listBrandKits = createListBrandKitsTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const createCanvaTemplateCopy = createCanvaTemplateCopyTool(ctx.supabase, ctx.userId, ctx.brandId)
   const getBrandTemplateDataset = createGetBrandTemplateDatasetTool(ctx.supabase, ctx.userId, ctx.brandId)
   const getDesign = createGetDesignTool(ctx.supabase, ctx.userId)
-  const startEditingTransaction = createStartEditingTransactionTool(ctx.supabase, ctx.userId)
-  const performEditingOperations = createPerformEditingOperationsTool(ctx.supabase, ctx.userId)
-  const commitEditingTransaction = createCommitEditingTransactionTool(ctx.supabase, ctx.userId)
-  const cancelEditingTransaction = createCancelEditingTransactionTool(ctx.supabase, ctx.userId)
   const getDesignContent = createGetDesignContentTool(ctx.supabase, ctx.userId)
   const getDesignPages = createGetDesignPagesTool(ctx.supabase, ctx.userId)
   const getDesignAssets = createGetDesignAssetsTool(ctx.supabase, ctx.userId)
@@ -247,6 +247,23 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const blotatoVisualStatus = createBlotatoVisualStatusTool(ctx.supabase, ctx.userId)
   const blotatoPostStatus = createBlotatoPostStatusTool(ctx.supabase, ctx.userId)
 
+  // A template-locked brand deliberately cannot call an image or visual
+  // generator. Prompt prose cannot prevent a model from inventing type or
+  // layout, so the capabilities are absent at the tool boundary instead.
+  const generatedImageTools = templateLockedVisuals
+    ? {}
+    : {
+        generate_image: generateImageTool,
+      }
+  const visualGenerationTools = templateLockedVisuals
+    ? {}
+    : {
+        ...generatedImageTools,
+        blotato_list_templates: blotatoListTemplatesTool,
+        blotato_create_visual: blotatoCreateVisualTool,
+        blotato_visual_status: blotatoVisualStatus,
+      }
+
   // Base management tools every agent gets
   const managementTools = {
     create_task: createTask,
@@ -274,7 +291,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       scan_social: scanSocial,
       marketing_audit: marketingAudit,
       browse_page: browsePage,
-      generate_image: generateImageTool,
+      ...visualGenerationTools,
       send_email: sendEmail,
       read_gmail: readGmail,
       generate_slides: generateSlides,
@@ -296,12 +313,9 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       search_folders: searchFolders,
       list_folder_items: listFolderItems,
       list_brand_templates: listBrandKits,
+      create_canva_template_copy: createCanvaTemplateCopy,
       get_brand_template_dataset: getBrandTemplateDataset,
       get_design: getDesign,
-      start_editing_transaction: startEditingTransaction,
-      perform_editing_operations: performEditingOperations,
-      commit_editing_transaction: commitEditingTransaction,
-      cancel_editing_transaction: cancelEditingTransaction,
       get_design_content: getDesignContent,
       get_design_pages: getDesignPages,
       get_design_assets: getDesignAssets,
@@ -356,22 +370,19 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       blotato_publish: blotatoPublish,
       blotato_extract_content: blotatoExtractContent,
       blotato_source_status: blotatoSourceStatus,
-      blotato_list_templates: blotatoListTemplatesTool,
-      blotato_create_visual: blotatoCreateVisualTool,
-      blotato_visual_status: blotatoVisualStatus,
       blotato_post_status: blotatoPostStatus,
       ...managementTools,
     },
-    content: { search_brain: searchBrain, approve_proposal: approveProposal, caption_video: captionVideo, tighten_video: tightenVideo, save_output: saveOutput, create_collage: createCollage, verify_product: verifyProduct, word_count: wordCount, query_media: queryMedia, propose_post_from_media: proposePost, generate_image: generateImageTool, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_templates: listBrandKits, get_brand_template_dataset: getBrandTemplateDataset, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, import_canva_design_to_media: importCanvaDesignToMedia, create_carousel_proposal: createCarouselProposal, browse_mixpost_media: browseMixpostMedia, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, blotato_extract_content: blotatoExtractContent, blotato_source_status: blotatoSourceStatus, blotato_list_templates: blotatoListTemplatesTool, blotato_create_visual: blotatoCreateVisualTool, blotato_visual_status: blotatoVisualStatus, ...managementTools },
+    content: { search_brain: searchBrain, approve_proposal: approveProposal, caption_video: captionVideo, tighten_video: tightenVideo, save_output: saveOutput, create_collage: createCollage, verify_product: verifyProduct, word_count: wordCount, query_media: queryMedia, propose_post_from_media: proposePost, ...visualGenerationTools, generate_slides: generateSlides, repurpose_content: repurposeContent, write_blog: writeBlog, analyse_voice: analyseVoice, search_designs: searchDesigns, list_brand_templates: listBrandKits, create_canva_template_copy: createCanvaTemplateCopy, get_brand_template_dataset: getBrandTemplateDataset, design_graphic: designGraphic, export_design: exportDesign, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, import_canva_design_to_media: importCanvaDesignToMedia, create_carousel_proposal: createCarouselProposal, browse_mixpost_media: browseMixpostMedia, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, blotato_extract_content: blotatoExtractContent, blotato_source_status: blotatoSourceStatus, ...managementTools },
     growth: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, send_email: sendEmail, browse_page: browsePage, read_gmail: readGmail, ...managementTools },
     strategy: { save_output: saveOutput, browse_page: browsePage, generate_slides: generateSlides, fill_calendar: fillCalendar, query_calendar: queryCalendar, manage_posts: managePosts, search_inspiration: searchInspiration, query_social_analytics: querySocialAnalytics, manage_tags: manageTags, request_outline_review: requestOutlineReview, import_design_from_url: importDesignFromUrl, get_presenter_notes: getPresenterNotes, list_mixpost_templates: listMixpostTemplates, create_mixpost_template: createMixpostTemplateTool, analyse_content_gaps: analyseContentGaps, publish_to_social: publishToSocial, manage_collections: manageCollections, manage_media_tags: manageMediaTags, research_industry: researchIndustry, ...managementTools },
     competitor: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, deep_competitor_scan: deepCompetitorScan, research_industry: researchIndustry, ...managementTools },
-    website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, generate_image: generateImageTool, ...managementTools },
+    website: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, ...generatedImageTools, ...managementTools },
     compliance: { save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, get_design_content: getDesignContent, get_design_pages: getDesignPages, comment_on_design: commentOnDesign, list_comments: listComments, reply_to_comment: replyToComment, review_content: reviewContent, ...(abeAi ? { use_abe_ai: abeAi } : {}), ...managementTools },
     seo: { save_output: saveOutput, word_count: wordCount, scan_website: scanWebsite, browse_page: browsePage, write_blog: writeBlog, ...managementTools },
-    paid_ads: { save_output: saveOutput, word_count: wordCount, generate_image: generateImageTool, write_ads: writeAds, search_designs: searchDesigns, list_brand_templates: listBrandKits, get_brand_template_dataset: getBrandTemplateDataset, design_graphic: designGraphic, export_design: exportDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, ...managementTools },
+    paid_ads: { save_output: saveOutput, word_count: wordCount, ...generatedImageTools, write_ads: writeAds, search_designs: searchDesigns, list_brand_templates: listBrandKits, create_canva_template_copy: createCanvaTemplateCopy, get_brand_template_dataset: getBrandTemplateDataset, design_graphic: designGraphic, export_design: exportDesign, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, get_export_formats: getExportFormats, generate_design_structured: generateDesignStructured, ...managementTools },
     email: { save_output: saveOutput, word_count: wordCount, send_email: sendEmail, read_gmail: readGmail, write_email_campaign: writeEmailCampaign, ...managementTools },
-    brand: { save_output: saveOutput, create_collage: createCollage, generate_image: generateImageTool, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_templates: listBrandKits, get_brand_template_dataset: getBrandTemplateDataset, get_design: getDesign, start_editing_transaction: startEditingTransaction, perform_editing_operations: performEditingOperations, commit_editing_transaction: commitEditingTransaction, cancel_editing_transaction: cancelEditingTransaction, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, comment_on_design: commentOnDesign, list_comments: listComments, list_replies: listReplies, reply_to_comment: replyToComment, create_folder: createFolder, move_item_to_folder: moveItemToFolder, resolve_shortlink: resolveShortlink, generate_design_structured: generateDesignStructured, import_canva_design_to_media: importCanvaDesignToMedia, create_carousel_proposal: createCarouselProposal, analyse_voice: analyseVoice, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, ...managementTools },
+    brand: { save_output: saveOutput, create_collage: createCollage, ...generatedImageTools, design_graphic: designGraphic, export_design: exportDesign, search_designs: searchDesigns, search_folders: searchFolders, list_folder_items: listFolderItems, list_brand_templates: listBrandKits, create_canva_template_copy: createCanvaTemplateCopy, get_brand_template_dataset: getBrandTemplateDataset, get_design: getDesign, get_design_content: getDesignContent, get_design_pages: getDesignPages, get_design_assets: getDesignAssets, resize_design: resizeDesign, upload_asset_from_url: uploadAssetFromUrl, design_from_candidate: designFromCandidate, import_design_from_url: importDesignFromUrl, comment_on_design: commentOnDesign, list_comments: listComments, list_replies: listReplies, reply_to_comment: replyToComment, create_folder: createFolder, move_item_to_folder: moveItemToFolder, resolve_shortlink: resolveShortlink, generate_design_structured: generateDesignStructured, import_canva_design_to_media: importCanvaDesignToMedia, create_carousel_proposal: createCarouselProposal, analyse_voice: analyseVoice, upload_media: uploadMedia, manage_collections: manageCollections, manage_media_tags: manageMediaTags, ...managementTools },
     analytics: { search_brain: searchBrain, approve_proposal: approveProposal, save_output: saveOutput, scan_website: scanWebsite, browse_page: browsePage, query_analytics: queryAnalytics, query_site_traffic: querySiteTraffic, query_social_analytics: querySocialAnalytics, analyse_content_gaps: analyseContentGaps, inspect_project_marketing_backend: inspectProjectMarketingBackend, ...managementTools },
     automation: { save_output: saveOutput, scan_github: scanGithub, browse_page: browsePage, inspect_project_marketing_backend: inspectProjectMarketingBackend, ...managementTools },
     video: { save_output: saveOutput, verify_product: verifyProduct, word_count: wordCount, process_media: processMedia, repurpose_content: repurposeContent, query_media: queryMedia, propose_post_from_media: proposePost, upload_asset_from_url: uploadAssetFromUrl, browse_mixpost_media: browseMixpostMedia, publish_to_social: publishToSocial, upload_media: uploadMedia, ...managementTools },

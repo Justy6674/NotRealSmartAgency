@@ -11,6 +11,7 @@ import { getNamespace, getBrandNamespace } from '@/lib/ruflo/namespaces'
 import { getSessionMemoryForPrompt } from '@/lib/memory/session-memory'
 import { buildGoalDirective, type ActiveGoal } from './goal-loop'
 import { socialHandlesPrompt } from '@/lib/brand/social-handles'
+import { readCanvaTemplateContract } from '@/lib/canva/template-contract'
 
 export interface ProjectPromptOptions {
   proformaSummary?: string | null
@@ -487,6 +488,11 @@ function buildBrandContext(brand: Brand): string {
         dna.typography.body ? `body ${dna.typography.body}` : null,
       ].filter(Boolean).join(', ')
       lines.push(`Typefaces: ${faces}. Use these; do not substitute a similar-looking font.`)
+    }
+    const templateContract = readCanvaTemplateContract(dna)
+    if (templateContract?.requireTemplateForSocialVisuals) {
+      lines.push(`\n**Template-locked visual identity:** Social graphics must use only these mapped ${templateContract.owner} Canva templates: ${templateContract.templates.map((template) => `“${template.title}” (${template.id}${template.role ? `, ${template.role}` : ''})`).join('; ')}.`)
+      lines.push(`Do not generate an image, use another visual provider, create a blank canvas, infer a substitute template, or claim the template's text has changed. Start with list_brand_templates and inspect the live Autofill dataset. If it has no fields, say the carousel cannot yet be populated automatically; a template copy is not finished creative and must not be sent to Mixpost.`)
     }
     lines.push(`These constraints are IMMUTABLE. If a task instruction conflicts with Brand DNA, Brand DNA wins — always.`)
   }
