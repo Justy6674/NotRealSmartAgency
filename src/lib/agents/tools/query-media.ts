@@ -25,8 +25,14 @@ export function createQueryMediaTool(
 ) {
   return tool({
     description:
-      'Check the media library for uploaded videos, images, and audio files. Returns each item with its UUID (labelled "ID:"), filename, file type, transcription status, public URL, AI description, tags, and (in analysis mode) the full transcription. When you need to attach media to a post, grab the UUID from this output and pass it to publish_to_social via media_ids (array) or draft_post via media_id (single). NEVER guess or hallucinate a media UUID — always call this tool first to get real IDs. Use mode="analysis" for strategic content reviews — it returns the FULL transcription and AI description so you can analyse the actual content of each item, not just the filename.',
+      'Check the media library for uploaded videos, images, and audio files. Returns each item with its UUID (labelled "ID:"), filename, file type, transcription status, public URL, AI description, tags, and (in analysis mode) the full transcription. When you need to attach media to a post, grab the UUID from this output and pass it to publish_to_social via media_ids (array) or draft_post via media_id (single). Supply media_ids when the owner attached files to this turn: that is the only safe way to analyse those exact files rather than a similarly named older upload. NEVER guess or hallucinate a media UUID — always call this tool first to get real IDs. Use mode="analysis" for strategic content reviews — it returns the FULL transcription and AI description so you can analyse the actual content of each item, not just the filename.',
     inputSchema: z.object({
+      media_ids: z
+        .array(z.string().uuid())
+        .min(1)
+        .max(10)
+        .optional()
+        .describe('Exact media item IDs to inspect. Use this for files attached to the current owner request.'),
       status: z
         .enum(['pending', 'transcribing', 'transcribed', 'failed'])
         .optional()
@@ -42,7 +48,7 @@ export function createQueryMediaTool(
         .default('list')
         .describe('list = compact summary with 100-char transcript snippet (default). analysis = full transcript + ai_description + all tags so the Director can do strategic content review.'),
     }),
-    execute: async ({ status, limit, mode }) => {
+    execute: async ({ media_ids: mediaIds, status, limit, mode }) => {
       let query = supabase
         .from('media_items')
         .select(
@@ -57,11 +63,18 @@ export function createQueryMediaTool(
         .eq('brand_id', brandId)
         .order('created_at', { ascending: false })
 
+      if (mediaIds?.length) {
+        query = query.in('id', mediaIds)
+      }
+
       if (status) {
         query = query.eq('transcription_status', status)
       }
 
-      const { data: items, error } = await query.limit(limit)
+      // A current Mini App attachment turn names the exact files to inspect.
+      // Never let the ordinary browse default hide files 6–10 of that set.
+      const effectiveLimit = mediaIds?.length ?? limit
+      const { data: items, error } = await query.limit(effectiveLimit)
 
       if (error) {
         return userSafeError('query-media', error, 'Could not read the media library just now. Try again in a moment.')

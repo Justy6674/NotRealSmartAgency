@@ -1,11 +1,7 @@
-import { after } from 'next/server'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
-import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
-import { startVideoBrief } from '@/lib/telegram/video-brief-run'
-import { proposeAndStore } from '@/lib/telegram/mini-app-proposal'
 
 /**
  * Upload real footage from inside Telegram.
@@ -22,7 +18,8 @@ import { proposeAndStore } from '@/lib/telegram/mini-app-proposal'
  *
  *   start    → check the session, hand back a signed upload URL
  *   (browser uploads straight to storage)
- *   complete → file it in the library, process it, put the Director to work
+ *   complete → file it in the library; the accompanying message owns the
+ *              processing and Director turn for the whole attachment set
  */
 
 export const runtime = 'nodejs'
@@ -46,7 +43,6 @@ export async function POST(request: Request) {
     file_type?: unknown
     file_size?: unknown
     storage_path?: unknown
-    instruction?: unknown
   } | null
 
   const initData = typeof body?.init_data === 'string' ? body.init_data : ''
@@ -114,8 +110,6 @@ export async function POST(request: Request) {
   const storagePath = typeof body?.storage_path === 'string' ? body.storage_path : ''
   const fileName = typeof body?.file_name === 'string' ? body.file_name : 'upload'
   const fileType = typeof body?.file_type === 'string' ? body.file_type : 'application/octet-stream'
-  const instruction = typeof body?.instruction === 'string' ? body.instruction.trim() : ''
-  const instructionGiven = instruction.length > 0
 
   // The path is built here at start, so a caller cannot point this at
   // someone else's file by inventing one.
@@ -133,6 +127,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'That file did not finish uploading.' }, { status: 409 })
   }
 
+  // Mobile clients retry after a lost response. Refiling the same storage path
+  // would produce duplicate media rows, then duplicate Director work, so the
+  // path is a stable idempotency key for the Mini App completion step.
+  const metadata = { source: 'telegram', via: 'mini_app', storage_path: storagePath }
+  const { data: alreadyFiled, error: existingError } = await admin
+    .from('media_items')
+    .select('id')
+    .eq('user_id', context.actorUserId)
+    .eq('brand_id', grant.projectId)
+    .contains('metadata', metadata)
+    .maybeSingle()
+  if (existingError) {
+    return NextResponse.json({ error: 'Could not check the uploaded file.' }, { status: 500 })
+  }
+  if (alreadyFiled?.id) {
+    return NextResponse.json({ media_item_id: alreadyFiled.id, project_name: grant.projectName, already_filed: true })
+  }
+
   const fileUrl = admin.storage.from('media').getPublicUrl(storagePath).data.publicUrl
 
   const { data: media, error: mediaError } = await admin
@@ -145,7 +157,7 @@ export async function POST(request: Request) {
       file_type: fileType,
       file_size_bytes: (uploaded.metadata as { size?: number } | null)?.size ?? 0,
       transcription_status: fileType.startsWith('image/') ? 'transcribed' : 'pending',
-      metadata: { source: 'telegram', via: 'mini_app' },
+      metadata,
     })
     .select('id')
     .single()
@@ -153,46 +165,6 @@ export async function POST(request: Request) {
   if (mediaError || !media) {
     return NextResponse.json({ error: 'The file uploaded but could not be filed.' }, { status: 500 })
   }
-
-  // Transcribe and describe first, then take a first pass at the post.
-  //
-  // Nothing is drafted and nothing reaches Mixpost here. Several clips can be
-  // sent one after another and each comes back carrying a hook and a caption to
-  // react to; the Director is only involved once there is something to discuss.
-  // Anything typed alongside the file is treated as an angle for Content & Copy
-  // rather than an order, because at upload time it is a hint, not a brief.
-  after(async () => {
-    await runMediaProcessingPipeline({ supabase: admin, mediaItemId: media.id }).catch(() => {
-      /* a proposal off the file name alone is still better than nothing */
-    })
-
-    // A video starts a conversation, not a caption.
-    //
-    // This used to write a finished post for one platform before the owner had
-    // said a word — no idea what it was for, who it was for, or where it was
-    // going — so the only thing to do with it was accept it or complain. Now
-    // NRS says what it heard and asks the first question.
-    //
-    // Typing an instruction alongside the file is a different matter: that IS
-    // a brief, so it goes straight to the copy as it always did.
-    if (instructionGiven) {
-      await proposeAndStore({
-        supabase: admin,
-        userId: context.actorUserId,
-        brandId: grant.projectId,
-        mediaItemId: media.id,
-        fileName,
-        angle: instruction,
-      })
-    } else {
-      await startVideoBrief({
-        admin,
-        userId: context.actorUserId,
-        brandId: grant.projectId,
-        mediaItemId: media.id,
-      })
-    }
-  })
 
   return NextResponse.json({
     media_item_id: media.id,

@@ -107,6 +107,12 @@ export default function TelegramMiniAppPage() {
   const [staged, setStaged] = useState<StagedFile[]>([])
   /** Typed and sent before the upload finished; goes the moment it lands. */
   const [queuedDirection, setQueuedDirection] = useState<string | null>(null)
+  /**
+   * A retry must use the same id as the first tap. If mobile data loses the
+   * response after NRS accepted it, the server returns the already-created
+   * Director job instead of charging for a second run.
+   */
+  const [pendingAttachmentEventId, setPendingAttachmentEventId] = useState<string | null>(null)
   const [startingNew, setStartingNew] = useState(false)
   const [tick, setTick] = useState(() => 0)
   const [hasMore, setHasMore] = useState(false)
@@ -217,6 +223,7 @@ export default function TelegramMiniAppPage() {
       followingRef.current = true
       setStaged([])
       setQueuedDirection(null)
+      setPendingAttachmentEventId(null)
       setNotice(
         data.memory_saved && (data.turns_saved ?? 0) > 0
           ? `Saved what we settled and started fresh. Ask for anything.`
@@ -394,18 +401,16 @@ export default function TelegramMiniAppPage() {
    *
    * The bytes are already in storage by now — attaching starts that straight
    * away so the wait happens while the direction is being typed. What waits for
-   * Send is the part that matters: filing the clip and letting Content & Copy
-   * write about it. Sending the file the moment it was picked meant the
-   * direction had nowhere to go, because the writing had already begun.
+   * Send is the part that matters: filing the file and pairing it with the
+   * owner's exact Director request. Sending the file the moment it was picked
+   * meant the direction had nowhere to go, because the work had already begun.
    */
   const sendStaged = async (direction: string) => {
     const ready = staged.filter((item) => item.storagePath)
-    if (ready.length === 0) return
+    if (ready.length === 0) return false
     setSending(true)
     setError(null)
     setNotice(null)
-    setDraft('')
-    setStaged([])
 
     const outcomes = await Promise.allSettled(
       ready.map(async (item) => {
@@ -418,21 +423,37 @@ export default function TelegramMiniAppPage() {
             storage_path: item.storagePath,
             file_name: item.name,
             file_type: item.type,
-            ...(direction ? { instruction: direction } : {}),
           }),
         })
         const data = (await finished.json().catch(() => ({}))) as { error?: string; media_item_id?: string }
         if (!finished.ok || !data.media_item_id) throw new Error(data.error ?? `${item.name} could not be filed.`)
+        return data.media_item_id
       }),
     )
     const failures = outcomes.flatMap((outcome) =>
       outcome.status === 'rejected' ? [String(outcome.reason?.message ?? outcome.reason)] : [],
     )
-    if (failures.length > 0) setError(failures.join(' '))
+    if (failures.length > 0) {
+      setError(failures.join(' '))
+      setSending(false)
+      return false
+    }
+
+    const mediaItemIds = outcomes.flatMap((outcome) =>
+      outcome.status === 'fulfilled' ? [outcome.value] : [],
+    )
+    const request = direction || `Review the ${mediaItemIds.length === 1 ? 'file' : 'files'} I just sent and tell me the best next move.`
+    const clientEventId = pendingAttachmentEventId ?? crypto.randomUUID()
+    setPendingAttachmentEventId(clientEventId)
+    const sent = await submitMessage(request, clientEventId, mediaItemIds)
+    if (sent) {
+      setDraft('')
+      setStaged([])
+      setQueuedDirection(null)
+      setPendingAttachmentEventId(null)
+    }
     setSending(false)
-    // The clip is now a real row, so it comes back as part of the one timeline
-    // rather than into a separate list with its own ordering.
-    void refreshTimeline()
+    return sent
   }
 
   /**
@@ -448,8 +469,12 @@ export default function TelegramMiniAppPage() {
    * lost on brand switch, and why the whole conversation vanished on reload.
    * The timeline poller picks the answer up and puts it in its place.
    */
-  const submitMessage = useCallback(async (message: string, reuseClientEventId?: string | null) => {
-    if (!selectedProject || !message.trim()) return
+  const submitMessage = useCallback(async (
+    message: string,
+    reuseClientEventId?: string | null,
+    mediaItemIds: string[] = [],
+  ): Promise<boolean> => {
+    if (!selectedProject || !message.trim()) return false
     const clientEventId = reuseClientEventId ?? crypto.randomUUID()
     const nowMs = Date.now()
 
@@ -465,7 +490,7 @@ export default function TelegramMiniAppPage() {
       side: 'owner',
       brandId: selectedProject.project_id,
       clientEventId,
-      payload: { kind: 'user_message', text: message, mediaIds: [], status: 'sent' },
+      payload: { kind: 'user_message', text: message, mediaIds: mediaItemIds, status: 'sent' },
       groupId: `turn:local:${clientEventId}`,
       groupAnchorMs: nowMs,
       memberRank: 0,
@@ -477,17 +502,26 @@ export default function TelegramMiniAppPage() {
       const response = await fetch('/api/telegram/mini-app/message', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ init_data: initData, message, client_event_id: clientEventId }),
+        body: JSON.stringify({
+          init_data: initData,
+          message,
+          client_event_id: clientEventId,
+          ...(mediaItemIds.length > 0 ? { media_item_ids: mediaItemIds } : {}),
+        }),
       })
       const data = (await response.json().catch(() => ({}))) as { error?: string; job_id?: string }
       if (!response.ok || !data.job_id) {
         setError(data.error ?? 'NRS could not start that request.')
-        return
+        setEvents((current) => current.filter((event) => event.id !== `local:${clientEventId}`))
+        return false
       }
       // The server now has it; the timeline is the authority from here.
       await refreshTimeline()
+      return true
     } catch {
       setError('That did not send. Check your connection and try again.')
+      setEvents((current) => current.filter((event) => event.id !== `local:${clientEventId}`))
+      return false
     } finally {
       setSending(false)
     }
@@ -552,7 +586,6 @@ export default function TelegramMiniAppPage() {
         // her watch a bar and press Send again at the right moment is work
         // the app should be doing.
         setQueuedDirection(message)
-        setDraft('')
         setError(null)
         setNotice('Got it — this goes as soon as the upload finishes. No need to press Send again.')
         return
@@ -561,8 +594,7 @@ export default function TelegramMiniAppPage() {
       return
     }
     if (!message) return
-    setDraft('')
-    await submitMessage(message)
+    if (await submitMessage(message)) setDraft('')
   }
 
   /**
@@ -599,6 +631,7 @@ export default function TelegramMiniAppPage() {
   const attachFiles = async (files: File[]) => {
     if (!selectedProject || sending || files.length === 0) return
     setError(null)
+    if (staged.length === 0) setPendingAttachmentEventId(null)
     const startedAt = Date.now()
     setStaged((current) => [
       ...current,

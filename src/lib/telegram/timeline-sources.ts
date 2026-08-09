@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { STALE_AFTER_MS, toUtcMs, type TimelineSourceEvent } from './timeline'
+import { stripMediaDirective } from './telegram-album'
 
 export interface TimelineFetchContext {
   admin: SupabaseClient
@@ -205,7 +206,15 @@ export const directorJobSource: TimelineSource<JobRow> = {
       const askedAtMs = toUtcMs(row.created_at)
       if (askedAtMs === null) continue
 
-      const message = typeof row.input?.message === 'string' ? row.input.message.trim() : ''
+      // The model needs the media directive on the active turn, but the owner
+      // must only see their own words. Showing UUIDs and internal instructions
+      // in the Mini App made a normal attachment look like a failed upload.
+      const message = typeof row.input?.message === 'string'
+        ? stripMediaDirective(row.input.message)
+        : ''
+      const mediaItemIds = Array.isArray(row.input?.media_item_ids)
+        ? row.input.media_item_ids.filter((id): id is string => typeof id === 'string')
+        : []
       const clientEventId =
         typeof row.input?.client_event_id === 'string' ? row.input.client_event_id : null
       const askId = `ask:${row.id}`
@@ -222,7 +231,7 @@ export const directorJobSource: TimelineSource<JobRow> = {
           side: 'owner',
           brandId,
           clientEventId,
-          payload: { kind: 'user_message', text: message, mediaIds: [], status: 'sent' },
+          payload: { kind: 'user_message', text: message, mediaIds: mediaItemIds, status: 'sent' },
         })
       }
 

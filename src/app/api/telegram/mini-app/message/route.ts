@@ -7,6 +7,8 @@ import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { resolveTelegramMiniAppContext, validateTelegramMiniAppInitData } from '@/lib/telegram/mini-app'
 import { advanceVideoBrief } from '@/lib/telegram/video-brief-run'
+import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
+import { buildMiniAppAttachmentDirective } from '@/lib/telegram/mini-app-attachment-turn'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -18,9 +20,25 @@ export async function POST(request: Request) {
     init_data?: unknown
     message?: unknown
     client_event_id?: unknown
+    media_item_ids?: unknown
   } | null
   const initData = typeof body?.init_data === 'string' ? body.init_data : ''
   const message = typeof body?.message === 'string' ? body.message.trim() : ''
+  const rawMediaItemIds = body?.media_item_ids
+  if (rawMediaItemIds !== undefined && !Array.isArray(rawMediaItemIds)) {
+    return NextResponse.json({ error: 'Attached media must be a list.' }, { status: 400 })
+  }
+  const mediaItemIds = Array.isArray(rawMediaItemIds)
+    ? [...new Set(rawMediaItemIds.filter((id): id is string =>
+      typeof id === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id),
+    ))]
+    : []
+  if (Array.isArray(rawMediaItemIds) && mediaItemIds.length !== rawMediaItemIds.length) {
+    return NextResponse.json({ error: 'One of the attached files is not valid.' }, { status: 400 })
+  }
+  if (mediaItemIds.length > 10) {
+    return NextResponse.json({ error: 'Send up to 10 files in one request.' }, { status: 400 })
+  }
   /**
    * The client's own id for this send, so the same tap can never become two
    * Director runs. On phone data a slow Send is tapped again; without this that
@@ -42,6 +60,26 @@ export async function POST(request: Request) {
   if (!context || !context.activeSession) return NextResponse.json({ error: 'Choose a project before messaging the Director.' }, { status: 409 })
   const grant = context.grants.find((candidate) => candidate.grantId === context.activeSession?.grantId && candidate.projectId === context.activeSession?.projectId)
   if (!grant || !grant.capabilities.includes('director:chat')) return NextResponse.json({ error: 'The selected project cannot run Director work.' }, { status: 403 })
+
+  if (mediaItemIds.length > 0) {
+    const { data: ownedMedia, error: mediaError } = await admin
+      .from('media_items')
+      .select('id')
+      .in('id', mediaItemIds)
+      .eq('user_id', context.actorUserId)
+      .eq('brand_id', grant.projectId)
+    if (mediaError || ownedMedia?.length !== mediaItemIds.length) {
+      return NextResponse.json({ error: 'One of those files is not available in this project.' }, { status: 403 })
+    }
+  }
+
+  // The directive is intentionally stored with this job, not just supplied to
+  // the live model call. That makes the current attachment set recoverable if
+  // the job is resumed, while `stripMediaDirective()` removes it from later
+  // thread turns so stale images cannot become a standing instruction.
+  const messageWithMedia = mediaItemIds.length > 0
+    ? message + buildMiniAppAttachmentDirective(mediaItemIds)
+    : message
 
   const execution = createTelegramDirectorExecution({
     userId: context.actorUserId,
@@ -69,8 +107,9 @@ export async function POST(request: Request) {
     status: 'queued',
     input: {
       brand_id: execution.projectId,
-      message,
+      message: messageWithMedia,
       ...(clientEventId ? { client_event_id: clientEventId } : {}),
+      ...(mediaItemIds.length > 0 ? { media_item_ids: mediaItemIds } : {}),
       // Persist the delivery target with the job, not only in the ephemeral
       // route continuation. The recovery cron can then finish an interrupted
       // Mini App request without inventing a Telegram destination.
@@ -104,33 +143,45 @@ export async function POST(request: Request) {
   if (error || !job) return NextResponse.json({ error: 'NRS could not start that request.' }, { status: 500 })
 
   after(async () => {
+    // The Director sees the attachment IDs immediately, but its first turn
+    // waits for the canonical processor so image/video analysis is available
+    // when it calls query_media. A processing failure never removes the owner
+    // request; the model is told to ask instead of guessing.
+    if (mediaItemIds.length > 0) {
+      await Promise.all(mediaItemIds.map((mediaItemId) =>
+        runMediaProcessingPipeline({ supabase: admin, mediaItemId }).catch(() => undefined),
+      ))
+    }
+
     // A clip mid-conversation owns the reply.
     //
     // Handing "yes" or "all three" to the general Director loses it: it has no
     // idea which question it answers, so it either asks again or invents a
     // task. The step machine knows exactly what was outstanding.
-    try {
-      const brief = await advanceVideoBrief({
-        admin,
-        userId: execution.actorUserId,
-        brandId: execution.projectId,
-        message,
-      })
-      if (brief.handled && brief.reply) {
-        await admin.from('mcp_jobs').update({
-          status: 'done',
-          result: { response: brief.reply },
-          completed_at: new Date().toISOString(),
-        }).eq('id', job.id)
-        return
+    if (mediaItemIds.length === 0) {
+      try {
+        const brief = await advanceVideoBrief({
+          admin,
+          userId: execution.actorUserId,
+          brandId: execution.projectId,
+          message,
+        })
+        if (brief.handled && brief.reply) {
+          await admin.from('mcp_jobs').update({
+            status: 'done',
+            result: { response: brief.reply },
+            completed_at: new Date().toISOString(),
+          }).eq('id', job.id)
+          return
+        }
+      } catch (error) {
+        // A fault in the brief must not eat the message. Fall through to the
+        // Director, which is worse at this but always answers.
+        console.error('[mini-app:brief]', error)
       }
-    } catch (error) {
-      // A fault in the brief must not eat the message. Fall through to the
-      // Director, which is worse at this but always answers.
-      console.error('[mini-app:brief]', error)
     }
 
-    await runDirectorJob(job.id, execution, { brand_id: execution.projectId, message })
+    await runDirectorJob(job.id, execution, { brand_id: execution.projectId, message: messageWithMedia })
   })
   return NextResponse.json({ job_id: job.id, project_name: grant.projectName })
 }
