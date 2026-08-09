@@ -47,6 +47,9 @@ const CLAIM_PATTERNS: readonly RegExp[] = [
   /\b(?:the\s+|your\s+|both\s+|all\s+)?(?:drafts?|posts?)\s+(?:has|have)\s+been\s+(?:updated|amended|edited|revised|corrected|replaced|drafted|scheduled|published)\b/i,
   /\bdone\s*[—–-]\s*(?:drafts?|posts?)\s+updated\b/i,
   /\bI(?:'ve| have)\s+(?:now\s+)?(?:pushed|sent|synced)\s+(?:it|them|that|these|those)?\s*to\s+mixpost\b/i,
+  // A library/output claim can be fabricated after otherwise useful copy,
+  // e.g. `Saved as “TikTok description — custom fragrance lists”.`.
+  /(?:^|\n)\s*Saved\s+as(?:\s+["“][^"”\n]+["”])?\s*[.!]?\s*$/im,
 ]
 
 export interface ClaimCheck {
@@ -126,9 +129,8 @@ export function checkClaims(response: string, toolNames: readonly string[]): Cla
  * word that makes it true.
  */
 export function correctionNotice(): string {
-  return '\n\n---\nOne correction: that has NOT been saved to the draft yet — the copy above is'
-    + ' written but nothing outside this chat has changed. Say "apply it" and I will make the'
-    + ' change to the actual draft and confirm what I did.'
+  return '\n\n---\nOne correction: the copy above is only in this chat. No output, Canva design,'
+    + ' Mixpost draft or post has been saved.'
 }
 
 /**

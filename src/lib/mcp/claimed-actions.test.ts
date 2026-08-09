@@ -11,9 +11,16 @@ test('the exact failure: says the drafts were updated, no tool ran', () => {
     + ' TikTok-style hashtag.'
   const result = enforceClaims(reply, steps('query_media'))
   assert.equal(result.corrected, true)
-  assert.match(result.response, /has NOT been saved to the draft yet/)
+  assert.match(result.response, /only in this chat/)
   // The copy itself is kept — throwing away good work would be its own waste.
   assert.ok(result.response.startsWith(reply))
+})
+
+test('a standalone fabricated output save is corrected', () => {
+  const reply = 'Saved as “TikTok description — custom fragrance lists”.'
+  const result = enforceClaims(reply, steps('query_media'))
+  assert.equal(result.corrected, true)
+  assert.match(result.response, /No output, Canva design, Mixpost draft or post has been saved/)
 })
 
 test('the same claim passes untouched when a write tool actually ran', () => {

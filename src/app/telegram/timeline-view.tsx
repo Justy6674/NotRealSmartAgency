@@ -36,7 +36,8 @@ function CaptionBlock({
   hook: string
   caption: string
   hashtags: string[]
-  onSave: (next: string) => void
+  /** Present only when this copy has a real saved record to edit. */
+  onSave?: (next: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(caption)
@@ -69,7 +70,7 @@ function CaptionBlock({
         <div className="mt-2 flex gap-2">
           <button
             type="button"
-            onClick={() => { onSave(draft); setEditing(false) }}
+            onClick={() => { onSave?.(draft); setEditing(false) }}
             className="rounded-xl bg-[var(--tg-theme-button-color,#2aabee)] px-4 py-2 text-sm font-medium text-[var(--tg-theme-button-text-color,#fff)]"
           >
             Save
@@ -99,9 +100,11 @@ function CaptionBlock({
         <button type="button" onClick={copy} className="rounded-lg px-3 py-1.5 text-xs ring-1 ring-black/15 dark:ring-white/15">
           {copied ? 'Copied' : 'Copy'}
         </button>
-        <button type="button" onClick={() => setEditing(true)} className="rounded-lg px-3 py-1.5 text-xs ring-1 ring-black/15 dark:ring-white/15">
-          Edit
-        </button>
+        {onSave && (
+          <button type="button" onClick={() => setEditing(true)} className="rounded-lg px-3 py-1.5 text-xs ring-1 ring-black/15 dark:ring-white/15">
+            Edit
+          </button>
+        )}
       </div>
     </div>
   )
@@ -140,6 +143,18 @@ const OwnerBubble = memo(function OwnerBubble({ text }: { text: string }) {
   )
 })
 
+/**
+ * A direct caption answer is still a deliverable, even before it is saved.
+ *
+ * The caption contract requires its hashtags to be on their own trailing
+ * line. That makes this a deliberately conservative signal: ordinary chat
+ * mentioning a hashtag remains a chat bubble, but a copy-ready social answer
+ * gets the single action its recipient needs — Copy.
+ */
+function isCopyReadySocialText(text: string): boolean {
+  return /(?:^|\n)\s*#[\p{L}\d_]+/u.test(text)
+}
+
 const DirectorBubble = memo(function DirectorBubble({
   text,
   withheld,
@@ -147,6 +162,14 @@ const DirectorBubble = memo(function DirectorBubble({
   text: string
   withheld: boolean
 }) {
+  if (!withheld && isCopyReadySocialText(text)) {
+    return (
+      <div className="mr-auto max-w-[92%]">
+        <CaptionBlock hook="" caption={text} hashtags={[]} />
+      </div>
+    )
+  }
+
   return (
     <div
       className={`mr-auto max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-bl-md px-4 py-2.5 text-[15px] leading-6 ${
