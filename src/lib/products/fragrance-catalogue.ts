@@ -23,6 +23,23 @@ export interface CatalogueMatch {
   perfumer: string[] | null
 }
 
+/**
+ * The master fragrance table, in ScentSell's own Supabase.
+ *
+ * This is the database that runs the business: the ScentSell app reads it 11
+ * times, the ScentSell MCP server 37, SniffBot's Oracle twice, and nothing
+ * reads anything else. 112,932 rows.
+ *
+ * NRS was pointed at a different project entirely — a 114,413-row catalogue
+ * that answers, but is not the owner's marketplace and does not carry his
+ * corrections. So a fragrance he had fixed in ScentSell could still come back
+ * wrong here, and the copy would cite a name he had already rejected.
+ *
+ * Not `fragrances` (105,923 — an older working table the product no longer
+ * reads) and not `fragrance_master_v2` (empty despite what the docs claim).
+ */
+const CATALOGUE_TABLE = 'fragrance_master'
+
 let cached: SupabaseClient | null = null
 
 /**
@@ -162,7 +179,7 @@ export async function findFragrance(
   // LEAST distinctive part of the query, and it is the part that matches first.
   for (const candidate of [...terms, ...words]) {
     const { data } = await supabase
-      .from('fragrances')
+      .from(CATALOGUE_TABLE)
       .select(select)
       .ilike('name', `%${candidate}%`)
       .limit(25)
@@ -378,14 +395,14 @@ export async function phoneticMatch(
   const batches = await Promise.all(
     tokens.slice(0, 4).map(async (token) => {
       const [byName, byBrand, byTrigram] = await Promise.all([
-        supabase.from('fragrances').select('brand, name, concentration, scent_family, perfumer')
+        supabase.from(CATALOGUE_TABLE).select('brand, name, concentration, scent_family, perfumer')
           .ilike('name', `%${token}%`).limit(150),
         // Deliberately generous. A token that matches a HOUSE is the strongest
         // signal there is, and the house's whole range is the search space:
         // capping it at sixty unordered rows is why "Ormond Janes Bijous
         // Saffron" came back with three Ormonde Jaynes and not the one it
         // plainly meant. Bijou Zafran was simply never fetched.
-        supabase.from('fragrances').select('brand, name, concentration, scent_family, perfumer')
+        supabase.from(CATALOGUE_TABLE).select('brand, name, concentration, scent_family, perfumer')
           .ilike('brand', `%${token}%`).limit(500),
         // And the trigram index per token, because a heard word is often the
         // right word with an extra letter — "Bijous" for Bijou, "Saffron" for
@@ -475,7 +492,7 @@ export async function matchWithinHouse(
 
   // Find the house first. A misheard house is not a house to search inside.
   const { data: brandRows } = await supabase
-    .from('fragrances')
+    .from(CATALOGUE_TABLE)
     .select('brand')
     .ilike('brand', `%${house.split(/\s+/)[0]}%`)
     .limit(200)
@@ -490,7 +507,7 @@ export async function matchWithinHouse(
   if (houses.length === 0 || houses[0].score < 0.85) return []
 
   const { data } = await supabase
-    .from('fragrances')
+    .from(CATALOGUE_TABLE)
     .select('brand, name, concentration, scent_family, perfumer')
     .eq('brand', houses[0].name)
     .limit(600)
