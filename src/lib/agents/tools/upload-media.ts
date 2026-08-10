@@ -168,6 +168,40 @@ export function createUploadMediaTool(
         const tagList = tags?.length ? ` Tags: ${tags.join(', ')}.` : ''
         const mediaType = isVideo ? 'Video' : 'Image'
 
+        /**
+         * Read it now, so the next question can be answered.
+         *
+         * Uploading and understanding were separate steps, and only the
+         * Director could take the second one. So a file sent from Claude or
+         * Codex landed in the library as a filename and nothing else — ask
+         * "what's in this video" and the honest answer was that nobody had
+         * looked. The assistant then either guessed from the filename or
+         * reported the upload as incomplete.
+         *
+         * Only the stages an answer needs run here: thumbnail, transcript,
+         * description — about fourteen seconds on a 2:36 clip, inside any MCP
+         * client's patience. `delivery` is a publish-time re-encode bounded at
+         * 240s and is deliberately not among them; it is made when something
+         * is actually being published.
+         *
+         * Never fatal. The file is already saved and the row already exists;
+         * a failed read must not turn a successful upload into an error.
+         */
+        let analysed = false
+        if (mediaItem?.id) {
+          try {
+            const { runMediaProcessingPipeline } = await import('@/lib/media/process-pipeline')
+            await runMediaProcessingPipeline({
+              supabase,
+              mediaItemId: mediaItem.id,
+              runStages: ['thumbnail', 'transcription', 'ai'],
+            })
+            analysed = true
+          } catch (error) {
+            console.error('[upload-media] analysis after upload failed:', error)
+          }
+        }
+
         return {
           success: true,
           image_url: publicUrl,
@@ -175,7 +209,12 @@ export function createUploadMediaTool(
           file_name: fullName,
           file_type: contentType,
           size_kb: sizeKb,
-          message: `${mediaType} saved to library (${sizeKb}KB).${tagList} URL: ${publicUrl}\n\nUse this URL with publish_to_social to include it in posts.`,
+          analysed,
+          message: `${mediaType} saved to library (${sizeKb}KB).${tagList} URL: ${publicUrl}\n\n`
+            + (analysed
+              ? 'It has been read: call query_media with mode="analysis" and this media_item_id for the transcript and description.'
+              : 'It could not be read just now — the file is safe. Ask again shortly, or say what is in it.')
+            + '\n\nUse this URL with publish_to_social to include it in posts.',
         }
       } catch (err) {
         return userSafeError('upload-media', err, 'That upload did not finish. Nothing was saved — try again.')

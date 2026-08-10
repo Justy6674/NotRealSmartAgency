@@ -50,6 +50,28 @@ export const DIRECT_MCP_TOOLS: ReadonlySet<string> = new Set([
   // the step every carousel needs, and it was the slowest part of the loop.
   'upload_media',
   'export_design',
+
+  // What the owner has already written down, across every project he runs.
+  //
+  // Read-only, and the single highest-value thing a plugged-in assistant can
+  // reach. Without it, asking Claude or Codex a question about a brand got an
+  // answer built from nothing — his naming rules, his corrections, his
+  // decisions and his specs were all sitting in the brain, invisible, while
+  // the assistant guessed. It writes nothing: a marketing agent reads the
+  // record of what was decided, it does not amend it.
+  'search_brain',
+
+  // The carousel chain, end to end.
+  //
+  // Every step of it was Director-only, so a carousel could not be built from
+  // the surface he actually works in — he would ask for one and get copy back.
+  // None of these publishes anything: the first two write to his own Canva and
+  // his own media library, and the third creates an UNAPPROVED review record,
+  // which is the gate. Splitting the chain across two trust levels only meant
+  // it could never be finished.
+  'generate_design_structured',
+  'import_canva_design_to_media',
+  'create_carousel_proposal',
 ])
 
 export function isDirectMcpTool(name: string): boolean {
