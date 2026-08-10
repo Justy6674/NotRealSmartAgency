@@ -1,20 +1,33 @@
 /**
  * Generate one slash-command wrapper per gstack skill.
  *
+ * Two things this gets right that the obvious version does not:
+ *
+ * 1. `description:` frontmatter. Without it the slash menu shows a bare name
+ *    and the owner has to already know what the command does, which is the
+ *    opposite of a menu. This is the field Claude Code renders beside the name.
+ *
+ * 2. Flat `gstack-<name>.md`, not a `gstack/` folder. A folder namespaces to
+ *    `/gstack:qa`; flat files give `/gstack-qa`, which is what Codex shows and
+ *    what the owner asked for. Typing `/gstack` still filters to the whole set.
+ *
  * The wrapper carries no instructions of its own — it names the skill and
- * stops. gstack ships the behaviour; duplicating any of it here would drift
- * the moment /gstack-upgrade runs.
+ * stops. Duplicating behaviour here would drift the moment /gstack-upgrade runs.
+ *
+ * Re-run after upgrading gstack:  node scripts/gen-gstack-commands.mjs
  */
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
 const GSTACK = join(homedir(), '.claude/skills/gstack')
-const OUT = join(process.cwd(), '.claude/commands/gstack')
+const OUT = join(process.cwd(), '.claude/commands')
 
-// Skills whose slash form would be noise: internal routers and one-shot
-// machine setup the owner will never type.
+/** Internal routers and build artefacts the owner will never type. */
 const SKIP = new Set(['SKILL.md', 'browser-skills', 'open-gstack-browser'])
+
+/** Long enough to be useful in the menu, short enough not to wrap forever. */
+const DESCRIPTION_MAX = 300
 
 function frontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---/)
@@ -30,18 +43,28 @@ function frontmatter(text) {
 /** The "When to invoke this skill" prose, collapsed to one paragraph. */
 function whenToUse(text) {
   const m = text.match(/## When to invoke this skill\s*\n+([\s\S]*?)(?=\n## )/)
-  if (!m) return null
-  const flat = m[1].trim().replace(/\s*\n\s*/g, ' ')
-  if (flat.length <= 400) return flat
-  // Cut on a sentence boundary. A menu entry that stops mid-clause reads as a
-  // broken file rather than a short one.
-  const cut = flat.slice(0, 400)
-  const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '))
-  return lastStop > 120 ? cut.slice(0, lastStop + 1) : `${cut.trimEnd()}…`
+  return m ? m[1].trim().replace(/\s*\n\s*/g, ' ') : ''
 }
 
-if (existsSync(OUT)) rmSync(OUT, { recursive: true })
-mkdirSync(OUT, { recursive: true })
+/** Cut on a sentence boundary — a menu entry that stops mid-clause reads as broken. */
+function clamp(text, max) {
+  if (text.length <= max) return text
+  const cut = text.slice(0, max)
+  const stop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? '), cut.lastIndexOf('! '))
+  return stop > max * 0.4 ? cut.slice(0, stop + 1).trim() : `${cut.trimEnd()}…`
+}
+
+/** YAML-safe on one line: the menu reads a scalar, not a block. */
+function yamlInline(text) {
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\s+/g, ' ').trim()}"`
+}
+
+// Clear only what this script owns, so hand-written commands survive.
+for (const stale of readdirSync(OUT).filter((f) => /^gstack(-|\.md$)/.test(f))) {
+  const path = join(OUT, stale)
+  rmSync(path, { recursive: true, force: true })
+}
+if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true })
 
 const names = readdirSync(GSTACK, { withFileTypes: true })
   .filter((e) => (e.isDirectory() || e.isSymbolicLink()) && !SKIP.has(e.name))
@@ -49,31 +72,41 @@ const names = readdirSync(GSTACK, { withFileTypes: true })
   .filter((n) => existsSync(join(GSTACK, n, 'SKILL.md')))
   .sort()
 
-let written = 0
-for (const name of names) {
-  const src = readFileSync(join(GSTACK, name, 'SKILL.md'), 'utf8')
+function write(commandName, skillName, srcPath) {
+  const src = readFileSync(srcPath, 'utf8')
   const fm = frontmatter(src)
-  const desc = (fm.description || '').replace(/\s*\(gstack\)\s*$/, '').trim()
-  const when = whenToUse(src)
+  const summary = (fm.description || '').replace(/\s*\(gstack\)\s*$/, '').trim()
+  const detail = whenToUse(src)
 
-  const body = `# /${name}
+  // Description first, then the trigger prose — the same shape Codex shows,
+  // so the menu answers "what is this" and "when would I reach for it".
+  const description = clamp([summary, detail].filter(Boolean).join(' '), DESCRIPTION_MAX)
 
-${desc || `Run the gstack \`${name}\` skill.`}
+  const body = `---
+description: ${yamlInline(description)}
+---
+
+# /${commandName}
+
+${summary || `Run the gstack \`${skillName}\` skill.`}
 
 ## What to do
 
-Invoke the **\`${name}\`** skill with the Skill tool, passing anything the user
-typed after the command as its arguments. Follow that skill's instructions from
-its first step; do not summarise, shortcut, or re-implement them here.
+Invoke the **\`${skillName}\`** skill with the Skill tool, passing anything the
+user typed after the command as its arguments. Follow that skill's instructions
+from its first step; do not summarise, shortcut, or re-implement them here.
 
-${when ? `## When this applies\n\n${when}\n` : ''}
+${detail ? `## When this applies\n\n${clamp(detail, 600)}\n` : ''}
 ---
-Wrapper only. The skill itself lives at \`~/.claude/skills/gstack/${name}/SKILL.md\`
-and is the single source of truth — this file is regenerated, never hand-edited.
+Wrapper only. The skill itself lives at \`~/.claude/skills/gstack/${skillName}/SKILL.md\`
+and is the single source of truth. Regenerated by
+\`scripts/gen-gstack-commands.mjs\` — never hand-edit.
 `
-  writeFileSync(join(OUT, `${name}.md`), body)
-  written++
+  writeFileSync(join(OUT, `${commandName}.md`), body)
 }
 
-console.log(`wrote ${written} command wrappers to .claude/commands/gstack/`)
-console.log(names.join(' '))
+// The bare router, so `/gstack <anything>` picks the right skill for you.
+write('gstack', 'gstack', join(GSTACK, 'SKILL.md'))
+for (const name of names) write(`gstack-${name}`, name, join(GSTACK, name, 'SKILL.md'))
+
+console.log(`wrote ${names.length + 1} commands: /gstack and /gstack-<name> × ${names.length}`)
