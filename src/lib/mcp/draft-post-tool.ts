@@ -33,6 +33,26 @@ import { getActiveGoal, markGoalReadyForReview } from '@/lib/agents/goal-loop'
 
 const PLATFORMS = ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'twitter'] as const
 type Platform = (typeof PLATFORMS)[number]
+type DraftMediaAttachment = {
+  id: string
+  file_url: string
+  file_type: string
+  thumbnail_url: string | null
+}
+
+export function resolveMcpDraftMediaAttachment(
+  mediaId: string | undefined,
+  media: DraftMediaAttachment | null,
+): { ok: true; media: DraftMediaAttachment | null } | { ok: false; error: string } {
+  if (!mediaId) return { ok: true, media: null }
+  if (!media) {
+    return {
+      ok: false,
+      error: 'The requested media is not available in this project. Call query_media for an exact ID, or upload it with upload_media before drafting.',
+    }
+  }
+  return { ok: true, media }
+}
 
 const PLATFORM_GUIDANCE: Record<Platform, string> = {
   instagram: 'Instagram caption — hook in first line, 3-5 short paragraphs, conversational, end with a question or CTA. 150 words max ideal. Hashtags will be added separately.',
@@ -316,7 +336,7 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
       }
 
       // Resolve optional media attachment
-      let mediaItemRow: { id: string; file_url: string; file_type: string; thumbnail_url: string | null } | null = null
+      let mediaItemRow: DraftMediaAttachment | null = null
       if (media_id) {
         const { data: mediaRow } = await supabase
           .from('media_items')
@@ -324,9 +344,14 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
           .eq('id', media_id)
           .eq('brand_id', brand_id)
           .single()
-        if (mediaRow) {
-          mediaItemRow = mediaRow
+        const attachment = resolveMcpDraftMediaAttachment(media_id, mediaRow)
+        if (!attachment.ok) {
+          return {
+            content: [{ type: 'text' as const, text: attachment.error }],
+            isError: true,
+          }
         }
+        mediaItemRow = attachment.media
       }
 
       // Insert the draft into scheduled_posts with mcp_external source.
