@@ -685,7 +685,7 @@ export async function syncDraftToMixpost(
 }
 
 /**
- * Build the URL of the Mixpost edit screen for a synced draft.
+ * Build the URL of the Mixpost draft screen for a synced draft.
  * Returns null if Mixpost isn't configured or the draft hasn't been synced.
  */
 export function buildMixpostEditUrl(metadata: Record<string, unknown> | null | undefined): string | null {
@@ -698,5 +698,5 @@ export function buildMixpostEditUrl(metadata: Record<string, unknown> | null | u
   const webBase =
     process.env.MIXPOST_WEB_URL ?? process.env.MIXPOST_API_URL?.replace(/\/api$/, '') ?? ''
   if (!webBase) return null
-  return `${webBase}/${mixpost.workspace_uuid}/posts/${mixpost.post_uuid}/edit`
+  return `${webBase}/${mixpost.workspace_uuid}/posts/${mixpost.post_uuid}`
 }

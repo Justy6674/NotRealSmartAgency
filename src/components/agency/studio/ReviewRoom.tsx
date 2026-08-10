@@ -309,7 +309,7 @@ export function ReviewRoom() {
     return unique.map((id) => mediaCache.get(id)).filter((m): m is ReviewMediaItem => !!m)
   }, [detailPost, mediaCache])
 
-  // Mixpost edit URL — only available once the background sync has completed.
+  // Mixpost draft URL — only available once the background sync has completed.
   // Reads metadata.mixpost set by syncDraftToMixpost.
   const mixpostEditUrl = useMemo(() => {
     if (!detailPost) return null
@@ -320,7 +320,7 @@ export function ReviewRoom() {
     if (!mixpost?.post_uuid || !mixpost.workspace_uuid) return null
     // Mixpost web URL — bare host, no /api prefix.
     const webBase = process.env.NEXT_PUBLIC_MIXPOST_WEB_URL ?? 'https://mixpost.notrealsmart.com.au/mixpost'
-    return `${webBase}/${mixpost.workspace_uuid}/posts/${mixpost.post_uuid}/edit`
+    return `${webBase}/${mixpost.workspace_uuid}/posts/${mixpost.post_uuid}`
   }, [detailPost])
 
   // ── Render ──────────────────────────────────────────────────────────────────
