@@ -1,0 +1,17 @@
+# /spec
+
+Turn vague intent into a precise, executable spec in five phases.
+
+## What to do
+
+Invoke the **`spec`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Files the issue, optionally spawns a Claude Code agent in a fresh worktree, and lets /ship close the source issue on merge. Use when asked to "spec this out", "file an issue", "write up a ticket", "make this a GitHub issue", or "turn this into a backlog item".
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/spec/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.

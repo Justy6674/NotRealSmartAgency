@@ -1,0 +1,17 @@
+# /connect-chrome
+
+Launch GStack Browser — AI-controlled Chromium with the sidebar extension baked in.
+
+## What to do
+
+Invoke the **`connect-chrome`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Opens a visible browser window where you can watch every action in real time. The sidebar shows a live activity feed and chat. Anti-bot stealth built in. Use when asked to "open gstack browser", "launch browser", "connect chrome", "open chrome", "real browser", "launch chrome", "side panel", or "control my browser". Voice triggers (speech-to-text aliases): "show me the browser".
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/connect-chrome/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.

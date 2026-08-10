@@ -1,0 +1,17 @@
+# /browse
+
+Fast headless browser for QA testing and site dogfooding.
+
+## What to do
+
+Invoke the **`browse`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Navigate any URL, interact with elements, verify page state, diff before/after actions, take annotated screenshots, check responsive layouts, test forms and uploads, handle dialogs, and assert element states. ~100ms per command. Use when you need to test a feature, verify a deployment, dogfood a user flow, or file a bug with evidence.
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/browse/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.

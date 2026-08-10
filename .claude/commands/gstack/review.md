@@ -1,0 +1,17 @@
+# /review
+
+Pre-landing PR review.
+
+## What to do
+
+Invoke the **`review`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Analyzes diff against the base branch for SQL safety, LLM trust boundary violations, conditional side effects, and other structural issues. Use when asked to "review this PR", "code review", "pre-landing review", or "check my diff". Proactively suggest when the user is about to merge or land code changes.
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/review/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.

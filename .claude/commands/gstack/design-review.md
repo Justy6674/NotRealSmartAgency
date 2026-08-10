@@ -1,0 +1,17 @@
+# /design-review
+
+Designer's eye QA: finds visual inconsistency, spacing issues, hierarchy problems, AI slop patterns, and slow interactions — then fixes them.
+
+## What to do
+
+Invoke the **`design-review`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Iteratively fixes issues in source code, committing each fix atomically and re-verifying with before/after screenshots. For plan-mode design review (before implementation), use /plan-design-review. Use when asked to "audit the design", "visual QA", "check if it looks good", or "design polish".
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/design-review/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.

@@ -1,0 +1,17 @@
+# /skillify
+
+Codify the most recent successful /scrape flow into a permanent browser-skill on disk.
+
+## What to do
+
+Invoke the **`skillify`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Future /scrape calls with the same intent run the codified script in ~200ms instead of re-driving the page. Walks back through the conversation, synthesizes script.ts + script.test.ts + fixture, runs the test in a temp dir, and asks before committing. Use when asked to "skillify", "codify", "save this scrape", or "make this permanent".
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/skillify/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.

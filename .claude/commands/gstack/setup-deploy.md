@@ -1,0 +1,17 @@
+# /setup-deploy
+
+Configure deployment settings for /land-and-deploy.
+
+## What to do
+
+Invoke the **`setup-deploy`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Detects your deploy platform (Fly.io, Render, Vercel, Netlify, Heroku, GitHub Actions, custom), production URL, health check endpoints, and deploy status commands. Writes the configuration to CLAUDE.md so all future deploys are automatic. Use when: "setup deploy", "configure deployment", "set up land-and-deploy", "how do I deploy with gstack", "add deploy config".
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/setup-deploy/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.

@@ -1,0 +1,17 @@
+# /health
+
+Code quality dashboard.
+
+## What to do
+
+Invoke the **`health`** skill with the Skill tool, passing anything the user
+typed after the command as its arguments. Follow that skill's instructions from
+its first step; do not summarise, shortcut, or re-implement them here.
+
+## When this applies
+
+Wraps existing project tools (type checker, linter, test runner, dead code detector, shell linter), computes a weighted composite 0-10 score, and tracks trends over time. Use when: "health check", "code quality", "how healthy is the codebase", "run all checks", "quality score".
+
+---
+Wrapper only. The skill itself lives at `~/.claude/skills/gstack/health/SKILL.md`
+and is the single source of truth — this file is regenerated, never hand-edited.
