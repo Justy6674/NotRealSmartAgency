@@ -52,6 +52,42 @@ export interface BrainHit {
 /** Long enough for a cold connection, short enough not to hold up a reply. */
 const QUERY_TIMEOUT_MS = 8_000
 
+/**
+ * What the brain holds that the Director must never read as fact.
+ *
+ * On 10 August the owner uploaded a video, asked whether it had arrived, and
+ * was told: "your new Aican by Kajal video still has not arrived… The upload
+ * did not complete into the library." It had arrived. It was transcribed, it
+ * was the newest row in his library, and `query_media` returned it first.
+ *
+ * The Director had asked the brain instead of looking, and the brain handed
+ * back `transcripts/claude-code/…/2026-08-04` and `…/2026-07-31` — transcripts
+ * of AI coding sessions in which an ENGINEER was debugging a DIFFERENT upload
+ * failure, days earlier. It quoted that back to him as a live check, with the
+ * slug attached so it read as verified.
+ *
+ * These pages full-text match beautifully on "upload", "video", "processing"
+ * and "media" precisely because they are debugging sessions about uploads. The
+ * more operational the owner's question, the higher they rank.
+ *
+ * So they are excluded here rather than left to ranking:
+ *   - transcripts/  — agent session logs; a record of work in progress, never
+ *     a statement of what is true now
+ *   - graphify-out/ — machine-generated code-graph dumps
+ *   - type 'code'   — source files; the Director reasons about marketing
+ *
+ * This does not delete anything. It scopes what a MARKETING agent may cite to
+ * what the owner actually decided: notes, decisions, references, specs.
+ */
+const NON_CITABLE_SLUG_PREFIXES = ['transcripts/', 'graphify-out/'] as const
+const NON_CITABLE_TYPES = ['code'] as const
+
+/** Exported so the exclusion can be tested against real slugs, not paraphrased. */
+export function isCitableBrainPage(page: { slug: string, type?: string | null }): boolean {
+  if (NON_CITABLE_TYPES.includes(page.type as typeof NON_CITABLE_TYPES[number])) return false
+  return !NON_CITABLE_SLUG_PREFIXES.some((prefix) => page.slug.startsWith(prefix))
+}
+
 export function brainConfigured(env: Record<string, string | undefined> = process.env): boolean {
   return typeof env.GBRAIN_DATABASE_URL === 'string' && env.GBRAIN_DATABASE_URL.length > 0
 }
@@ -107,12 +143,25 @@ export async function searchBrain(
           AND source_id IN (
             SELECT id FROM sources WHERE config->>'federated' = 'true' AND archived = false
           )
+          -- See NON_CITABLE_SLUG_PREFIXES. Excluded in SQL so they never
+          -- occupy one of the six slots the Director gets back.
+          AND type <> ALL($3::text[])
+          AND slug NOT LIKE ALL($4::text[])
         ORDER BY rank DESC, updated_at DESC NULLS LAST
         LIMIT $2`,
-      [question.trim(), Math.min(Math.max(limit, 1), 20)],
+      [
+        question.trim(),
+        Math.min(Math.max(limit, 1), 20),
+        [...NON_CITABLE_TYPES],
+        NON_CITABLE_SLUG_PREFIXES.map((prefix) => `${prefix}%`),
+      ],
     )
 
-    return rows.map((row) => ({
+    return rows
+      // Belt and braces: the predicate is the contract, the SQL is an
+      // optimisation. If they ever disagree, the predicate wins.
+      .filter((row) => isCitableBrainPage(row))
+      .map((row) => ({
       slug: row.slug,
       title: row.title,
       type: row.type,

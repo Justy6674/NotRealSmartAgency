@@ -54,6 +54,13 @@ export interface DirectorTaskPlanOptions {
   brandSlug?: string
   /** AHPRA/TGA work needs cited corpus evidence instead of a prose-only review. */
   regulated?: boolean
+  /**
+   * Whether this thread already has media in play.
+   *
+   * A bare "check now" is a question about the video only because of the turn
+   * before it. The request string cannot carry that, so the caller supplies it.
+   */
+  mediaInThread?: boolean
 }
 
 export interface CapabilityExecution {
@@ -90,6 +97,12 @@ const CANVA_CAROUSEL_REQUEST = /\b(?:carousel|slides?)\b/i
 const CAPTION_REQUEST = /\b(?:caption|captions|hashtags?|hook|social copy|post copy)\b/i
 const COMPLIANCE_REQUEST = /\b(?:ahpra|tga|compliance|regulat(?:ion|ory)|health claim|therapeutic claim)\b/i
 const PRODUCT_LANGUAGE = /\b(?:product|fragrance|perfume|scent|cologne|bottle|notes?)\b/i
+
+/** Asking after the state of a thing: has it arrived, is it done, is it there. */
+const MEDIA_STATE_QUESTION = /\b(?:check|checked|checking|arrived|landed|there\s+yet|come\s+through|came\s+through|show(?:ed|ing|n)?\s+up|upload(?:ed|ing)?|process(?:ing|ed)?|transcrib\w+|finish(?:ed|ing)?|done\s+yet|ready|status)\b/i
+
+/** Names a thing that lives in the media library. */
+const MEDIA_NOUN = /\b(?:video|clip|reel|footage|file|upload|media|photo|image|picture|recording)\b/i
 
 function hasAny(text: string, ...patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(text))
@@ -151,6 +164,31 @@ export function planDirectorTask(
       agentType: 'video',
       requiredAnyToolNames: ['query_media', 'process_media'],
       summary: 'Read the actual media/transcript evidence before recommending a video treatment.',
+    })
+  }
+
+  // Whether a file is THERE is a question about live state, and the one answer
+  // that must never be improvised is "it isn't".
+  //
+  // The rule above needs two keyword classes to co-occur, so the messages a
+  // real conversation is actually made of matched nothing: "check now", "when
+  // is it finishing processing". With no requirement attached, the Director
+  // answered from memory and told the owner his upload had never landed. It
+  // had. It was the newest row in his library, transcribed, and query_media
+  // returned it first.
+  //
+  // `mediaInThread` is what makes a bare "check now" legible: the message
+  // cannot show what it refers to, but the turn that carried the attachment
+  // can. Without it this could only be fixed by matching "check" everywhere,
+  // which would put a specialist call on ordinary chat.
+  if (MEDIA_STATE_QUESTION.test(request) && (MEDIA_NOUN.test(request) || options.mediaInThread)) {
+    addRequirement(requirements, {
+      capability: 'video_evidence',
+      agentType: 'video',
+      requiredAnyToolNames: ['query_media', 'process_media'],
+      summary: 'Call query_media and report what it returns. Never state that a file is missing,'
+        + ' unprocessed, or still uploading without a tool result from THIS turn showing it.'
+        + ' A stale note, a past session or your own recollection is not a check.',
     })
   }
 

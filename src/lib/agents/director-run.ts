@@ -28,6 +28,11 @@ export interface DirectorTurnInput {
   agentId?: string | null
   /** A retryable queue job may rejoin its prior evidence run. */
   idempotencyKey?: string
+  /**
+   * Whether media is already in play for this project. Lets a bare follow-up
+   * like "check now" be recognised as a question about a file.
+   */
+  mediaInThread?: boolean
 }
 
 export interface PreparedDirectorTurn {
@@ -89,6 +94,7 @@ export async function prepareDirectorTurn(input: DirectorTurnInput): Promise<Pre
   const plan = planDirectorTask(input.request, {
     brandSlug: input.brand.slug,
     regulated: Boolean(input.brand.compliance_flags?.ahpra || input.brand.compliance_flags?.tga),
+    mediaInThread: input.mediaInThread,
   })
   const policy = buildDirectorSourcePolicy(input.brand, plan)
 

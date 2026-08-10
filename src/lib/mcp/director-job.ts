@@ -71,6 +71,7 @@ import {
   type DirectorExecutionScope,
 } from '@/lib/agents/director-execution'
 import { prepareDirectorTurn } from '@/lib/agents/director-run'
+import { hasRecentMediaContext } from '@/lib/media/recent-upload'
 
 export interface DirectorJobInput {
   brand_id: string
@@ -320,6 +321,9 @@ export async function runDirectorJob(
       channel: execution.channel,
       request: telegramWorkMessage,
       agentId: registry?.id ?? null,
+      mediaInThread: await hasRecentMediaContext(supabase, brand_id, {
+        attachedNow: input.media_item_ids ?? null,
+      }),
     })
 
     // Build system prompt with memory
