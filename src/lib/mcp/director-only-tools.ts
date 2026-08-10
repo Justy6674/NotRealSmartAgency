@@ -34,7 +34,7 @@ export const DIRECT_MCP_TOOLS: ReadonlySet<string> = new Set([
 
   // Read-only design library
   'search_designs',
-  'list_brand_kits',
+  'list_brand_templates',
   // Reads Autofill field names only. The caller needs this before it can
   // populate an approved brand template without guessing its schema.
   'get_brand_template_dataset',

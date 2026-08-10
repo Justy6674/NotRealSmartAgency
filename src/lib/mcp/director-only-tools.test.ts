@@ -61,7 +61,7 @@ test('lets a client move finished artwork into the library without the Director'
   // Uploading to the owner's own library and exporting a design produce no
   // public effect and no marketing copy, so the Director round trip was pure
   // latency on the one step every carousel needs.
-  for (const name of ['upload_media', 'export_design', 'get_export_formats', 'search_designs', 'list_brand_kits']) {
+  for (const name of ['upload_media', 'export_design', 'get_export_formats', 'search_designs', 'list_brand_templates']) {
     assert.equal(isDirectorOnlyMcpTool(name), false)
   }
 })
