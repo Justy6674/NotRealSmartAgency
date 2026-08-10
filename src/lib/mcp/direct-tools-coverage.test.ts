@@ -27,6 +27,7 @@ test('Bec can put a file in and have it understood', () => {
 test('a carousel can be built end to end from a plug-in client', () => {
   for (const step of [
     'get_brand_kit',
+    'get_brand_template_dataset',
     'generate_design_structured',
     'import_canva_design_to_media',
     'create_carousel_proposal',
