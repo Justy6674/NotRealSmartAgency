@@ -209,3 +209,28 @@ Comments here carry the incident that motivated the code (see `memory-value.ts`,
 - `docs/ARCHITECTURE.md` — stale model list (`claude-sonnet-4 → gpt-4.1`); `src/lib/ai/model-routing.ts` is authoritative.
 
 When code and prose disagree, the code wins — except on *what should be built*, where the Obsidian spec wins.
+
+## Skill routing
+
+gstack is installed globally (53 skills). When a request matches one, **invoke it via the Skill tool** rather than improvising the same work by hand. When in doubt, invoke the skill. The owner should not have to type the command to get the discipline.
+
+| The request | Invoke |
+|---|---|
+| Vague idea, "should we build X", empty repo | `/office-hours`, then `/spec` |
+| Plan a feature | `/autoplan` (or `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`) |
+| Bug, error, "why is this broken", "it worked yesterday", a red box | `/investigate` — never debug directly |
+| "Does this work", QA a running app | `/qa` (report-only: `/qa-only`) |
+| Visual polish, spacing, hierarchy | `/design-review`; new direction → `/design-consultation` |
+| Before landing a change | `/review` |
+| Anything touching auth, PHI, billing, payments, RLS | `/cso` — not optional on this codebase |
+| Ship it | `/ship`, then `/land-and-deploy`, then `/canary` |
+| Save / resume working context | `/context-save`, `/context-restore` |
+| Weekly | `/retro`. Keep current with `/gstack-upgrade`. |
+
+**Craft skills sit inside whichever gstack skill is running**, not instead of it: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `requesting-code-review`, and `impeccable` for any UI work.
+
+**Order of operations inside any of them:** the knowledge layer at the top of this file comes first. graphify before grepping, gbrain before searching the web, the Obsidian spec before designing. A skill does not excuse skipping those.
+
+**Safety is on demand here, never a blocking gate.** `/careful` before destructive commands, `/freeze` to lock edits to one directory, `/guard` for both, `/unfreeze` to release. Do **not** add PreToolUse hooks that block edits — that is a deliberate standing decision, not an oversight.
+
+**Ship straight to `main`.** No feature branches or PRs unless explicitly asked. Pause and confirm first for: live Supabase schema migrations, auth / RLS / billing / payments, refactors whose scope the owner has not seen, or any "hold" / "wait" / "stop".
