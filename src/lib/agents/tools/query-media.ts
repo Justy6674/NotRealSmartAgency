@@ -77,7 +77,12 @@ export function createQueryMediaTool(
       const { data: items, error } = await query.limit(effectiveLimit)
 
       if (error) {
-        return userSafeError('query-media', error, 'Could not read the media library just now. Try again in a moment.')
+        // Returned as `{ error }`, not prose. The evidence contract reads this
+        // shape; a bare string would be indistinguishable from a successful
+        // read and would let "I checked the library" stand on a failed query.
+        return {
+          error: userSafeError('query-media', error, 'Could not read the media library just now. Try again in a moment.'),
+        }
       }
 
       if (!items || items.length === 0) {

@@ -34,6 +34,48 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * Did this tool actually run, or did it report a failure?
+ *
+ * The previous rule accepted only an OBJECT output carrying `success`,
+ * `updated`, `created` or `requested` — the shapes durable-write tools return.
+ * Every read tool in this codebase returns markdown prose or a plain data
+ * object with no such flag, so none of them could ever be counted:
+ *
+ *   query_media     5 string returns, no success flag  → never counted
+ *   query_outputs   3 string returns, no success flag  → never counted
+ *   verify_product  6 object returns, no success flag  → never counted
+ *   scan_website    1 object return,  no success flag  → never counted
+ *
+ * Those are precisely the tools the evidence contract names. So
+ * `product_identity`, which requires `verify_product`, could not be satisfied
+ * by any execution — and the Director, told its evidence was unsatisfied,
+ * reported to the owner that "the verification check failed" and withheld a
+ * fragrance name it had in fact resolved correctly. The check had not failed.
+ * It could not succeed.
+ *
+ * The rule now is the honest one: a tool ran unless it said otherwise. An
+ * explicit failure flag or an `error` field means no; blank output means no;
+ * anything else is a tool that executed and returned something.
+ *
+ * Known limit, stated rather than hidden: a read tool that catches its own
+ * fault and returns `userSafeError`'s prose is indistinguishable here from one
+ * that succeeded, because both are a non-empty string. Tools whose failure
+ * must be visible to the contract return `{ error }` instead — see
+ * query_media. Extend that shape rather than pattern-matching English here.
+ */
+export function toolRunSucceeded(output: unknown): boolean {
+  if (typeof output === 'string') return output.trim().length > 0
+  if (output === null || output === undefined) return false
+  if (typeof output !== 'object') return true
+
+  const value = output as Record<string, unknown>
+  if (value.success === false || value.ok === false) return false
+  if (value.error !== undefined && value.error !== null) return false
+  if (Array.isArray(output)) return output.length > 0
+  return Object.keys(value).length > 0
+}
+
+/**
  * AI SDK's `result.toolCalls` contains only the last step. Evidence must read
  * every `result.steps` entry and inspect tool results, not merely the model's
  * final answer or a tool name that might have failed.
@@ -61,16 +103,16 @@ export function collectWorkerToolEvidence(steps: readonly unknown[] | undefined)
       if (!resultRecord || resultRecord.type !== 'tool-result') continue
       const toolName = resultRecord.toolName
       const output = record(resultRecord.output)
-      // Tools predate a single success envelope. Accept the established
-      // durable-write receipts as successful, but never equate a tool call
-      // with a successful tool result.
-      const succeeded = output?.success === true
-        || output?.updated === true
-        || output?.created === true
-        || output?.requested === true
-      if (typeof toolName !== 'string' || !succeeded) continue
+      if (typeof toolName !== 'string' || !toolRunSucceeded(resultRecord.output)) continue
 
       successfulToolNames.push(toolName)
+
+      // Canva receipts are concrete identifiers, so they are read only from a
+      // structured output. A prose result can prove a tool RAN — it can never
+      // prove a design exists, and that distinction is the whole point of the
+      // Canva minimums.
+      if (!output) continue
+
       if (toolName === 'generate_design_structured') {
         const designId = output.design_id
         const editUrl = output.edit_url
