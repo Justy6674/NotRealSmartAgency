@@ -16,7 +16,7 @@
  */
 
 import { tool } from 'ai'
-import { z } from 'zod'
+import { z } from 'zod/v3'
 import { brainConfigured, searchBrain, brainContext } from '@/lib/brain/gbrain'
 
 export function createSearchBrainTool() {
