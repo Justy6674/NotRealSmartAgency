@@ -3,6 +3,34 @@ import { userSafeError } from '@/lib/errors/user-safe'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+const MCP_UPLOAD_MEDIA_TYPES = {
+  'image/png': { extension: 'png', isVideo: false },
+  'image/jpeg': { extension: 'jpg', isVideo: false },
+  'image/jpg': { extension: 'jpg', isVideo: false },
+  'image/gif': { extension: 'gif', isVideo: false },
+  'image/webp': { extension: 'webp', isVideo: false },
+  'image/svg+xml': { extension: 'svg', isVideo: false },
+  'video/mp4': { extension: 'mp4', isVideo: true },
+  'video/quicktime': { extension: 'mov', isVideo: true },
+  'video/webm': { extension: 'webm', isVideo: true },
+} as const
+
+export function resolveMcpUploadContentType(
+  rawContentType: string | null | undefined,
+):
+  | { ok: true; contentType: keyof typeof MCP_UPLOAD_MEDIA_TYPES; extension: string; isVideo: boolean }
+  | { ok: false; error: string } {
+  const contentType = (rawContentType ?? 'image/png').split(';', 1)[0].trim().toLowerCase()
+  const details = MCP_UPLOAD_MEDIA_TYPES[contentType as keyof typeof MCP_UPLOAD_MEDIA_TYPES]
+  if (!details) {
+    return {
+      ok: false,
+      error: `Only supported image or video files can be uploaded. Received "${contentType || 'unknown'}".`,
+    }
+  }
+  return { ok: true, contentType: contentType as keyof typeof MCP_UPLOAD_MEDIA_TYPES, ...details }
+}
+
 /**
  * Upload an image or video to the brand's media library.
  * Accepts base64 data (from chat images) or a public URL.
@@ -16,7 +44,7 @@ export function createUploadMediaTool(
 ) {
   return tool({
     description:
-      'Upload an image or video to the brand\'s media library. Use when the user shares an image in chat and wants to save it for future posts, or when you need to store media with tags. Accepts base64 image data OR a public URL. The media is saved permanently and can be used with publish_to_social via the returned image_url.',
+      'Upload an image or video to the brand\'s media library. Use when the user shares an image in chat and wants to save it for future posts, or when you need to store media with tags. Accepts base64 image/video data OR a public URL. The media is saved permanently and can be attached to draft_post or passed to chat_with_director.',
     inputSchema: z.object({
       base64_data: z
         .string()
@@ -26,6 +54,10 @@ export function createUploadMediaTool(
         .string()
         .optional()
         .describe('Public URL to download the image/video from. Use this if the user provides a link instead of dropping a file.'),
+      content_type: z
+        .enum(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml', 'video/mp4', 'video/quicktime', 'video/webm'])
+        .optional()
+        .describe('Required for raw base64 video data without a data URI. Omit when the data URI or URL supplies the type.'),
       file_name: z
         .string()
         .optional()
@@ -39,40 +71,26 @@ export function createUploadMediaTool(
         .optional()
         .describe('Brief description of the media for search and context.'),
     }),
-    execute: async ({ base64_data, source_url, file_name, tags, description }) => {
+    execute: async ({ base64_data, source_url, content_type, file_name, tags, description }) => {
       if (!base64_data && !source_url) {
         return 'Please provide either base64_data (from a chat image) or source_url (a public link to download from).'
       }
 
       try {
         let buffer: Buffer
-        let contentType = 'image/png'
-        let extension = 'png'
+        let resolvedType: ReturnType<typeof resolveMcpUploadContentType>
 
         if (base64_data) {
           // Parse data URI if present
           const dataUriMatch = base64_data.match(/^data:([^;]+);base64,(.+)$/)
           if (dataUriMatch) {
-            contentType = dataUriMatch[1]
             buffer = Buffer.from(dataUriMatch[2], 'base64')
+            resolvedType = resolveMcpUploadContentType(dataUriMatch[1])
           } else {
             // Raw base64
             buffer = Buffer.from(base64_data, 'base64')
+            resolvedType = resolveMcpUploadContentType(content_type)
           }
-
-          // Detect extension from content type
-          const typeMap: Record<string, string> = {
-            'image/png': 'png',
-            'image/jpeg': 'jpg',
-            'image/jpg': 'jpg',
-            'image/gif': 'gif',
-            'image/webp': 'webp',
-            'image/svg+xml': 'svg',
-            'video/mp4': 'mp4',
-            'video/quicktime': 'mov',
-            'video/webm': 'webm',
-          }
-          extension = typeMap[contentType] ?? 'png'
         } else if (source_url) {
           // Download from URL
           const res = await fetch(source_url)
@@ -81,19 +99,13 @@ export function createUploadMediaTool(
           }
           const arrayBuffer = await res.arrayBuffer()
           buffer = Buffer.from(arrayBuffer)
-          contentType = res.headers.get('content-type') ?? 'image/png'
-
-          const typeMap: Record<string, string> = {
-            'image/png': 'png',
-            'image/jpeg': 'jpg',
-            'image/gif': 'gif',
-            'image/webp': 'webp',
-            'video/mp4': 'mp4',
-          }
-          extension = typeMap[contentType.split(';')[0]] ?? 'png'
+          resolvedType = resolveMcpUploadContentType(content_type ?? res.headers.get('content-type'))
         } else {
           return 'No media data provided.'
         }
+
+        if (!resolvedType.ok) return resolvedType.error
+        const { contentType, extension, isVideo } = resolvedType
 
         // Build file name
         const safeName = (file_name ?? `upload-${Date.now()}`)
@@ -139,7 +151,6 @@ export function createUploadMediaTool(
         const publicUrl = urlData.publicUrl
 
         // Create media_items record
-        const isVideo = contentType.startsWith('video/')
         const { data: mediaItem, error: mediaError } = await supabase
           .from('media_items')
           .insert({
@@ -214,7 +225,7 @@ export function createUploadMediaTool(
             + (analysed
               ? 'It has been read: call query_media with mode="analysis" and this media_item_id for the transcript and description.'
               : 'It could not be read just now — the file is safe. Ask again shortly, or say what is in it.')
-            + '\n\nUse this URL with publish_to_social to include it in posts.',
+            + '\n\nAttach this media_item_id to draft_post, or ask chat_with_director to turn it into a reviewed social draft.',
         }
       } catch (err) {
         return userSafeError('upload-media', err, 'That upload did not finish. Nothing was saved — try again.')
