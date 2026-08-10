@@ -25,19 +25,92 @@ export interface CatalogueMatch {
 
 let cached: SupabaseClient | null = null
 
-/** The catalogue client, or null when NRS has not been given access. */
+/**
+ * Why the catalogue cannot be reached, in a form a person can act on.
+ *
+ * `missing` and `malformed` are different faults with different fixes, and
+ * telling them apart is the whole point: a malformed value looks configured
+ * from every angle except the one that matters.
+ */
+export type CatalogueConfigProblem =
+  | { ok: true }
+  | { ok: false, reason: 'missing', detail: string }
+  | { ok: false, reason: 'malformed', detail: string }
+
+/**
+ * Check the configuration WITHOUT constructing anything.
+ *
+ * The old guard tested only that the two variables were non-empty, then handed
+ * them to `createClient`, which throws on a value that is not a URL. In
+ * production `FRAGRANCE_CATALOGUE_URL` is stored as a Vercel Sensitive value
+ * and is not a valid URL, so every verification attempt threw
+ * `Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL` — and that raw
+ * client error was read out to the owner as the reason his fragrance could not
+ * be confirmed.
+ *
+ * The catalogue holds `Kajal | Aican`. One query answers it. The owner spent
+ * an afternoon being told his product could not be verified by a check that
+ * had never once been able to run in production.
+ */
+export function catalogueConfig(
+  env: Record<string, string | undefined> = process.env,
+): CatalogueConfigProblem {
+  const url = env.FRAGRANCE_CATALOGUE_URL?.trim()
+  const key = env.FRAGRANCE_CATALOGUE_KEY?.trim()
+
+  if (!url && !key) return { ok: false, reason: 'missing', detail: 'FRAGRANCE_CATALOGUE_URL and FRAGRANCE_CATALOGUE_KEY are not set' }
+  if (!url) return { ok: false, reason: 'missing', detail: 'FRAGRANCE_CATALOGUE_URL is not set' }
+  if (!key) return { ok: false, reason: 'missing', detail: 'FRAGRANCE_CATALOGUE_KEY is not set' }
+
+  // A value pasted with its surrounding quotes is configured everywhere except
+  // where it is parsed, which is exactly how this survived a deploy.
+  if (/^["']|["']$/.test(url)) {
+    return { ok: false, reason: 'malformed', detail: 'FRAGRANCE_CATALOGUE_URL is wrapped in quotes' }
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return { ok: false, reason: 'malformed', detail: 'FRAGRANCE_CATALOGUE_URL is not a URL' }
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { ok: false, reason: 'malformed', detail: `FRAGRANCE_CATALOGUE_URL uses ${parsed.protocol} — Supabase needs http or https` }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * The catalogue client, or null when it cannot be built.
+ *
+ * Never throws. A configuration fault here must degrade the answer, never
+ * become the answer.
+ */
 export function catalogueClient(env: Record<string, string | undefined> = process.env): SupabaseClient | null {
-  const url = env.FRAGRANCE_CATALOGUE_URL
-  const key = env.FRAGRANCE_CATALOGUE_KEY
-  if (!url || !key) return null
+  const config = catalogueConfig(env)
+  if (!config.ok) {
+    console.error(`[fragrance-catalogue] unavailable: ${config.detail}`)
+    return null
+  }
   if (!cached) {
-    cached = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+    try {
+      cached = createClient(
+        env.FRAGRANCE_CATALOGUE_URL!.trim(),
+        env.FRAGRANCE_CATALOGUE_KEY!.trim(),
+        { auth: { persistSession: false, autoRefreshToken: false } },
+      )
+    } catch (error) {
+      console.error('[fragrance-catalogue] client construction failed:', error)
+      return null
+    }
   }
   return cached
 }
 
 export function catalogueAvailable(env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(env.FRAGRANCE_CATALOGUE_URL && env.FRAGRANCE_CATALOGUE_KEY)
+  return catalogueConfig(env).ok
 }
 
 /**
