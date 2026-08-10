@@ -147,9 +147,22 @@ export async function POST(request: Request) {
     // waits for the canonical processor so image/video analysis is available
     // when it calls query_media. A processing failure never removes the owner
     // request; the model is told to ask instead of guessing.
+    //
+    // Only the stages the ANSWER depends on are awaited here. `delivery` is a
+    // publish-time re-encode of anything over 80 MB, bounded at 240s inside a
+    // route bounded at 300s — so awaiting it spent the entire budget before
+    // the Director had run once. A 156-second clip burned all 240s, failed,
+    // and left the job queued for the recovery cron, which re-ran it four
+    // minutes later and hit the tool-step limit. The owner asked "did you
+    // hold context" and got a red box, while the evidence his question needed
+    // — thumbnail, transcript, description — had been ready 14 seconds in.
     if (mediaItemIds.length > 0) {
       await Promise.all(mediaItemIds.map((mediaItemId) =>
-        runMediaProcessingPipeline({ supabase: admin, mediaItemId }).catch(() => undefined),
+        runMediaProcessingPipeline({
+          supabase: admin,
+          mediaItemId,
+          runStages: ['thumbnail', 'transcription', 'ai'],
+        }).catch(() => undefined),
       ))
     }
 
@@ -186,6 +199,21 @@ export async function POST(request: Request) {
       message: messageWithMedia,
       ...(mediaItemIds.length > 0 ? { media_item_ids: mediaItemIds } : {}),
     })
+
+    // The delivery copy is wanted by a publisher, never by an answer, so it is
+    // made with whatever budget is left AFTER the owner has been replied to.
+    // If it runs out, `resolvePublishUrl` falls back to the master file and
+    // publishing still works — the only cost is a heavier upload, which is the
+    // correct thing to trade away for a Director that responds.
+    if (mediaItemIds.length > 0) {
+      await Promise.all(mediaItemIds.map((mediaItemId) =>
+        runMediaProcessingPipeline({
+          supabase: admin,
+          mediaItemId,
+          runStages: ['delivery'],
+        }).catch(() => undefined),
+      ))
+    }
   })
   return NextResponse.json({ job_id: job.id, project_name: grant.projectName })
 }
