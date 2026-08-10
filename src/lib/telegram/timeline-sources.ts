@@ -122,6 +122,35 @@ export function canRetry(
   return !/budget/i.test([diagnosticText(result), error ?? ''].join('\n'))
 }
 
+/**
+ * What this turn wrote to the outputs library, named the way the owner would
+ * name it.
+ *
+ * The Director records its write tools in `result.actions` as
+ * `save_output (Instagram)`. The Mini App card never read them, and instead
+ * carried a fixed line saying nothing had been saved — printed, on 10 August,
+ * directly above two descriptions that same job had saved. The model's own
+ * closing sentence ("Both descriptions are saved") was correct and the
+ * interface contradicted it.
+ *
+ * Only `save_output` counts. Publishing and scheduling are different actions
+ * with their own receipts, and this must never imply either.
+ */
+export function savedOutputsFromJobResult(result: Record<string, unknown> | null): string[] {
+  const actions = Array.isArray(result?.actions) ? result.actions : []
+  const labels: string[] = []
+
+  for (const action of actions) {
+    if (typeof action !== 'string') continue
+    const match = action.match(/^save_output\s*\(([^)]+)\)\s*$/)
+    if (!match) continue
+    const label = match[1].trim()
+    if (label && !labels.includes(label)) labels.push(label)
+  }
+
+  return labels
+}
+
 interface JobRow {
   id: string
   status: string | null
@@ -293,7 +322,13 @@ export const directorJobSource: TimelineSource<JobRow> = {
             occurredAtMs: completedAtMs ?? askedAtMs,
             side: 'director',
             brandId,
-            payload: { kind: 'director_reply', jobId: row.id, text: response, withheld: false },
+            payload: {
+              kind: 'director_reply',
+              jobId: row.id,
+              text: response,
+              withheld: false,
+              savedOutputs: savedOutputsFromJobResult(row.result),
+            },
           })
         }
         const carousel = carouselDeliveryFromJobResult(row.result)

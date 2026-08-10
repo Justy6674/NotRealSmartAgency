@@ -39,7 +39,7 @@ function reply(id: string, completedAt: string, text: string): TimelineSourceEve
     occurredAtMs: ms(completedAt),
     side: 'director',
     brandId: 'scent-sell',
-    payload: { kind: 'director_reply', jobId: id, text, withheld: false },
+    payload: { kind: 'director_reply', jobId: id, text, withheld: false, savedOutputs: [] },
   }
 }
 

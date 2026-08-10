@@ -156,19 +156,38 @@ function isCopyReadySocialText(text: string): boolean {
   return /(?:^|\n)\s*#[\p{L}\d_]+/u.test(text)
 }
 
+/**
+ * Say where the copy is, having looked.
+ *
+ * This line used to be the fixed string "Prepared in this chat · not saved in
+ * NRS or Mixpost" on every card. The bubble was handed text and nothing else,
+ * so it could not have known either way — and on 10 August it printed that
+ * above two descriptions the same job had already saved, while the Director's
+ * own closing line said they were saved. One message, both claims.
+ *
+ * Saved is not published. Both branches say so, because the assurance that
+ * nothing went out is the part the owner is actually reading for.
+ */
+function persistenceLabel(savedOutputs: string[]): string {
+  if (savedOutputs.length === 0) return 'Prepared in this chat · not saved in NRS or Mixpost'
+  return `Saved to your NRS library · ${savedOutputs.join(', ')} · not scheduled or published`
+}
+
 const DirectorBubble = memo(function DirectorBubble({
   text,
   withheld,
+  savedOutputs = [],
 }: {
   text: string
   withheld: boolean
+  savedOutputs?: string[]
 }) {
   if (!withheld && isCopyReadySocialText(text)) {
     return (
       <section className="mr-auto max-w-[92%] overflow-hidden rounded-2xl rounded-bl-md bg-[var(--tg-theme-secondary-bg-color,#17212b)] ring-1 ring-black/10 dark:ring-white/10">
         <div className="px-4 pb-2 pt-4">
           <p className="text-xs font-medium uppercase tracking-wide text-[var(--tg-theme-hint-color,#82909f)]">Social copy</p>
-          <p className="mt-1 text-sm text-[var(--tg-theme-hint-color,#82909f)]">Prepared in this chat · not saved in NRS or Mixpost</p>
+          <p className="mt-1 text-sm text-[var(--tg-theme-hint-color,#82909f)]">{persistenceLabel(savedOutputs)}</p>
         </div>
         <CaptionBlock hook="" caption={text} hashtags={[]} />
       </section>
@@ -357,7 +376,7 @@ function EventRow({ event, onRetry, onEditCaption, onSaveDraft }: { event: Timel
       return <OwnerBubble text={payload.text} />
 
     case 'director_reply':
-      return <DirectorBubble text={payload.text} withheld={payload.withheld} />
+      return <DirectorBubble text={payload.text} withheld={payload.withheld} savedOutputs={payload.savedOutputs} />
 
     case 'director_pending':
       return <Working label={payload.label} />

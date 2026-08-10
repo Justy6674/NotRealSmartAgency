@@ -62,7 +62,22 @@ export type TimelineEventPayload =
       containedByEventId: string | null
     }
   | { kind: 'director_pending'; jobId: string | null; label: string; waitingSinceMs: number }
-  | { kind: 'director_reply'; jobId: string; text: string; withheld: boolean }
+  | {
+      kind: 'director_reply'
+      jobId: string
+      text: string
+      withheld: boolean
+      /**
+       * Where this copy actually ended up, read from the job's own action log.
+       *
+       * The card used to state "not saved in NRS or Mixpost" as a fixed label
+       * on anything that looked like social copy. It had no way to know: the
+       * bubble was handed text and nothing else. On 10 August it printed that
+       * line above two descriptions the same job had already written to the
+       * outputs library via save_output.
+       */
+      savedOutputs: string[]
+    }
   | {
       /** A finished, reviewable carousel. This is never emitted from copy alone. */
       kind: 'carousel_delivery'
