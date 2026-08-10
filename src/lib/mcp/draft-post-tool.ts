@@ -54,6 +54,40 @@ export function resolveMcpDraftMediaAttachment(
   return { ok: true, media }
 }
 
+/**
+ * Resolve a carousel's media without losing the order the owner approved.
+ *
+ * PostgREST does not guarantee an `.in()` result order. Returning the rows in
+ * the request order is therefore intentional: first slide is the cover in
+ * NRS and Mixpost, so sorting or accepting a partial result would make a
+ * carousel look right in storage but wrong in Review.
+ */
+export function resolveMcpDraftMediaAttachments(
+  mediaIds: readonly string[],
+  media: readonly DraftMediaAttachment[],
+): { ok: true; media: DraftMediaAttachment[] } | { ok: false; error: string } {
+  if (new Set(mediaIds).size !== mediaIds.length) {
+    return {
+      ok: false,
+      error: 'Carousel slide IDs must be unique. Remove the repeated media ID and try again.',
+    }
+  }
+
+  const mediaById = new Map(media.map((item) => [item.id, item]))
+  const orderedMedia = mediaIds
+    .map((mediaId) => mediaById.get(mediaId))
+    .filter((item): item is DraftMediaAttachment => Boolean(item))
+
+  if (orderedMedia.length !== mediaIds.length) {
+    return {
+      ok: false,
+      error: 'One or more requested media items are not available in this project. Call query_media for exact IDs, or upload the slides with upload_media before drafting.',
+    }
+  }
+
+  return { ok: true, media: orderedMedia }
+}
+
 const PLATFORM_GUIDANCE: Record<Platform, string> = {
   instagram: 'Instagram caption — hook in first line, 3-5 short paragraphs, conversational, end with a question or CTA. 150 words max ideal. Hashtags will be added separately.',
   facebook: 'Facebook caption — slightly longer than Instagram, more narrative, ends with a question or community prompt. 200 words max.',
@@ -133,7 +167,15 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
           .uuid()
           .optional()
           .describe(
-            "Optional UUID of a media_items row to attach (image or video). For Reels/Shorts/TikTok you MUST call query_media first and pass a video media_id. The user can't review a video draft without the media attached.",
+            "Optional UUID of one media_items row to attach (image or video). For Reels/Shorts/TikTok you MUST call query_media first and pass a video media_id. The user can't review a video draft without the media attached. Do not combine this with media_ids.",
+          ),
+        media_ids: z
+          .array(z.string().uuid())
+          .min(2)
+          .max(10)
+          .optional()
+          .describe(
+            'Optional ordered list of 2-10 image media_items UUIDs for a carousel. Call query_media first; every slide must belong to this brand. Use this instead of media_id for carousels.',
           ),
       },
     },
@@ -143,12 +185,14 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
       platform,
       tone,
       media_id,
+      media_ids,
     }: {
       brand_id: string
       intent: string
       platform: Platform
       tone?: string
       media_id?: string
+      media_ids?: string[]
     }) => {
       try {
         assertProjectCapability(principal, brand_id, 'draft:post')
@@ -195,6 +239,46 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
           isError: true,
         }
       }
+
+      if (media_id && media_ids) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: 'Use media_id for one image or video, or media_ids for a 2-10 image carousel — not both.',
+          }],
+          isError: true,
+        }
+      }
+
+      const requestedMediaIds = media_ids ?? (media_id ? [media_id] : [])
+      let mediaItemRows: DraftMediaAttachment[] = []
+      if (requestedMediaIds.length > 0) {
+        const { data: mediaRows } = await supabase
+          .from('media_items')
+          .select('id, file_url, file_type, thumbnail_url')
+          .in('id', requestedMediaIds)
+          .eq('brand_id', brand_id)
+
+        const attachment = resolveMcpDraftMediaAttachments(requestedMediaIds, mediaRows ?? [])
+        if (!attachment.ok) {
+          return {
+            content: [{ type: 'text' as const, text: attachment.error }],
+            isError: true,
+          }
+        }
+        mediaItemRows = attachment.media
+
+        if (media_ids && mediaItemRows.some((item) => !item.file_type.startsWith('image/'))) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: 'Carousel drafts need 2-10 image slides. Use media_id for a single video draft, or upload image slides before creating the carousel.',
+            }],
+            isError: true,
+          }
+        }
+      }
+
       const platformGuide = PLATFORM_GUIDANCE[platform]
 
       // Build a structured brief for Content & Copy. Worker will call
@@ -212,6 +296,7 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
         '',
         `Platform format: ${platformGuide}`,
         tone ? `Tone: ${tone}` : '',
+        media_ids ? `Asset format: ${mediaItemRows.length}-slide image carousel. Write a caption that introduces the slide sequence without describing images you cannot see.` : '',
         '',
         'Output requirements:',
         '- Return ONLY a JSON object with this exact shape, no preamble:',
@@ -335,25 +420,6 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
         }
       }
 
-      // Resolve optional media attachment
-      let mediaItemRow: DraftMediaAttachment | null = null
-      if (media_id) {
-        const { data: mediaRow } = await supabase
-          .from('media_items')
-          .select('id, file_url, file_type, thumbnail_url')
-          .eq('id', media_id)
-          .eq('brand_id', brand_id)
-          .single()
-        const attachment = resolveMcpDraftMediaAttachment(media_id, mediaRow)
-        if (!attachment.ok) {
-          return {
-            content: [{ type: 'text' as const, text: attachment.error }],
-            isError: true,
-          }
-        }
-        mediaItemRow = attachment.media
-      }
-
       // Insert the draft into scheduled_posts with mcp_external source.
       // createDraftPost also pushes it to Mixpost — without that the draft is
       // invisible on the surface the user actually reviews from.
@@ -373,7 +439,7 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
           platform,
           caption,
           hashtags: parsedHashtags,
-          mediaItemIds: mediaItemRow ? [mediaItemRow.id] : [],
+          mediaItemIds: mediaItemRows.map((media) => media.id),
           // `intent` is the user's request verbatim — the tool contract above
           // demands it. That makes it the honest owner turn for the stale-media
           // guard: "draft a post with this image" attaches the newest upload
@@ -409,7 +475,15 @@ After this tool returns, tell the user what the 'mixpost' field actually says, a
         // The ids the draft ACTUALLY carries, which is not always the media_id
         // that was passed in — see the stale-media guard in createDraftPost.
         media_item_ids_used: draft.mediaItemIds,
-        ...(mediaItemRow ? { media_attached: { id: mediaItemRow.id, type: mediaItemRow.file_type } } : {}),
+        ...(mediaItemRows.length === 1
+          ? { media_attached: { id: mediaItemRows[0].id, type: mediaItemRows[0].file_type } }
+          : {}),
+        ...(mediaItemRows.length > 1
+          ? {
+              carousel_slides: mediaItemRows.map((media) => ({ id: media.id, type: media.file_type })),
+              carousel_slide_count: mediaItemRows.length,
+            }
+          : {}),
         cost_cents: workerResult.costCents,
         duration_ms: workerResult.durationMs,
         caption_preview: caption.length > 200 ? caption.slice(0, 200) + '…' : caption,
