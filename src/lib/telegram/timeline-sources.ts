@@ -49,8 +49,31 @@ const PROPOSAL_GRACE_MS = 10 * 60 * 1000
  * was. The stored error is written for a log; this turns it into a sentence
  * that tells him what to DO.
  */
-export function explainJobError(error: string | null | undefined): string {
-  const raw = error?.trim() ?? ''
+/**
+ * The real cause, which `error` structurally cannot hold.
+ *
+ * `markJobError` writes an owner-safe sentence into `error` — that is correct,
+ * because `error` is read straight back to him. But it means the words this
+ * function tests for are gone before they arrive: every failure reaches here
+ * already rendered as "That did not complete." The truth is kept beside it, in
+ * `result.diagnostic`, and that is what must be classified.
+ *
+ * The diagnostic is only ever MATCHED against, never returned. It carries stack
+ * frames and upstream messages and is not fit to be read to anyone.
+ */
+function diagnosticText(result: Record<string, unknown> | null | undefined): string {
+  const diagnostic = result?.diagnostic as { message?: unknown, stack?: unknown } | undefined
+  if (!diagnostic) return ''
+  return [diagnostic.message, diagnostic.stack]
+    .filter((part): part is string => typeof part === 'string')
+    .join('\n')
+}
+
+export function explainJobError(
+  error: string | null | undefined,
+  result?: Record<string, unknown> | null,
+): string {
+  const raw = [diagnosticText(result), error ?? ''].join('\n').trim()
 
   if (/budget/i.test(raw)) {
     // The number is deliberately not shown. "10003c / 10000c" is the shape of
@@ -64,7 +87,19 @@ export function explainJobError(error: string | null | undefined): string {
     return 'The AI is rate-limited for a moment. Give it about a minute, then send it again.'
   }
 
-  if (/timeout|timed out|ETIMEDOUT/i.test(raw)) {
+  if (/tool.?step limit|step.?count|reached its tool-step/i.test(raw)) {
+    return 'It ran out of working steps before it had finished looking things up, so it'
+      + ' stopped rather than answer half-informed. Asking for one thing at a time gets'
+      + ' through — tell me the part that matters most and I will start there.'
+  }
+
+  if (/transcode|ffmpeg/i.test(raw)) {
+    return 'The video was still being converted and that ran long, so the reply never'
+      + ' started. The file itself is safe and already uploaded — ask again and it will'
+      + ' use what it has.'
+  }
+
+  if (/timeout|timed out|ETIMEDOUT|AbortError/i.test(raw)) {
     return 'That took too long and was stopped. Nothing else changed — send it again.'
   }
 
@@ -77,8 +112,14 @@ export function explainJobError(error: string | null | undefined): string {
  * Offering a retry that is guaranteed to fail is how the owner spent an
  * evening pressing a button against a spend cap.
  */
-export function canRetry(error: string | null | undefined): boolean {
-  return !/budget/i.test(error?.trim() ?? '')
+export function canRetry(
+  error: string | null | undefined,
+  result?: Record<string, unknown> | null,
+): boolean {
+  // Same reason as explainJobError: by the time a spend cap reaches `error` it
+  // no longer says "budget", so reading only that string offered a retry
+  // against a wall every time.
+  return !/budget/i.test([diagnosticText(result), error ?? ''].join('\n'))
 }
 
 interface JobRow {
@@ -297,8 +338,8 @@ export const directorJobSource: TimelineSource<JobRow> = {
             // Director spent a day rejecting every message with "Budget
             // exceeded — 10003c / 10000c monthly limit" while the owner was
             // told to try again, which was the one thing that could not work.
-            text: explainJobError(row.error),
-            retryText: canRetry(row.error) ? (message || null) : null,
+            text: explainJobError(row.error, row.result),
+            retryText: canRetry(row.error, row.result) ? (message || null) : null,
             retryClientEventId: clientEventId,
           },
         })
