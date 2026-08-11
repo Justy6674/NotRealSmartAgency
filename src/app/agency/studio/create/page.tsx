@@ -6,9 +6,19 @@ import { useSearchParams } from 'next/navigation'
 import { PostCreator } from '@/components/agency/studio/post/PostCreator'
 import { useAgencyStore } from '@/stores/agency-store'
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export default function CreatePage() {
   const { pendingDraftId, pendingMediaId, setPendingDraftId, setPendingMediaId } = useAgencyStore()
   const searchParams = useSearchParams()
+  const draftParam = searchParams.get('draft')
+  const mediaParam = searchParams.get('media')
+  const conversationParam = searchParams.get('conversation')
+  const outputParam = searchParams.get('output')
+  const exactDraftId = draftParam && UUID_PATTERN.test(draftParam) ? draftParam : null
+  const exactMediaId = mediaParam && UUID_PATTERN.test(mediaParam) ? mediaParam : null
+  const deskConversationId = conversationParam && UUID_PATTERN.test(conversationParam) ? conversationParam : undefined
+  const deskOutputId = outputParam && UUID_PATTERN.test(outputParam) ? outputParam : undefined
 
   const handleDone = () => {
     setPendingDraftId(null)
@@ -28,8 +38,10 @@ export default function CreatePage() {
   return (
     <div className="h-full overflow-hidden">
       <PostCreator
-        draftId={pendingDraftId ?? undefined}
-        mediaId={pendingMediaId ?? undefined}
+        draftId={exactDraftId ?? pendingDraftId ?? undefined}
+        mediaId={exactMediaId ?? pendingMediaId ?? undefined}
+        deskConversationId={deskConversationId}
+        deskOutputId={deskOutputId}
         onDone={handleDone}
         initialScheduleDate={initialScheduleDate}
       />

@@ -67,9 +67,13 @@ interface PostCreatorProps {
   onDone?: () => void
   /** Pre-fill schedule date/time from calendar click (format: YYYY-MM-DDTHH:mm) */
   initialScheduleDate?: string
+  /** Restore exact NRS Desk media/platform context */
+  deskConversationId?: string
+  /** Restore one exact saved Desk proposal into the editor */
+  deskOutputId?: string
 }
 
-export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: PostCreatorProps = {}) {
+export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, deskConversationId, deskOutputId }: PostCreatorProps = {}) {
   const { activeBrandId, setPendingDraftId, setPendingMediaId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
@@ -195,6 +199,53 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate }: P
     setPendingMediaId(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaId])
+
+  // A Desk receipt must restore the exact work, never whichever media or
+  // proposal happens to be newest. The server re-verifies conversation,
+  // brand and owner access before returning these IDs.
+  useEffect(() => {
+    if (!deskConversationId || draftId) return
+    fetch(`/api/desk/results?conversationId=${encodeURIComponent(deskConversationId)}`)
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data: {
+        context?: { media_item_ids?: string[]; platforms?: string[] }
+        outputs?: Array<{ id: string; content?: string | null; output_type?: string | null }>
+      } | null) => {
+        if (!data) return
+        if (data.context?.media_item_ids?.length) setSelectedMediaIds(data.context.media_item_ids)
+        if (data.context?.platforms?.length) {
+          const validPlatforms = new Set<PostPlatform>(['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube', 'bluesky', 'mastodon', 'pinterest', 'threads', 'google_business'])
+          const restored = data.context.platforms
+            .map((platform) => platform.toLowerCase() as PostPlatform)
+            .filter((platform) => validPlatforms.has(platform))
+          if (restored.length) setSelectedPlatforms(restored)
+        }
+
+        const output = deskOutputId
+          ? data.outputs?.find((output) => output.id === deskOutputId)
+          : undefined
+        if (!output?.content) return
+
+        let restoredCaption = output.content
+        try {
+          const parsed = JSON.parse(output.content) as Record<string, unknown>
+          const candidate = parsed.caption ?? parsed.content ?? parsed.copy ?? parsed.text
+          if (typeof candidate === 'string') restoredCaption = candidate
+          if (Array.isArray(parsed.hashtags)) {
+            setHashtags(parsed.hashtags.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.replace(/^#/, '')))
+          }
+          const requestedType = parsed.post_type ?? parsed.content_type
+          if (requestedType === 'carousel') setContentType('carousel')
+          if (requestedType === 'reel' || requestedType === 'short_video') setContentType('short_video')
+          if (requestedType === 'video' || requestedType === 'long_video') setContentType('long_video')
+        } catch {
+          // Plain saved copy is already the exact proposal text.
+        }
+        setCaption(restoredCaption)
+        if (output.output_type === 'carousel') setContentType('carousel')
+      })
+      .catch(() => {})
+  }, [deskConversationId, deskOutputId, draftId])
 
   // Fetch media items to populate slots + drive the embedded MediaSelector.
   // The Creator owns the fetch — MediaSelector receives items via prop. This

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
+import { BrandWorkspaceAccessError, resolveBrandWorkspaceContext } from '@/lib/auth/brand-workspace'
+import { buildDeskContext, createDeskConversationMetadata } from '@/lib/desk/context'
 import type { AgentType } from '@/types/database'
 
 const VALID_AGENT_TYPES: AgentType[] = [
@@ -15,6 +17,9 @@ const CreateSchema = z.object({
   brandId: z.string().uuid(),
   agentType: z.enum(VALID_AGENT_TYPES as [AgentType, ...AgentType[]]),
   title: z.string().optional(),
+  source: z.literal('nrs_desk').optional(),
+  mediaItemIds: z.array(z.string().uuid()).max(10).optional(),
+  platforms: z.array(z.string().trim().min(1).max(50)).max(10).optional(),
 })
 
 export async function GET(request: Request) {
@@ -63,15 +68,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
   }
 
-  const { brandId, agentType, title } = parsed.data
+  const { brandId, agentType, title, source, mediaItemIds, platforms } = parsed.data
+
+  let workspace
+  try {
+    workspace = await resolveBrandWorkspaceContext(supabase, user.id, brandId)
+  } catch (error) {
+    const status = error instanceof BrandWorkspaceAccessError ? error.status : 403
+    return NextResponse.json({ error: 'Business access denied' }, { status })
+  }
+
+  const { workspaceOwnerId } = workspace
 
   const { data, error } = await supabase
     .from('conversations')
     .insert({
-      user_id: user.id,
+      user_id: workspaceOwnerId,
       brand_id: brandId,
       agent_type: agentType,
       title: title ?? null,
+      ...(source === 'nrs_desk'
+        ? {
+            metadata: createDeskConversationMetadata(buildDeskContext({
+              actorUserId: user.id,
+              mediaItemIds,
+              platforms,
+            })),
+          }
+        : {}),
     })
     .select()
     .single()

@@ -90,6 +90,7 @@ export function createManagePostsTool(
    * in code, when "THIS image" means the newest one.
    */
   ownerMessage?: string,
+  conversationId?: string | null,
 ) {
   return tool({
     description:
@@ -157,7 +158,11 @@ export function createManagePostsTool(
             mediaItemIds: media_item_ids ?? [],
             ...(ownerMessage ? { ownerMessage } : {}),
             scheduledAt: scheduled_at,
-            metadata: { source: 'director', created_by: 'NRS Director' },
+            metadata: {
+              source: 'director',
+              created_by: 'NRS Director',
+              ...(conversationId ? { desk_conversation_id: conversationId } : {}),
+            },
           })
 
           return {

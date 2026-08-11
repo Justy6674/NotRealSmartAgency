@@ -22,6 +22,8 @@ import { CADENCE_DAYS, type ReviewCadence } from '@/lib/proforma/sections'
 import { inspectMarketingInput } from '@/lib/security/marketing-data-boundary'
 import { getActiveGoal } from '@/lib/agents/goal-loop'
 import { prepareDirectorTurn } from '@/lib/agents/director-run'
+import { BrandWorkspaceAccessError, resolveBrandWorkspaceContext } from '@/lib/auth/brand-workspace'
+import { buildDeskDirectorContext, readDeskContext } from '@/lib/desk/context'
 import {
   estimateGatewayCost,
   getGatewayRouteProviderOptions,
@@ -40,6 +42,7 @@ const RequestSchema = z.object({
   brandId: z.string().uuid(),
   agentType: z.enum(VALID_AGENT_TYPES as [AgentType, ...AgentType[]]),
   conversationId: z.string().uuid().nullable().optional(),
+  clientTurnId: z.string().uuid().optional(),
 })
 
 export async function POST(request: Request) {
@@ -63,21 +66,57 @@ export async function POST(request: Request) {
     })
   }
 
-  const { messages: rawMessages, brandId, agentType, conversationId } = parsed.data
+  const { messages: rawMessages, brandId, agentType, conversationId, clientTurnId } = parsed.data
   const messages = rawMessages as unknown as UIMessage[]
 
-  // Fetch brand (RLS ensures ownership)
-  const { data: brand, error: brandError } = await supabase
-    .from('brands')
-    .select('*')
-    .eq('id', brandId)
-    .single()
-
-  if (brandError || !brand) {
-    return new Response(JSON.stringify({ error: 'Brand not found', friendlyMessage: "I can't find this brand. Try selecting it again from the sidebar." }), {
-      status: 404,
+  let workspace
+  try {
+    workspace = await resolveBrandWorkspaceContext<Brand>(supabase, user.id, brandId)
+  } catch (error) {
+    const status = error instanceof BrandWorkspaceAccessError ? error.status : 403
+    return new Response(JSON.stringify({ error: 'Business access denied', friendlyMessage: "You don't have permission to change this business." }), {
+      status,
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+  const { workspaceOwnerId, actorUserId, brand } = workspace
+
+  let deskContext = null
+  if (conversationId) {
+    const { data: conversation } = await supabase
+      .from('conversations')
+      .select('id, user_id, brand_id, metadata')
+      .eq('id', conversationId)
+      .maybeSingle()
+    if (!conversation
+      || conversation.user_id !== workspaceOwnerId
+      || conversation.brand_id !== brandId) {
+      return new Response(JSON.stringify({ error: 'Conversation not found', friendlyMessage: 'That NRS Desk conversation is not available for this business.' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    deskContext = readDeskContext(conversation.metadata)
+
+    if (clientTurnId) {
+      const { data: existingReply } = await supabase
+        .from('messages')
+        .select('content')
+        .eq('conversation_id', conversationId)
+        .eq('client_turn_id', clientTurnId)
+        .eq('role', 'assistant')
+        .maybeSingle()
+      if (existingReply?.content) {
+        return new Response(JSON.stringify({
+          error: 'DuplicateTurn',
+          friendlyMessage: 'That request already finished. NRS Desk has reloaded its saved answer.',
+          existingResponse: existingReply.content,
+        }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+    }
   }
 
   // Fetch agent config
@@ -95,7 +134,7 @@ export async function POST(request: Request) {
   }
 
   // Get/create agent registry entry (org chart + budget)
-  const registry = await getOrCreateAgentRegistry(supabase, user.id, agentType)
+  const registry = await getOrCreateAgentRegistry(supabase, workspaceOwnerId, agentType)
 
   // Check budget before starting
   if (registry) {
@@ -137,14 +176,30 @@ export async function POST(request: Request) {
   const directorTurn = agentType === 'overall'
     ? await prepareDirectorTurn({
         supabase,
-        userId: user.id,
+        userId: workspaceOwnerId,
         brand: brand as Brand,
         conversationId: conversationId ?? null,
         channel: 'web',
         request: lastMessageText,
         agentId: registry?.id ?? null,
+        idempotencyKey: clientTurnId,
+        mediaInThread: Boolean(deskContext?.media_item_ids.length),
       })
     : null
+
+  if (directorTurn?.duplicate) {
+    return new Response(JSON.stringify({
+      error: 'DuplicateTurn',
+      friendlyMessage: directorTurn.status === 'completed'
+        ? 'That request already finished. Reload this NRS Desk conversation to see its saved answer.'
+        : 'NRS is already working on that request. Please wait rather than sending it twice.',
+      runId: directorTurn.runId,
+      status: directorTurn.status,
+    }), {
+      status: 409,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
   // Ordinary project work loads only the active project's proforma. User-wide
   // work context and sibling projects are not prompt context.
@@ -185,13 +240,13 @@ export async function POST(request: Request) {
   }
 
   // Build system prompt with memory + user context + proforma
-  const activeGoal = await getActiveGoal(supabase, user.id, brandId)
+  const activeGoal = await getActiveGoal(supabase, workspaceOwnerId, brandId)
   let { prompt: systemPrompt, memoryCount } = await buildSystemPromptWithMemory(
     brand as Brand,
     agentConfig as AgentConfig,
     lastMessageText,
     { proformaSummary, activeGoal },
-    user.id
+    workspaceOwnerId
   )
 
   // Intent classification + auto-routing for Director
@@ -205,6 +260,9 @@ export async function POST(request: Request) {
     }
     if (directorTurn?.context) {
       systemPrompt += '\n\n---\n\n' + directorTurn.context
+    }
+    if (deskContext) {
+      systemPrompt += '\n\n---\n\n' + buildDeskDirectorContext(deskContext)
     }
     systemPrompt += `\n\n---\n\n${buildMarketingSkillContext(lastMessageText, 'web')}`
 
@@ -235,12 +293,12 @@ export async function POST(request: Request) {
     }
 
     // Brand context safety — confirm which brand is active
-    const brandNiche = (brand as Record<string, unknown>).niche ?? ''
+    const brandNiche = brand.niche ?? ''
     systemPrompt += `\n\nBRAND CONTEXT SAFETY:
-- You are currently working on: **${(brand as Record<string, unknown>).name}** (${brandNiche})
+- You are currently working on: **${brand.name}** (${brandNiche})
 - NEVER reference, publish to, or use context from other brands in this conversation
-- If the user mentions a different brand by name, confirm they want to switch: "You mentioned [other brand]. Want me to switch to that brand, or continue with ${(brand as Record<string, unknown>).name}?"
-- Start every NEW conversation by confirming: "Working on ${(brand as Record<string, unknown>).name}. What can I help with?"`
+- If the user mentions a different brand by name, confirm they want to switch: "You mentioned [other brand]. Want me to switch to that brand, or continue with ${brand.name}?"
+- Start every NEW conversation by confirming: "Working on ${brand.name}. What can I help with?"`
 
     // Product-mention detection — enforce search-first for product descriptions
     const mentionsProducts = /(?:write|create|post|caption|describe|carousel|about)\s+.*(?:product|fragrance|perfume|service|item|scent|cologne)/i.test(lastMessageText)
@@ -367,7 +425,7 @@ That's the difference between a marketing director and a tech support agent. Def
   // Get tools for this agent
   const tools = getToolsForAgent(agentType, {
     supabase,
-    userId: user.id,
+    userId: workspaceOwnerId,
     brandId,
     brand: brand as Brand,
     conversationId: conversationId ?? null,
@@ -382,7 +440,7 @@ That's the difference between a marketing director and a tech support agent. Def
   if (agentType === 'overall') {
     const delegateCtx = {
       supabase,
-      userId: user.id,
+      userId: workspaceOwnerId,
       brandId,
       brand: brand as Brand,
       conversationId: conversationId ?? null,
@@ -419,7 +477,7 @@ That's the difference between a marketing director and a tech support agent. Def
     tools,
     stopWhen: stepCountIs(8),
     providerOptions: getGatewayRouteProviderOptions(modelRoute, {
-      user: user.id,
+      user: workspaceOwnerId,
       tags: [agentType, typedBrand.slug, 'chat'],
       zeroDataRetention: isHealthBrand,
     }),
@@ -447,7 +505,7 @@ That's the difference between a marketing director and a tech support agent. Def
       // matters: a spend record that cannot be written must say so, because a
       // cost you cannot see is worse than one you can.
       const { error: usageError } = await supabase.from('ai_usage').insert({
-        user_id: user.id,
+        user_id: workspaceOwnerId,
         query_type: `agency_${agentType}`,
         tokens_input: inputTokens,
         tokens_output: outputTokens,
@@ -477,7 +535,7 @@ That's the difference between a marketing director and a tech support agent. Def
       // Audit log
       await logAudit({
         supabase,
-        userId: user.id,
+        userId: workspaceOwnerId,
         agentId: registry?.id,
         action: 'chat_completed',
         entityType: 'conversation',
@@ -492,16 +550,40 @@ That's the difference between a marketing director and a tech support agent. Def
           cacheReadTokens: cost.cacheReadTokens,
           cacheWriteTokens: cost.cacheWriteTokens,
           memoryCount,
+          actorUserId,
         },
         costCents,
       })
 
       // Smart memory extraction — v2 (LLM) + v1 (regex) in parallel
+      if (conversationId && clientTurnId && text) {
+        const { error: messageError } = await supabase.from('messages').insert([
+          {
+            conversation_id: conversationId,
+            role: 'user',
+            content: lastMessageText,
+            client_turn_id: clientTurnId,
+          },
+          {
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: text,
+            client_turn_id: clientTurnId,
+            model: actualModel,
+            tokens_input: inputTokens,
+            tokens_output: outputTokens,
+          },
+        ])
+        if (messageError?.code !== '23505') {
+          if (messageError) console.error('[chat] Desk turn could not be persisted:', messageError.message)
+        }
+      }
+
       if (text && text.length > 20) {
         // v1: Regex extraction (fast, immediate, catches common patterns)
         extractAndStoreMemories({
           brandId: typedBrand.id,
-          userId: user.id,
+          userId: workspaceOwnerId,
           brandSlug: typedBrand.slug,
           agentType,
           userMessage: lastMessageText,
@@ -515,7 +597,7 @@ That's the difference between a marketing director and a tech support agent. Def
             if (facts.length === 0) return
             const ns = `nrs-${typedBrand.slug}-${agentType}`
             for (const fact of facts) {
-              await memoryStoreV2(fact, ns, user.id, typedBrand.id, conversationId ?? undefined)
+              await memoryStoreV2(fact, ns, workspaceOwnerId, typedBrand.id, conversationId ?? undefined)
                 .catch((err) => console.error('[chat] Memory v2 store failed:', err))
             }
           })
@@ -530,7 +612,7 @@ That's the difference between a marketing director and a tech support agent. Def
             brandId: typedBrand.id,
             brandSlug: typedBrand.slug,
             brandName: typedBrand.name,
-            userId: user.id,
+            userId: workspaceOwnerId,
             userMessage: lastMessageText,
             assistantResponse: text,
             conversationId,

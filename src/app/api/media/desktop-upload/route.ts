@@ -47,6 +47,7 @@ export async function POST(request: Request) {
     file_type?: unknown
     file_size?: unknown
     storage_path?: unknown
+    client_upload_id?: unknown
   } | null
   const brandId = typeof body?.brand_id === 'string' ? body.brand_id : ''
   if (!brandId) return NextResponse.json({ error: 'Choose a brand before uploading.' }, { status: 400 })
@@ -80,6 +81,15 @@ export async function POST(request: Request) {
   const fileSize = typeof body?.file_size === 'number' ? body.file_size : 0
   const fileError = validateIntakeFile({ fileName, fileType, fileSize })
   if (fileError) return NextResponse.json({ error: fileError }, { status: 400 })
+  const requestedUploadId = typeof body?.client_upload_id === 'string' ? body.client_upload_id : ''
+  const requestedStoragePath = typeof body?.storage_path === 'string' ? body.storage_path : ''
+  const storedUploadId = requestedStoragePath.slice(requestedStoragePath.lastIndexOf('/') + 1).split('_')[0] ?? ''
+  const isUploadId = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  const clientUploadId = isUploadId(requestedUploadId)
+    ? requestedUploadId
+    : isUploadId(storedUploadId)
+      ? storedUploadId
+      : randomUUID()
 
   const admin = createAdminClient()
 
@@ -88,7 +98,7 @@ export async function POST(request: Request) {
       ownerUserId: brand.user_id,
       brandId: brand.id,
       uploaderUserId: user.id,
-      uploadId: randomUUID(),
+      uploadId: clientUploadId,
       fileName,
       sanitizeFileName: sanitizeIntakeFileName,
     })
@@ -124,7 +134,7 @@ export async function POST(request: Request) {
 
   // The path is the idempotency key. Retrying after a lost browser response
   // cannot create another NRS media item or make a second processing request.
-  const metadata = { source: 'desktop_media_inbox', uploader_user_id: user.id, storage_path: storagePath }
+  const metadata = { source: 'desktop_media_inbox', uploader_user_id: user.id, storage_path: storagePath, client_upload_id: clientUploadId }
   const { data: existing, error: existingError } = await admin
     .from('media_items')
     .select('id')

@@ -44,7 +44,7 @@ function getComplianceStatus(result: ComplianceResult | null | undefined): 'pass
 
 // ── Review Room ───────────────────────────────────────────────────────────────
 
-export function ReviewRoom() {
+export function ReviewRoom({ initialDraftId }: { initialDraftId?: string } = {}) {
   const { activeBrandId, setPendingDraftId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
 
@@ -99,6 +99,13 @@ export function ReviewRoom() {
   }, [activeBrandId])
 
   useEffect(() => { fetchDrafts() }, [fetchDrafts])
+
+  // Desk receipts are durable URLs. Restore the exact draft after refresh once
+  // the brand's review queue has loaded, without falling back to the newest row.
+  useEffect(() => {
+    if (!initialDraftId || detailPostId) return
+    if (drafts.some((draft) => draft.id === initialDraftId)) setDetailPostId(initialDraftId)
+  }, [detailPostId, drafts, initialDraftId])
 
   // ── Fetch media for the brand (so the detail pane can render the real
   // video / image content for whichever draft is active). Single fetch per

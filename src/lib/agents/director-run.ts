@@ -41,6 +41,11 @@ export interface PreparedDirectorTurn {
   policy: DirectorSourcePolicy
   execution: DirectorTaskPlanExecution | null
   context: string
+  duplicate?: boolean
+}
+
+export function isDirectorRunIdempotencyConflict(error: { code?: string } | null | undefined, idempotencyKey?: string): boolean {
+  return Boolean(idempotencyKey) && error?.code === '23505'
 }
 
 function safeSummary(text: string, length = 500): string {
@@ -110,6 +115,32 @@ export async function prepareDirectorTurn(input: DirectorTurnInput): Promise<Pre
     })
     .select('id')
     .single()
+
+  if (isDirectorRunIdempotencyConflict(runError, input.idempotencyKey)) {
+    const { data: existing } = await input.supabase
+      .from('director_runs')
+      .select('id, status')
+      .eq('user_id', input.userId)
+      .eq('brand_id', input.brand.id)
+      .eq('channel', input.channel)
+      .eq('idempotency_key', input.idempotencyKey as string)
+      .maybeSingle()
+
+    if (existing) {
+      return {
+        runId: existing.id,
+        status: existing.status === 'blocked'
+          ? 'blocked'
+          : existing.status === 'completed'
+            ? 'completed'
+            : 'partial',
+        policy,
+        execution: null,
+        context: 'This owner action is already being handled. Reuse its existing receipt instead of running it again.',
+        duplicate: true,
+      }
+    }
+  }
 
   if (runError || !run) {
     console.error('[director-run] Could not create evidence ledger:', runError?.message)

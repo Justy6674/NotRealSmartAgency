@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { AlertCircle, ArrowLeft, CheckCircle2, Copy, Loader2, Upload } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { useSearchParams } from 'next/navigation'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, Loader2, Upload } from 'lucide-react'
+import { NrsDeskConversation } from '@/components/agency/NrsDeskConversation'
 import { desktopInboxDisplayName } from '@/lib/media/desktop-inbox'
 
 const MAX_MEDIA_INTAKE_BYTES = 500 * 1024 * 1024
@@ -21,6 +22,8 @@ interface UploadItem {
   percent: number
   state: UploadState
   error?: string
+  mediaItemId?: string
+  selected: boolean
 }
 
 function uploadWithProgress(signedUrl: string, file: File, onProgress: (percent: number) => void): Promise<void> {
@@ -39,15 +42,19 @@ function uploadWithProgress(signedUrl: string, file: File, onProgress: (percent:
 }
 
 export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
+  const searchParams = useSearchParams()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [selectedBrand, setSelectedBrand] = useState<InboxBrand | null>(null)
+  const initialBrandSlug = searchParams.get('brand')
+  const initialConversationId = searchParams.get('conversation')
+  const [selectedBrand, setSelectedBrand] = useState<InboxBrand | null>(() => (
+    brands.find((brand) => brand.slug === initialBrandSlug) ?? null
+  ))
   const [uploads, setUploads] = useState<UploadItem[]>([])
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
 
   const request = useCallback(async (body: Record<string, unknown>) => {
-    if (!selectedBrand) throw new Error('Choose a brand before uploading.')
+    if (!selectedBrand) throw new Error('Choose a business before uploading.')
     const response = await fetch('/api/media/desktop-upload', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -64,7 +71,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
 
   const uploadFile = async (file: File) => {
     const id = crypto.randomUUID()
-    setUploads((items) => [...items, { id, name: file.name, percent: 0, state: 'uploading' }])
+    setUploads((items) => [...items, { id, name: file.name, percent: 0, state: 'uploading', selected: false }])
 
     if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
       updateUpload(id, { state: 'error', error: 'Choose an image, video, or audio file.' })
@@ -76,18 +83,21 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
     }
 
     try {
-      const started = await request({ action: 'start', file_name: file.name, file_type: file.type, file_size: file.size })
+      const started = await request({ action: 'start', client_upload_id: id, file_name: file.name, file_type: file.type, file_size: file.size })
       const signedUrl = typeof started.signed_url === 'string' ? started.signed_url : ''
       const storagePath = typeof started.storage_path === 'string' ? started.storage_path : ''
       if (!signedUrl || !storagePath) throw new Error('NRS could not prepare this upload.')
 
       await uploadWithProgress(signedUrl, file, (percent) => updateUpload(id, { percent }))
       updateUpload(id, { percent: 100, state: 'filing' })
-      await request({ action: 'complete', file_name: file.name, file_type: file.type, file_size: file.size, storage_path: storagePath })
-      updateUpload(id, { state: 'ready' })
+      const completed = await request({ action: 'complete', client_upload_id: id, file_name: file.name, file_type: file.type, file_size: file.size, storage_path: storagePath })
+      const mediaItemId = typeof completed.media_item_id === 'string' ? completed.media_item_id : ''
+      if (!mediaItemId) throw new Error('NRS filed the upload without returning its media reference.')
+      updateUpload(id, { state: 'ready', mediaItemId, selected: true })
     } catch (cause) {
       updateUpload(id, {
         state: 'error',
+        selected: false,
         error: cause instanceof Error ? cause.message : 'The file did not finish uploading. Check your connection and try again.',
       })
     }
@@ -95,8 +105,6 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
 
   const chooseFiles = async (files: File[]) => {
     setError(null)
-    // Mobile Safari becomes unreliable when several 500 MB request bodies are
-    // held in memory. Queue one at a time so the progress shown stays honest.
     for (const file of files.slice(0, 10)) await uploadFile(file)
   }
 
@@ -104,111 +112,144 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
     setSelectedBrand(null)
     setUploads([])
     setError(null)
-    setCopied(false)
+    window.history.replaceState(null, '', '/desktop-upload')
   }
 
-  const copyPrompt = async () => {
-    if (!selectedBrand) return
-    try {
-      await navigator.clipboard.writeText(`Use the newest ${desktopInboxDisplayName(selectedBrand)} upload to make a polished social draft. Keep it in NRS review and do not publish.`)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setError('Could not copy the NRS instruction. You can type it directly in Claude or ChatGPT.')
-    }
+  const selectBrand = (brand: InboxBrand) => {
+    setSelectedBrand(brand)
+    setUploads([])
+    window.history.replaceState(null, '', `/desktop-upload?brand=${encodeURIComponent(brand.slug)}`)
+  }
+
+  const toggleUpload = (id: string) => {
+    setUploads((items) => items.map((item) => item.id === id && item.state === 'ready'
+      ? { ...item, selected: !item.selected }
+      : item))
   }
 
   const busy = uploads.some((item) => item.state === 'uploading' || item.state === 'filing')
-  const completed = uploads.some((item) => item.state === 'ready')
+  const selectedUploads = uploads.filter((item) => item.state === 'ready' && item.selected && item.mediaItemId)
+  const selectedMediaIds = selectedUploads.map((item) => item.mediaItemId as string)
+  const selectedMediaNames = selectedUploads.map((item) => item.name)
 
   return (
-    <main className="min-h-[100dvh] bg-zinc-950 px-4 py-8 text-zinc-100 sm:px-6">
-      <section className="mx-auto w-full max-w-xl">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-lime-300 text-zinc-950"><Upload className="h-5 w-5" /></div>
+    <main className="min-h-[100dvh] bg-background px-4 py-6 text-foreground sm:px-6 lg:py-8">
+      <section className="mx-auto w-full max-w-7xl">
+        <div className="mb-7 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Upload className="h-5 w-5" /></div>
           <div>
-            <p className="text-sm font-semibold tracking-wide text-lime-300">NOT REAL SMART</p>
-            <p className="text-xs text-zinc-400">Shared desktop media inbox</p>
+            <p className="text-sm font-semibold tracking-wide">NRS Desk</p>
+            <p className="text-xs text-muted-foreground">Upload, ask, create and review in one place</p>
           </div>
         </div>
 
         {!selectedBrand && (
-          <>
-            <h1 className="text-3xl font-semibold tracking-tight">Where should this media go?</h1>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">Choose the business first, then add photos, video or audio. Files go into that NRS library for review only. Nothing is posted from here.</p>
+          <div className="mx-auto max-w-3xl py-8">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">What are we working on?</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">Choose the business once. You can upload photos, video or audio and talk to the NRS Director on the same screen. Nothing publishes without review.</p>
 
             {brands.length === 0 ? (
-              <div role="alert" className="mt-6 rounded-2xl border border-red-500/40 bg-red-950/50 p-5 text-sm text-red-100">
-                Your NRS sign-in does not have upload access to these shared brands. Ask your NRS admin to check your team access.
+              <div role="alert" className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">
+                Your NRS sign-in does not have access to these shared businesses. Ask your NRS admin to check your team access.
               </div>
             ) : (
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="mt-7 grid gap-3 sm:grid-cols-2">
                 {brands.map((brand) => (
                   <button
                     key={brand.id}
                     type="button"
-                    onClick={() => setSelectedBrand(brand)}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-lime-300/70 hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-lime-300"
+                    onClick={() => selectBrand(brand)}
+                    className="group rounded-2xl border bg-card p-5 text-left shadow-sm transition hover:border-primary/60 hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    <p className="font-medium text-zinc-100">{desktopInboxDisplayName(brand)}</p>
-                    {brand.slug === 'endorseme' && <p className="mt-1 text-xs text-zinc-400">EndorseMe</p>}
-                    <p className="mt-3 text-sm text-zinc-400">Add media</p>
+                    <p className="font-medium">{desktopInboxDisplayName(brand)}</p>
+                    {brand.slug === 'endorseme' && <p className="mt-1 text-xs text-muted-foreground">EndorseMe</p>}
+                    <p className="mt-4 text-sm text-muted-foreground group-hover:text-foreground">Open NRS Desk →</p>
                   </button>
                 ))}
               </div>
             )}
-          </>
+          </div>
         )}
 
         {selectedBrand && (
           <>
-            <button type="button" onClick={resetSelection} disabled={busy} className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-lime-300 disabled:cursor-not-allowed disabled:opacity-50">
-              <ArrowLeft className="h-4 w-4" /> Choose a different business
-            </button>
-            <p className="text-sm font-medium text-lime-300">{desktopInboxDisplayName(selectedBrand)}</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Add photos, video or audio</h1>
-            <p className="mt-3 text-sm leading-6 text-zinc-400">Drag files from this computer or choose them below. Up to 500 MB per file. NRS will prepare the media, but it stays out of the social calendar until you ask for a draft.</p>
-
-            {error && <div role="alert" className="mt-5 rounded-2xl border border-red-500/40 bg-red-950/50 p-5 text-sm text-red-100"><div className="flex gap-3"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><p>{error}</p></div></div>}
-
-            <button
-              type="button"
-              className={`mt-6 w-full rounded-3xl border border-dashed p-8 text-left transition ${dragging ? 'border-lime-300 bg-lime-300/10' : 'border-zinc-700 bg-zinc-900 hover:border-lime-300/70'}`}
-              onClick={() => !busy && inputRef.current?.click()}
-              onDragOver={(event) => { event.preventDefault(); if (!busy) setDragging(true) }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => { event.preventDefault(); setDragging(false); if (!busy) void chooseFiles(Array.from(event.dataTransfer.files)) }}
-              disabled={busy}
-            >
-              <div className="flex flex-col items-center text-center">
-                <div className="mb-4 rounded-2xl bg-zinc-800 p-3 text-lime-300"><Upload className="h-6 w-6" /></div>
-                <span className="font-medium">Choose photos or video</span>
-                <span className="mt-1 text-sm text-zinc-400">Up to 500 MB each · up to 10 at a time</span>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">Working on</p>
+                <h1 className="text-2xl font-semibold">{desktopInboxDisplayName(selectedBrand)}</h1>
               </div>
-              <input ref={inputRef} className="hidden" type="file" accept="image/*,video/*,audio/*" multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.currentTarget.value = ''; void chooseFiles(files) }} />
-            </button>
+              <button type="button" onClick={resetSelection} disabled={busy} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
+                <ArrowLeft className="h-4 w-4" /> Change business
+              </button>
+            </div>
 
-            {uploads.length > 0 && (
-              <div className="mt-4 space-y-2">
-                {uploads.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3 text-sm"><span className="min-w-0 truncate font-medium">{item.name}</span>{item.state === 'ready' ? <CheckCircle2 className="h-4 w-4 shrink-0 text-lime-300" /> : item.state === 'error' ? <AlertCircle className="h-4 w-4 shrink-0 text-red-300" /> : <Loader2 className="h-4 w-4 shrink-0 animate-spin text-lime-300" />}</div>
-                    {item.state === 'uploading' && <><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-lime-300 transition-all" style={{ width: `${item.percent}%` }} /></div><p className="mt-1 text-xs text-zinc-400">Uploading {item.percent}%</p></>}
-                    {item.state === 'filing' && <p className="mt-1 text-xs text-zinc-400">Saving to NRS and starting review processing…</p>}
-                    {item.state === 'ready' && <p className="mt-1 text-xs text-zinc-400">In NRS and being prepared for review.</p>}
-                    {item.state === 'error' && <p className="mt-1 text-xs text-red-200">{item.error}</p>}
+            {error && <div role="alert" className="mb-5 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"><div className="flex gap-3"><AlertCircle className="mt-0.5 h-5 w-5 shrink-0" /><p>{error}</p></div></div>}
+
+            <div className="grid items-start gap-5 lg:grid-cols-[minmax(300px,0.72fr)_minmax(520px,1.5fr)]">
+              <aside className="rounded-3xl border bg-card p-5 shadow-sm lg:sticky lg:top-6">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Media</p>
+                  <h2 className="mt-1 text-lg font-semibold">Add files</h2>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Up to 500 MB each. Finished files are selected for your next instruction.</p>
+                </div>
+
+                <button
+                  type="button"
+                  className={`mt-5 w-full rounded-2xl border border-dashed p-6 text-left transition ${dragging ? 'border-primary bg-primary/5' : 'bg-background hover:border-primary/60 hover:bg-muted/30'}`}
+                  onClick={() => !busy && inputRef.current?.click()}
+                  onDragOver={(event) => { event.preventDefault(); if (!busy) setDragging(true) }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => { event.preventDefault(); setDragging(false); if (!busy) void chooseFiles(Array.from(event.dataTransfer.files)) }}
+                  disabled={busy}
+                >
+                  <div className="flex flex-col items-center text-center">
+                    <div className="mb-3 rounded-xl bg-primary/10 p-3 text-primary"><Upload className="h-5 w-5" /></div>
+                    <span className="text-sm font-medium">Choose or drop files</span>
+                    <span className="mt-1 text-xs text-muted-foreground">Photos · video · audio</span>
                   </div>
-                ))}
-              </div>
-            )}
+                  <input ref={inputRef} className="hidden" type="file" accept="image/*,video/*,audio/*" multiple onChange={(event) => { const files = Array.from(event.target.files ?? []); event.currentTarget.value = ''; void chooseFiles(files) }} />
+                </button>
 
-            {completed && !busy && (
-              <div className="mt-6 rounded-2xl border border-lime-300/30 bg-lime-300/10 p-5">
-                <p className="font-medium text-lime-200">Next: tell your NRS assistant what to make.</p>
-                <p className="mt-1 text-sm leading-6 text-zinc-300">Copy this, then paste it into Claude or ChatGPT with NRS connected. The result stays a review draft until you approve it.</p>
-                <Button className="mt-4 bg-lime-300 text-zinc-950 hover:bg-lime-200" onClick={copyPrompt}><Copy className="mr-2 h-4 w-4" /> {copied ? 'Copied' : 'Copy NRS draft instruction'}</Button>
-              </div>
-            )}
+                {uploads.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {uploads.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-pressed={item.selected}
+                        disabled={item.state !== 'ready'}
+                        onClick={() => toggleUpload(item.id)}
+                        className="w-full rounded-xl border bg-background px-3 py-3 text-left transition enabled:hover:border-primary/50 aria-pressed:border-primary/60 aria-pressed:bg-primary/5 disabled:cursor-default"
+                      >
+                        <div className="flex items-center gap-3 text-sm">
+                          <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">
+                            {item.state === 'ready' && item.selected ? <Check className="h-3.5 w-3.5 text-primary" /> : item.state === 'ready' ? <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" /> : item.state === 'error' ? <AlertCircle className="h-3.5 w-3.5 text-destructive" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
+                        </div>
+                        {item.state === 'uploading' && <><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${item.percent}%` }} /></div><p className="mt-1 text-xs text-muted-foreground">Uploading {item.percent}%</p></>}
+                        {item.state === 'filing' && <p className="mt-1 pl-8 text-xs text-muted-foreground">Saving safely in NRS…</p>}
+                        {item.state === 'ready' && <p className="mt-1 pl-8 text-xs text-muted-foreground">{item.selected ? 'Selected for the Director' : 'Not selected'}</p>}
+                        {item.state === 'error' && <p className="mt-1 pl-8 text-xs text-destructive">{item.error}</p>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-4 rounded-xl bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
+                  {selectedMediaIds.length} selected · Nothing publishes from this screen
+                </div>
+              </aside>
+
+              <NrsDeskConversation
+                key={selectedBrand.id}
+                brand={selectedBrand}
+                selectedMediaIds={selectedMediaIds}
+                selectedMediaNames={selectedMediaNames}
+                hasUploadedMedia={uploads.some((item) => item.state === 'ready')}
+                initialConversationId={selectedBrand.slug === initialBrandSlug ? initialConversationId : null}
+              />
+            </div>
           </>
         )}
       </section>

@@ -13,6 +13,7 @@ interface ChatInputProps {
   brand?: Brand | null
   agentType?: AgentType
   showChips?: boolean
+  allowAttachments?: boolean
 }
 
 /** Read a File as base64 data (no data: prefix) */
@@ -126,6 +127,7 @@ export function ChatInput({
   brand,
   agentType,
   showChips = false,
+  allowAttachments = true,
 }: ChatInputProps) {
   const [input, setInput] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -199,6 +201,7 @@ export function ChatInput({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
+    if (!allowAttachments) return
     const file = e.dataTransfer.files[0]
     if (file && (file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/'))) {
       setSelectedFile(file)
@@ -274,6 +277,7 @@ export function ChatInput({
   }
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!allowAttachments) return
     const items = e.clipboardData?.items
     if (!items) return
     for (const item of items) {
@@ -329,7 +333,7 @@ export function ChatInput({
       <div className="mx-auto max-w-3xl">
         <div
           className={`relative rounded-2xl border bg-muted/30 shadow-sm transition-all focus-within:shadow-md focus-within:ring-2 focus-within:ring-primary/20 ${dragOver ? 'border-primary border-dashed ring-2 ring-primary/30' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragOver={(e) => { e.preventDefault(); if (allowAttachments) setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
         >
@@ -371,7 +375,7 @@ export function ChatInput({
           )}
 
           {/* File attachment preview */}
-          {selectedFile && (
+          {allowAttachments && selectedFile && (
             <div className="mx-4 mt-3 mb-1 flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-xs">
               {selectedFile.type.startsWith('image/') ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -397,7 +401,7 @@ export function ChatInput({
             </div>
           )}
           {/* Drag overlay hint */}
-          {dragOver && (
+          {allowAttachments && dragOver && (
             <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-primary/5">
               <p className="text-sm font-medium text-primary">Drop file here</p>
             </div>
@@ -414,24 +418,28 @@ export function ChatInput({
             className="w-full resize-none rounded-2xl bg-transparent px-4 pb-12 pt-4 text-sm placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
           />
           {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/*,audio/*,image/*"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
+          {allowAttachments && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/*,audio/*,image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+          )}
           {/* Bottom bar inside the input box */}
           <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg p-2 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
-                title="Attach file"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
+              {allowAttachments && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-lg p-2 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                  title="Attach file"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              )}
               {/* Slash hint — visible when input is empty */}
               {!input && (
                 <span className="select-none pl-1 text-[11px] text-muted-foreground/40">
