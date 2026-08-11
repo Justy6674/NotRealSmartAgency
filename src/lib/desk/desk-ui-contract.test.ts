@@ -53,6 +53,13 @@ test('Desk reuses slash commands but keeps large media in the signed uploader', 
   assert.match(chatInput, /allowAttachments/)
 })
 
+test('the Director composer stays visible on desktop and mobile PWA screens', () => {
+  assert.match(conversation, /data-testid="nrs-desk-director-composer"/)
+  assert.match(conversation, /max-lg:fixed/)
+  assert.match(conversation, /lg:h-\[calc\(100dvh-12rem\)\]/)
+  assert.match(conversation, /pb-\[env\(safe-area-inset-bottom\)\]/)
+})
+
 test('real draft receipts link to the exact Creator and Review work', () => {
   assert.match(conversation, /\/agency\/studio\/create\?conversation=/)
   assert.match(conversation, /\/agency\/studio\/review\?draft=/)

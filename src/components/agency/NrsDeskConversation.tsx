@@ -264,7 +264,7 @@ export function NrsDeskConversation({
   const hasResults = results.outputs.length > 0 || results.drafts.length > 0
 
   return (
-    <section className="flex min-h-[640px] flex-col overflow-hidden rounded-3xl border bg-card shadow-sm">
+    <section className="flex min-h-[640px] flex-col overflow-hidden rounded-3xl border bg-card shadow-sm lg:h-[calc(100dvh-12rem)] lg:max-h-[900px]">
       <header className="border-b px-5 py-4 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -301,7 +301,7 @@ export function NrsDeskConversation({
         </div>
       </header>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-44 pt-4 sm:px-6 lg:pb-4">
         {messages.length === 0 ? (
           <div className="flex h-full min-h-64 flex-col justify-center">
             <p className="text-sm font-medium">Start with one clear instruction</p>
@@ -365,14 +365,25 @@ export function NrsDeskConversation({
         )}
       </div>
 
-      <ChatInput
-        onSend={(text) => void handleSend(text)}
-        isLoading={isLoading}
-        placeholder={`Ask NRS about ${brand.name}, or type / for shortcuts`}
-        agentType="overall"
-        showChips={false}
-        allowAttachments={false}
-      />
+      <div
+        data-testid="nrs-desk-director-composer"
+        className="pb-[env(safe-area-inset-bottom)] max-lg:fixed max-lg:inset-x-0 max-lg:bottom-0 max-lg:z-40 max-lg:border-t max-lg:bg-background/95 max-lg:shadow-[0_-16px_36px_rgba(0,0,0,0.28)] max-lg:backdrop-blur-xl lg:shrink-0 lg:pb-0"
+      >
+        <div className="mx-auto max-w-7xl">
+          <div className="flex items-center justify-between px-4 pt-2 text-[11px] font-medium text-muted-foreground lg:hidden">
+            <span>NRS Director</span>
+            <span className="max-w-[55vw] truncate">{brand.name}</span>
+          </div>
+          <ChatInput
+            onSend={(text) => void handleSend(text)}
+            isLoading={isLoading}
+            placeholder={`Ask NRS about ${brand.name}, or type / for shortcuts`}
+            agentType="overall"
+            showChips={false}
+            allowAttachments={false}
+          />
+        </div>
+      </div>
     </section>
   )
 }
