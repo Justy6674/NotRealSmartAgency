@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAgencyStore } from '@/stores/agency-store'
 import { MediaUploader } from '@/components/agency/MediaUploader'
+import { MediaIntakeLinks } from '@/components/agency/MediaIntakeLinks'
 import { MediaCard } from '@/components/agency/MediaCard'
 import type { MediaItem } from '@/types/database'
 
@@ -69,6 +70,8 @@ export default function MediaPage() {
           Upload images, videos, and audio. Images are saved to your brand library. Videos get AI transcription and platform-specific captions.
         </p>
       </div>
+
+      <MediaIntakeLinks key={activeBrandId} brandId={activeBrandId} />
 
       <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} />
 
