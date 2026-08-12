@@ -70,6 +70,14 @@ test('a non-idempotent stream drop reloads the saved conversation before asking 
   assert.doesNotMatch(conversation, /You can send the instruction again/)
 })
 
+test('a Desk transport drop keeps the selected media safe and gives the owner a recovery path', () => {
+  assert.match(conversation, /The Director connection didn’t reach NRS/)
+  assert.match(conversation, /Your selected media is still here and nothing was created/)
+  assert.match(conversation, />Try again</)
+  assert.match(conversation, />Reload NRS</)
+  assert.doesNotMatch(conversation, /localError \|\| error\?\.message/)
+})
+
 test('Desk reuses slash commands but keeps large media in the signed uploader', () => {
   assert.match(conversation, /<ChatInput/)
   assert.match(conversation, /allowAttachments=\{false\}/)

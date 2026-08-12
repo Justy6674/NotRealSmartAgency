@@ -82,6 +82,7 @@ export function NrsDeskConversation({
   const [results, setResults] = useState<DeskResults>({ outputs: [], drafts: [] })
   const [resultLoading, setResultLoading] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [retryInstruction, setRetryInstruction] = useState<string | null>(null)
   const { platforms: connectedPlatforms, loading: connectedPlatformsLoading } = useConnectedPlatforms(brand.id)
   const platformOptions = useMemo(
     () => deskPlatformOptions(connectedPlatforms),
@@ -100,6 +101,9 @@ export function NrsDeskConversation({
   const sourceSummary = effectiveMediaIds.length === 0
     ? null
     : sourceTypes.map((type, index) => `${type.startsWith('video/') ? 'Video' : type.startsWith('image/') ? 'Image' : type.startsWith('audio/') ? 'Audio' : 'File'} selected: ${effectiveMediaNames[index] ?? `file ${index + 1}`}`)
+  const connectionDropMessage = effectiveMediaIds.length > 0
+    ? 'The Director connection didn’t reach NRS. Your selected media is still here and nothing was created.'
+    : 'The Director connection didn’t reach NRS. Your work is still here and nothing was created.'
 
   useEffect(() => {
     useAgencyStore.getState().setBrand(brand.id)
@@ -190,16 +194,21 @@ export function NrsDeskConversation({
       if (cancelled) return
       if (restored) {
         setLocalError('The connection dropped after the Director finished. The saved reply is back in this chat.')
+        setRetryInstruction(null)
         clearError()
         void refreshResults()
         return
       }
-      setLocalError('The connection dropped before the Director could finish. Your source and work context are still here.')
+      setLocalError(connectionDropMessage)
+      clearError()
     }).catch(() => {
-      if (!cancelled) setLocalError('The connection dropped before the Director could finish. Your source and work context are still here.')
+      if (!cancelled) {
+        setLocalError(connectionDropMessage)
+        clearError()
+      }
     })
     return () => { cancelled = true }
-  }, [clearError, error, refreshResults, reloadSavedMessages, setMessages])
+  }, [clearError, connectionDropMessage, error, refreshResults, reloadSavedMessages, setMessages])
 
   useEffect(() => {
     if (!initialConversationId) return
@@ -264,6 +273,7 @@ export function NrsDeskConversation({
     const instruction = text.trim()
     if (!instruction || isLoading) return
     setLocalError(null)
+    setRetryInstruction(instruction)
     clearError()
 
     try {
@@ -291,9 +301,10 @@ export function NrsDeskConversation({
       clientTurnIdRef.current = crypto.randomUUID()
       await sendMessage({ text: instruction })
     } catch (cause) {
-      setLocalError(cause instanceof Error ? cause.message : 'NRS could not send that instruction.')
+      const message = cause instanceof Error ? cause.message : 'NRS could not send that instruction.'
+      setLocalError(message === 'Failed to fetch' ? connectionDropMessage : message)
     }
-  }, [clearError, deskState, effectiveMediaIds, ensureConversation, isLoading, platforms, sendMessage])
+  }, [clearError, connectionDropMessage, deskState, effectiveMediaIds, ensureConversation, isLoading, platforms, sendMessage])
 
   const togglePlatform = (platform: string) => {
     setPlatforms((current) => current.includes(platform)
@@ -364,7 +375,17 @@ export function NrsDeskConversation({
           </div>
         ) : messages.map((message) => <ChatMessage key={message.id} message={message} />)}
         {isLoading && <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> The Director is working…</div>}
-        {(localError || error) && <div role="alert" className="my-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{localError || error?.message}</div>}
+        {(localError || error) && (
+          <div role="alert" className="my-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            <p>{localError || 'The Director connection didn’t reach NRS. Nothing was created.'}</p>
+            {retryInstruction && !isLoading && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button type="button" onClick={() => void handleSend(retryInstruction)} className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium transition hover:bg-destructive/10">Try again</button>
+                <button type="button" onClick={() => window.location.reload()} className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium transition hover:bg-destructive/10">Reload NRS</button>
+              </div>
+            )}
+          </div>
+        )}
 
         {hasResults && (
           <div className="mt-5 border-t pt-5">
