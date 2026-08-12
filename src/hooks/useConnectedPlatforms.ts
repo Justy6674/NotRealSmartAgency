@@ -40,12 +40,12 @@ export function useConnectedPlatforms(brandId: string | null) {
 
         // brandMapping is keyed by brand ID — extract unique friendly platform names
         const mappings = data.brandMapping[brandId!] as
-          | Array<{ platform: string; accountName: string; provider: string }>
+          | Array<{ platform: string; accountName: string; provider: string; authorized?: boolean }>
           | undefined
 
         if (!cancelled) {
           const connected = mappings
-            ? [...new Set(mappings.map(m => m.platform))]
+            ? [...new Set(mappings.filter(m => m.authorized !== false).map(m => m.platform))]
             : []
           setPlatforms(connected)
         }

@@ -9,6 +9,8 @@ import { ChatInput } from './ChatInput'
 import { ChatMessage } from './ChatMessage'
 import { useAgencyStore } from '@/stores/agency-store'
 import { deskCreativeStateForMessage, type DeskCreativeState } from '@/lib/desk/creative-flow'
+import { deskPlatformOptions } from '@/lib/desk/platform-options'
+import { useConnectedPlatforms } from '@/hooks/useConnectedPlatforms'
 
 interface DeskBrand {
   id: string
@@ -36,8 +38,6 @@ interface DeskResults {
   outputs: DeskOutput[]
   drafts: DeskDraft[]
 }
-
-const PLATFORM_OPTIONS = ['Instagram', 'TikTok', 'Facebook', 'LinkedIn'] as const
 
 const STARTERS = [
   { label: 'A social post', prompt: 'I want to make a social post. Start by confirming the point, audience and voice before you write it.' },
@@ -82,6 +82,11 @@ export function NrsDeskConversation({
   const [results, setResults] = useState<DeskResults>({ outputs: [], drafts: [] })
   const [resultLoading, setResultLoading] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
+  const { platforms: connectedPlatforms, loading: connectedPlatformsLoading } = useConnectedPlatforms(brand.id)
+  const platformOptions = useMemo(
+    () => deskPlatformOptions(connectedPlatforms),
+    [connectedPlatforms],
+  )
 
   brandIdRef.current = brand.id
   const effectiveMediaIds = hasUploadedMedia ? selectedMediaIds : restoredMediaIds
@@ -315,19 +320,25 @@ export function NrsDeskConversation({
 
         <div className="mt-4">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Where should we shape this for?</p>
-          <div className="flex flex-wrap gap-2">
-            {PLATFORM_OPTIONS.map((platform) => (
-              <button
-                key={platform}
-                type="button"
-                aria-pressed={platforms.includes(platform)}
-                onClick={() => togglePlatform(platform)}
-                className="rounded-full border px-3 py-1.5 text-xs transition aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
-              >
-                {platform}
-              </button>
-            ))}
-          </div>
+          {connectedPlatformsLoading ? (
+            <p className="text-xs text-muted-foreground">Checking your connected channels…</p>
+          ) : platformOptions.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {platformOptions.map((platform) => (
+                <button
+                  key={platform}
+                  type="button"
+                  aria-pressed={platforms.includes(platform)}
+                  onClick={() => togglePlatform(platform)}
+                  className="rounded-full border px-3 py-1.5 text-xs transition aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+                >
+                  {platform}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No publishing channels are connected to this brand yet.</p>
+          )}
         </div>
       </header>
 
