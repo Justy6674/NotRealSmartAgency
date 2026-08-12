@@ -60,14 +60,14 @@ export function NrsDeskConversation({
   selectedMediaIds,
   selectedMediaNames,
   selectedMediaTypes,
-  hasUploadedMedia,
+  hasSelectedMedia,
   initialConversationId,
 }: {
   brand: DeskBrand
   selectedMediaIds: string[]
   selectedMediaNames: string[]
   selectedMediaTypes: string[]
-  hasUploadedMedia: boolean
+  hasSelectedMedia: boolean
   initialConversationId?: string | null
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -89,17 +89,17 @@ export function NrsDeskConversation({
   )
 
   brandIdRef.current = brand.id
-  const effectiveMediaIds = hasUploadedMedia ? selectedMediaIds : restoredMediaIds
-  const effectiveMediaNames = hasUploadedMedia
+  const effectiveMediaIds = hasSelectedMedia ? selectedMediaIds : restoredMediaIds
+  const effectiveMediaNames = hasSelectedMedia
     ? selectedMediaNames
     : restoredMediaIds.map((_, index) => `saved NRS file ${index + 1}`)
-  const effectiveMediaTypes = hasUploadedMedia ? selectedMediaTypes : []
+  const effectiveMediaTypes = hasSelectedMedia ? selectedMediaTypes : []
   const sourceTypes = effectiveMediaTypes.length > 0
     ? effectiveMediaTypes
     : effectiveMediaNames.map(() => '')
   const sourceSummary = effectiveMediaIds.length === 0
     ? null
-    : sourceTypes.map((type, index) => `${type.startsWith('video/') ? 'Video' : type.startsWith('image/') ? 'Image' : type.startsWith('audio/') ? 'Audio' : 'File'} uploaded: ${effectiveMediaNames[index] ?? `file ${index + 1}`}`)
+    : sourceTypes.map((type, index) => `${type.startsWith('video/') ? 'Video' : type.startsWith('image/') ? 'Image' : type.startsWith('audio/') ? 'Audio' : 'File'} selected: ${effectiveMediaNames[index] ?? `file ${index + 1}`}`)
 
   useEffect(() => {
     useAgencyStore.getState().setBrand(brand.id)
@@ -302,6 +302,11 @@ export function NrsDeskConversation({
   }
 
   const hasResults = results.drafts.length > 0
+  const selectedMediaIsOnlyVideo = effectiveMediaTypes.length > 0 && effectiveMediaTypes.every((type) => type.startsWith('video/'))
+  const analyseSelectedMedia = {
+    label: selectedMediaIsOnlyVideo ? 'Analyse this video' : 'Analyse this media',
+    prompt: `Analyse my selected ${selectedMediaIsOnlyVideo ? 'video' : 'media'} first. Tell me what you understand it to be, the point of the post, and the strongest direction. Do not create, save or draft anything yet.`,
+  }
 
   return (
     <section className="flex min-h-[640px] flex-col overflow-hidden rounded-3xl border bg-card shadow-sm lg:h-[calc(100dvh-12rem)] lg:max-h-[900px]">
@@ -348,7 +353,7 @@ export function NrsDeskConversation({
             <p className="text-sm font-medium">Start with what you want to say</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {(effectiveMediaIds.length > 0
-                ? [{ label: 'Review this first', prompt: 'Review my selected media first. Tell me what you understand it to be, the point of the post, and the strongest direction. Do not create, save or draft anything yet.' }]
+                ? [analyseSelectedMedia]
                 : STARTERS).map((starter) => (
                 <button key={starter.label} type="button" onClick={() => void handleSend(starter.prompt)} className="rounded-2xl border bg-background p-4 text-left transition hover:border-primary/60 hover:bg-muted/50">
                   <p className="text-sm font-medium">{starter.label}</p>

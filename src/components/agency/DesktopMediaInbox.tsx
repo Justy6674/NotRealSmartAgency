@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AlertCircle, ArrowLeft, Check, CheckCircle2, FileVideo, Image as ImageIcon, Loader2, Music, Upload } from 'lucide-react'
 import { NrsDeskConversation } from '@/components/agency/NrsDeskConversation'
@@ -25,6 +25,14 @@ interface UploadItem {
   error?: string
   mediaItemId?: string
   selected: boolean
+}
+
+interface ExistingMediaItem {
+  id: string
+  file_name: string
+  file_type: string
+  file_url: string
+  thumbnail_url: string | null
 }
 
 function mediaLabel(fileType: string) {
@@ -65,6 +73,10 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
     brands.find((brand) => brand.slug === initialBrandSlug) ?? null
   ))
   const [uploads, setUploads] = useState<UploadItem[]>([])
+  const [existingMedia, setExistingMedia] = useState<ExistingMediaItem[]>([])
+  const [selectedExistingMediaIds, setSelectedExistingMediaIds] = useState<string[]>([])
+  const [existingMediaLoading, setExistingMediaLoading] = useState(false)
+  const [existingMediaError, setExistingMediaError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -79,6 +91,38 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
     if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'NRS could not complete that upload.')
     return data
   }, [selectedBrand])
+
+  useEffect(() => {
+    if (!selectedBrand) {
+      setExistingMedia([])
+      setSelectedExistingMediaIds([])
+      setExistingMediaError(null)
+      return
+    }
+
+    let cancelled = false
+    setExistingMediaLoading(true)
+    setExistingMediaError(null)
+    setSelectedExistingMediaIds([])
+    void request({ action: 'list' }).then((data) => {
+      if (cancelled) return
+      const media = Array.isArray(data.media) ? data.media.filter((item): item is ExistingMediaItem => (
+        !!item
+        && typeof item === 'object'
+        && typeof (item as Record<string, unknown>).id === 'string'
+        && typeof (item as Record<string, unknown>).file_name === 'string'
+        && typeof (item as Record<string, unknown>).file_type === 'string'
+        && typeof (item as Record<string, unknown>).file_url === 'string'
+      )) : []
+      setExistingMedia(media)
+    }).catch((cause) => {
+      if (!cancelled) setExistingMediaError(cause instanceof Error ? cause.message : 'NRS could not load the existing media library.')
+    }).finally(() => {
+      if (!cancelled) setExistingMediaLoading(false)
+    })
+
+    return () => { cancelled = true }
+  }, [request, selectedBrand])
 
   const updateUpload = (id: string, changes: Partial<UploadItem>) => {
     setUploads((items) => items.map((item) => item.id === id ? { ...item, ...changes } : item))
@@ -126,6 +170,8 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
   const resetSelection = () => {
     setSelectedBrand(null)
     setUploads([])
+    setExistingMedia([])
+    setSelectedExistingMediaIds([])
     setError(null)
     window.history.replaceState(null, '', '/desktop-upload')
   }
@@ -133,6 +179,8 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
   const selectBrand = (brand: InboxBrand) => {
     setSelectedBrand(brand)
     setUploads([])
+    setExistingMedia([])
+    setSelectedExistingMediaIds([])
     window.history.replaceState(null, '', `/desktop-upload?brand=${encodeURIComponent(brand.slug)}`)
   }
 
@@ -142,11 +190,18 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
       : item))
   }
 
+  const toggleExistingMedia = (id: string) => {
+    setSelectedExistingMediaIds((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id])
+  }
+
   const busy = uploads.some((item) => item.state === 'uploading' || item.state === 'filing')
   const selectedUploads = uploads.filter((item) => item.state === 'ready' && item.selected && item.mediaItemId)
-  const selectedMediaIds = selectedUploads.map((item) => item.mediaItemId as string)
-  const selectedMediaNames = selectedUploads.map((item) => item.name)
-  const selectedMediaTypes = selectedUploads.map((item) => item.fileType)
+  const selectedExistingMedia = existingMedia.filter((item) => selectedExistingMediaIds.includes(item.id))
+  const selectedMediaIds = [...selectedUploads.map((item) => item.mediaItemId as string), ...selectedExistingMedia.map((item) => item.id)]
+  const selectedMediaNames = [...selectedUploads.map((item) => item.name), ...selectedExistingMedia.map((item) => item.file_name)]
+  const selectedMediaTypes = [...selectedUploads.map((item) => item.fileType), ...selectedExistingMedia.map((item) => item.file_type)]
 
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-6 text-foreground sm:px-6 lg:py-8">
@@ -205,8 +260,8 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
               <aside className="rounded-3xl border bg-card p-5 shadow-sm lg:sticky lg:top-6">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Media</p>
-                  <h2 className="mt-1 text-lg font-semibold">Add files</h2>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Up to 500 MB each. Finished files are selected for your next instruction.</p>
+                  <h2 className="mt-1 text-lg font-semibold">Add a file or use one already here</h2>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Upload something new, or select an existing file for the Director. Nothing publishes from this screen.</p>
                 </div>
 
                 <button
@@ -246,12 +301,59 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                         </div>
                         {item.state === 'uploading' && <><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${item.percent}%` }} /></div><p className="mt-1 text-xs text-muted-foreground">Uploading {item.percent}%</p></>}
                         {item.state === 'filing' && <p className="mt-1 pl-8 text-xs text-muted-foreground">Saving safely in NRS…</p>}
-                        {item.state === 'ready' && <p className="mt-1 pl-8 text-xs text-muted-foreground">{mediaLabel(item.fileType)} uploaded — {item.selected ? 'ready for the Director to review' : 'not selected'}.</p>}
+                        {item.state === 'ready' && <p className="mt-1 pl-8 text-xs text-muted-foreground">{mediaLabel(item.fileType)} ready — {item.selected ? 'selected for the Director' : 'not selected'}.</p>}
                         {item.state === 'error' && <p className="mt-1 pl-8 text-xs text-destructive">{item.error}</p>}
                       </button>
                     ))}
                   </div>
                 )}
+
+                <div className="mt-5 border-t pt-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Already in {desktopInboxDisplayName(selectedBrand)}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Choose a saved video, image or audio file instead of uploading it again.</p>
+                    </div>
+                    {existingMediaLoading && <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-muted-foreground" aria-label="Loading saved media" />}
+                  </div>
+
+                  {existingMediaError && <p role="alert" className="mt-3 text-xs leading-5 text-destructive">{existingMediaError}</p>}
+                  {!existingMediaLoading && !existingMediaError && existingMedia.length === 0 && <p className="mt-3 text-xs leading-5 text-muted-foreground">No saved files yet. Upload the first one above.</p>}
+
+                  {existingMedia.length > 0 && (
+                    <div className="mt-3 space-y-2" data-testid="nrs-desk-existing-media">
+                      {existingMedia.map((item) => {
+                        const selected = selectedExistingMediaIds.includes(item.id)
+                        const previewUrl = item.file_type.startsWith('video/') ? item.thumbnail_url : item.file_url
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => toggleExistingMedia(item.id)}
+                            className="w-full rounded-xl border bg-background p-2 text-left transition hover:border-primary/50 aria-pressed:border-primary/60 aria-pressed:bg-primary/5"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                                {previewUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+                                ) : <MediaTypeIcon fileType={item.file_type} />}
+                              </div>
+                              <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">
+                                {selected ? <Check className="h-3.5 w-3.5 text-primary" /> : <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium">{item.file_name}</span>
+                                <span className="mt-0.5 block text-xs text-muted-foreground">{mediaLabel(item.file_type)} already in NRS — {selected ? 'selected to analyse' : 'select to analyse'}</span>
+                              </span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-4 rounded-xl bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground">
                   {selectedMediaIds.length} selected · Nothing publishes from this screen
@@ -264,7 +366,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                 selectedMediaIds={selectedMediaIds}
                 selectedMediaNames={selectedMediaNames}
                 selectedMediaTypes={selectedMediaTypes}
-                hasUploadedMedia={uploads.some((item) => item.state === 'ready')}
+                hasSelectedMedia={selectedMediaIds.length > 0}
                 initialConversationId={selectedBrand.slug === initialBrandSlug ? initialConversationId : null}
               />
             </div>

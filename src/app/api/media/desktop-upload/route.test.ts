@@ -24,6 +24,14 @@ test('the desktop inbox files every completed object under the selected brand ow
   assert.match(source, /concurrentlyFiled/)
 })
 
+test('the desktop inbox lists only existing non-archived files belonging to the authorised brand owner', () => {
+  assert.match(source, /action === 'list'/)
+  assert.match(source, /\.eq\('user_id', brand\.user_id\)/)
+  assert.match(source, /\.eq\('brand_id', brand\.id\)/)
+  assert.match(source, /\.eq\('is_archived', false\)/)
+  assert.match(source, /\.order\('created_at', \{ ascending: false \}\)/)
+})
+
 test('the desktop inbox only starts media enrichment and never directs or publishes a post', () => {
   assert.match(source, /runMediaProcessingPipeline/)
   assert.doesNotMatch(source, /runDirectorJob/)

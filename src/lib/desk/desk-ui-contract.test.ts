@@ -24,13 +24,21 @@ test('uploads retain exact media IDs, client retry IDs and explicit selection st
   assert.match(inbox, /aria-pressed/)
 })
 
-test('an uploaded video is unmistakable and starts with a Director review, not a draft action', () => {
-  assert.match(inbox, /mediaLabel\(item\.fileType\)\} uploaded/)
+test('a chosen video is unmistakable and starts with a Director analysis, not a draft action', () => {
+  assert.match(inbox, /mediaLabel\(item\.fileType\)\} ready/)
   assert.match(inbox, /MediaTypeIcon/)
-  assert.match(conversation, /Review this first/)
+  assert.match(conversation, /Analyse this video/)
   assert.match(conversation, /Do not create, save or draft anything yet/)
   assert.doesNotMatch(conversation, />Continue</)
   assert.doesNotMatch(conversation, /Open in Creator/)
+})
+
+test('the Desk shows existing brand media so a video is selected instead of uploaded again', () => {
+  assert.match(inbox, /action: 'list'/)
+  assert.match(inbox, /existingMedia/)
+  assert.match(inbox, /selectedExistingMediaIds/)
+  assert.match(inbox, /Already in \{desktopInboxDisplayName\(selectedBrand\)\}/)
+  assert.match(conversation, /\? 'Video' : .* selected:/)
 })
 
 test('Desk chat creates a durable conversation before sending and passes exact context', () => {

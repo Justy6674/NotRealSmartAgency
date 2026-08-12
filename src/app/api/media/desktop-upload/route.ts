@@ -33,7 +33,8 @@ function unavailableBrandResponse() {
  * It is deliberately separate from the public phone capability endpoint. An
  * authenticated NRS owner/admin selects one of four approved brands, receives
  * a single signed Storage URL, and files the result under the brand owner. It
- * cannot list media, send a Director job, create a draft or publish anything.
+ * can also show that same brand's existing library, but cannot send a Director
+ * job, create a draft or publish anything.
  */
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -60,10 +61,11 @@ export async function POST(request: Request) {
   const brand = selectedBrand as InboxBrand | null
   if (brandError || !brand || !isDesktopInboxBrandSlug(brand.slug)) return unavailableBrandResponse()
 
+  const admin = createAdminClient()
+
   // brands_select predates per-brand team restrictions, so apply the precise
-  // write test here before using the service client to create a signed URL.
+  // shared-inbox access test here before using the service client.
   if (brand.user_id !== user.id) {
-    const admin = createAdminClient()
     const { data: membership } = await admin
       .from('team_members')
       .select('role, status, brand_ids')
@@ -76,6 +78,23 @@ export async function POST(request: Request) {
   }
 
   const action = body?.action
+
+  // This must use the same access path as uploads. The generic media endpoint
+  // is intentionally scoped to the signed-in user, whereas NRS Desk is a
+  // shared owner/admin workspace and needs the selected brand owner's library.
+  if (action === 'list') {
+    const { data: media, error: mediaError } = await admin
+      .from('media_items')
+      .select('id, file_name, file_type, file_url, thumbnail_url')
+      .eq('user_id', brand.user_id)
+      .eq('brand_id', brand.id)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false })
+      .limit(24)
+    if (mediaError) return NextResponse.json({ error: 'NRS could not load this brand’s media library.' }, { status: 500 })
+    return NextResponse.json({ media: media ?? [], brand_name: brand.name })
+  }
+
   const fileName = typeof body?.file_name === 'string' ? body.file_name : ''
   const fileType = typeof body?.file_type === 'string' ? body.file_type.trim().toLowerCase() : ''
   const fileSize = typeof body?.file_size === 'number' ? body.file_size : 0
@@ -90,8 +109,6 @@ export async function POST(request: Request) {
     : isUploadId(storedUploadId)
       ? storedUploadId
       : randomUUID()
-
-  const admin = createAdminClient()
 
   if (action === 'start') {
     const storagePath = buildDesktopInboxStoragePath({
