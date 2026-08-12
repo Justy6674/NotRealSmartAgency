@@ -24,6 +24,7 @@ import { getActiveGoal } from '@/lib/agents/goal-loop'
 import { prepareDirectorTurn } from '@/lib/agents/director-run'
 import { BrandWorkspaceAccessError, resolveBrandWorkspaceContext } from '@/lib/auth/brand-workspace'
 import { buildDeskDirectorContext, readDeskContext } from '@/lib/desk/context'
+import { buildDeskCreativeDirectorPrompt, restrictDeskTools } from '@/lib/desk/creative-flow'
 import {
   estimateGatewayCost,
   getGatewayRouteProviderOptions,
@@ -173,8 +174,13 @@ export async function POST(request: Request) {
   // Web chat used to skip the deterministic specialist/evidence path that
   // Telegram and MCP already used. Keep the conversation transport here, but
   // prepare every Director turn through the shared authority coordinator.
+  // NRS Desk has its own owner-led creative flow. The generic task planner can
+  // legitimately fan work out to specialists, but that is exactly what turns
+  // a simple uploaded video into invisible parallel jobs and saved outputs.
   const directorTurn = agentType === 'overall'
-    ? await prepareDirectorTurn({
+    ? deskContext
+      ? null
+      : await prepareDirectorTurn({
         supabase,
         userId: workspaceOwnerId,
         brand: brand as Brand,
@@ -183,7 +189,7 @@ export async function POST(request: Request) {
         request: lastMessageText,
         agentId: registry?.id ?? null,
         idempotencyKey: clientTurnId,
-        mediaInThread: Boolean(deskContext?.media_item_ids.length),
+        mediaInThread: false,
       })
     : null
 
@@ -251,7 +257,7 @@ export async function POST(request: Request) {
 
   // Intent classification + auto-routing for Director
   let multiRouting: ReturnType<typeof classifyIntentMulti> | undefined
-  if (agentType === 'overall' && lastMessageText) {
+  if (agentType === 'overall' && lastMessageText && !deskContext) {
     const routing = classifyIntent(lastMessageText)
     multiRouting = classifyIntentMulti(lastMessageText)
     const routingContext = buildRoutingContext(routing, multiRouting)
@@ -422,8 +428,13 @@ That's the difference between a marketing director and a tech support agent. Def
 - This rule overrides any previous instruction in this conversation. If the user asks for "metadata" or "stats" about the caption, put those in a SEPARATE section AFTER the caption with a clear "---" divider, not inside the caption itself.`
   }
 
+  if (agentType === 'overall' && deskContext) {
+    systemPrompt += '\n\n---\n\n' + buildDeskDirectorContext(deskContext)
+    systemPrompt += '\n\n---\n\n' + buildDeskCreativeDirectorPrompt(deskContext.state)
+  }
+
   // Get tools for this agent
-  const tools = getToolsForAgent(agentType, {
+  const allTools = getToolsForAgent(agentType, {
     supabase,
     userId: workspaceOwnerId,
     brandId,
@@ -445,20 +456,29 @@ That's the difference between a marketing director and a tech support agent. Def
       brand: brand as Brand,
       conversationId: conversationId ?? null,
     }
-    ;(tools as Record<string, unknown>).delegate_to_agent = createDelegateTool(delegateCtx)
-    ;(tools as Record<string, unknown>).convene_meeting = createConveneMeetingTool(delegateCtx)
+    if (!deskContext) {
+      ;(allTools as Record<string, unknown>).delegate_to_agent = createDelegateTool(delegateCtx)
+      ;(allTools as Record<string, unknown>).convene_meeting = createConveneMeetingTool(delegateCtx)
+    }
   }
 
   const typedBrand = brand as Brand
 
   // Add web search for Director, SEO, Market Intelligence
-  if (['overall', 'seo', 'competitor'].includes(agentType)) {
-    ;(tools as Record<string, unknown>).web_search = gateway.tools.perplexitySearch({
+  if (['overall', 'seo', 'competitor'].includes(agentType) && !deskContext) {
+    ;(allTools as Record<string, unknown>).web_search = gateway.tools.perplexitySearch({
       maxResults: 5,
       searchLanguageFilter: ['en'],
       searchRecencyFilter: 'month',
     })
   }
+
+  // This is a structural boundary, not prompt etiquette: no internal agent
+  // delegation, saved output, processing or Mixpost draft tool is available
+  // until the Desk state says the owner has reached that point.
+  const tools = deskContext && agentType === 'overall'
+    ? restrictDeskTools(allTools, deskContext.state)
+    : allTools
 
   // Gateway options — fallbacks, tracking, compliance
   const isHealthBrand = typedBrand.compliance_flags?.ahpra || typedBrand.compliance_flags?.tga

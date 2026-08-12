@@ -1,4 +1,5 @@
 import { z } from 'zod/v3'
+import { DESK_CREATIVE_STATES, type DeskCreativeState } from './creative-flow'
 
 const UUID = z.string().uuid()
 
@@ -10,7 +11,7 @@ const DeskResultRefSchema = z.object({
 export const DeskContextSchema = z.object({
   schema_version: z.literal(1),
   source: z.literal('nrs_desk'),
-  state: z.enum(['collecting', 'working', 'needs_input', 'result_ready', 'completed']),
+  state: z.enum(DESK_CREATIVE_STATES),
   media_item_ids: z.array(UUID).max(10),
   intent: z.string().trim().max(2_000).nullable(),
   platforms: z.array(z.string().trim().min(1).max(50)).max(10),
@@ -27,7 +28,7 @@ export function buildDeskContext(input: {
   mediaItemIds?: string[]
   intent?: string | null
   platforms?: string[]
-  state?: DeskConversationContext['state']
+  state?: DeskCreativeState
   policyVersion?: string
   resultRefs?: DeskResultRef[]
 }): DeskConversationContext {

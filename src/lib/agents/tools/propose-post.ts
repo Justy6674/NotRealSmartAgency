@@ -112,7 +112,7 @@ CRITICAL: never supply the caption or hashtags yourself. Pass the user's angle h
       // 2. Fetch each media row with its visual analysis
       const { data: items } = await supabase
         .from('media_items')
-        .select('id, file_name, file_type, metadata, transcription')
+        .select('id, file_name, file_type, ai_description, metadata, transcription')
         .in('id', media_ids)
         .eq('brand_id', brandId)
 
@@ -141,7 +141,11 @@ CRITICAL: never supply the caption or hashtags yourself. Pass the user's angle h
           id: item.id,
           file_name: item.file_name ?? 'untitled',
           file_type: item.file_type ?? 'unknown',
-          summary: va?.summary ?? null,
+          // The canonical pipeline writes the LLM's media understanding here.
+          // visual_analysis is retained only as a legacy fallback.
+          summary: (typeof item.ai_description === 'string' && item.ai_description.trim())
+            ? item.ai_description.trim()
+            : va?.summary ?? null,
           products: va?.products ?? [],
           scenes: va?.scenes ?? [],
           mood: va?.mood ?? null,

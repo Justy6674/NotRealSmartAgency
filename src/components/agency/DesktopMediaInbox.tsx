@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, Loader2, Upload } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, FileVideo, Image as ImageIcon, Loader2, Music, Upload } from 'lucide-react'
 import { NrsDeskConversation } from '@/components/agency/NrsDeskConversation'
 import { desktopInboxDisplayName } from '@/lib/media/desktop-inbox'
 
@@ -19,11 +19,26 @@ type UploadState = 'uploading' | 'filing' | 'ready' | 'error'
 interface UploadItem {
   id: string
   name: string
+  fileType: string
   percent: number
   state: UploadState
   error?: string
   mediaItemId?: string
   selected: boolean
+}
+
+function mediaLabel(fileType: string) {
+  if (fileType.startsWith('video/')) return 'Video'
+  if (fileType.startsWith('image/')) return 'Image'
+  if (fileType.startsWith('audio/')) return 'Audio'
+  return 'File'
+}
+
+function MediaTypeIcon({ fileType }: { fileType: string }) {
+  const className = 'h-3.5 w-3.5 text-muted-foreground'
+  if (fileType.startsWith('video/')) return <FileVideo className={className} aria-hidden="true" />
+  if (fileType.startsWith('image/')) return <ImageIcon className={className} aria-hidden="true" />
+  return <Music className={className} aria-hidden="true" />
 }
 
 function uploadWithProgress(signedUrl: string, file: File, onProgress: (percent: number) => void): Promise<void> {
@@ -71,7 +86,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
 
   const uploadFile = async (file: File) => {
     const id = crypto.randomUUID()
-    setUploads((items) => [...items, { id, name: file.name, percent: 0, state: 'uploading', selected: false }])
+    setUploads((items) => [...items, { id, name: file.name, fileType: file.type, percent: 0, state: 'uploading', selected: false }])
 
     if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
       updateUpload(id, { state: 'error', error: 'Choose an image, video, or audio file.' })
@@ -131,6 +146,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
   const selectedUploads = uploads.filter((item) => item.state === 'ready' && item.selected && item.mediaItemId)
   const selectedMediaIds = selectedUploads.map((item) => item.mediaItemId as string)
   const selectedMediaNames = selectedUploads.map((item) => item.name)
+  const selectedMediaTypes = selectedUploads.map((item) => item.fileType)
 
   return (
     <main className="min-h-[100dvh] bg-background px-4 py-6 text-foreground sm:px-6 lg:py-8">
@@ -222,6 +238,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                         className="w-full rounded-xl border bg-background px-3 py-3 text-left transition enabled:hover:border-primary/50 aria-pressed:border-primary/60 aria-pressed:bg-primary/5 disabled:cursor-default"
                       >
                         <div className="flex items-center gap-3 text-sm">
+                          <MediaTypeIcon fileType={item.fileType} />
                           <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border">
                             {item.state === 'ready' && item.selected ? <Check className="h-3.5 w-3.5 text-primary" /> : item.state === 'ready' ? <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" /> : item.state === 'error' ? <AlertCircle className="h-3.5 w-3.5 text-destructive" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
                           </span>
@@ -229,7 +246,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                         </div>
                         {item.state === 'uploading' && <><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${item.percent}%` }} /></div><p className="mt-1 text-xs text-muted-foreground">Uploading {item.percent}%</p></>}
                         {item.state === 'filing' && <p className="mt-1 pl-8 text-xs text-muted-foreground">Saving safely in NRS…</p>}
-                        {item.state === 'ready' && <p className="mt-1 pl-8 text-xs text-muted-foreground">{item.selected ? 'Selected for the Director' : 'Not selected'}</p>}
+                        {item.state === 'ready' && <p className="mt-1 pl-8 text-xs text-muted-foreground">{mediaLabel(item.fileType)} uploaded — {item.selected ? 'ready for the Director to review' : 'not selected'}.</p>}
                         {item.state === 'error' && <p className="mt-1 pl-8 text-xs text-destructive">{item.error}</p>}
                       </button>
                     ))}
@@ -246,6 +263,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                 brand={selectedBrand}
                 selectedMediaIds={selectedMediaIds}
                 selectedMediaNames={selectedMediaNames}
+                selectedMediaTypes={selectedMediaTypes}
                 hasUploadedMedia={uploads.some((item) => item.state === 'ready')}
                 initialConversationId={selectedBrand.slug === initialBrandSlug ? initialConversationId : null}
               />

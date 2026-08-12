@@ -6,6 +6,7 @@ import {
   createDeskConversationMetadata,
   readDeskContext,
 } from '@/lib/desk/context'
+import { DESK_CREATIVE_STATES } from '@/lib/desk/creative-flow'
 import { createClient } from '@/lib/supabase/server'
 
 const UpdateSchema = z.object({
@@ -13,7 +14,7 @@ const UpdateSchema = z.object({
   mediaItemIds: z.array(z.string().uuid()).max(10),
   intent: z.string().trim().max(2_000).nullable().optional(),
   platforms: z.array(z.string().trim().min(1).max(50)).max(10).optional(),
-  state: z.enum(['collecting', 'working', 'needs_input', 'result_ready', 'completed']).optional(),
+  state: z.enum(DESK_CREATIVE_STATES).optional(),
   resultRefs: z.array(z.object({
     kind: z.enum(['asset', 'proposal', 'draft']),
     id: z.string().uuid(),

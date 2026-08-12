@@ -24,6 +24,15 @@ test('uploads retain exact media IDs, client retry IDs and explicit selection st
   assert.match(inbox, /aria-pressed/)
 })
 
+test('an uploaded video is unmistakable and starts with a Director review, not a draft action', () => {
+  assert.match(inbox, /mediaLabel\(item\.fileType\)\} uploaded/)
+  assert.match(inbox, /MediaTypeIcon/)
+  assert.match(conversation, /Review this first/)
+  assert.match(conversation, /Do not create, save or draft anything yet/)
+  assert.doesNotMatch(conversation, />Continue</)
+  assert.doesNotMatch(conversation, /Open in Creator/)
+})
+
 test('Desk chat creates a durable conversation before sending and passes exact context', () => {
   assert.match(conversation, /source: 'nrs_desk'/)
   assert.match(conversation, /ensureConversation/)
@@ -36,7 +45,7 @@ test('Desk conversation and messages survive refresh through a stable exact URL'
   assert.match(inbox, /useSearchParams/)
   assert.match(conversation, /initialConversationId/)
   assert.match(conversation, /history\.replaceState/)
-  assert.match(conversation, /\/api\/conversations\/\$\{initialConversationId\}\/messages/)
+  assert.match(conversation, /reloadSavedMessages\(initialConversationId\)/)
   assert.match(conversation, /setMessages/)
 })
 
@@ -45,6 +54,12 @@ test('a replayed client turn restores its saved assistant answer instead of aski
   assert.match(conversation, /existingResponse/)
   assert.match(conversation, /DuplicateTurn/)
   assert.match(conversation, /setMessages/)
+})
+
+test('a non-idempotent stream drop reloads the saved conversation before asking the owner to act', () => {
+  assert.match(conversation, /reloadSavedMessages/)
+  assert.match(conversation, /The saved reply is back in this chat/)
+  assert.doesNotMatch(conversation, /You can send the instruction again/)
 })
 
 test('Desk reuses slash commands but keeps large media in the signed uploader', () => {

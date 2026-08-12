@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { ArrowUpRight, CheckCircle2, FileText, Loader2, Palette } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 import { ChatInput } from './ChatInput'
 import { ChatMessage } from './ChatMessage'
 import { useAgencyStore } from '@/stores/agency-store'
+import { deskCreativeStateForMessage, type DeskCreativeState } from '@/lib/desk/creative-flow'
 
 interface DeskBrand {
   id: string
@@ -39,9 +40,9 @@ interface DeskResults {
 const PLATFORM_OPTIONS = ['Instagram', 'TikTok', 'Facebook', 'LinkedIn'] as const
 
 const STARTERS = [
-  { label: 'Canva asset', prompt: 'Create a polished Canva image proposal using my selected media.' },
-  { label: 'TikTok caption', prompt: 'Write a TikTok caption proposal using my selected media.' },
-  { label: 'Carousel', prompt: 'Create a social carousel proposal using my selected media.' },
+  { label: 'A social post', prompt: 'I want to make a social post. Start by confirming the point, audience and voice before you write it.' },
+  { label: 'A caption', prompt: 'I need a caption. First tell me what you understand the message and purpose to be, then ask one question if needed.' },
+  { label: 'A campaign idea', prompt: 'Help me shape a campaign idea. Start by reflecting the outcome you think I want before proposing anything.' },
 ]
 
 function mixpostState(draft: DeskDraft): 'synced' | 'failed' | 'pending' {
@@ -58,12 +59,14 @@ export function NrsDeskConversation({
   brand,
   selectedMediaIds,
   selectedMediaNames,
+  selectedMediaTypes,
   hasUploadedMedia,
   initialConversationId,
 }: {
   brand: DeskBrand
   selectedMediaIds: string[]
   selectedMediaNames: string[]
+  selectedMediaTypes: string[]
   hasUploadedMedia: boolean
   initialConversationId?: string | null
 }) {
@@ -74,6 +77,7 @@ export function NrsDeskConversation({
   const brandIdRef = useRef(brand.id)
   const [conversationId, setConversationId] = useState<string | null>(initialConversationId ?? null)
   const [restoredMediaIds, setRestoredMediaIds] = useState<string[]>([])
+  const [deskState, setDeskState] = useState<DeskCreativeState>('collecting')
   const [platforms, setPlatforms] = useState<string[]>([])
   const [results, setResults] = useState<DeskResults>({ outputs: [], drafts: [] })
   const [resultLoading, setResultLoading] = useState(false)
@@ -84,6 +88,13 @@ export function NrsDeskConversation({
   const effectiveMediaNames = hasUploadedMedia
     ? selectedMediaNames
     : restoredMediaIds.map((_, index) => `saved NRS file ${index + 1}`)
+  const effectiveMediaTypes = hasUploadedMedia ? selectedMediaTypes : []
+  const sourceTypes = effectiveMediaTypes.length > 0
+    ? effectiveMediaTypes
+    : effectiveMediaNames.map(() => '')
+  const sourceSummary = effectiveMediaIds.length === 0
+    ? null
+    : sourceTypes.map((type, index) => `${type.startsWith('video/') ? 'Video' : type.startsWith('image/') ? 'Image' : type.startsWith('audio/') ? 'Audio' : 'File'} uploaded: ${effectiveMediaNames[index] ?? `file ${index + 1}`}`)
 
   useEffect(() => {
     useAgencyStore.getState().setBrand(brand.id)
@@ -122,6 +133,23 @@ export function NrsDeskConversation({
   })
   const isLoading = status === 'streaming' || status === 'submitted'
 
+  const reloadSavedMessages = useCallback(async (id = conversationIdRef.current) => {
+    if (!id) return false
+    const response = await fetch(`/api/conversations/${id}/messages`)
+    if (!response.ok) return false
+    const data = await response.json() as {
+      conversation?: { brand_id?: string }
+      messages?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
+    }
+    if (data.conversation?.brand_id !== brand.id) return false
+    setMessages((data.messages ?? []).map((message) => ({
+      id: message.id,
+      role: message.role,
+      parts: [{ type: 'text' as const, text: message.content }],
+    })))
+    return true
+  }, [brand.id, setMessages])
+
   useEffect(() => {
     if (!error) return
     try {
@@ -152,8 +180,21 @@ export function NrsDeskConversation({
     } catch {
       // Non-JSON transport errors use the plain recovery message below.
     }
-    setLocalError('NRS kept your work context, but this reply did not finish. You can send the instruction again.')
-  }, [clearError, error, refreshResults, setMessages])
+    let cancelled = false
+    void reloadSavedMessages().then((restored) => {
+      if (cancelled) return
+      if (restored) {
+        setLocalError('The connection dropped after the Director finished. The saved reply is back in this chat.')
+        clearError()
+        void refreshResults()
+        return
+      }
+      setLocalError('The connection dropped before the Director could finish. Your source and work context are still here.')
+    }).catch(() => {
+      if (!cancelled) setLocalError('The connection dropped before the Director could finish. Your source and work context are still here.')
+    })
+    return () => { cancelled = true }
+  }, [clearError, error, refreshResults, reloadSavedMessages, setMessages])
 
   useEffect(() => {
     if (!initialConversationId) return
@@ -162,29 +203,20 @@ export function NrsDeskConversation({
     useAgencyStore.getState().setConversation(initialConversationId)
 
     void Promise.all([
-      fetch(`/api/conversations/${initialConversationId}/messages`).then(async (response) => {
-        if (!response.ok) throw new Error('That saved NRS Desk conversation is no longer available.')
-        const data = await response.json() as {
-          conversation?: { brand_id?: string }
-          messages?: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
-        }
-        if (data.conversation?.brand_id !== brand.id) throw new Error('That conversation belongs to a different business.')
-        setMessages((data.messages ?? []).map((message) => ({
-          id: message.id,
-          role: message.role,
-          parts: [{ type: 'text' as const, text: message.content }],
-        })))
+      reloadSavedMessages(initialConversationId).then((restored) => {
+        if (!restored) throw new Error('That saved NRS Desk conversation is no longer available.')
       }),
       fetch(`/api/desk/context?conversationId=${encodeURIComponent(initialConversationId)}`).then(async (response) => {
         if (!response.ok) return
-        const data = await response.json() as { context?: { media_item_ids?: string[] } }
+        const data = await response.json() as { context?: { media_item_ids?: string[]; state?: DeskCreativeState } }
         setRestoredMediaIds(data.context?.media_item_ids ?? [])
+        setDeskState(data.context?.state ?? 'collecting')
       }),
       refreshResults(initialConversationId),
     ]).catch((cause) => {
       setLocalError(cause instanceof Error ? cause.message : 'NRS could not restore this conversation.')
     })
-  }, [brand.id, initialConversationId, refreshResults, setMessages])
+  }, [initialConversationId, refreshResults, reloadSavedMessages])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -231,6 +263,7 @@ export function NrsDeskConversation({
 
     try {
       const id = await ensureConversation(instruction)
+      const nextDeskState = deskCreativeStateForMessage(deskState, instruction)
       const contextResponse = await fetch('/api/desk/context', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -240,7 +273,7 @@ export function NrsDeskConversation({
           mediaItemIds: effectiveMediaIds,
           intent: instruction,
           platforms,
-          state: 'working',
+          state: nextDeskState,
         }),
       })
       if (!contextResponse.ok) {
@@ -248,12 +281,14 @@ export function NrsDeskConversation({
         throw new Error(details.error || 'NRS could not save the selected files for this instruction.')
       }
 
+      setDeskState(nextDeskState)
+
       clientTurnIdRef.current = crypto.randomUUID()
       await sendMessage({ text: instruction })
     } catch (cause) {
       setLocalError(cause instanceof Error ? cause.message : 'NRS could not send that instruction.')
     }
-  }, [clearError, effectiveMediaIds, ensureConversation, isLoading, platforms, sendMessage])
+  }, [clearError, deskState, effectiveMediaIds, ensureConversation, isLoading, platforms, sendMessage])
 
   const togglePlatform = (platform: string) => {
     setPlatforms((current) => current.includes(platform)
@@ -261,7 +296,7 @@ export function NrsDeskConversation({
       : [...current, platform])
   }
 
-  const hasResults = results.outputs.length > 0 || results.drafts.length > 0
+  const hasResults = results.drafts.length > 0
 
   return (
     <section className="flex min-h-[640px] flex-col overflow-hidden rounded-3xl border bg-card shadow-sm lg:h-[calc(100dvh-12rem)] lg:max-h-[900px]">
@@ -269,22 +304,17 @@ export function NrsDeskConversation({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">NRS Director</p>
-            <h2 className="mt-1 text-xl font-semibold">What should we make?</h2>
+            <h2 className="mt-1 text-xl font-semibold">Let’s get the post right</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {effectiveMediaIds.length > 0
-                ? `${effectiveMediaIds.length} selected file${effectiveMediaIds.length === 1 ? '' : 's'}: ${effectiveMediaNames.join(', ')}`
+              {sourceSummary
+                ? `${sourceSummary.join(' · ')}. The Director will confirm what it understands before suggesting a post.`
                 : 'Ask a question, plan content, or upload media beside this chat.'}
             </p>
           </div>
-          {conversationId && (
-            <Link href={`/agency/studio/create?conversation=${conversationId}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-              Open in Creator <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          )}
         </div>
 
         <div className="mt-4">
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Where is this for?</p>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Where should we shape this for?</p>
           <div className="flex flex-wrap gap-2">
             {PLATFORM_OPTIONS.map((platform) => (
               <button
@@ -304,23 +334,16 @@ export function NrsDeskConversation({
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-44 pt-4 sm:px-6 lg:pb-4">
         {messages.length === 0 ? (
           <div className="flex h-full min-h-64 flex-col justify-center">
-            <p className="text-sm font-medium">Start with one clear instruction</p>
+            <p className="text-sm font-medium">Start with what you want to say</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {STARTERS.map((starter) => (
+              {(effectiveMediaIds.length > 0
+                ? [{ label: 'Review this first', prompt: 'Review my selected media first. Tell me what you understand it to be, the point of the post, and the strongest direction. Do not create, save or draft anything yet.' }]
+                : STARTERS).map((starter) => (
                 <button key={starter.label} type="button" onClick={() => void handleSend(starter.prompt)} className="rounded-2xl border bg-background p-4 text-left transition hover:border-primary/60 hover:bg-muted/50">
                   <p className="text-sm font-medium">{starter.label}</p>
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">{starter.prompt}</p>
                 </button>
               ))}
-              <button
-                type="button"
-                disabled={platforms.length === 0}
-                onClick={() => void handleSend(`Create a review draft for ${platforms.join(', ')} using my selected media. Do not publish it.`)}
-                className="rounded-2xl border bg-background p-4 text-left transition hover:border-primary/60 hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <p className="text-sm font-medium">Create review draft</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">Choose at least one platform first. Nothing publishes from NRS Desk.</p>
-              </button>
             </div>
           </div>
         ) : messages.map((message) => <ChatMessage key={message.id} message={message} />)}
@@ -330,17 +353,10 @@ export function NrsDeskConversation({
         {hasResults && (
           <div className="mt-5 border-t pt-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Ready for you</h3>
+              <h3 className="text-sm font-semibold">Mixpost drafts</h3>
               {resultLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
             <div className="mt-3 space-y-2">
-              {results.outputs.map((output) => (
-                <div key={output.id} className="flex items-center gap-3 rounded-xl border bg-background p-3">
-                  {output.metadata?.canva_design_id || output.output_type === 'video' ? <Palette className="h-4 w-4 text-primary" /> : <FileText className="h-4 w-4 text-primary" />}
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{output.title || 'Content proposal'}</p><p className="text-xs text-muted-foreground">Proposal saved in NRS</p></div>
-                  <Link href={`/agency/studio/create?conversation=${conversationId}&output=${output.id}`} className="rounded-md border px-3 py-1.5 text-xs font-medium transition hover:bg-muted">Continue</Link>
-                </div>
-              ))}
               {results.drafts.map((draft) => {
                 const sync = mixpostState(draft)
                 return (
@@ -350,7 +366,7 @@ export function NrsDeskConversation({
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium">{draft.platform || 'Social'} review draft</p>
                         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{draft.caption || 'Draft created for review.'}</p>
-                        <p className="mt-2 text-[11px] text-muted-foreground">Mixpost: {sync}. Nothing has been published.</p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">Mixpost draft: {sync}. Nothing has been published.</p>
                       </div>
                     </div>
                     <div className="mt-3 flex justify-end gap-2">

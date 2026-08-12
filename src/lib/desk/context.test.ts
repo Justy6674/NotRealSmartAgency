@@ -26,6 +26,15 @@ test('Desk context preserves exact media order and records who acted', () => {
   assert.equal(context.schema_version, 1)
 })
 
+test('Desk context persists the owner-led creation stage', () => {
+  const context = buildDeskContext({
+    actorUserId: 'bec-1',
+    mediaItemIds: ids,
+    state: 'proposal_ready',
+  })
+  assert.equal(context.state, 'proposal_ready')
+})
+
 test('Desk context rejects duplicate, invalid and oversized media selections', () => {
   assert.throws(() => buildDeskContext({ actorUserId: 'bec-1', mediaItemIds: [ids[0], ids[0]] }))
   assert.throws(() => buildDeskContext({ actorUserId: 'bec-1', mediaItemIds: ['latest'] }))

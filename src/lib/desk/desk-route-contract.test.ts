@@ -21,6 +21,7 @@ test('Desk context mutation verifies the conversation and every selected media r
   assert.match(route, /mediaRows\.length !== mediaItemIds\.length/)
   assert.match(route, /user_id.*workspaceOwnerId/)
   assert.match(route, /brand_id.*conversation\.brand_id/)
+  assert.match(route, /DESK_CREATIVE_STATES/)
 })
 
 test('web Director turns load exact Desk context and use a client turn idempotency key', () => {
@@ -32,6 +33,15 @@ test('web Director turns load exact Desk context and use a client turn idempoten
   assert.match(route, /client_turn_id: clientTurnId/)
   assert.match(route, /directorTurn\?\.duplicate/)
   assert.match(route, /DuplicateTurn/)
+})
+
+test('Desk creation is structurally staged before it can create a Mixpost draft', () => {
+  const route = source('src/app/api/chat/route.ts')
+  const proposal = source('src/lib/agents/tools/propose-post.ts')
+  assert.match(route, /deskContext\s*\?\s*null\s*:\s*await prepareDirectorTurn/)
+  assert.match(route, /buildDeskCreativeDirectorPrompt\(deskContext\.state\)/)
+  assert.match(route, /restrictDeskTools\(allTools, deskContext\.state\)/)
+  assert.match(proposal, /ai_description/)
 })
 
 test('desktop upload retries reuse the client upload id and return the exact media id', () => {
