@@ -48,11 +48,35 @@ export async function fetchZernioAccounts(profileId?: string): Promise<ZernioAcc
 
     const zernio = new Zernio({ apiKey: process.env.ZERNIO_API_KEY });
 
-    // The Zernio API accepts profileId as a filter
+    /*
+     * The filter is applied HERE, not by Zernio.
+     *
+     * The previous comment on this line read "The Zernio API accepts profileId
+     * as a filter". It does accept it, and it ignores it. Measured against the
+     * live account on 2026-08-17: listAccounts({profileId}) returned all ten
+     * accounts across every profile, byte-identical to passing no filter at all.
+     *
+     * Zernio's own multi-tenant guide says as much — validation is "against your
+     * whole team, not against a profile", and integrators are told to "only pass
+     * a customer their own account IDs". Tenant isolation is ours to enforce.
+     *
+     * Two live consequences of trusting it. Callers using this to answer "does
+     * this account belong to this brand" were comparing against every account in
+     * the team, so the answer was always yes. And with the same social accounts
+     * attached to more than one profile, a publisher picking by platform alone
+     * could match twice and post the same thing twice to one page.
+     *
+     * Each account carries its own profileId, so the filter is exact. It is
+     * applied after normalisation because the raw field is sometimes a populated
+     * object rather than a string.
+     */
     const { data } = await zernio.accounts.listAccounts(profileId ? { profileId } : undefined);
 
     const accounts = (data.accounts ?? []) as unknown as Record<string, unknown>[]
-    return accounts.map(normaliseAccount).filter((a) => a.id !== '');
+    const normalised = accounts.map(normaliseAccount).filter((a) => a.id !== '');
+
+    if (!profileId) return normalised;
+    return normalised.filter((a) => a.profileId === profileId);
   } catch (err) {
     console.error('Failed to fetch Zernio accounts:', err);
     return [];
