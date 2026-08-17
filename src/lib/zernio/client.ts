@@ -24,10 +24,17 @@ export async function fetchZernioAccounts(profileId?: string): Promise<ZernioAcc
   }
 }
 
+function getMediaType(url: string): 'image' | 'video' | 'gif' {
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.mov') || lowerUrl.endsWith('.webm')) return 'video';
+  if (lowerUrl.endsWith('.gif')) return 'gif';
+  return 'image';
+}
+
 export async function createZernioPost(params: {
   content: string;
   accounts: { platform: string; accountId: string }[];
-  mediaIds?: string[];
+  mediaUrls?: string[];
   scheduledFor?: string;
   publishNow?: boolean;
 }) {
@@ -47,8 +54,11 @@ export async function createZernioPost(params: {
       body.publishNow = true;
     }
     
-    if (params.mediaIds && params.mediaIds.length > 0) {
-      body.media = params.mediaIds;
+    if (params.mediaUrls && params.mediaUrls.length > 0) {
+      body.mediaItems = params.mediaUrls.map(url => ({
+        type: getMediaType(url),
+        url: url
+      }));
     }
 
     const { data } = await zernio.posts.createPost({ body });
@@ -57,12 +67,4 @@ export async function createZernioPost(params: {
     console.error('Failed to create Zernio post:', err.message);
     throw err;
   }
-}
-
-export async function uploadZernioMedia(fileUrl: string): Promise<string | null> {
-  // In a full integration, we'd pull the file buffer and send it to Zernio's /v1/media endpoint
-  // For the trial, we assume text-only or we rely on Zernio's URL upload if supported.
-  // Zernio's media endpoint typically expects multipart/form-data.
-  console.warn('Zernio media upload is a stub for the trial - returning null');
-  return null;
 }

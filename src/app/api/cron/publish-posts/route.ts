@@ -12,7 +12,7 @@ import {
 } from '@/lib/mixpost/client'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
-import { fetchZernioAccounts, createZernioPost, uploadZernioMedia, type ZernioAccount } from '@/lib/zernio/client'
+import { fetchZernioAccounts, createZernioPost, type ZernioAccount } from '@/lib/zernio/client'
 
 
 
@@ -237,13 +237,6 @@ export async function GET(request: Request) {
       if (zernioAccount) {
         // ── Primary SaaS Path: Zernio ──
         
-        // 1. Handle media
-        const zernioMediaIds: string[] = []
-        for (const url of mediaUrls) {
-          const mId = await uploadZernioMedia(url)
-          if (mId) zernioMediaIds.push(mId)
-        }
-
         // 2. Build caption
         let caption = post.caption as string
         const hashtags = post.hashtags as string[] | null
@@ -256,7 +249,7 @@ export async function GET(request: Request) {
         const result = await createZernioPost({
           content: caption,
           accounts: [{ platform: post.platform, accountId: zernioAccount.id }],
-          mediaIds: zernioMediaIds,
+          mediaUrls: mediaUrls,
           publishNow: true
         })
         
