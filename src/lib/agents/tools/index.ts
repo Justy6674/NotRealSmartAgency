@@ -29,6 +29,7 @@ import { createQueryMediaTool } from './query-media'
 import { createProcessMediaTool } from './process-media'
 import { createRepurposeContentTool } from './repurpose-content'
 import { getZernioReplyTool } from './zernio-reply'
+import { getZernioAdsTool, getZernioAnalyticsTool } from './zernio-ads'
 import { createFillCalendarTool } from './fill-calendar'
 import { createSaveBrandInfoTool } from './save-brand-info'
 import { createReadProformaTool, createUpdateProformaTool } from './proforma'
@@ -103,6 +104,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const marketingAudit = createMarketingAuditTool(ctx.supabase, ctx.userId, ctx.brandId)
 
   const zernioReply = getZernioReplyTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const zernioAds = getZernioAdsTool()
+  const zernioAnalytics = getZernioAnalyticsTool()
   
   // Management tools — available to all agents
   const createTask = createCreateTaskTool({
@@ -294,6 +297,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const toolSets: Partial<Record<AgentType, Record<string, unknown>>> = {
     overall: {
       zernio_reply: zernioReply,
+      zernio_ads: zernioAds,
+      zernio_analytics: zernioAnalytics,
       save_output: saveOutput,
       save_brand_info: saveBrandInfo,
       scan_website: scanWebsite,
