@@ -276,21 +276,69 @@ export function GlobalSettings({ userId, userEmail, workContext }: GlobalSetting
   )
 }
 
+interface CalendarFeed {
+  brand: string
+  slug: string
+  url: string
+}
+
+/**
+ * Get the calendar addresses, one per project.
+ *
+ * This screen used to tell the owner to build the address himself:
+ * `/api/calendar/feed?key=YOUR_API_KEY`, optionally `&brand=slug`. Both are gone
+ * — the feed no longer reads a key from the address bar at all, because that key
+ * also drives the Director, drafts posts and publishes, and an address ends up
+ * in browser history, server logs and Referer headers. The replacement is a
+ * feed-only token that can read ninety days of one project's calendar and
+ * nothing else.
+ *
+ * Minting one needs the real key sent in a header, which is a terminal command —
+ * and this owner is not a developer and is never sent to a command line. So the
+ * page does it for him: paste the key once, and the addresses come back. The key
+ * is held in this component's state for the length of the request and is never
+ * stored, never put in a URL, and never sent anywhere but this site.
+ */
 function CalendarFeedSection() {
-  const [keys, setKeys] = useState<ApiKeyDisplay[]>([])
-  const [copiedFeed, setCopiedFeed] = useState(false)
+  const [apiKey, setApiKey] = useState('')
+  const [feeds, setFeeds] = useState<CalendarFeed[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  const [copiedSlug, setCopiedSlug] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetch('/api/keys').then(r => r.ok ? r.json() : { keys: [] }).then(d => setKeys(d.keys ?? []))
-  }, [])
+  const handleFetch = async () => {
+    const key = apiKey.trim()
+    if (!key) return
 
-  const firstKey = keys[0]
-  const feedUrl = firstKey
-    ? `https://www.notrealsmart.com.au/api/calendar/feed?key=${firstKey.prefix}...`
-    : null
+    setLoading(true)
+    setProblem(null)
+    setFeeds(null)
 
-  // We can't show the full key (only prefix stored). User needs to use a key they know.
-  // Show instructions instead.
+    try {
+      const res = await fetch('/api/calendar/feed', {
+        headers: { Authorization: `Bearer ${key}` },
+      })
+
+      if (!res.ok) {
+        // The route answers a refusal in plain text, written for the owner.
+        setProblem((await res.text()).trim() || 'That key was not accepted. Check it and try again.')
+        return
+      }
+
+      const data = await res.json()
+      setFeeds(data.feeds ?? [])
+    } catch {
+      setProblem('Your calendar addresses could not be fetched just now. Nothing has been changed — try again in a moment.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCopy = (feed: CalendarFeed) => {
+    navigator.clipboard.writeText(feed.url)
+    setCopiedSlug(feed.slug)
+    setTimeout(() => setCopiedSlug(null), 2000)
+  }
 
   return (
     <section className="space-y-3">
@@ -298,20 +346,68 @@ function CalendarFeedSection() {
         Calendar Sync (Google Calendar / Apple Calendar)
       </p>
       <p className="text-[11px] text-muted-foreground">
-        See all your scheduled posts in Google Calendar or Apple Calendar.
-        Colour-coded by brand. Auto-updates every hour.
+        See your scheduled posts in Google Calendar or Apple Calendar. One address per project,
+        so each gets its own colour. Auto-updates every hour.
       </p>
 
       <div className="rounded-lg border p-4 space-y-3">
-        <p className="text-sm font-medium">How to subscribe</p>
-        <ol className="text-[12px] text-muted-foreground space-y-1 list-decimal list-inside">
-          <li>Create an API key below (if you haven&apos;t already)</li>
-          <li>Copy your calendar feed URL: <code className="text-[11px] bg-muted px-1 rounded">https://www.notrealsmart.com.au/api/calendar/feed?key=YOUR_API_KEY</code></li>
-          <li>In Google Calendar: <strong>+ Other calendars → From URL</strong> → paste</li>
-          <li>For one brand only, add <code className="text-[11px] bg-muted px-1 rounded">&amp;brand=your-brand-slug</code></li>
-        </ol>
+        <p className="text-sm font-medium">Get your calendar addresses</p>
         <p className="text-[11px] text-muted-foreground">
-          Works with Apple Calendar too — add your Google account to your Mac and it syncs automatically.
+          Paste one of your keys below (it starts with <code className="text-[11px] bg-muted px-1 rounded">nrs_sk_</code>).
+          It is used once to look up your addresses and is not saved anywhere. No key yet? Create one further down this page.
+        </p>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            placeholder="nrs_sk_..."
+            autoComplete="off"
+            className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+          />
+          <button
+            onClick={handleFetch}
+            disabled={loading || !apiKey.trim()}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          >
+            {loading ? 'Looking...' : 'Get addresses'}
+          </button>
+        </div>
+
+        {problem && <p className="text-[12px] text-red-500">{problem}</p>}
+
+        {feeds && feeds.length === 0 && (
+          <p className="text-[12px] text-muted-foreground">
+            That key works, but it has not been given any projects, so there is no calendar to show.
+            Create a key further down and tick the projects you want in your calendar.
+          </p>
+        )}
+
+        {feeds && feeds.length > 0 && (
+          <div className="space-y-2">
+            {feeds.map(feed => (
+              <div key={feed.slug} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                <span className="flex-1 min-w-0 truncate text-sm">{feed.brand}</span>
+                <button
+                  onClick={() => handleCopy(feed)}
+                  className="shrink-0 rounded-md border border-border px-3 py-1 text-[11px] font-medium hover:bg-muted transition-colors"
+                >
+                  {copiedSlug === feed.slug ? 'Copied' : 'Copy address'}
+                </button>
+              </div>
+            ))}
+            <ol className="text-[12px] text-muted-foreground space-y-1 list-decimal list-inside pt-1">
+              <li>In Google Calendar: <strong>+ Other calendars → From URL</strong> → paste</li>
+              <li>In Apple Calendar: <strong>File → New Calendar Subscription</strong> → paste</li>
+            </ol>
+          </div>
+        )}
+
+        <p className="text-[11px] text-muted-foreground border-t border-border pt-3">
+          <strong>If you already subscribed to a calendar here before:</strong> that old address has stopped
+          working and needs replacing with one of these. The old one carried a key that could also post for you,
+          which is why it was retired.
         </p>
       </div>
     </section>

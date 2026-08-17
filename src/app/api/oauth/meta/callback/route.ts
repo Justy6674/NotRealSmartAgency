@@ -9,11 +9,15 @@
  *  5. Save tokens to social_oauth_tokens for both facebook + instagram
  */
 
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { saveToken } from '@/lib/publishers/token-store'
+import {
+  BrandWorkspaceAccessError,
+  resolveBrandWorkspaceContext,
+} from '@/lib/auth/brand-workspace'
+import { userSafeError } from '@/lib/errors/user-safe'
 
 export const dynamic = 'force-dynamic'
 
@@ -105,19 +109,32 @@ export async function GET(request: Request) {
     )
   }
 
-  // Read through the session client, so RLS decides. A project belonging to
-  // anyone else simply returns nothing rather than reporting that it exists.
-  const { data: ownedBrand } = await supabase
-    .from('brands')
-    .select('id')
-    .eq('id', brandId)
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (!ownedBrand) {
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent('That project is not yours to connect')}`,
-    )
+  /*
+   * Read through the session client, so the workspace rules decide. A project
+   * belonging to anyone else is simply not found, which is the same answer as
+   * one that does not exist — ids cannot be enumerated by asking.
+   *
+   * The project's NAME comes from this same read. It used to come from
+   * `createAdminClient()`, which bypasses Row Level Security entirely: the
+   * service role would fetch any tenant's project name for an attacker-chosen
+   * uuid. There is no admin client in this file now, which is a stronger
+   * position than having one behind a check.
+   */
+  let brandName: string
+  try {
+    const workspace = await resolveBrandWorkspaceContext<{
+      id: string
+      user_id: string
+      name: string | null
+    }>(supabase, user.id, brandId)
+    brandName = workspace.brand.name ?? ''
+  } catch (err) {
+    if (err instanceof BrandWorkspaceAccessError) {
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent('That project is not yours to connect')}`,
+      )
+    }
+    throw err
   }
 
   const appId = process.env.META_APP_ID!
@@ -181,15 +198,6 @@ export async function GET(request: Request) {
 
     const savedAccounts: string[] = []
     const skippedAccounts: string[] = []
-
-    // Resolve the connecting project so each Page can be checked against it.
-    const admin = createAdminClient()
-    const { data: connectingBrand } = await admin
-      .from('brands')
-      .select('name')
-      .eq('id', brandId)
-      .maybeSingle()
-    const brandName = (connectingBrand?.name as string | undefined) ?? ''
 
     for (const page of pages) {
       // A Page that is not this project's is left unconnected rather than
@@ -266,8 +274,14 @@ export async function GET(request: Request) {
       `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?${savedAccounts.length ? 'success' : 'error'}=${encodeURIComponent(message)}`,
     )
   } catch (error) {
-    console.error('[meta/callback] Error:', error)
-    const msg = error instanceof Error ? error.message : 'Unknown error'
+    // This message is redirected into the browser's address bar, so it was
+    // carrying raw Graph API bodies — upstream request detail, written for a
+    // developer — where the owner reads it. The real one goes to the log.
+    const msg = userSafeError(
+      'oauth/meta/callback',
+      error,
+      'Those accounts could not be connected just now. Nothing has been changed. Try connecting them again from the accounts page.',
+    )
     return NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent(msg)}`,
     )

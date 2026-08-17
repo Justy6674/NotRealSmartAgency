@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userSafeError } from '@/lib/errors/user-safe'
+import { zernioProfileForBrand } from '@/lib/auth/brand-zernio-profile'
 import {
+  fetchZernioAccounts,
   isZernioAdPlatform,
   listZernioCampaigns,
   setZernioCampaignStatus,
@@ -26,6 +28,12 @@ export const dynamic = 'force-dynamic'
  * client returns a discriminated result now, and this route forwards the
  * difference — `reachable: false` with a plain sentence — so the page can say
  * "these figures could not be read" instead of "no campaigns running".
+ *
+ * The private `profileIdForOwnedBrand` helper this file used to carry is now
+ * `zernioProfileForBrand` in src/lib/auth. Four Zernio routes had grown their
+ * own copy of it, all of them owner-only, while the rest of the workspace
+ * honours an accepted team admin — so a team admin could save a brand's
+ * settings and be refused its ad spend. One helper, one rule.
  */
 
 /** What the browser sees. `problem` is written for the owner, never upstream's words. */
@@ -61,17 +69,38 @@ export async function GET(request: Request) {
       )
     }
 
-    const profileId = await profileIdForOwnedBrand(supabase, brandId, user.id)
-    if (profileId === 'not_found') {
+    const access = await zernioProfileForBrand(supabase, user.id, brandId)
+    if (access.access === 'denied') {
       return NextResponse.json({ error: 'That brand could not be found.' }, { status: 404 })
     }
-    if (profileId === null) {
+    if (access.brand.profileId === null) {
       // Linked to nothing. A real answer, not a failure.
       const payload: AdsPayload = { configured: false, reachable: null, problem: null, campaigns: [] }
       return NextResponse.json(payload)
     }
 
-    const result = await listZernioCampaigns(profileId, accountId)
+    /*
+     * A narrowing filter is still an id from the caller, so it is checked
+     * against this brand's own profile before it is forwarded.
+     *
+     * Zernio's multi-tenant guide is explicit that it does not do this for us:
+     * "Posts validate accountId against your whole team, not against a profile
+     * ... only pass a customer their own account IDs." Whether campaign listing
+     * scopes the filter by profile is not documented either way, and an
+     * undocumented assumption is not a control. The POST below already refuses
+     * a campaign that is not in this profile; the read now matches it.
+     */
+    if (accountId) {
+      const own = await fetchZernioAccounts(access.brand.profileId)
+      if (!own.some((a) => a.id === accountId)) {
+        return NextResponse.json(
+          { error: 'That account is not connected to this brand, so no figures were read.' },
+          { status: 404 },
+        )
+      }
+    }
+
+    const result = await listZernioCampaigns(access.brand.profileId, accountId)
     if (!result.ok) {
       const payload: AdsPayload = {
         configured: true,
@@ -127,13 +156,14 @@ export async function POST(request: Request) {
       )
     }
 
-    const profileId = await profileIdForOwnedBrand(supabase, brandId, user.id)
-    if (profileId === 'not_found' || profileId === null) {
+    const access = await zernioProfileForBrand(supabase, user.id, brandId)
+    if (access.access === 'denied' || access.brand.profileId === null) {
       return NextResponse.json(
         { error: 'That campaign could not be changed, because that brand is not linked to an ad profile here.' },
         { status: 404 },
       )
     }
+    const profileId = access.brand.profileId
 
     /**
      * Ownership is checked against Zernio, not against the request.
@@ -190,30 +220,6 @@ export async function POST(request: Request) {
       { status: 500 },
     )
   }
-}
-
-/**
- * The brand's Zernio ad profile, but only if this person owns the brand.
- *
- * 'not_found' covers both "no such brand" and "not yours" deliberately: telling
- * the two apart would let anyone enumerate which brand ids exist.
- */
-async function profileIdForOwnedBrand(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  userId: string,
-): Promise<string | null | 'not_found'> {
-  const { data: brand } = await supabase
-    .from('brands')
-    .select('id, social_urls')
-    .eq('id', brandId)
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (!brand) return 'not_found'
-
-  const profileId = (brand.social_urls as { zernio_profile_id?: unknown } | null)?.zernio_profile_id
-  return typeof profileId === 'string' && profileId.trim() !== '' ? profileId : null
 }
 
 /** Zernio's own record wins; the caller's value is only a fallback. */
