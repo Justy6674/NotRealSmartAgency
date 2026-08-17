@@ -19,6 +19,11 @@
  *    Downscale must never be able to miss one.
  * 3. Nothing here knows about counts, brands or the current route. Those are
  *    inputs to the renderer, so this stays a description rather than a state.
+ * 4. A STATE OF SOMETHING IS NOT A PLACE. "Waiting on you" is the approval
+ *    queue, and the queue is not a thirteenth department — it is the Posts list
+ *    with a filter on it. It therefore points at Posts with `?status=waiting`,
+ *    never at a route of its own. The old shape made review a separate room and
+ *    the owner ended up with two lists of the same posts that could disagree.
  */
 
 import type { LucideIcon } from 'lucide-react'
@@ -55,11 +60,35 @@ export type NavSectionId =
   | 'engagement'
   | 'settings'
 
+/**
+ * A query the row applies to the destination it shares with a sibling. Present
+ * only on rows that are a VIEW of another row rather than a place of their own.
+ *
+ * It is split from `href` rather than parsed back out of it because the active
+ * state has to be answered against `useSearchParams()`, which hands back
+ * `status` and `waiting` as separate things. Storing the pair keeps the link
+ * and the highlight reading from one declaration instead of two string parses
+ * that drift.
+ */
+export interface NavChildFilter {
+  param: string
+  value: string
+}
+
+/**
+ * The approval queue's filter, in one place. Exported because the Posts screen
+ * has to read the same `?status=waiting` off the URL that this list writes into
+ * it — a second hand-typed 'waiting' in the screen is how a link starts landing
+ * on an unfiltered list without anything failing.
+ */
+export const WAITING_ON_YOU_FILTER: NavChildFilter = { param: 'status', value: 'waiting' }
+
 /** A destination beneath a section. Renders as an indented, bulleted row. */
 export interface NavChildLink {
   kind: 'link'
   id: string
   label: string
+  /** Includes the query when the row is a filtered view — see `filter`. */
   href: string
   /**
    * Shown only when the business is regulated (AHPRA and/or TGA). These are the
@@ -67,6 +96,18 @@ export interface NavChildLink {
    * compliance obligation never reads like ordinary furniture.
    */
   healthcareOnly?: boolean
+  /**
+   * Set when this row shows a filtered slice of the sibling above it. Two rows
+   * then share a pathname, so the renderer needs the filter to tell which of
+   * them the owner is actually looking at. See `activeChildId`.
+   */
+  filter?: NavChildFilter
+  /**
+   * Which number in `NavCounts` belongs on this row. Only queues carry one —
+   * a count beside a row is read as "this much is waiting for you", so it is
+   * declared per row rather than inferred from the id.
+   */
+  countId?: NavCountId
 }
 
 /**
@@ -103,12 +144,27 @@ export interface NavSection {
 }
 
 /**
+ * Everything that can carry an attention number: every section, plus the child
+ * rows that are a queue rather than a place. Today that is only the approval
+ * queue. It is a closed union so a typo in a fetcher is a type error rather
+ * than a badge that silently never appears.
+ */
+export type NavCountId = NavSectionId | 'social-waiting'
+
+/**
  * Attention counts, supplied by whoever fetched them. Deliberately partial and
  * deliberately not defaulted: a section with no number is a section we have not
  * measured, and it renders bare. Rendering `0` for "we did not look" tells the
  * owner there is nothing waiting, which is a different and much worse claim.
+ *
+ * Three are live today and they come from three different places, so this stays
+ * one flat bag the caller fills in as far as it can rather than a shape that
+ * has to be complete:
+ *   blogging       — drafts not yet published
+ *   engagement     — comments, messages and reviews not yet answered
+ *   social-waiting — posts sitting in the approval queue (Scent Sell: 59)
  */
-export type NavCounts = Partial<Record<NavSectionId, number>>
+export type NavCounts = Partial<Record<NavCountId, number>>
 
 // ─── The list ─────────────────────────────────────────────────────────────────
 
@@ -244,6 +300,16 @@ export const NAV_SECTIONS: NavSection[] = [
     children: [
       { kind: 'group', id: 'social-grp-content', label: 'Content' },
       { kind: 'link', id: 'social-posts', label: 'Posts', href: '/agency/social/posts' },
+      {
+        // The approval queue. Directly under Posts because it IS Posts, held to
+        // the ones that need a decision — see rule 4 at the top of the file.
+        kind: 'link',
+        id: 'social-waiting',
+        label: 'Waiting on you',
+        href: `/agency/social/posts?${WAITING_ON_YOU_FILTER.param}=${WAITING_ON_YOU_FILTER.value}`,
+        filter: WAITING_ON_YOU_FILTER,
+        countId: 'social-waiting',
+      },
       { kind: 'link', id: 'social-calendar', label: 'Calendar', href: '/agency/social/calendar' },
       { kind: 'link', id: 'social-media', label: 'Media library', href: '/agency/social/media' },
       { kind: 'link', id: 'social-templates', label: 'Templates', href: '/agency/social/templates' },
@@ -345,16 +411,37 @@ export function visibleSections(healthcare: boolean): NavSection[] {
 // ─── Route matching ───────────────────────────────────────────────────────────
 
 /**
+ * What can answer "what is `?status` set to right now". `useSearchParams()`
+ * satisfies it as-is, and so does `new URLSearchParams('status=waiting')`, so
+ * neither the caller nor a test has to build an adaptor.
+ */
+export interface NavFilterState {
+  get(param: string): string | null
+}
+
+/** '/agency/social/posts?status=waiting' → '/agency/social/posts'. */
+function hrefPath(href: string): string {
+  const query = href.indexOf('?')
+  return query === -1 ? href : href.slice(0, query)
+}
+
+/**
  * Prefix match, so a detail page keeps its parent lit: /agency/social/posts/abc
  * is still Posts. `exact` opts out for /agency, which prefixes everything.
+ *
+ * The query is stripped first. `usePathname()` never returns one, so comparing
+ * a filtered row's full href against it would make that row permanently cold —
+ * and would take its section down with it, because `isSectionActive` asks the
+ * same question of every child.
  *
  * Exported because the department shell reads the same list to build its inner
  * tabs — one matcher, or the sidebar and the tab strip will eventually disagree
  * about which screen the owner is on.
  */
 export function matchesRoute(href: string, pathname: string, exact = false): boolean {
-  if (exact) return pathname === href
-  return pathname === href || pathname.startsWith(`${href}/`)
+  const path = hrefPath(href)
+  if (exact) return pathname === path
+  return pathname === path || pathname.startsWith(`${path}/`)
 }
 
 export function isSectionActive(section: NavSection, pathname: string): boolean {
@@ -364,8 +451,44 @@ export function isSectionActive(section: NavSection, pathname: string): boolean 
   )
 }
 
-export function isChildActive(child: NavChildLink, pathname: string): boolean {
-  return matchesRoute(child.href, pathname)
+/**
+ * Is this row the one being looked at? A plain row only has to match the path.
+ * A filtered row also has to have its filter applied, or "Waiting on you" would
+ * light up on the full Posts list, which is the opposite of what it means.
+ *
+ * It cannot see its siblings, so it will answer `true` for BOTH Posts and
+ * Waiting on you while the queue filter is on. Use `activeChildId` to pick the
+ * single winner; this stays exported for the one-row case.
+ */
+export function isChildActive(
+  child: NavChildLink,
+  pathname: string,
+  filters?: NavFilterState | null
+): boolean {
+  if (!matchesRoute(child.href, pathname)) return false
+  if (!child.filter) return true
+  return filters?.get(child.filter.param) === child.filter.value
+}
+
+/**
+ * The ONE child row to highlight, or none. A filtered view beats the row it
+ * filters, so landing on Posts with `?status=waiting` lights Waiting on you and
+ * leaves Posts quiet — two lit rows in a five-row list is worse than the wrong
+ * one lit, because the owner cannot tell which click he is undoing.
+ *
+ * `filters` omitted means "nobody told us what is on the URL". The filtered row
+ * then loses and the plain destination is lit, which is exactly today's
+ * behaviour and never claims a filter is applied when we do not know.
+ */
+export function activeChildId(
+  children: NavChild[],
+  pathname: string,
+  filters?: NavFilterState | null
+): string | undefined {
+  const links = children.filter((child): child is NavChildLink => child.kind === 'link')
+  const filtered = links.find((child) => child.filter && isChildActive(child, pathname, filters))
+  if (filtered) return filtered.id
+  return links.find((child) => !child.filter && isChildActive(child, pathname, filters))?.id
 }
 
 /** The section that owns a route, for a department header or a page title. */

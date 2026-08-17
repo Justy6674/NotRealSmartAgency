@@ -1,8 +1,17 @@
-import { redirect } from 'next/navigation'
+'use client'
 
-// Opening NRS shows every project at once. It used to open one project's
-// conversation, which meant the state of the other ten was only reachable by
-// selecting each in turn.
-export default function AgencyPage() {
-  redirect('/agency/board')
+export const dynamic = 'force-dynamic'
+
+import { StudioDashboard } from '@/components/agency/studio/StudioDashboard'
+
+/**
+ * Dashboard is the first section, at /agency — not a redirect to the old board.
+ * Posts and analytics on this screen are NRS `scheduled_posts`, not Mixpost history.
+ */
+export default function AgencyDashboardPage() {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <StudioDashboard />
+    </div>
+  )
 }

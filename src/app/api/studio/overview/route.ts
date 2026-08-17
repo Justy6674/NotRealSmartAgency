@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchMixpostAccounts } from '@/lib/mixpost/client'
 import { mapMixpostAccountsToBrands } from '@/lib/mixpost/brand-mapping'
+import { fetchZernioAccounts } from '@/lib/zernio/client'
+import {
+  mapZernioAccountsForOverview,
+  zernioProfileIdFromSocialUrls,
+} from '@/lib/studio/overview-accounts'
 
 export const dynamic = 'force-dynamic'
 
@@ -117,13 +122,20 @@ export async function GET(req: NextRequest) {
     const analyticsPosts = analyticsPostsResult.data ?? []
     const aiUsage = aiUsageResult.data ?? []
 
-    // Build Mixpost brand mapping
-    let accounts: Record<string, { platform: string; accountName: string; provider: string }[]> = {}
-    if (mixpostAccounts && allBrandsResult.data) {
-      accounts = mapMixpostAccountsToBrands(mixpostAccounts, allBrandsResult.data)
-      console.log('[studio/overview] Mixpost accounts:', mixpostAccounts.length, 'mapped brands:', Object.keys(accounts).length)
+    // Connected accounts for THIS brand. A Zernio-linked brand publishes
+    // through Zernio; reading Mixpost here is how the dashboard said
+    // "nothing connected" after a successful Zernio publish.
+    let brandAccounts: { platform: string; accountName: string; provider: string }[] = []
+    const zernioProfileId = zernioProfileIdFromSocialUrls(brand?.social_urls)
+    if (zernioProfileId) {
+      const zernioAccounts = await fetchZernioAccounts(zernioProfileId)
+      brandAccounts = mapZernioAccountsForOverview(zernioAccounts)
     } else {
-      console.log('[studio/overview] Mixpost not available:', mixpostAccounts === null ? 'null (not configured or API error)' : 'no brands')
+      let accounts: Record<string, { platform: string; accountName: string; provider: string }[]> = {}
+      if (mixpostAccounts && allBrandsResult.data) {
+        accounts = mapMixpostAccountsToBrands(mixpostAccounts, allBrandsResult.data)
+      }
+      brandAccounts = accounts[brandId] ?? []
     }
 
     // Build analytics summary
@@ -150,8 +162,7 @@ export async function GET(req: NextRequest) {
       outputs,
       videos,
       agentActivity,
-      accounts: accounts[brandId] ?? [],
-      _debug_accountBrandIds: Object.keys(accounts),
+      accounts: brandAccounts,
       lastPublishedByPlatform,
       analytics: {
         totalPosts,

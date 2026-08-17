@@ -32,19 +32,23 @@
  * a business with no colours set gets honest neutral rather than a guessed tint.
  */
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { ChevronDown, Plus } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useAgencyStore } from '@/stores/agency-store'
+import type { Brand } from '@/types/database'
 import {
+  activeChildId,
   CREATE_POST_HREF,
-  isChildActive,
   isHealthcareBusiness,
   isSectionActive,
   visibleChildren,
   visibleSections,
   type NavCounts,
+  type NavFilterState,
   type NavSection,
 } from './nav-sections'
 
@@ -83,8 +87,9 @@ const TOKENS = [
   'dark:[--nrs-brand-wash:var(--brand-wash,oklch(0.272_0.038_240))]',
   // Text sitting ON the accent. In dark the accent inverts to a light tint, so
   // white here would drop to almost no contrast on the Create post button.
-  '[--nrs-on-brand:oklch(1_0_0)]',
-  'dark:[--nrs-on-brand:oklch(0.17_0.020_240)]',
+  // brand-theme.ts derives this as --brand-ink for exactly that reason.
+  '[--nrs-on-brand:var(--brand-ink,oklch(1_0_0))]',
+  'dark:[--nrs-on-brand:var(--brand-ink,oklch(0.17_0.020_240))]',
   // Healthcare. Warm red, hue 25, and only ever visible on a regulated business.
   '[--nrs-care:var(--care,oklch(0.52_0.150_25))]',
   'dark:[--nrs-care:var(--care,oklch(0.77_0.13_25))]',
@@ -106,7 +111,15 @@ const CHIP =
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface AgencySidebarProps {
-  /** The business the whole column is scoped to. */
+  /**
+   * The block at the top of the column — business name, account count, and the
+   * healthcare indicator. Pass the store-connected `<BusinessSelector />` and it
+   * replaces the built-in one entirely, indicator included, so the two never
+   * stack. The built-in exists so this column is complete and testable on its
+   * own from props alone; it is not a second implementation to keep in step.
+   */
+  businessSelector?: ReactNode
+  /** Used only by the built-in selector, i.e. when `businessSelector` is absent. */
   businessName?: string | null
   /**
    * The quiet second line under the name — "3 accounts". Supplied by the
@@ -122,10 +135,25 @@ export interface AgencySidebarProps {
   /** Straight off brands.compliance_flags. Drives every [care] row. */
   complianceFlags?: { ahpra?: boolean; tga?: boolean } | null
   /**
-   * Attention counts by section id. Optional per section, and a section with no
-   * number renders bare — a "0" would claim we looked and found nothing waiting.
+   * The live business list. When present, the [care] rows follow the
+   * *selected* business rather than whichever one the server guessed first.
+   */
+  brands?: Brand[]
+  /**
+   * Attention counts by section id, plus the queue rows that carry one
+   * (`social-waiting`). Optional per entry, and anything without a number
+   * renders bare — a "0" would claim we looked and found nothing waiting.
    */
   counts?: NavCounts
+  /**
+   * What is currently on the URL's query string — pass `useSearchParams()`.
+   *
+   * Only needed to tell "Waiting on you" apart from "Posts", which share a
+   * pathname. Omit it and Posts is lit on both, which is what happens today:
+   * the shell layout is a Server Component and cannot read the query, so it
+   * does not pass this. The Social department screen can, and should.
+   */
+  activeFilters?: NavFilterState | null
   /** Signed-in owner, for the footer chip. Omit and the footer does not render. */
   userName?: string | null
   /** Only wired when there is more than one business to choose between. */
@@ -139,11 +167,14 @@ export interface AgencySidebarProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function AgencySidebar({
+  businessSelector,
   businessName,
   businessSubtitle,
   businessCount = 1,
   complianceFlags,
+  brands,
   counts,
+  activeFilters,
   userName,
   onSelectBusiness,
   onNavigate,
@@ -151,7 +182,12 @@ export function AgencySidebar({
   className,
 }: AgencySidebarProps) {
   const pathname = usePathname() ?? ''
-  const healthcare = isHealthcareBusiness(complianceFlags)
+  const searchParams = useSearchParams()
+  const filters = activeFilters ?? searchParams
+  const activeBrandId = useAgencyStore((s) => s.activeBrandId)
+  const liveFlags =
+    brands?.find((brand) => brand.id === activeBrandId)?.compliance_flags ?? complianceFlags
+  const healthcare = isHealthcareBusiness(liveFlags)
   const sections = visibleSections(healthcare)
 
   return (
@@ -163,14 +199,16 @@ export function AgencySidebar({
         className
       )}
     >
-      <BusinessBlock
-        name={businessName}
-        subtitle={businessSubtitle}
-        count={businessCount}
-        healthcare={healthcare}
-        complianceFlags={complianceFlags}
-        onSelect={onSelectBusiness}
-      />
+      {businessSelector ?? (
+        <BusinessBlock
+          name={businessName}
+          subtitle={businessSubtitle}
+          count={businessCount}
+          healthcare={healthcare}
+          complianceFlags={complianceFlags}
+          onSelect={onSelectBusiness}
+        />
+      )}
 
       {/* The one primary manual action. Law 1: the owner starts work without
           ever addressing the Director. */}
@@ -195,7 +233,8 @@ export function AgencySidebar({
             section={section}
             pathname={pathname}
             healthcare={healthcare}
-            count={counts?.[section.id]}
+            counts={counts}
+            activeFilters={filters}
             onNavigate={onNavigate}
           />
         ))}
@@ -311,20 +350,23 @@ function Section({
   section,
   pathname,
   healthcare,
-  count,
+  counts,
+  activeFilters,
   onNavigate,
 }: {
   section: NavSection
   pathname: string
   healthcare: boolean
-  count?: number
+  counts?: NavCounts
+  activeFilters?: NavFilterState | null
   onNavigate?: () => void
 }) {
   const active = isSectionActive(section, pathname)
   const children = visibleChildren(section, healthcare)
   const Icon = section.icon
-  // Absent means unmeasured, and zero waiting items is not worth a badge.
-  const showCount = typeof count === 'number' && count > 0
+  const count = badgeCount(counts?.[section.id])
+  // At most one child row is ever lit, even where two share a pathname.
+  const currentChildId = activeChildId(children, pathname, activeFilters)
 
   return (
     <>
@@ -354,16 +396,7 @@ function Section({
           aria-hidden
         />
         <span className="min-w-0 flex-1 truncate">{section.label}</span>
-        {showCount ? (
-          <span
-            className={cn(
-              'shrink-0 rounded-[5px] px-[5px] py-[2px] text-[10px] font-[650] tabular-nums',
-              'border border-[var(--nrs-line)] bg-[var(--nrs-panel-2)] text-[var(--nrs-ink-3)]'
-            )}
-          >
-            {count}
-          </span>
-        ) : null}
+        {count === undefined ? null : <CountBadge count={count} />}
       </Link>
 
       {children.length > 0 ? (
@@ -384,7 +417,8 @@ function Section({
                 label={child.label}
                 href={child.href}
                 care={Boolean(child.healthcareOnly)}
-                active={isChildActive(child, pathname)}
+                active={child.id === currentChildId}
+                count={child.countId ? badgeCount(counts?.[child.countId]) : undefined}
                 onNavigate={onNavigate}
               />
             )
@@ -400,12 +434,14 @@ function SubItem({
   href,
   care,
   active,
+  count,
   onNavigate,
 }: {
   label: string
   href: string
   care: boolean
   active: boolean
+  count?: number
   onNavigate?: () => void
 }) {
   return (
@@ -426,8 +462,45 @@ function SubItem({
         !care && !active && 'font-normal text-[var(--nrs-ink-2)] before:bg-[var(--nrs-ink-3)] before:opacity-55 hover:bg-[var(--nrs-panel-2)] hover:text-[var(--nrs-ink)]'
       )}
     >
-      {label}
+      <span className="min-w-0 flex-1">{label}</span>
+      {count === undefined ? null : <CountBadge count={count} tone="attention" />}
     </Link>
+  )
+}
+
+// ─── Counts ───────────────────────────────────────────────────────────────────
+
+/**
+ * The number, or nothing. Absent means nobody measured it; zero means the queue
+ * is empty, and an empty queue is not news worth a badge. Both render bare, so
+ * a badge in this column always means there is something there.
+ *
+ * `Number.isFinite` because a count that arrived as NaN from a failed fetch is
+ * an unmeasured count wearing a number's clothes.
+ */
+function badgeCount(count?: number): number | undefined {
+  return typeof count === 'number' && Number.isFinite(count) && count > 0 ? count : undefined
+}
+
+/**
+ * `quiet` is inventory — how much is in there. `attention` is a queue: work
+ * that stops until the owner does something, so it takes the solid accent and
+ * survives sitting on an already-tinted active row. Scent Sell's 59 unapproved
+ * posts are the reason the second tone exists; a 59 that reads like "59
+ * templates" is a 59 nobody clears.
+ */
+function CountBadge({ count, tone = 'quiet' }: { count: number; tone?: 'quiet' | 'attention' }) {
+  return (
+    <span
+      className={cn(
+        'shrink-0 rounded-[5px] border px-[5px] py-[2px] text-[10px] font-[650] tabular-nums',
+        tone === 'attention'
+          ? 'mt-px border-transparent bg-[var(--nrs-brand-deep)] text-[var(--nrs-on-brand)]'
+          : 'border-[var(--nrs-line)] bg-[var(--nrs-panel-2)] text-[var(--nrs-ink-3)]'
+      )}
+    >
+      {count}
+    </span>
   )
 }
 
