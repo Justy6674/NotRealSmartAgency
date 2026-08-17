@@ -18,8 +18,10 @@ import {
   fetchMixpostAccounts,
   resolveAccountIdsForPlatform,
   uploadMediaFromUrl,
+  type MixpostAccount,
   type MixpostVersion,
 } from '@/lib/mixpost/client'
+import { buildPlatformOptions } from '@/lib/mixpost/sync-draft'
 import {
   createZernioPost,
   fetchZernioAccounts,
@@ -271,18 +273,32 @@ export async function publishToPlatform(
      * the accounts again over the network.
      */
     zernioAccounts?: readonly ZernioAccount[]
+    /**
+     * The UNFILTERED workspace Mixpost list, listed once by the caller.
+     *
+     * A twenty-post bulk publish otherwise makes twenty account listings. This
+     * is a network saving and NOTHING else: the whole workspace is still handed
+     * to mapAccountsToBrandsRaw below, before the platform filter, exactly as
+     * if it had been fetched here. Narrowing this list on the way in would move
+     * the project scoping out of the one place that is tested for it — see
+     * 'a publish is scoped to the project that asked for it' in
+     * src/lib/agents/regulatory-invariants.test.ts.
+     */
+    mixpostAccounts?: readonly MixpostAccount[]
   },
 ): Promise<PublishResult> {
   const start = Date.now()
 
-  // One read of the brand, shared by the selector and the gate. It sits outside
-  // the attempt === 1 block because a retry still has to know which publisher
-  // this brand uses — and because reading the same brand twice in one call is
-  // how the two answers get a chance to differ.
+  // One read of the brand, shared by the selector, the gate AND the Mixpost
+  // account mapping. It sits outside the attempt === 1 block because a retry
+  // still has to know which publisher this brand uses — and because reading the
+  // same brand twice in one call is how the two answers get a chance to differ.
+  // The Mixpost branch used to re-read it for `id, name, slug, social_urls`,
+  // which on a twenty-post batch was forty brand reads for twenty publishes.
   const admin = createAdminClient()
   const { data: brand } = await admin
     .from('brands')
-    .select('name, slug, social_urls, compliance_flags, brand_dna_constraints')
+    .select('id, name, slug, social_urls, compliance_flags, brand_dna_constraints')
     .eq('id', req.brand_id)
     .maybeSingle()
 
@@ -323,7 +339,12 @@ export async function publishToPlatform(
       })
       // Deliberately not queued for retry: a compliance block is a decision
       // about the content, and re-sending the same words will block again.
-      return { ok: false, publisher: backend, error: gate.reason ?? 'Blocked by the regulatory review' }
+      return {
+        ok: false,
+        publisher: backend,
+        retryable: false,
+        error: gate.reason ?? 'Blocked by the regulatory review',
+      }
     }
   }
 
@@ -352,6 +373,8 @@ export async function publishToPlatform(
     return {
       ok: false,
       publisher: backend,
+      // The content was never offered to the platform, so the row stays live.
+      retryable: true,
       error: 'Rate limit exceeded — retrying later.',
     }
   }
@@ -373,6 +396,10 @@ export async function publishToPlatform(
       return {
         ok: false,
         publisher: backend,
+        // A file that is too long or too large for the platform is still too
+        // long on the next tick. Requeueing it would loop until the sweep gave
+        // up, and the owner would be told nothing for twenty minutes.
+        retryable: false,
         error: validation.errors.join(' '),
       }
     }
@@ -448,6 +475,10 @@ export async function publishToPlatform(
         ok: false,
         publisher: 'zernio',
         confirmed: false,
+        // Zernio answered and said no. That is a per-platform failure from the
+        // network's side, not a decision about the words — the review already
+        // passed — so it is worth another attempt.
+        retryable: true,
         ...(outcome.externalPostId ? { external_post_id: outcome.externalPostId } : {}),
         error: outcome.error ?? 'Zernio publishing failed.',
       }
@@ -475,7 +506,7 @@ export async function publishToPlatform(
         })
       }
 
-      return { ok: false, publisher: 'zernio', confirmed: false, error }
+      return { ok: false, publisher: 'zernio', confirmed: false, retryable: true, error }
     }
   }
 
@@ -497,7 +528,12 @@ export async function publishToPlatform(
           error: preCheck.errors.join(' '),
           durationMs: Date.now() - start,
         })
-        return { ok: false, publisher: 'native', error: preCheck.errors.join(' ') }
+        return {
+          ok: false,
+          publisher: 'native',
+          retryable: false,
+          error: preCheck.errors.join(' '),
+        }
       }
 
       // Get and refresh token
@@ -515,6 +551,8 @@ export async function publishToPlatform(
         return {
           ok: false,
           publisher: 'native',
+          // Nobody has connected the account. Waiting does not connect it.
+          retryable: false,
           error: `No active OAuth token for ${req.platform}. Connect the account first.`,
         }
       }
@@ -533,6 +571,8 @@ export async function publishToPlatform(
         return {
           ok: false,
           publisher: 'native',
+          // The connection has lapsed and only the owner can restore it.
+          retryable: false,
           error: 'OAuth token expired and refresh failed. Re-connect the account.',
         }
       }
@@ -567,7 +607,12 @@ export async function publishToPlatform(
         })
       }
 
-      return result
+      // The publisher's own verdict, with the requeue hint defaulted only when
+      // it did not state one. A native publisher that knows the send was
+      // refused on its merits can say `retryable: false` and be believed; the
+      // enqueueRetry above already treats an unqualified failure as worth
+      // another attempt, so the default matches what this path already does.
+      return result.ok ? result : { ...result, retryable: result.retryable ?? true }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err)
       const durationMs = Date.now() - start
@@ -592,13 +637,17 @@ export async function publishToPlatform(
         })
       }
 
-      return { ok: false, publisher: 'native', error }
+      return { ok: false, publisher: 'native', retryable: true, error }
     }
   }
 
   // ── Mixpost fallback ──────────────────────────────────────────────────
   try {
-    const accounts = await fetchMixpostAccounts()
+    // A list the caller already has is used as given — including an empty one.
+    // `??` and not `||` on purpose: an explicitly passed [] means the caller
+    // has already looked and found nothing, and fetching a second opinion here
+    // is how a batch ends up disagreeing with itself halfway through.
+    const accounts = options?.mixpostAccounts ?? (await fetchMixpostAccounts())
     if (!accounts || accounts.length === 0) {
       await logRun({
         scheduledPostId: req.scheduled_post_id,
@@ -612,6 +661,9 @@ export async function publishToPlatform(
       return {
         ok: false,
         publisher: 'mixpost',
+        // Mixpost was not reached, or answered with nothing. Either way the
+        // content was never offered to a platform, so the row is still live.
+        retryable: true,
         error: 'No Mixpost accounts connected.',
       }
     }
@@ -637,25 +689,28 @@ export async function publishToPlatform(
      * also honours the confirmed `social_urls.mixpost_account_ids` overrides.
      * This was the one publishing path that skipped it.
      */
-    const { data: brandRow } = await createAdminClient()
-      .from('brands')
-      .select('id, name, slug, social_urls')
-      .eq('id', req.brand_id)
-      .maybeSingle()
-
     // Mapping needs the project's name, slug and its confirmed
     // `social_urls.mixpost_account_ids` overrides. Without the row there is
     // nothing to narrow by, and publishing to the unnarrowed workspace is the
     // fault being removed — so this fails closed rather than falling back.
-    const brandAccounts = brandRow
-      ? mapAccountsToBrandsRaw(accounts, [
-          {
-            id: brandRow.id as string,
-            name: brandRow.name as string,
-            slug: brandRow.slug as string,
-            social_urls: (brandRow.social_urls as Record<string, string>) ?? {},
-          },
-        ]).get(req.brand_id) ?? []
+    //
+    // It is the SAME brand row the gate above was given, not a second read of
+    // it. Two reads is two chances for the review and the destination to be
+    // decided from different data.
+    const brandAccounts = brand
+      ? mapAccountsToBrandsRaw(
+          // A copy, because the caller's batch list is shared across every post
+          // in the tick and mapAccountsToBrandsRaw takes a mutable array.
+          [...accounts],
+          [
+            {
+              id: brand.id as string,
+              name: brand.name as string,
+              slug: brand.slug as string,
+              social_urls: (brand.social_urls as Record<string, string>) ?? {},
+            },
+          ],
+        ).get(req.brand_id) ?? []
       : []
 
     if (brandAccounts.length === 0) {
@@ -673,6 +728,10 @@ export async function publishToPlatform(
       return {
         ok: false,
         publisher: 'mixpost',
+        // Not a transport failure. Nothing is connected, and the next tick will
+        // find nothing connected too — requeueing would hide the one thing the
+        // owner has to do about it.
+        retryable: false,
         error:
           'No social account is connected to this project yet, so nothing was published. Connect one in Social Accounts and try again.',
       }
@@ -692,23 +751,159 @@ export async function publishToPlatform(
       return {
         ok: false,
         publisher: 'mixpost',
+        retryable: false,
         error: `No Mixpost account connected for ${req.platform}.`,
       }
     }
 
-    // Upload media to Mixpost
+    // The account this post is actually going to, not just its id.
+    // buildPlatformOptions below needs the PROVIDER — 'facebook_page', not
+    // 'facebook' — and a bare account id cannot tell anyone which it is.
+    const account = brandAccounts.find((a) => a.id === accountIds[0])
+
+    /*
+     * Upload media, and refuse the post if any of it did not arrive.
+     *
+     * THE FAULT: this loop was `if (uploaded) mediaIds.push(...)`. A failed
+     * upload was not an error, it was an absence — the post went out with the
+     * remaining files, or with none, as text. Two wrong text-only posts reached
+     * Facebook that way before `publish_to_social` was made to fail loudly, and
+     * this path still had the silent version. A post that is missing the thing
+     * it was about is worse than a post that did not go out, because nobody is
+     * told to look.
+     */
     const mediaIds: number[] = []
+    let mediaFailures = 0
     for (const m of req.media) {
+      // Cache hit: Mixpost already holds this file and re-transcoding it costs
+      // ~380s on a large video. See PublishMedia.mixpost_media_id.
+      if (typeof m.mixpost_media_id === 'number' && m.mixpost_media_id > 0) {
+        mediaIds.push(m.mixpost_media_id)
+        continue
+      }
+
       const uploaded = await uploadMediaFromUrl(m.url, m.alt_text)
-      if (uploaded) mediaIds.push(uploaded.id)
+      if (!uploaded) {
+        mediaFailures += 1
+        // The URL is signed and carries a token, so it is logged, never
+        // returned — a tool's returned string is read aloud to the owner.
+        console.error('[dispatcher] Mixpost media upload failed for', m.url.split('?')[0])
+        continue
+      }
+      mediaIds.push(uploaded.id)
+
+      // Fill the cache the branch above reads. Only the two columns whose
+      // values we actually have: uploadMediaFromUrl returns the numeric id and
+      // not the companion uuid, and PostgREST rejects an update WHOLESALE if it
+      // names a column that does not exist — one wrong key silently drops the
+      // whole write, cache and timestamp together.
+      if (m.media_item_id) {
+        const { error: cacheError } = await admin
+          .from('media_items')
+          .update({
+            mixpost_media_id: uploaded.id,
+            mixpost_cached_at: new Date().toISOString(),
+          })
+          .eq('id', m.media_item_id)
+        if (cacheError) {
+          // A cold cache costs time, not correctness. Never fail a publish for it.
+          console.error('[dispatcher] Could not cache Mixpost media id:', cacheError.message)
+        }
+      }
+    }
+
+    if (mediaFailures > 0) {
+      await logRun({
+        scheduledPostId: req.scheduled_post_id,
+        platform: req.platform,
+        publisher: 'mixpost',
+        status: 'failed',
+        attempt,
+        error: `${mediaFailures} of ${req.media.length} media items failed to upload`,
+        durationMs: Date.now() - start,
+      })
+      return {
+        ok: false,
+        publisher: 'mixpost',
+        // Transport, not a decision: the same file usually uploads next time.
+        retryable: true,
+        error: `Nothing was published — ${mediaFailures} of ${req.media.length} images or videos did not upload. The post was held back rather than going out incomplete, and it will be tried again shortly.`,
+      }
     }
 
     const fullCaption = buildCaption(req)
 
+    /*
+     * Per-platform settings, on the one door.
+     *
+     * THE FAULT: the same stored row published with different settings
+     * depending on which of five paths sent it. /api/scheduled-posts/publish-now
+     * was the only path that attached an `options` key at all, and attached it
+     * FLAT — `{ type: 'reel', privacy_level: '…', visibility: 'PUBLIC' }`.
+     * Mixpost Pro runs `Arr::only($version['options'], array_keys($providers))`
+     * (PostFormRequest.php:59 and :99, read from the running container on
+     * 2026-08-17), so options must be keyed by PROVIDER and a flat object
+     * matches no provider key and is discarded without a word. The dispatcher
+     * and the cron sent no options at all. So the owner picked "Reel", one
+     * button dropped the choice on the floor and the other looked like it kept
+     * it, and the video published pillarboxed either way.
+     *
+     * buildPlatformOptions is imported rather than re-implemented on purpose:
+     * a second copy of these key names is exactly how the paths came to
+     * disagree, and it is the copy with a test behind it
+     * (src/lib/mixpost/platform-options.test.ts).
+     */
     const version: MixpostVersion = {
       account_id: accountIds[0]!,
       is_original: true,
-      content: [{ body: fullCaption, media: mediaIds, url: null, video_thumbs: [] }],
+      content: [
+        {
+          body: fullCaption,
+          media: mediaIds,
+          url: null,
+          // Videos still lose their poster frame here. PublishMedia now carries
+          // `thumbnail_url`, but MixpostVersion types this field as `never[]`
+          // (src/lib/mixpost/client.ts:52), so only [] is assignable. Widening
+          // it to string[] is a one-line change in a file this change does not
+          // own; until then, sending nothing is honest and sending a cast is not.
+          video_thumbs: [],
+        },
+      ],
+      options: buildPlatformOptions(
+        // The provider, with the platform only as a last resort. They differ:
+        // Facebook is 'facebook_page', and Arr::only drops the wrong one.
+        account?.provider ?? req.platform,
+        req.post_type ?? null,
+        // The bare caption, not fullCaption — deriveYoutubeTitle takes the first
+        // real line, and the first line of a caption with the brand's sign-off
+        // appended is still the caption, but hashtags and signature have no
+        // business in a video title.
+        req.caption,
+        {
+          ...(req.metadata ?? {}),
+          // Only the three composer choices that Mixpost Pro's
+          // YoutubePostOptions actually declares — title (max 256), status
+          // (public|private|unlisted), made_for_kids — read from its rules()
+          // on the running container on 2026-08-17. Every other key the
+          // composer collects travels in req.platform_options and is NOT sent:
+          // Arr::only would discard it silently, and a setting that looks
+          // applied but was thrown away is worse than one the owner can see is
+          // missing.
+          ...(req.platform === 'youtube' && req.platform_options
+            ? {
+                ...(typeof req.platform_options.title === 'string' && req.platform_options.title
+                  ? { youtube_title: req.platform_options.title }
+                  : {}),
+                ...(typeof req.platform_options.privacy === 'string'
+                  ? { youtube_status: req.platform_options.privacy }
+                  : {}),
+                ...(typeof req.platform_options.made_for_kids === 'boolean'
+                  ? { made_for_kids: req.platform_options.made_for_kids }
+                  : {}),
+              }
+            : {}),
+        },
+      ),
     }
 
     const result = await createMixpostPost({
@@ -765,6 +960,9 @@ export async function publishToPlatform(
     return {
       ok: false,
       publisher: 'mixpost',
+      // Mixpost gave back nothing at all. That is an unanswered call, not a
+      // refusal of the content.
+      retryable: true,
       error: 'Mixpost publishing failed.',
     }
   } catch (err) {
@@ -791,6 +989,6 @@ export async function publishToPlatform(
       })
     }
 
-    return { ok: false, publisher: 'mixpost', error }
+    return { ok: false, publisher: 'mixpost', retryable: true, error }
   }
 }

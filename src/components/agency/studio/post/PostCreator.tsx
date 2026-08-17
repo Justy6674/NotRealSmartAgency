@@ -73,6 +73,66 @@ function composePublishBody(caption: string, hashtags: string[]): string {
 
 const formatCount = (n: number) => n.toLocaleString('en-AU')
 
+/**
+ * PLATFORM_LABELS covers the ten platforms Mixpost draws chips for; the pills
+ * in this composer offer google_business as well. Reaching into the record for
+ * a platform it has never heard of returns undefined, and a sentence that says
+ * "undefined did not save" is worse than the silence it replaced.
+ */
+const platformLabel = (platform: PostPlatform): string =>
+  (PLATFORM_LABELS as Record<string, string>)[platform]
+  ?? platform.split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+
+/** "Instagram", "Instagram and Facebook", "Instagram, Facebook and LinkedIn". */
+const listPlatforms = (platforms: readonly PostPlatform[]): string => {
+  const names = platforms.map(platformLabel)
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/**
+ * A platform whose row was not created. `permanent` separates "press Save
+ * again" from "pressing Save again will never work" — /api/scheduled-posts
+ * accepts the six platforms the publishers support and answers 400 to the rest,
+ * while the pills above offer eleven. Telling the owner to retry a platform the
+ * server will refuse every time is the same class of lie as telling him it
+ * saved.
+ */
+type SaveFailure = { platform: PostPlatform; permanent: boolean }
+
+/**
+ * Written to be read by someone who does not know what an HTTP status is, and
+ * deliberately does NOT carry the server's own error text: that string is a
+ * database message often enough to make it a coin toss, and the owner cannot
+ * act on it either way. Name the platform, say what exists now, say what to do.
+ */
+function describeSaveOutcome(saved: readonly PostPlatform[], failed: readonly SaveFailure[]): string {
+  const blocked = failed.filter((f) => f.permanent).map((f) => f.platform)
+  const retryable = failed.filter((f) => !f.permanent).map((f) => f.platform)
+  const parts: string[] = []
+
+  if (saved.length > 0) {
+    const one = saved.length === 1
+    parts.push(
+      `Saved for ${listPlatforms(saved)} — ${one ? 'it is' : 'they are'} waiting in Review, and ${one ? 'it has' : 'they have'} been unticked so saving again cannot create ${one ? 'it' : 'them'} twice.`,
+    )
+  }
+  if (blocked.length > 0) {
+    const one = blocked.length === 1
+    parts.push(
+      `${listPlatforms(blocked)} cannot be saved from here yet, so nothing was created for ${one ? 'it' : 'them'}. Untick ${one ? 'it' : 'them'} to save the rest.`,
+    )
+  }
+  if (retryable.length > 0) {
+    const one = retryable.length === 1
+    parts.push(
+      `${listPlatforms(retryable)} did not save, so there is nothing waiting in Review for ${one ? 'it' : 'them'}. Try Save again.`,
+    )
+  }
+  parts.push('Your words are still here — nothing has been cleared.')
+  return parts.join(' ')
+}
+
 // ── Media item shape (from /api/media) ────────────────────────────────────────
 // Imported from MediaSelector so the picker, the slot card, and the Creator
 // all share ONE shape. Defined as a Pick<> of MediaItemWithUsage so any DB
@@ -119,12 +179,19 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [versions, setVersions] = useState<PostVersions>({})
   const [aiPrompt, setAiPrompt] = useState('')
   const [saving, setSaving] = useState(false)
-  const [compliancePassed, setCompliancePassed] = useState<boolean | null>(null)
+  // Both keyed by the exact words that were reviewed, not by platform. A verdict
+  // belongs to a caption: two platforms publishing the same text share one
+  // answer, and a platform the owner rewrote gets its own. Keying by platform
+  // instead is how a tick earned by the master ended up sitting over a version
+  // nobody had checked.
+  const [complianceByCaption, setComplianceByCaption] = useState<Record<string, boolean | null>>({})
   // The review is recorded on the post, not just shown. The board treats a
   // regulated post with no recorded review as needing sign-off, and nothing
   // was stamping it, so everything scheduled read as unreviewed even after
   // it had been checked here.
-  const [reviewStamp, setReviewStamp] = useState<Record<string, unknown> | null>(null)
+  const [reviewStamps, setReviewStamps] = useState<Record<string, Record<string, unknown>>>({})
+  // What the last Save actually did, when it did not do all of it.
+  const [saveProblem, setSaveProblem] = useState<string | null>(null)
   const [creatorMode, setCreatorMode] = useState<CreatorMode>('fresh')
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
@@ -342,9 +409,34 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     }
   }
 
+  /**
+   * A hashtag is a whole-post decision in this composer: no surface here can
+   * give one platform tags of its own. THE FAULT: they were snapshotted into
+   * each version the moment a platform was ticked and never refreshed, so a tag
+   * added after a platform had been customised was dropped at publish —
+   * resolvePublishCaption trusts a customised version's hashtags verbatim
+   * (post-versions.ts, rule 3) and the snapshot predated the tag. Fixing only
+   * the editor's customise call covers the owner who adds tags first; this
+   * covers the one who adds them second, which is most people.
+   */
+  const handleHashtagsChange = (next: string[]) => {
+    setHashtags(next)
+    setVersions((current) => {
+      const synced: PostVersions = { ...current }
+      for (const platform of Object.keys(synced) as PostPlatform[]) {
+        const version = synced[platform]
+        if (!version) continue
+        synced[platform] = { ...version, hashtags: [...next] }
+      }
+      return synced
+    })
+  }
+
   const handlePlatformsChange = (platforms: PostPlatform[]) => {
     setSelectedPlatforms(platforms)
     setVersions(createVersionsFromMaster(platforms, caption, hashtags))
+    // The last Save's report is about a platform list that no longer exists.
+    setSaveProblem(null)
   }
 
   const handleTemplateApply = (templateCaption: string, templateHashtags: string[]) => {
@@ -407,6 +499,82 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
 
   const hasOverLimit = overLimitPlatforms.length > 0
 
+  // ── What compliance is actually being asked about ─────────────────────────
+  // THE FAULT: the compliance card was handed the MASTER caption and nothing
+  // else. An owner who rewrote the Instagram version watched a green tick
+  // settle over words Instagram would never see. The publish-time gate does
+  // read the real per-platform text (src/lib/agents/publish-gate.ts), so this
+  // was a misleading tick rather than a way past the gate — but on an AHPRA
+  // brand a tick is the thing people trust instead of reading it themselves,
+  // and $60K per offence is not a good place to be sincerely wrong.
+  //
+  // Grouped by the words rather than listed per platform: the usual case is
+  // several platforms publishing one caption, and six identical checks would be
+  // six paid model calls for one answer, plus six chances to disagree.
+  const complianceTargets: Array<{ caption: string; platforms: PostPlatform[] }> = (() => {
+    const byCaption = new Map<string, { caption: string; platforms: PostPlatform[] }>()
+    for (const platform of selectedPlatforms) {
+      const publish = resolvePublishCaption(versions, platform, caption, hashtags)
+      const existing = byCaption.get(publish.caption)
+      if (existing) existing.platforms.push(platform)
+      else byCaption.set(publish.caption, { caption: publish.caption, platforms: [platform] })
+    }
+    // Nothing ticked yet: still check what is on screen, the way this card
+    // always has, rather than leaving the owner writing blind until he picks.
+    if (byCaption.size === 0) return [{ caption, platforms: [] }]
+    return [...byCaption.values()]
+  })()
+
+  // One red is red. Green only once every version that will publish has come
+  // back clean — a summary that ignored the version the owner rewrote is the
+  // tick this whole section exists to stop showing.
+  const complianceVerdicts = complianceTargets.map((target) => complianceByCaption[target.caption] ?? null)
+  const compliancePassed = complianceVerdicts.includes(false)
+    ? false
+    : complianceVerdicts.every((verdict) => verdict === true)
+      ? true
+      : null
+
+  // React skips the re-render when a state updater returns the object it was
+  // handed, and that bail-out is load-bearing here: ComplianceSection receives a
+  // fresh inline callback on every render and restarts its 1.5s debounce from
+  // it, so a handler that always built a new object would re-check for as long
+  // as the tab stayed open — a paid compliance call every 1.5 seconds, forever.
+  const handleComplianceResult = useCallback(
+    (reviewedCaption: string, result: { isValid: boolean } | null) => {
+      setComplianceByCaption((current) => {
+        const verdict = result === null ? null : result.isValid
+        if (current[reviewedCaption] === verdict) return current
+        return { ...current, [reviewedCaption]: verdict }
+      })
+      setReviewStamps((current) => {
+        // Only a review that ran AND passed is worth recording. `recordable` is
+        // the API's own word for that; ComplianceSection's result type predates
+        // it, hence the cast rather than a wider prop change in a file this
+        // change does not own.
+        const recordable = !!result && (result as { recordable?: boolean }).recordable === true
+        if (!recordable) {
+          if (!(reviewedCaption in current)) return current
+          const without = { ...current }
+          delete without[reviewedCaption]
+          return without
+        }
+        // Keep the first approval time. Re-stamping on every re-check would
+        // move the timestamp forward without anything having been re-read.
+        if (current[reviewedCaption]) return current
+        return {
+          ...current,
+          [reviewedCaption]: {
+            compliance_reviewed: true,
+            approved_at: new Date().toISOString(),
+            reviewed_caption: reviewedCaption,
+          },
+        }
+      })
+    },
+    [],
+  )
+
   // ── Save / Schedule / Publish ──────────────────────────────────────────────
   const handleSave = useCallback(async (mode: 'draft' | 'schedule' | 'now', scheduledAt?: string) => {
     if (!activeBrandId || !caption.trim()) return
@@ -414,6 +582,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     // last place that should trust its caller.
     if (hasOverLimit) return
     setSaving(true)
+    setSaveProblem(null)
 
     try {
       if (mode === 'now') {
@@ -446,29 +615,44 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         const editPublish = editPlatform
           ? resolvePublishCaption(versions, editPlatform, caption, hashtags)
           : { caption, hashtags, isCustomised: false }
-        await fetch('/api/scheduled-posts', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: editDraftId,
-            caption: editPublish.caption,
-            hashtags: editPublish.hashtags.map(h => h.replace(/^#/, '')),
-            status: mode === 'draft' ? 'draft' : 'scheduled',
-            scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
-            post_type: postType,
-            media_item_ids: selectedMediaIds,
-            content_type: strategyContext?.suggestedContentType ?? undefined,
-            content_pillar: strategyContext?.suggestedPillar ?? undefined,
-            // Compared against the words this row is publishing, not against
-            // the master. The compliance check runs on the master caption, so
-            // a platform the owner rewrote afterwards was never reviewed —
-            // stamping it reviewed is how unchecked AHPRA/TGA copy reaches a
-            // live account carrying a tick.
-            ...(reviewStamp && reviewStamp.reviewed_caption === editPublish.caption
-              ? { metadata: reviewStamp }
-              : {}),
-          }),
-        })
+        let editResponse: Response | null = null
+        try {
+          editResponse = await fetch('/api/scheduled-posts', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: editDraftId,
+              caption: editPublish.caption,
+              hashtags: editPublish.hashtags.map(h => h.replace(/^#/, '')),
+              status: mode === 'draft' ? 'draft' : 'scheduled',
+              scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
+              post_type: postType,
+              media_item_ids: selectedMediaIds,
+              content_type: strategyContext?.suggestedContentType ?? undefined,
+              content_pillar: strategyContext?.suggestedPillar ?? undefined,
+              // Looked up by the words this row is publishing, so the lookup IS
+              // the check that the review was about them. A stamp keyed to the
+              // master would sit on a platform the owner rewrote afterwards,
+              // which is how unchecked AHPRA/TGA copy reaches a live account
+              // carrying a tick.
+              ...(reviewStamps[editPublish.caption]
+                ? { metadata: reviewStamps[editPublish.caption] }
+                : {}),
+            }),
+          })
+        } catch {
+          // Offline, or the tab lost the network mid-request. Nothing changed.
+          editResponse = null
+        }
+        if (!editResponse?.ok) {
+          // Same fault as the loop below: this navigated back to Review and
+          // reported success without ever looking at the reply, so an update
+          // that never landed read exactly like one that did — the old words
+          // still in Review, the new ones gone from the screen they were typed
+          // on. Stay put, keep the edit, say so.
+          setSaveProblem('That update did not save, so the post in Review still has its old words. Your changes are still here — try Update again.')
+          return
+        }
         // Return to Review tab
         setEditMode(false)
         setEditDraftId(null)
@@ -478,6 +662,8 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       }
 
       // New post mode: POST per platform
+      const savedPlatforms: PostPlatform[] = []
+      const failedPlatforms: SaveFailure[] = []
       for (const platform of selectedPlatforms) {
         // scheduled_posts is already one row per platform, so the row's own
         // caption IS the variant — no migration, no new column, nothing
@@ -485,45 +671,78 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         // the whole fault: the editor wrote the LinkedIn version, the preview
         // drew the LinkedIn version, and LinkedIn received the master.
         const publish = resolvePublishCaption(versions, platform, caption, hashtags)
-        await fetch('/api/scheduled-posts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            brandId: activeBrandId,
-            platform,
-            caption: publish.caption,
-            // Stored bare. publish-now/route.ts:132 puts a '#' on every tag
-            // unconditionally, so a '#' added here reached the account as
-            // '##weightloss' while the preview — which strips a leading '#'
-            // before drawing — showed '#weightloss'. The preview was right and
-            // the row was wrong. Bare is the shape the rest of the app already
-            // writes (HashtagSection, fill-calendar) and the shape
-            // dispatcher.ts:buildCaption is built to receive.
-            hashtags: publish.hashtags.map(h => h.replace(/^#/, '')),
-            status: mode === 'draft' ? 'draft' : 'scheduled',
-            scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
-            post_type: postType,
-            media_item_ids: selectedMediaIds,
-            content_type: strategyContext?.suggestedContentType ?? undefined,
-            content_pillar: strategyContext?.suggestedPillar ?? undefined,
-            metadata: {
-              source: 'post_creator',
-              created_by: 'You',
-              // Only stamped when the review both ran and passed on this exact
-              // caption — editing after a check clears it, so the stamp can
-              // never outlive the words it was about. Compared against this
-              // platform's words, not the master: ComplianceSection checks the
-              // master caption, so a platform the owner rewrote afterwards was
-              // never reviewed, and a tick on it would be a false one.
-              ...(reviewStamp && reviewStamp.reviewed_caption === publish.caption ? reviewStamp : {}),
-              ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
-                ? { platform_options: platformOptions[platform] }
-                : {}),
-            },
-          }),
-        })
+        let response: Response | null = null
+        try {
+          response = await fetch('/api/scheduled-posts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              brandId: activeBrandId,
+              platform,
+              caption: publish.caption,
+              // Stored bare. publish-now/route.ts:132 puts a '#' on every tag
+              // unconditionally, so a '#' added here reached the account as
+              // '##weightloss' while the preview — which strips a leading '#'
+              // before drawing — showed '#weightloss'. The preview was right and
+              // the row was wrong. Bare is the shape the rest of the app already
+              // writes (HashtagSection, fill-calendar) and the shape
+              // dispatcher.ts:buildCaption is built to receive.
+              hashtags: publish.hashtags.map(h => h.replace(/^#/, '')),
+              status: mode === 'draft' ? 'draft' : 'scheduled',
+              scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
+              post_type: postType,
+              media_item_ids: selectedMediaIds,
+              content_type: strategyContext?.suggestedContentType ?? undefined,
+              content_pillar: strategyContext?.suggestedPillar ?? undefined,
+              metadata: {
+                source: 'post_creator',
+                created_by: 'You',
+                // Only stamped when the review both ran and passed on this exact
+                // caption — editing after a check drops the stamp, so it can
+                // never outlive the words it was about. Looked up by this
+                // platform's words, not the master's: the card checks each
+                // version separately now, and a stamp keyed to the master would
+                // put a tick on a version nobody reviewed.
+                ...(reviewStamps[publish.caption] ?? {}),
+                ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
+                  ? { platform_options: platformOptions[platform] }
+                  : {}),
+              },
+            }),
+          })
+        } catch {
+          // Offline, or the tab lost the network mid-request. No row was made.
+          response = null
+        }
+        if (response?.ok) {
+          savedPlatforms.push(platform)
+          continue
+        }
+        // 400 is the server refusing the shape outright — most often a platform
+        // /api/scheduled-posts does not accept. Retrying that is pressing a
+        // button that can only ever fail, so it gets different words.
+        failedPlatforms.push({ platform, permanent: response?.status === 400 })
       }
+
       data.refetch()
+
+      if (failedPlatforms.length > 0) {
+        // THE FAULT: every reply was thrown away and the form was cleared
+        // regardless, so a platform that received nothing looked exactly like
+        // one that saved — the words gone from the screen, and nothing in
+        // Review to find them in. A save that half-worked has to say so.
+        //
+        // The platforms that DID save are unticked rather than left selected,
+        // so pressing Save again retries only what failed instead of creating
+        // the successful ones a second time. Set straight through
+        // setSelectedPlatforms on purpose: handlePlatformsChange rebuilds
+        // versions from the master, which would throw away the per-platform
+        // rewrites still sitting in the boxes above.
+        setSaveProblem(describeSaveOutcome(savedPlatforms, failedPlatforms))
+        setSelectedPlatforms(failedPlatforms.map((failure) => failure.platform))
+        return
+      }
+
       // Clear draft from localStorage after successful save
       if (draftKey) try { localStorage.removeItem(draftKey) } catch {}
       // Reset form after schedule/draft save
@@ -537,7 +756,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     } finally {
       setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamp, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {
@@ -862,7 +1081,7 @@ If any items have no AI description or transcription yet, name them and offer to
         <HashtagSection
           brandId={activeBrandId}
           hashtags={hashtags}
-          onChange={setHashtags}
+          onChange={handleHashtagsChange}
           selectedPlatforms={selectedPlatforms}
           caption={caption}
         />
@@ -875,23 +1094,45 @@ If any items have no AI description or transcription yet, name them and offer to
           subtitle="AHPRA/TGA auto-check — $60K per offence"
           required={true}
           directorAssist={{
-            prompt: `Review this post for ${brandName} before I publish it. Check for AHPRA/TGA compliance, brand voice, and anything that could get us in trouble. The caption is:\n\n"${caption}"\n\nHashtags: ${hashtags.map(h => `#${h}`).join(' ')}\n\nPlatforms: ${selectedPlatforms.join(', ')}\n\nBring in the Compliance team if needed.`,
+            // Every version, under its own heading. Handing the Director the
+            // master alone asked it to review words that were not going out,
+            // which is the same fault as the tick below and reads just as
+            // convincingly when it comes back clean.
+            prompt: [
+              `Review this post for ${brandName} before I publish it. Check for AHPRA/TGA compliance, brand voice, and anything that could get us in trouble.`,
+              ...complianceTargets.map((target) =>
+                target.platforms.length > 0
+                  ? `--- ${listPlatforms(target.platforms)} ---\n"${target.caption}"`
+                  : `"${target.caption}"`,
+              ),
+              `Hashtags: ${hashtags.map(h => `#${h}`).join(' ')}`,
+              'Bring in the Compliance team if needed.',
+            ].join('\n\n'),
             label: 'Full review',
           }}
         >
-          <ComplianceSection
-            caption={caption}
-            brandName={brandName}
-            isHealthBrand={isHealthBrand}
-            onResult={result => {
-              setCompliancePassed(result === null ? null : result.isValid)
-              setReviewStamp(
-                result && (result as { recordable?: boolean }).recordable
-                  ? { compliance_reviewed: true, approved_at: new Date().toISOString(), reviewed_caption: caption }
-                  : null,
-              )
-            }}
-          />
+          <div className="space-y-4">
+            {complianceTargets.map((target) => (
+              // Keyed by the platforms, not by the caption: keying by the text
+              // would remount this on every keystroke, resetting the health-
+              // claims tickbox inside it and restarting its debounce from
+              // scratch each time. The grouping only changes when a version
+              // genuinely starts or stops differing from the master.
+              <div key={target.platforms.join('|') || 'master'} className="space-y-2">
+                {complianceTargets.length > 1 && (
+                  <p className="text-[10px] font-medium text-muted-foreground">
+                    {listPlatforms(target.platforms)}
+                  </p>
+                )}
+                <ComplianceSection
+                  caption={target.caption}
+                  brandName={brandName}
+                  isHealthBrand={isHealthBrand}
+                  onResult={result => handleComplianceResult(target.caption, result)}
+                />
+              </div>
+            ))}
+          </div>
         </StudioCard>
       )}
     </div>
@@ -928,6 +1169,15 @@ If any items have no AI description or transcription yet, name them and offer to
         <div className="flex items-start gap-2 rounded-lg border border-[oklch(0.55_0.2_25/0.3)] bg-[oklch(0.55_0.2_25/0.08)] px-3 py-2 text-[11px] text-[oklch(0.55_0.2_25)]">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>{overLimitMessage}</span>
+        </div>
+      )}
+      {/* What the last Save actually did. It sits beside the button that did it
+          for the same reason the over-limit line does: a report the owner has
+          to go looking for is a report he will not read. */}
+      {saveProblem && (
+        <div className="flex items-start gap-2 rounded-lg border border-[oklch(0.55_0.2_25/0.3)] bg-[oklch(0.55_0.2_25/0.08)] px-3 py-2 text-[11px] text-[oklch(0.55_0.2_25)]">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>{saveProblem}</span>
         </div>
       )}
       <CreatorActionBar

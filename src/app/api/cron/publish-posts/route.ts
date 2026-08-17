@@ -368,6 +368,30 @@ export async function GET(request: Request) {
       // different services. Backend choice, account matching, caption
       // assembly and media handling now belong to publishToPlatform.
       //
+      // AYRSHARE WAS THE THIRD ARM OF THAT FORK AND IT IS NOT COMING BACK.
+      // Do not restore it as a "fallback" on the strength of an
+      // `AYRSHARE_API_KEY` still named in a stale integrations note, or of
+      // 'ayrshare' still sitting in the IntegrationProvider union. It was not
+      // a spare copy of this path, it was a different one, and each difference
+      // was silent:
+      //   · it handed `hashtags` to Ayrshare as its own field instead of
+      //     appending them to the body, so one stored row reached the public
+      //     as different words depending on which environment variables
+      //     happened to be set on the deployment that ran the tick;
+      //   · it sent `mediaUrls: [post.media_items.file_url]` — a single item —
+      //     so a carousel published as one image and nothing reported a loss;
+      //   · it was selected by `else if (!useMixpost)`, that is, by
+      //     configuration being ABSENT. A publisher chosen because nobody set
+      //     anything is a publisher chosen when nobody is watching, which on a
+      //     health brand is an AHPRA/TGA exposure, not an inconvenience.
+      // A publisher that cannot be reached must say so and be requeued by the
+      // catch below. It must never quietly take a different-shaped route to a
+      // live account. regulatory-invariants.test.ts lists Ayrshare under
+      // RETIRED and holds its endpoint to match nothing anywhere in src/ —
+      // which is also why the URL is not written out here, comment or not, as
+      // that scan reads raw source text. Bringing it back has to be argued for
+      // in that file rather than slipped in through this one.
+      //
       // `attempt` is 1 and must stay 1: the dispatcher skips the regulatory
       // review on attempts above 1, on the understanding that a retry is
       // re-sending content that already passed. Content arriving from this

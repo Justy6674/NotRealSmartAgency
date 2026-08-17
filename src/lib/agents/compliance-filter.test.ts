@@ -52,15 +52,40 @@ test('a failed regulatory review is never reported as a completed one', () => {
 })
 
 test('publish_to_social blocks regulated content when the review did not run', () => {
-  const source = readFileSync(
+  /*
+   * Same guarantee, stronger owner.
+   *
+   * This used to assert the inline condition
+   * `!check.checkCompleted && (complianceFlags.ahpra || complianceFlags.tga)`
+   * inside publish-to-social.ts. Note what that condition says: the tool only
+   * blocked on an incomplete review for a REGULATED project. An unregulated one
+   * got no gate call at all on that path.
+   *
+   * The tool now goes through publishToPlatform, so checkPublishAllowed runs for
+   * EVERY project and refuses on an incomplete review regardless of flags. The
+   * TGA half of the original worry — DownscaleDerm is TGA-only, so an
+   * ahpra-only condition let therapeutic claims through — is handled inside the
+   * gate, which reads both flags.
+   *
+   * So this asserts the tool reaches the gate, and that the gate still refuses.
+   * Asserting the old inline string would now be asserting the presence of the
+   * very thing whose removal was the fix.
+   */
+  const tool = readFileSync(
     new URL('./tools/publish-to-social.ts', import.meta.url),
     'utf8',
   )
+  assert.match(tool, /publishToPlatform\s*\(/)
+  assert.doesNotMatch(tool, /if \(complianceFlags\.ahpra\) \{/)
 
-  // Must cover TGA as well as AHPRA — DownscaleDerm is TGA-only, so an
-  // ahpra-only condition let therapeutic claims through.
-  assert.match(source, /!check\.checkCompleted && \(complianceFlags\.ahpra \|\| complianceFlags\.tga\)/)
-  assert.doesNotMatch(source, /if \(complianceFlags\.ahpra\) \{/)
+  const gate = readFileSync(
+    new URL('./publish-gate.ts', import.meta.url),
+    'utf8',
+  )
+  // Both regimes, and an incomplete review blocks rather than passing.
+  assert.match(gate, /flags\.ahpra/)
+  assert.match(gate, /flags\.tga/)
+  assert.match(gate, /checkCompleted/)
 })
 
 test('draft_post blocks a regulated draft when the review did not run', () => {

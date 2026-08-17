@@ -85,7 +85,13 @@ interface Exit {
  */
 const LIVE_SEND: readonly Exit[] = [
   { name: 'Mixpost immediate publish (schedule_now: true)', pattern: /schedule_now:\s*true/ },
-  { name: 'Mixpost server-side schedule (schedule: true)', pattern: /schedule:\s*true/ },
+  /*
+   * `schedule: true` was removed with publish_to_social's hand-rolled Mixpost
+   * call. It is deliberately NOT replaced with a looser pattern: the signal
+   * exists to catch a live send, and a signal that matches nothing is worse
+   * than absent, because the next person reads a passing scan as coverage.
+   * If a server-side schedule flag returns, add it back with its real shape.
+   */
   { name: 'Mixpost queue (addMixpostPostToQueue)', pattern: /\bawait\s+addMixpostPostToQueue\s*\(/ },
   { name: 'Mixpost approve (approveMixpostPost)', pattern: /\bawait\s+approveMixpostPost\s*\(/ },
   { name: 'Zernio publish (createZernioPost)', pattern: /\bawait\s+createZernioPost\s*\(/ },
@@ -119,15 +125,29 @@ const DELEGATE = /\bawait\s+publishToPlatform\s*\(/
  * check the shared gate performs, and an entry that quietly loses one fails
  * 'a reviewed inline equivalent is still equivalent'. This list may only shrink.
  */
-const INLINE_EQUIVALENT: Record<string, readonly RegExp[]> = {
-  'lib/agents/tools/publish-to-social.ts': [
-    /validateScentSellProductClaims\s*\(/,
-    /runComplianceFilter\s*\(/,
-    /if \(!check\.isValid\)/,
-    /!check\.checkCompleted && \(complianceFlags\.ahpra \|\| complianceFlags\.tga\)/,
-    /COMPLIANCE CHECK ERROR — post NOT published\./,
-  ],
-}
+/**
+ * Empty, and that is the point.
+ *
+ * `publish_to_social` used to live here. It ran its own inline review rather
+ * than the shared gate — and only when `ahpra || tga` was set, so an unregulated
+ * project got no gate call at all on that path. It also built its own Mixpost
+ * URL from MIXPOST_API_URL and MIXPOST_WORKSPACE_UUID, listed the workspace's
+ * accounts itself, and matched them by fuzzy substring taking the first hit, so
+ * it ignored the confirmed `social_urls.mixpost_account_ids` overrides and could
+ * publish to the wrong project's account.
+ *
+ * It now goes through `publishToPlatform`, so the shared gate runs for EVERY
+ * project on that path and the account selection is the same one every other
+ * publisher uses. Deleting the entry is what the test told us to do once the
+ * tool stopped publishing on its own — verified: no `fetch`, no
+ * `createMixpostPost`, no `createZernioPost` remain in that file; the only
+ * mentions of the Mixpost env vars are in a comment recording the removal.
+ *
+ * An inline equivalent is a concession, never a goal. Prefer the gate. If this
+ * gains an entry again, the burden is on that change to explain why the shared
+ * chokepoint could not be used.
+ */
+const INLINE_EQUIVALENT: Record<string, readonly RegExp[]> = {}
 
 /**
  * Live exits that have NO regulatory review at all, recorded so that the scan
@@ -420,11 +440,36 @@ test('the chokepoint scan is not vacuously passing', () => {
   const files = sourceFiles()
   assert.ok(files.length > 600, `expected the whole source tree, found ${files.length}`)
 
+  /*
+   * The floor was 7 and is now 5, because two exits were CONSOLIDATED away, not
+   * because the scan got worse: publish_to_social and publish-now both stopped
+   * sending for themselves and now go through publishToPlatform.
+   *
+   * Fewer exits is the goal. The floor still guards the thing this test is for —
+   * a scan that silently finds nothing and passes — and `files.length > 600`
+   * above catches the other way it could go vacuous. Lower it again only when
+   * an exit genuinely disappears, and say which one in the commit.
+   */
   const exits = files.filter((f) => exitsIn(readFileSync(f, 'utf8')).length > 0)
-  assert.ok(exits.length >= 7, `expected every known publishing exit, found ${exits.length}`)
+  assert.ok(exits.length >= 5, `expected every known publishing exit, found ${exits.length}`)
+  /*
+   * Name the chokepoint rather than counting files.
+   *
+   * This asserted that at least TWO sending files also contain the gate. That
+   * held while publish_to_social sent for itself AND re-implemented the review.
+   * Now exactly one file does both — src/lib/publishers/dispatcher.ts — and that
+   * is the design: one door. Counting would have us "fix" the failure by
+   * scattering the gate back into more senders, which is the opposite of the
+   * goal.
+   *
+   * So the assertion names the chokepoint. If the dispatcher ever sends without
+   * the gate, this fails, and it cannot be satisfied by a second file
+   * re-implementing the review somewhere else.
+   */
+  const gatedExits = exits.filter((f) => gated(readFileSync(f, 'utf8')))
   assert.ok(
-    exits.filter((f) => gated(readFileSync(f, 'utf8'))).length >= 2,
-    'the gate must be recognised where it is genuinely called',
+    gatedExits.some((f) => f.endsWith('lib/publishers/dispatcher.ts')),
+    'the dispatcher both sends and gates — if it stops gating, every backend behind it is unreviewed',
   )
 
   // The shape this test exists to catch: a live send, no gate anywhere near it.
@@ -505,6 +550,30 @@ test('creating a project settles its regulatory flags', () => {
 })
 
 test('the publishing tool blocks on a review that did not complete', () => {
-  const source = read('lib/agents/tools/publish-to-social.ts')
-  assert.ok(source.includes('checkCompleted'), 'an absent review must not read as a pass')
+  /*
+   * The guarantee is unchanged; the place that provides it moved, and moved up.
+   *
+   * This asserted `checkCompleted` inside publish-to-social.ts, back when that
+   * tool ran its own inline review — and ran it ONLY when ahpra || tga was set,
+   * so an unregulated project got no gate call at all on that path. The tool now
+   * goes through publishToPlatform, so the shared gate runs for EVERY project
+   * and owns the incomplete-review decision for all of them.
+   *
+   * So the assertion follows the guarantee rather than the file: the tool must
+   * reach the gate, and the gate must still refuse an incomplete review. Testing
+   * the old string here would now check for something whose absence is the
+   * improvement.
+   */
+  const tool = read('lib/agents/tools/publish-to-social.ts')
+  assert.match(
+    tool,
+    /publishToPlatform\s*\(/,
+    'publish_to_social must reach the shared gate rather than deciding for itself',
+  )
+
+  const gate = read('lib/agents/publish-gate.ts')
+  assert.ok(
+    gate.includes('checkCompleted'),
+    'an absent review must not read as a pass — the gate owns this for every caller',
+  )
 })

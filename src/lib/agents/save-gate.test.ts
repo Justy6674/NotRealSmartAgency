@@ -12,6 +12,12 @@ function review(over: Partial<GuardianResult> = {}): GuardianResult {
     brandVoiceIssues: [],
     regulatoryCitations: [],
     regulatoryCorpusVersion: null,
+    // Required on GuardianResult, and deliberately so: a review that never
+    // stated its own grounding is the exact shape that hid the corpus outage
+    // for two days. The default here is the clean case; tests that care about
+    // a degraded review pass their own value.
+    regulatoryGrounding: 'grounded',
+    regulatoryGroundingNote: null,
     ...over,
   }
 }

@@ -15,6 +15,38 @@ export type PublisherPlatform =
   | 'twitter'
 
 /**
+ * The platforms the one door can actually reach.
+ *
+ * THE FAULT: a caller handed `post.platform` — a bare `string` off a database
+ * row — straight into a `PublisherPlatform` parameter, and TypeScript is not
+ * there at runtime to object. `resolveAccountIdsForPlatform` falls back to
+ * `[platform]` for anything it does not recognise, so an unrecognised value did
+ * not fail at the edge; it matched no accounts and failed several steps later
+ * with a message about Mixpost that named nothing the owner could act on.
+ *
+ * This lived as a private const inside the cron. Every other caller that wants
+ * to stop going around the door needs the same narrowing, and a second copy of
+ * a six-member union is how the two lists come to disagree — so it lives with
+ * the union it guards. Checked against live data on 2026-08-17: all 158 rows in
+ * `scheduled_posts` use one of these six.
+ */
+export const DISPATCHABLE_PLATFORMS: readonly PublisherPlatform[] = [
+  'facebook',
+  'instagram',
+  'linkedin',
+  'tiktok',
+  'twitter',
+  'youtube',
+]
+
+export function asPublisherPlatform(value: unknown): PublisherPlatform | null {
+  return typeof value === 'string' &&
+    (DISPATCHABLE_PLATFORMS as readonly string[]).includes(value)
+    ? (value as PublisherPlatform)
+    : null
+}
+
+/**
  * 'zernio' arrived after the audit table was written.
  *
  * supabase/migrations/034_direct_publishing.sql still declares
@@ -82,6 +114,29 @@ export interface PublishMedia {
   size_bytes?: number
   duration_seconds?: number
   alt_text?: string
+  /**
+   * `media_items.id`, so a fresh upload can be cached back onto the row it came
+   * from. Without it the dispatcher can read a cache but never fill one, and
+   * every publish of the same video pays the transcode again.
+   */
+  media_item_id?: string | null
+  /**
+   * `media_items.mixpost_media_id` — the numeric id Mixpost gave this file the
+   * first time it was uploaded (migration 031, `integer`).
+   *
+   * Mixpost re-transcodes a video on upload; a 141MB .mov measured at ~382s.
+   * `publish_to_social` has skipped that on a cache hit since April and the
+   * dispatcher did not, so moving a caller onto the door would have made every
+   * repeat publish six minutes slower than the path it replaced.
+   */
+  mixpost_media_id?: number | null
+  /**
+   * `media_items.thumbnail_url` — the poster frame Mixpost shows on a video
+   * (its `video_thumbs`). Carried here because the caller is the only one that
+   * has read the `media_items` row; see the note at the version literal in
+   * dispatcher.ts for why it is not sent yet.
+   */
+  thumbnail_url?: string | null
 }
 
 export interface PublishRequest {
@@ -103,6 +158,33 @@ export interface PublishRequest {
    * appended it to `caption` leaves this undefined; do not do both.
    */
   signature?: string
+  /**
+   * 'single' | 'carousel' | 'reel' | 'video'. Decides Instagram/Facebook
+   * reel-vs-feed and whether TikTok is asked to add music to a photo post.
+   *
+   * THE FAULT: the cron passed this inside `metadata`, under a comment
+   * promising the dispatcher would apply it. Nothing in the dispatcher ever
+   * read `req.metadata` — it is inert to this day — so a vertical 9:16 video
+   * was published as a feed post and rendered pillarboxed with black bars down
+   * both sides. It is a field rather than a metadata key so that it cannot be
+   * promised and ignored a second time: a caller that sets it can see, in this
+   * type, that something reads it.
+   */
+  post_type?: string | null
+  /**
+   * The owner's per-platform choices from the composer, as stored in
+   * `scheduled_posts.metadata.platform_options`.
+   *
+   * Carried as its own field rather than spliced into `metadata` because only
+   * the keys verified against Mixpost Pro's own *PostOptions classes may be
+   * sent — Mixpost runs `Arr::only($version['options'], array_keys($providers))`
+   * and discards anything else without a word, so an unverified key reads as a
+   * setting that applied when it never did. The rest travel this far and stop,
+   * so the one place that shapes those options
+   * (`buildPlatformOptions`, src/lib/mixpost/sync-draft.ts) can start using
+   * them without another schema hunt.
+   */
+  platform_options?: Record<string, unknown> | null
   metadata?: Record<string, unknown>
 }
 
@@ -125,6 +207,22 @@ export interface PublishResult {
    * src/lib/posts/create-draft.ts was written to prevent: pending is not done.
    */
   confirmed?: boolean
+  /**
+   * The publisher was never reached, as opposed to refusing the content.
+   *
+   * Both arrive as `{ ok: false, error }`, and the cron currently tells them
+   * apart by matching the error PROSE against a hard-coded list of phrases
+   * (PUBLISHER_UNREACHABLE, cron/publish-posts/route.ts:122) — whose own
+   * comment says to delete it the moment this flag exists. Prose is not a
+   * protocol: reword one message and a transport outage starts being read as a
+   * rejection, and the post is written off instead of requeued.
+   *
+   * True for: no accounts reachable, a rate limit, and every thrown transport
+   * error. FALSE for a compliance block, a validation failure and 'no account
+   * mapped to this project' — those are decisions about the content or the
+   * setup, and requeueing a decision loops forever.
+   */
+  retryable?: boolean
   /** If the platform returned a rate-limit, how long to wait (ms). */
   retry_after_ms?: number
 }

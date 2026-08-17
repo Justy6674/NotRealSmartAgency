@@ -2,10 +2,106 @@ import { tool } from 'ai'
 import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { validateScentSellProductClaims } from '@/lib/products/scent-sell-product-gate'
+import { checkPublishAllowed } from '@/lib/agents/publish-gate'
+import { createDraftPost } from '@/lib/posts/create-draft'
+import { publishToPlatform } from '@/lib/publishers/dispatcher'
+import type { PublishMedia, PublisherPlatform } from '@/lib/publishers/types'
+import { relayIfSafe, userSafeError } from '@/lib/errors/user-safe'
 
 /**
- * Publish content directly to social media platforms via Mixpost.
- * Minimal, self-contained — no external imports that could crash in AI SDK tool context.
+ * The Director's publishing tool. It no longer talks to a platform itself.
+ *
+ * THE FAULT, and why the obvious version of this file was wrong:
+ *
+ * It built its own Mixpost base URL out of MIXPOST_API_URL and
+ * MIXPOST_WORKSPACE_UUID, listed the workspace's accounts itself, and then
+ * chose one by testing whether the project's name or slug appeared ANYWHERE
+ * inside an account's name or username — taking `candidates[0]` when several
+ * matched. Three separate things were wrong with that:
+ *
+ *   · It never read `social_urls.mixpost_account_ids`. Those are the CONFIRMED
+ *     account overrides — the answer somebody has already checked — and every
+ *     other Mixpost caller in this codebase honours them through
+ *     mapAccountsToBrandsRaw. This one silently preferred a substring guess
+ *     over a confirmed fact, so a project whose account is named for its
+ *     product rather than its project matched nothing, and a project whose name
+ *     is a substring of another's matched the wrong one. `candidates[0]` then
+ *     picked whichever of those the API happened to return first.
+ *   · It could not reach Zernio AT ALL. Scent Sell and Endorse Me are linked to
+ *     Zernio profiles, and the 5-minute cron sends their scheduled posts there.
+ *     So the same stored words went to Zernio when scheduled and to Mixpost when
+ *     published from this tool — two OAuth connections to two services, and
+ *     nothing in this codebase asserts they point at the same page.
+ *   · It ran its own copy of the regulatory review, and only when
+ *     `compliance_flags.ahpra || compliance_flags.tga` was set. An unregulated
+ *     project got no review of any kind on this path, and the project's
+ *     `brand_dna_constraints` were never consulted on any project.
+ *
+ * All three are now somebody else's problem by design: publishToPlatform is the
+ * one door. It picks the backend, narrows accounts to THIS project before
+ * narrowing them to the platform, and runs checkPublishAllowed on every project
+ * before any platform call. Everything below is the part that is genuinely this
+ * tool's job — resolving what the Director asked for, refusing what cannot be
+ * published, recording the row, and saying plainly what happened.
+ *
+ * WHAT DELIBERATELY STAYED HERE, and why the shared gate does not replace it:
+ *
+ *   · validateScentSellProductClaims runs BEFORE anything is written down. The
+ *     shared gate runs it too, but by then a scheduled_posts row exists; a false
+ *     product claim should not survive as a row for later work to copy.
+ *   · The missing-media_id refusal. The dispatcher receives resolved URLs and
+ *     cannot know that the Director invented a UUID. It did once, the lookup
+ *     returned nothing, and a text-only post went live in place of a video.
+ *   · The Instagram/TikTok/YouTube media requirement. validateMedia only checks
+ *     maxima; nothing downstream enforces a minimum.
+ */
+
+/**
+ * Image vs video without trusting the file extension alone.
+ *
+ * A Supabase *signed* URL ends `?token=…`, so every `endsWith('.mp4')` test
+ * misses and a video is typed as an image — which then fails the platform's
+ * image rules for reasons that read as nothing to do with the real cause. The
+ * stored mime type is authoritative when the row has one; the extension is only
+ * the fallback, and the query string is stripped before it is read.
+ *
+ * Duplicated from the scheduled publisher rather than imported: the original
+ * lives inside a route file (app/api/cron/publish-posts/route.ts) and exporting
+ * a helper out of a route is worse than two copies of nine lines. If a third
+ * copy appears, move it to lib/publishers.
+ */
+function mediaKind(url: string, fileType: string | null): 'image' | 'video' {
+  if (fileType?.startsWith('video/')) return 'video'
+  if (fileType?.startsWith('image/')) return 'image'
+  const path = (url.split('?')[0] ?? '').split('#')[0]?.toLowerCase() ?? ''
+  return /\.(mp4|mov|webm|m4v|avi|mkv)$/.test(path) ? 'video' : 'image'
+}
+
+/**
+ * The suffix the owner hears after the platform name. Unchanged wording — this
+ * is read aloud, and the owner already knows what these phrases mean.
+ */
+function describeMedia(media: readonly PublishMedia[]): string {
+  if (media.length === 0) return ''
+  if (media.some((m) => m.type === 'video')) return ' (with video)'
+  if (media.length > 1) return ` (carousel: ${media.length} images)`
+  return ' (with image)'
+}
+
+const PLATFORM_LABELS: Record<PublisherPlatform, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  twitter: 'X',
+}
+
+/** Platforms that cannot publish a post with nothing attached. */
+const MEDIA_REQUIRED = new Set<PublisherPlatform>(['instagram', 'tiktok', 'youtube'])
+
+/**
+ * Publish content to social media through the one publishing door.
  */
 export function createPublishToSocialTool(
   supabase: SupabaseClient,
@@ -49,500 +145,337 @@ export function createPublishToSocialTool(
     }),
     execute: async ({ platforms, caption, hashtags, media_ids, image_url, image_urls, schedule_date, schedule_time }) => {
       try {
-        const base = process.env.MIXPOST_API_URL
-        const token = process.env.MIXPOST_API_TOKEN
-        const workspace = process.env.MIXPOST_WORKSPACE_UUID
-
-        if (!base || !token) {
-          return 'Publishing is not configured. MIXPOST_API_URL or MIXPOST_API_TOKEN is missing.'
-        }
-
-        const apiBase = workspace ? `${base}/api/${workspace}` : `${base}/api`
-
-        // Fetch brand with compliance flags for Guardian check
         const { data: brand } = await supabase
           .from('brands')
-          .select('name, slug, social_urls, compliance_flags')
+          .select('name, slug, compliance_flags, brand_dna_constraints')
           .eq('id', brandId)
-          .single()
+          .maybeSingle()
 
         if (!brand) {
-          return `Cannot publish — brand not found (ID: ${brandId}). Make sure you selected the right brand.`
+          return 'Cannot publish — I could not find that project. Pick the project again and try once more.'
         }
 
-        const brandName = brand.name
-        const brandSlug = brand.slug
+        const brandName = brand.name as string
+        const brandSlug = brand.slug as string
 
-        // This runs before Mixpost is contacted. A wrong perfume name is not a
-        // normal copy error for the marketplace: it is a false product claim.
-        // The catalogue is the authority; an unavailable or near result blocks
-        // the named claim rather than letting a plausible model guess through.
+        // Runs before a row exists, let alone a platform call. A wrong perfume
+        // name is not a normal copy error for the marketplace: it is a false
+        // product claim. The catalogue is the authority; an unavailable or near
+        // result blocks the named claim rather than letting a plausible model
+        // guess through. The shared gate performs this check too, but only once
+        // the draft has been written down, and a false claim should not exist
+        // as a row that query_outputs can later hold up as an example.
         const productGate = await validateScentSellProductClaims(
           brandSlug,
           hashtags?.length ? `${caption}\n${hashtags.join(' ')}` : caption,
         )
         if (!productGate.allowed) return `PRODUCT IDENTITY CHECK FAILED — post NOT published.\n\n${productGate.reason}`
 
-        // ── AHPRA/TGA Compliance Gate — runs BEFORE publishing ──
-        const complianceFlags = brand?.compliance_flags ?? {}
-        if (complianceFlags.ahpra || complianceFlags.tga) {
-          try {
-            const { runComplianceFilter } = await import('@/lib/agents/compliance-filter')
-            const fullText = hashtags?.length
-              ? `${caption}\n\n${hashtags.map((h: string) => `#${h}`).join(' ')}`
-              : caption
-            const check = await runComplianceFilter(
-              fullText,
-              complianceFlags,
-              undefined
-            )
-            if (!check.isValid) {
-              const issues = [
-                ...check.flags.map((f: string) => `BLOCKED: ${f}`),
-                ...check.brandVoiceIssues.map((v: string) => `BRAND VOICE: ${v}`),
-              ].join('\n')
-              return `COMPLIANCE CHECK FAILED — post NOT published.\n\n${issues}\n\nFix the content and try again. AHPRA/TGA penalties: up to $60,000 per offence.`
-            }
-            // A regulated brand may not publish on a review that did not run.
-            // The filter catches its own failures and returns a default-valid
-            // result, so the outer catch below never fires for that case — this
-            // flag is the only signal that the check was skipped, and it covers
-            // TGA as well as AHPRA (DownscaleDerm is TGA-only).
-            if (!check.checkCompleted && (complianceFlags.ahpra || complianceFlags.tga)) {
-              const regime = [complianceFlags.ahpra ? 'AHPRA' : null, complianceFlags.tga ? 'TGA' : null]
-                .filter(Boolean)
-                .join('/')
-              return `COMPLIANCE CHECK DID NOT RUN — post NOT published.\n\nThe ${regime} review could not be completed, so this content is unverified. Regulated content is never published without a completed review. Try again shortly; if it keeps failing, the compliance model is unreachable.`
-            }
-            if (check.warnings.length > 0) {
-              // Warnings are non-blocking but logged
-              console.log(`[publish_to_social] Compliance warnings for ${brandSlug}:`, check.warnings)
-            }
-          } catch (err) {
-            // Reached only if the filter itself throws — importing it, or a
-            // caller-side fault. Regulated brands still fail closed.
-            console.error('[publish_to_social] Compliance check error:', err)
-            if (complianceFlags.ahpra || complianceFlags.tga) {
-              return 'COMPLIANCE CHECK ERROR — post NOT published. The compliance check failed to run, and regulated content cannot be published without verification.'
-            }
-          }
-        }
-
-        // Fetch all Mixpost accounts
-        const accountsRes = await fetch(`${apiBase}/accounts`, {
-          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-          cache: 'no-store',
-        })
-
-        if (!accountsRes.ok) {
-          return `Failed to fetch social accounts (${accountsRes.status}). Check Mixpost configuration.`
-        }
-
-        const accountsRaw = await accountsRes.json()
-        const accounts: Array<{ id: number; name: string; username: string | null; provider: string }> =
-          Array.isArray(accountsRaw) ? accountsRaw : accountsRaw.data ?? []
-
-        if (!accounts.length) {
-          return 'No social accounts connected. Connect your accounts in Mixpost first.'
-        }
-
-        // Platform → provider mapping
-        const providerMap: Record<string, string[]> = {
-          instagram: ['instagram'],
-          facebook: ['facebook_page', 'facebook_group'],
-          linkedin: ['linkedin', 'linkedin_page'],
-          twitter: ['x', 'twitter'],
-          tiktok: ['tiktok'],
-          youtube: ['youtube'],
-        }
-
-        // Build full caption
-        const fullCaption = hashtags?.length
-          ? `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}`
-          : caption
-
-        // ─── Resolve media items ──────────────────────────────────────────────
+        // ─── Resolve media ────────────────────────────────────────────────
         // Three input sources, in priority order:
-        //   1. media_ids — look up from our media_items table (supports video + image, carousels)
+        //   1. media_ids — rows in our media_items table (video + image, carousels)
         //   2. image_urls — multi-image carousel from raw URLs
-        //   3. image_url — single image from raw URL
+        //   3. image_url — a single raw URL
         //
-        // For each item we build a normalised descriptor with file_url, mime,
-        // file name, thumbnail_url, AND (if previously uploaded) a cached
-        // Mixpost media id so we can skip the slow remote-initiate round-trip
-        // on subsequent publishes. Mixpost's video transcode takes ~6 minutes
-        // for a 141MB .mov — once is enough.
-        interface MediaDescriptor {
-          url: string
-          mime: string
-          fileName: string
-          thumbnailUrl: string | null
-          mediaItemId: string | null // our UUID, for scheduled_posts.media_item_ids
-          mixpostMediaId: number | null // cached Mixpost numeric id (skip re-upload)
-        }
-
-        const allMedia: MediaDescriptor[] = []
+        // Nothing is uploaded here any more. The Mixpost upload, its cache and
+        // its poll budget belong to the dispatcher, which is the only path that
+        // knows whether the destination is even Mixpost — this file used to
+        // transcode a video into Mixpost and then discover the project publishes
+        // through Zernio. What travels instead is everything the dispatcher
+        // needs to make those decisions: the cached Mixpost id so it can skip a
+        // ~380s transcode, the poster frame, and the row id to write the cache
+        // back to.
+        const media: PublishMedia[] = []
+        const mediaItemIds: string[] = []
 
         if (media_ids?.length) {
           const { data: items } = await supabase
             .from('media_items')
-            .select('id, file_url, file_name, file_type, thumbnail_url, mixpost_media_id')
+            .select('id, file_url, file_name, file_type, file_size_bytes, duration_seconds, thumbnail_url, mixpost_media_id')
             .in('id', media_ids)
             .eq('brand_id', brandId)
 
-          const foundIds = new Set((items ?? []).map((i) => i.id))
+          const rows = items ?? []
+          const foundIds = new Set(rows.map((i) => i.id as string))
           const missingIds = media_ids.filter((id) => !foundIds.has(id))
 
-          // FAIL LOUDLY — if any media_id can't be found, refuse to publish.
-          // Silent fallback to text-only posts was a real bug: Director hallucinated
-          // a media_id, lookup returned nothing, and a text-only post went live
-          // instead of the expected video. Never again.
+          // FAIL LOUDLY — if any media_id cannot be found, refuse to publish.
+          // Silent fallback to a text-only post was a real bug: the Director
+          // hallucinated a media_id, the lookup returned nothing, and a
+          // text-only post went live instead of the expected video. The
+          // dispatcher cannot catch this — it is handed resolved URLs and has
+          // no way to know one was asked for and never arrived.
           if (missingIds.length > 0) {
             return `BLOCKED — cannot publish. The following media_ids were not found in ${brandName}'s media library: ${missingIds.join(', ')}\n\nCall query_media first to get the real UUIDs (look for the "ID:" field in the output), then retry with those exact IDs. Do NOT guess or reuse any other UUID (like brand_id).`
           }
 
-          if (items) {
-            // Preserve caller order
-            for (const id of media_ids) {
-              const item = items.find((m) => m.id === id)
-              if (item) {
-                allMedia.push({
-                  url: item.file_url,
-                  mime: item.file_type ?? 'application/octet-stream',
-                  fileName: item.file_name ?? 'upload.bin',
-                  thumbnailUrl: item.thumbnail_url ?? null,
-                  mediaItemId: item.id,
-                  mixpostMediaId: (item as Record<string, unknown>).mixpost_media_id as number | null ?? null,
-                })
-              }
-            }
+          // Re-key by id and walk the caller's array. `.in()` returns
+          // PostgREST's order, not the owner's, and a carousel is an ordered
+          // thing — mapping the rows as they arrive shuffles the slides.
+          const byId = new Map(rows.map((row) => [row.id as string, row]))
+          for (const id of media_ids) {
+            const row = byId.get(id)
+            if (!row?.file_url) continue
+
+            const fileType = (row.file_type as string | null) ?? null
+            const kind = mediaKind(row.file_url as string, fileType)
+            // The column is declared TEXT in src/types/database.ts and holds a
+            // number in practice. Coerced rather than cast: a non-numeric value
+            // must read as "no cache", not as NaN handed to Mixpost.
+            const cachedId = Number(row.mixpost_media_id)
+
+            media.push({
+              url: row.file_url as string,
+              type: kind,
+              mime_type: fileType ?? (kind === 'video' ? 'video/mp4' : 'image/jpeg'),
+              ...(typeof row.file_size_bytes === 'number' ? { size_bytes: row.file_size_bytes } : {}),
+              ...(typeof row.duration_seconds === 'number' ? { duration_seconds: row.duration_seconds } : {}),
+              media_item_id: row.id as string,
+              ...(Number.isFinite(cachedId) && cachedId > 0 ? { mixpost_media_id: cachedId } : {}),
+              ...(row.thumbnail_url ? { thumbnail_url: row.thumbnail_url as string } : {}),
+            })
+            mediaItemIds.push(row.id as string)
           }
         }
 
-        // Legacy path: raw image URLs (backward compat)
+        // Legacy path: raw image URLs. These carry no metadata at all, so the
+        // mime type below is a placeholder rather than a measurement — nothing
+        // downstream may treat it as one.
         const legacyUrls = image_urls?.length ? image_urls : image_url ? [image_url] : []
         for (const url of legacyUrls) {
-          allMedia.push({
+          const kind = mediaKind(url, null)
+          media.push({
             url,
-            mime: 'image/jpeg',
-            fileName: 'upload.jpg',
-            thumbnailUrl: null,
-            mediaItemId: null,
-            mixpostMediaId: null,
+            type: kind,
+            mime_type: kind === 'video' ? 'video/mp4' : 'image/jpeg',
           })
         }
 
-        const hasVideo = allMedia.some((m) => m.mime.startsWith('video/'))
-
-        // Upload each item to Mixpost. Collects failures so we can return
-        // a precise BLOCKED message instead of silently publishing text-only.
-        const mixpostMediaIds: number[] = []
-        const videoThumbs: string[] = []
-        const uploadErrors: string[] = []
-
-        /**
-         * Poll Mixpost's download-status endpoint until the remote fetch completes.
-         * Returns the media id + uuid, or null on failure/timeout.
-         *
-         * Default 500s — Mixpost's two-pass libx264 transcode of a 141MB MJPEG
-         * .mov takes ~380s. 500s gives headroom for larger files. The outer
-         * Vercel maxDuration on the MCP route is 600s.
-         */
-        async function pollRemoteDownload(
-          downloadId: string,
-          maxSeconds = 500,
-        ): Promise<{ id: number; uuid: string | null } | null> {
-          const started = Date.now()
-          const statusUrl = `${apiBase}/media/remote/${downloadId}/status`
-          while (Date.now() - started < maxSeconds * 1000) {
-            await new Promise((r) => setTimeout(r, 3000))
-            try {
-              const r = await fetch(statusUrl, {
-                headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-              })
-              if (!r.ok) continue
-              const d = await r.json()
-              if (d.status === 'completed') {
-                // Completed payloads can carry the new media in several shapes
-                const id = d.media?.id ?? d.id ?? d.data?.id
-                const uuid = d.media?.uuid ?? d.uuid ?? d.data?.uuid ?? null
-                return id ? { id: Number(id), uuid } : null
-              }
-              if (d.status === 'failed') {
-                uploadErrors.push(`Mixpost remote download failed for ${downloadId}: ${d.error ?? 'unknown'}`)
-                return null
-              }
-              // else pending/downloading/processing — keep polling
-            } catch {
-              /* transient, keep polling */
-            }
-          }
-          uploadErrors.push(`Mixpost remote download timed out for ${downloadId} after ${maxSeconds}s`)
-          return null
-        }
-
-        for (const item of allMedia) {
-          try {
-            let uploadedId: number | null = null
-            let uploadedUuid: string | null = null
-
-            // ─── Cache hit: media already transcoded + living in Mixpost ──
-            // Mixpost's video transcode takes ~6 minutes per video. We cache
-            // the returned id on the media_items row so subsequent publishes
-            // skip the whole remote-initiate + poll chain entirely.
-            if (item.mixpostMediaId) {
-              uploadedId = item.mixpostMediaId
-              console.log(`[publish_to_social] Mixpost cache hit for ${item.fileName}: media_id=${uploadedId}`)
-              mixpostMediaIds.push(uploadedId)
-              if (item.mime.startsWith('video/') && item.thumbnailUrl) {
-                videoThumbs.push(item.thumbnailUrl)
-              }
-              continue
-            }
-
-            // Method 1: Remote URL upload (preferred — Mixpost pulls from our Supabase URL).
-            // Mixpost's /media/remote/initiate is ASYNC — it returns
-            // { download_id, status: 'pending' } for larger files. We MUST poll
-            // /media/remote/{download_id}/status until completed or failed. The
-            // previous implementation only handled synchronous responses and
-            // silently proceeded to publish text-only when Mixpost was still
-            // downloading — real bug that produced text-only Facebook posts.
-            const remoteRes = await fetch(`${apiBase}/media/remote/initiate`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ url: item.url, alt_text: '' }),
-            })
-            if (remoteRes.ok) {
-              const remoteData = await remoteRes.json()
-              // Fast path: already completed (small images)
-              if (remoteData.status === 'completed') {
-                const id = Number(remoteData.media?.id ?? remoteData.id ?? remoteData.data?.id ?? NaN)
-                uploadedId = Number.isFinite(id) ? id : null
-                uploadedUuid = remoteData.media?.uuid ?? remoteData.uuid ?? remoteData.data?.uuid ?? null
-              } else if (remoteData.status === 'pending' && remoteData.download_id) {
-                // Slow path: poll until done (videos)
-                const result = await pollRemoteDownload(String(remoteData.download_id))
-                if (result) {
-                  uploadedId = result.id
-                  uploadedUuid = result.uuid
-                }
-              } else if (remoteData.status === 'failed') {
-                uploadErrors.push(`Mixpost remote initiate failed: ${remoteData.error ?? 'unknown'}`)
-              }
-            } else {
-              const errText = await remoteRes.text().catch(() => '')
-              uploadErrors.push(`Mixpost remote initiate HTTP ${remoteRes.status}: ${errText.slice(0, 200)}`)
-            }
-
-            // Method 2: Fallback to binary upload (for images only — videos
-            // would exhaust Vercel memory on a 148MB file). Images are small.
-            if (!uploadedId && !item.mime.startsWith('video/')) {
-              const fileRes = await fetch(item.url)
-              if (fileRes.ok) {
-                const blob = await fileRes.blob()
-                const formData = new FormData()
-                formData.append('file', blob, item.fileName)
-                const uploadRes = await fetch(`${apiBase}/media`, {
-                  method: 'POST',
-                  headers: { Authorization: `Bearer ${token}` },
-                  body: formData,
-                })
-                if (uploadRes.ok) {
-                  const data = await uploadRes.json()
-                  uploadedId = Number(data.id ?? data.data?.id)
-                } else {
-                  const errText = await uploadRes.text().catch(() => '')
-                  uploadErrors.push(`Mixpost binary upload HTTP ${uploadRes.status}: ${errText.slice(0, 200)}`)
-                }
-              }
-            }
-
-            if (uploadedId) {
-              mixpostMediaIds.push(uploadedId)
-              if (item.mime.startsWith('video/') && item.thumbnailUrl) {
-                videoThumbs.push(item.thumbnailUrl)
-              }
-              // Persist the Mixpost id on the media_items row so the next
-              // publish skips the remote-initiate + poll (~382s saved per video).
-              if (item.mediaItemId) {
-                void supabase
-                  .from('media_items')
-                  .update({
-                    mixpost_media_id: uploadedId,
-                    mixpost_media_uuid: uploadedUuid,
-                    mixpost_cached_at: new Date().toISOString(),
-                  })
-                  .eq('id', item.mediaItemId)
-              }
-            } else {
-              uploadErrors.push(`Failed to upload ${item.fileName} (${item.mime})`)
-            }
-            console.log(
-              `[publish_to_social] Media upload: mime=${item.mime} | mediaId=${uploadedId}`,
-            )
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            uploadErrors.push(`Exception uploading ${item.fileName}: ${msg}`)
-            console.error(`[publish_to_social] Media upload error for ${item.url}:`, err)
-          }
-        }
-
-        // Backwards-compatible alias used further down
-        const mediaIds = mixpostMediaIds
-
-        // FAIL LOUDLY if any media item was requested but Mixpost couldn't ingest it.
-        // Previous behaviour: silently publish text-only. Result: two wrong posts hit
-        // Facebook before we caught it. Never again.
-        if (allMedia.length > 0 && mediaIds.length < allMedia.length) {
-          const errorSummary = uploadErrors.length > 0 ? uploadErrors.join('\n  - ') : 'unknown reason'
-          return `BLOCKED — cannot publish. ${mediaIds.length}/${allMedia.length} media items uploaded to Mixpost successfully.\n\nUpload failures:\n  - ${errorSummary}\n\nCommon causes for video failures: file size exceeds Mixpost's MIXPOST_MAX_FILE_UPLOAD_SIZE, unsupported codec, or Supabase URL unreachable. Fix the underlying issue and retry — do NOT retry with the same file expecting a different result.`
-        }
-
+        const mediaDesc = describeMedia(media)
+        const hasVideo = media.some((m) => m.type === 'video')
         const isScheduled = !!(schedule_date && schedule_time)
+
+        // ─── The scheduled branch's own review ────────────────────────────
+        //
+        // A scheduled post never reaches publishToPlatform from here — it is
+        // written as a `scheduled` row and the 5-minute cron publishes it, which
+        // is the only way a future-dated send can also honour this project's
+        // Zernio connection. The consequence is that the door's review does not
+        // run until the cron ticks, so without this the owner would be told
+        // "Scheduled for the 20th", walk away, and the refusal would land three
+        // weeks later in a status column nobody reads.
+        //
+        // This is the SHARED gate, called once for the whole request, not a
+        // second copy of the review: the caption is identical across every
+        // platform in one call, so asking per platform would buy nothing and
+        // cost a model call each time. The content string matches the one the
+        // cron will review later, so the verdict now and the verdict then are
+        // answers to the same question.
+        if (isScheduled) {
+          const gate = await checkPublishAllowed({
+            content: [caption, ...(hashtags ?? [])].join('\n'),
+            complianceFlags: brand.compliance_flags as never,
+            brandDNA: brand.brand_dna_constraints as never,
+            brandSlug,
+            label: `${brandName} → scheduled`,
+          })
+          if (!gate.allowed) {
+            return `COMPLIANCE CHECK FAILED — post NOT published.\n\n${gate.reason ?? 'The review did not clear this content.'}\n\nFix the content and try again. AHPRA/TGA penalties: up to $60,000 per offence.`
+          }
+          if (gate.warnings.length > 0) {
+            console.log(`[publish_to_social] Compliance warnings for ${brandSlug}:`, gate.warnings)
+          }
+        }
+
         const results: string[] = []
-        const postResults: Array<{ platform: string; externalId: string | null; success: boolean }> = []
 
         for (const platform of platforms) {
-          const providers = providerMap[platform] ?? [platform]
+          const label = PLATFORM_LABELS[platform]
 
-          // Find account: STRICT brand-name match only — NEVER fall back to another brand's account
-          const brandLower = brandName.toLowerCase()
-          const slugLower = brandSlug.toLowerCase()
-
-          // Safety: if brand name is empty, refuse to match (empty string matches everything)
-          if (!brandLower) {
-            results.push(`${platform}: Cannot match accounts — brand name is empty. This is a bug.`)
+          // validateMedia only checks maxima, so nothing downstream refuses a
+          // post that has nothing to show on a platform that cannot render one.
+          if (MEDIA_REQUIRED.has(platform) && media.length === 0) {
+            results.push(`${label}: BLOCKED — ${label} requires media (${hasVideo ? 'video' : 'image or video'}). Upload to the media library first, then pass media_ids.`)
             continue
           }
 
-          // Build all matching candidates for this provider
-          const candidates = accounts.filter((a) => {
-            if (!providers.includes(a.provider)) return false
-            const n = (a.name || '').toLowerCase()
-            const u = (a.username || '').toLowerCase()
-            // Match brand name or slug in account name/username
-            return n.includes(brandLower) || n.includes(slugLower) ||
-                   u.includes(slugLower) || u.includes(brandLower.replace(/\s+/g, ''))
-          })
-
-          const account = candidates[0] ?? null
-
-          console.log(`[publish_to_social] Brand: "${brandName}" (${brandSlug}) | Platform: ${platform} | Candidates: ${candidates.map(c => c.name).join(', ') || 'NONE'} | Selected: ${account?.name ?? 'NONE'}`)
-
-          if (!account) {
-            results.push(`${platform}: No ${brandName} account found in Mixpost. Available accounts for this platform: ${accounts.filter(a => providers.includes(a.provider)).map(a => a.name).join(', ')}`)
-            postResults.push({ platform, externalId: null, success: false })
-            continue
-          }
-
-          // Instagram / TikTok / YouTube require media — text-only posts blocked
-          if ((platform === 'instagram' || platform === 'tiktok' || platform === 'youtube') && mediaIds.length === 0) {
-            results.push(`${platform}: BLOCKED — ${platform} requires media (${hasVideo ? 'video' : 'image/video'}). Upload to the media library first, then pass media_ids.`)
-            postResults.push({ platform, externalId: null, success: false })
-            continue
-          }
-
-          const postBody = {
-            accounts: [account.id],
-            versions: [{
-              account_id: account.id,
-              is_original: true,
-              content: [{
-                body: fullCaption,
-                media: mediaIds.length > 0 ? mediaIds : [],
-                url: null,
-                // Mixpost uses video_thumbs to set poster images for video posts.
-                // Empty for image-only posts; populated from media_items.thumbnail_url for videos.
-                video_thumbs: videoThumbs,
-              }],
-            }],
-            ...(isScheduled
-              ? { date: schedule_date, time: schedule_time, timezone: 'Australia/Brisbane', schedule: true }
-              : { schedule_now: true }),
-          }
-
-          const postRes = await fetch(`${apiBase}/posts`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(postBody),
-          })
-
-          if (postRes.ok) {
-            const postData = await postRes.json().catch(() => ({}))
-            const externalId = String(postData.data?.uuid ?? postData.uuid ?? postData.data?.id ?? postData.id ?? '')
-            const label = platform.charAt(0).toUpperCase() + platform.slice(1)
-            const mediaDesc = hasVideo
-              ? ' (with video)'
-              : mediaIds.length > 1
-                ? ` (carousel: ${mediaIds.length} images)`
-                : mediaIds.length === 1
-                  ? ' (with image)'
-                  : ''
-            results.push(isScheduled
-              ? `${label}: Scheduled for ${schedule_date} at ${schedule_time} AEST via ${account.name}${mediaDesc}`
-              : `${label}: Publishing now via ${account.name}${mediaDesc} (30-60 seconds to go live)`)
-            postResults.push({ platform, externalId: externalId || null, success: true })
-          } else {
-            const errText = await postRes.text().catch(() => '')
-            results.push(`${platform}: Failed (${postRes.status}) ${errText.slice(0, 100)}`)
-            postResults.push({ platform, externalId: null, success: false })
-          }
-        }
-
-        // Determine the correct post_type per PostType enum ('single' | 'carousel' | 'reel' | 'video')
-        // Video posts on short-form platforms → 'reel'; elsewhere → 'video'; otherwise image logic.
-        const ourMediaItemIds = allMedia.map((m) => m.mediaItemId).filter((id): id is string => !!id)
-
-        // Track in scheduled_posts table — one row per platform result
-        for (const pr of postResults) {
+          // ─── The row is born first, and only here ──────────────────────
+          //
+          // createDraftPost is the ONE place a draft is born; this tool used to
+          // raw-insert into scheduled_posts AFTER the platform had already
+          // accepted the post, which meant the row existed only if the send
+          // worked and carried none of the brand-name correction, duplicate
+          // suppression or platform/media sanity checks that every other draft
+          // gets. It also has to come first for a second reason: the dispatcher
+          // writes its audit row to publisher_runs.scheduled_post_id, which is
+          // `not null references scheduled_posts(id)`. No row, no audit.
+          //
+          // Status decides whether a Mixpost draft is synced. 'scheduled' syncs
+          // one and the cron publishes the NRS row; 'publishing' skips the sync
+          // entirely, because on the immediate path the dispatcher is about to
+          // create the real post and a draft alongside it is just litter.
+          let draft
           try {
-            let postType: 'single' | 'carousel' | 'reel' | 'video'
-            if (hasVideo) {
-              postType = (pr.platform === 'instagram' || pr.platform === 'facebook' || pr.platform === 'tiktok')
-                ? 'reel'
-                : 'video'
-            } else {
-              postType = mediaIds.length > 1 ? 'carousel' : 'single'
-            }
-
-            await supabase.from('scheduled_posts').insert({
-              user_id: userId,
-              brand_id: brandId,
-              platform: pr.platform,
-              caption: fullCaption,
+            draft = await createDraftPost({
+              supabase,
+              userId,
+              brandId,
+              platform,
+              caption,
               hashtags: hashtags ?? [],
-              status: isScheduled ? 'scheduled' : (pr.success ? 'publishing' : 'failed'),
-              scheduled_at: isScheduled
-                ? new Date(`${schedule_date}T${schedule_time}:00+10:00`).toISOString()
-                : new Date().toISOString(),
-              post_type: postType,
-              ...(ourMediaItemIds.length > 0 ? { media_item_ids: ourMediaItemIds } : {}),
-              ...(image_url ? { image_url } : {}),
-              ...(pr.externalId ? { external_post_id: pr.externalId } : {}),
-              ...(!pr.success ? { error: `Failed to publish to ${pr.platform}` } : {}),
+              mediaItemIds,
+              status: isScheduled ? 'scheduled' : 'publishing',
+              ...(isScheduled
+                ? { scheduledAt: new Date(`${schedule_date}T${schedule_time}:00+10:00`).toISOString() }
+                : {}),
+              // A scheduled row is published by the cron reading THIS row, so
+              // waiting up to 90s per platform for the Mixpost draft to sync
+              // would stall the conversation for something the send does not
+              // depend on.
+              awaitMixpost: false,
               metadata: {
                 source: 'publish_to_social',
                 created_by: 'Director',
                 ...(hasVideo ? { has_video: true } : {}),
-                ...(productGate.verified.length ? { verified_products: productGate.verified } : {}),
               },
             })
-          } catch {
-            // Non-blocking
+          } catch (err) {
+            // createDraftPost refuses a combination the platform could never
+            // publish — a photo carousel bound for YouTube, say — in words the
+            // owner can act on. relayIfSafe passes those through and swallows
+            // anything that turns out to carry internal detail.
+            results.push(`${label}: NOT published. ${relayIfSafe('publish_to_social', err, 'I could not save this post, so nothing was sent. Try again.')}`)
+            continue
           }
+
+          // The legacy raw-URL path attaches nothing to media_item_ids, so the
+          // scheduled publisher's only way back to the picture is this column.
+          // Without it a scheduled raw-URL post publishes text-only weeks later
+          // and nothing reports the loss.
+          if (mediaItemIds.length === 0 && legacyUrls[0]) {
+            await supabase
+              .from('scheduled_posts')
+              .update({ image_url: legacyUrls[0] })
+              .eq('id', draft.id)
+          }
+
+          if (isScheduled) {
+            results.push(`${label}: Scheduled for ${schedule_date} at ${schedule_time} AEST${mediaDesc}`)
+            continue
+          }
+
+          // ─── The one door ───────────────────────────────────────────────
+          //
+          // The words that publish must be the words in the row. createDraftPost
+          // corrects the project's own name in the caption before storing it
+          // (enforceBrandName), so re-sending the model's original text here
+          // would publish something the review never saw and the row does not
+          // contain. Read it back rather than assuming they match.
+          //
+          // Hashtags travel BARE and separate. The dispatcher's buildCaption
+          // adds the '#' and appends them in one place, which is the whole
+          // reason the same stored row used to reach the public as different
+          // words depending on which path sent it.
+          const { data: stored } = await supabase
+            .from('scheduled_posts')
+            .select('caption, hashtags')
+            .eq('id', draft.id)
+            .maybeSingle()
+
+          const result = await publishToPlatform({
+            scheduled_post_id: draft.id,
+            brand_id: brandId,
+            platform,
+            caption: (stored?.caption as string | null) ?? caption,
+            media,
+            hashtags: (stored?.hashtags as string[] | null) ?? hashtags,
+            // Decides Instagram/Facebook reel-vs-feed and whether TikTok is
+            // asked to add music. Derived once by createDraftPost so the row and
+            // the send cannot disagree about what kind of post this is.
+            post_type: draft.postType,
+          })
+
+          // Relay what the publisher actually said.
+          //
+          // `ok` only means the send was accepted. Only `confirmed` means the
+          // platform said it is live — Zernio returns that synchronously,
+          // Mixpost never does and is reconciled by the cron's in-flight sweep.
+          // Writing 'published' on `ok` alone repeats the fault create-draft.ts
+          // exists to prevent: pending is not done.
+          //
+          // A retryable failure goes back to 'scheduled' with the error
+          // CLEARED, which is what puts it in front of the 5-minute cron again.
+          // Marking it 'failed' is how real content used to be discarded by a
+          // DNS blip and never picked up again — the cron only ever selects
+          // status='scheduled'.
+          const safeError = result.ok
+            ? null
+            : relayIfSafe(
+                'publish_to_social',
+                result.error,
+                'The publisher did not accept this post.',
+              )
+
+          const update: Record<string, unknown> = result.confirmed
+            ? {
+                status: 'published',
+                published_at: new Date().toISOString(),
+                error: null,
+                ...(result.external_post_id ? { external_post_id: result.external_post_id } : {}),
+              }
+            : result.ok
+              ? {
+                  status: 'publishing',
+                  error: null,
+                  ...(result.external_post_id ? { external_post_id: result.external_post_id } : {}),
+                }
+              : result.retryable
+                ? { status: 'scheduled', error: null }
+                : { status: 'failed', error: safeError }
+
+          const { error: writeBackError } = await supabase
+            .from('scheduled_posts')
+            .update(update)
+            .eq('id', draft.id)
+
+          if (writeBackError) {
+            // The post's fate is decided by the platform, not by our ability to
+            // record it. Logged, never spoken: the owner is about to be told
+            // exactly what happened to the post either way.
+            console.error(`[publish_to_social] status write-back failed for ${draft.id}:`, writeBackError.message)
+          }
+
+          // What the owner hears. Never names the publishing service: the
+          // destination depends on which backend the door chose, and this file
+          // no longer knows or needs to know.
+          if (result.confirmed) {
+            results.push(
+              `${label}: Published to ${brandName}'s ${label}${mediaDesc}.`
+              + (result.external_permalink ? ` ${result.external_permalink}` : ''),
+            )
+          } else if (result.ok) {
+            results.push(`${label}: Publishing now to ${brandName}'s ${label}${mediaDesc} (30-60 seconds to go live)`)
+          } else if (result.retryable) {
+            results.push(`${label}: Not published yet — I could not reach the publishing service. It is queued and will go out on its own within a few minutes. Nothing is lost.`)
+          } else {
+            results.push(`${label}: NOT published. ${safeError}`)
+          }
+        }
+
+        // A tool's return value is read aloud, so an empty string is the owner
+        // hearing silence and assuming it worked. The schema allows an empty
+        // `platforms` array and the model has sent one.
+        if (results.length === 0) {
+          return 'Nothing was published — no platform was named. Tell me where you want this posted (Instagram, Facebook, LinkedIn, TikTok, YouTube or X) and I will send it.'
         }
 
         return results.join('\n')
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        console.error('[publish_to_social] Error:', msg)
-        return `Publishing failed: ${msg}`
+        return userSafeError(
+          'publish_to_social',
+          err,
+          'Publishing failed and nothing was sent. Try again, and if it keeps failing the publishing service is unreachable.',
+        )
       }
     },
   })

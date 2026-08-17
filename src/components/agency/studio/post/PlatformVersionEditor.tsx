@@ -56,15 +56,29 @@ export function PlatformVersionEditor({
 
   const charLimit = activeTab === 'master' ? 2200 : PLATFORM_CHAR_LIMITS[activeTab] ?? 2200
 
+  /**
+   * THE FAULT: the first keystroke in a platform's box deleted that platform's
+   * hashtags. This carried `currentVersion?.hashtags ?? masterHashtags` — the
+   * snapshot taken by createVersionsFromMaster when the platform was ticked,
+   * which on the usual order of work (pick platforms, write, then add tags) is
+   * an empty array. resolvePublishCaption trusts a customised version's
+   * hashtags verbatim and never tops them up from the master (post-versions.ts,
+   * rule 3), so that stale array is what published: the caption the owner had
+   * just rewritten, with every hashtag silently gone, and a preview that agreed
+   * with the row rather than with him.
+   *
+   * The live master is the only honest answer while nothing in this editor can
+   * give a platform hashtags of its own — the stored array is never a decision,
+   * only a leftover. If a per-platform hashtag field is ever added, its value
+   * is what belongs here instead, and rule 3 becomes load-bearing rather than
+   * merely true.
+   */
   const handleCaptionChange = (text: string) => {
     if (activeTab === 'master') {
       onMasterChange(text, masterHashtags)
     } else {
       const platform = activeTab as PostPlatform
-      const currentVersion = versions[platform]
-      onVersionsChange(
-        customisePlatform(versions, platform, text, currentVersion?.hashtags ?? masterHashtags)
-      )
+      onVersionsChange(customisePlatform(versions, platform, text, masterHashtags))
     }
   }
 
