@@ -33,7 +33,8 @@ import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
 import { MediaSelector } from './MediaSelector'
 
 import { createVersionsFromMaster, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
-import type { PostPlatform, PostType } from '@/types/database'
+import { earliestNextSlot } from '@/lib/posting-queue/assign-to-slot'
+import type { PostPlatform, PostType, PostingScheduleSlot } from '@/types/database'
 
 // ── Content type → Post type mapping ──────────────────────────────────────────
 const CONTENT_TO_POST_TYPE: Record<ContentType, PostType> = {
@@ -196,6 +197,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
+  const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
 
   const brandName = data.brand?.name ?? 'Brand'
   const postType = CONTENT_TO_POST_TYPE[contentType]
@@ -249,6 +251,27 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     const draft = { contentType, caption, hashtags, aiPrompt, creatorMode }
     try { localStorage.setItem(draftKey, JSON.stringify(draft)) } catch { /* storage full */ }
   }, [draftKey, contentType, caption, hashtags, aiPrompt, creatorMode])
+
+  useEffect(() => {
+    if (!activeBrandId) {
+      setNextSlotIso(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/posting-schedule?brandId=${activeBrandId}`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((slots: PostingScheduleSlot[]) => {
+        if (cancelled || !Array.isArray(slots)) return
+        const when = earliestNextSlot(slots, new Date())
+        setNextSlotIso(when ? when.toISOString() : null)
+      })
+      .catch(() => {
+        if (!cancelled) setNextSlotIso(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeBrandId])
 
   // ── Load existing draft for editing ──────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
@@ -584,27 +607,11 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     setSaving(true)
     setSaveProblem(null)
 
+    const persistStatus = mode === 'schedule' ? 'scheduled' : 'draft'
+
     try {
-      if (mode === 'now') {
-        const platformNames = selectedPlatforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')
-        // The Director is asked to publish the words on screen, per platform.
-        // It used to be handed the master caption and a platform list, so a
-        // platform the owner had rewritten was reviewed and published from the
-        // copy he had already replaced — and the reply came back saying it was
-        // done, which it was, with the wrong text.
-        const anyCustomised = selectedPlatforms.some(
-          (platform) => resolvePublishCaption(versions, platform, caption, hashtags).isCustomised,
-        )
-        if (!anyCustomised) {
-          sendToDirector(`Review and publish this post to ${platformNames}:\n\n${caption}\n\n${hashtags.map(h => `#${h}`).join(' ')}\n\nCheck compliance and brand voice, then publish when ready.`)
-          return
-        }
-        const perPlatform = selectedPlatforms.map((platform) => {
-          const publish = resolvePublishCaption(versions, platform, caption, hashtags)
-          const label = platform.charAt(0).toUpperCase() + platform.slice(1)
-          return `--- ${label} ---\n${composePublishBody(publish.caption, publish.hashtags)}`
-        })
-        sendToDirector(`Review and publish this post to ${platformNames}. Each platform below has its own wording — publish exactly what is written under that platform's heading and do not merge them or reuse one for another.\n\n${perPlatform.join('\n\n')}\n\nCheck compliance and brand voice on every version, then publish when ready.`)
+      if (selectedPlatforms.length === 0) {
+        setSaveProblem('Pick at least one account first.')
         return
       }
 
@@ -624,7 +631,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
               id: editDraftId,
               caption: editPublish.caption,
               hashtags: editPublish.hashtags.map(h => h.replace(/^#/, '')),
-              status: mode === 'draft' ? 'draft' : 'scheduled',
+              status: persistStatus,
               scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
               post_type: postType,
               media_item_ids: selectedMediaIds,
@@ -653,7 +660,17 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
           setSaveProblem('That update did not save, so the post in Review still has its old words. Your changes are still here — try Update again.')
           return
         }
-        // Return to Review tab
+        if (mode === 'now') {
+          const published = await fetch('/api/scheduled-posts/publish-now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postIds: [editDraftId] }),
+          })
+          if (!published.ok) {
+            setSaveProblem('The update saved but did not go out. It is in Posts — try Post now from there.')
+            return
+          }
+        }
         setEditMode(false)
         setEditDraftId(null)
         data.refetch()
@@ -664,6 +681,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       // New post mode: POST per platform
       const savedPlatforms: PostPlatform[] = []
       const failedPlatforms: SaveFailure[] = []
+      const createdIds: string[] = []
       for (const platform of selectedPlatforms) {
         // scheduled_posts is already one row per platform, so the row's own
         // caption IS the variant — no migration, no new column, nothing
@@ -688,7 +706,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
               // writes (HashtagSection, fill-calendar) and the shape
               // dispatcher.ts:buildCaption is built to receive.
               hashtags: publish.hashtags.map(h => h.replace(/^#/, '')),
-              status: mode === 'draft' ? 'draft' : 'scheduled',
+              status: persistStatus,
               scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
               post_type: postType,
               media_item_ids: selectedMediaIds,
@@ -716,6 +734,8 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         }
         if (response?.ok) {
           savedPlatforms.push(platform)
+          const created = (await response.json().catch(() => null)) as { id?: string } | null
+          if (created?.id) createdIds.push(created.id)
           continue
         }
         // 400 is the server refusing the shape outright — most often a platform
@@ -741,6 +761,18 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         setSaveProblem(describeSaveOutcome(savedPlatforms, failedPlatforms))
         setSelectedPlatforms(failedPlatforms.map((failure) => failure.platform))
         return
+      }
+
+      if (mode === 'now' && createdIds.length > 0) {
+        const published = await fetch('/api/scheduled-posts/publish-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postIds: createdIds }),
+        })
+        if (!published.ok) {
+          setSaveProblem('The post was saved but did not go out. It is in Posts — try Post now from there.')
+          return
+        }
       }
 
       // Clear draft from localStorage after successful save
@@ -1187,6 +1219,7 @@ If any items have no AI description or transcription yet, name them and offer to
         saving={saving}
         onSave={handleSave}
         editMode={editMode}
+        nextSlotIso={nextSlotIso}
       />
     </div>
   )

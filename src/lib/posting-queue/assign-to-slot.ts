@@ -83,6 +83,23 @@ export function nextOccurrence(
 }
 
 /**
+ * The next time on the plan, in the owner's language "next free slot".
+ * No slots configured → nothing to pick; the composer must not invent a time.
+ */
+export function earliestNextSlot(
+  slots: Array<Pick<PostingScheduleSlot, 'day_of_week' | 'time' | 'timezone'>>,
+  from: Date,
+): Date | null {
+  if (slots.length === 0) return null
+  let best: Date | null = null
+  for (const slot of slots) {
+    const when = nextOccurrence(slot, from)
+    if (!best || when.getTime() < best.getTime()) best = when
+  }
+  return best
+}
+
+/**
  * Returns the IANA timezone offset in minutes (e.g. Brisbane = +600).
  * Hard-codes the Australian tzs we ship with; falls back to 0.
  */

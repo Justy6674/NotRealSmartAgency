@@ -2,8 +2,8 @@
 
 export const dynamic = 'force-dynamic'
 
-import { DepartmentNotReadyForPath } from '@/components/agency/shell/DepartmentNotReady'
+import { BloggingDepartment } from '@/components/agency/blogging/BloggingDepartment'
 
 export default function BloggingDepartmentPage() {
-  return <DepartmentNotReadyForPath />
+  return <BloggingDepartment />
 }
