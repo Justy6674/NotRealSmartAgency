@@ -21,6 +21,10 @@ export function LoginPageClient() {
   const touchMapRef = useRef<Map<string, { x: number; y: number }>>(new Map())
   const [isMobile, setIsMobile] = useState(false)
   const [rippleReady, setRippleReady] = useState(false)
+  // Set when the decorative WebGL layer cannot run at all — no GPU, WebGL
+  // disabled by policy, a blocked context. It reveals the brand and swaps in
+  // the static background, so the page never depends on the effect painting.
+  const [rippleFailed, setRippleFailed] = useState(false)
   const [existingUser, setExistingUser] = useState<{ email: string; name: string } | null>(null)
 
   useEffect(() => {
@@ -210,7 +214,18 @@ void main() {
     }
 
     let cleanup: (() => void) | undefined
-    init().then((c) => { cleanup = c })
+    init()
+      .then((c) => { cleanup = c })
+      .catch((err) => {
+        // `new THREE.WebGLRenderer()` throws when a context cannot be created,
+        // and this rejection had nowhere to go: `setRippleReady(true)` sits at
+        // the end of init, so a machine without WebGL left the logo at opacity
+        // 0 permanently while its 480px still occupied the layout — an
+        // unbranded login page with the form shoved off centre. A decoration
+        // failing must never decide whether the brand appears.
+        console.warn('[login] background effect unavailable, using static backdrop:', err)
+        setRippleFailed(true)
+      })
     return () => { cleanup?.() }
   }, [isMobile])
 
@@ -247,8 +262,8 @@ void main() {
       className="relative min-h-svh w-full overflow-hidden"
       style={{ background: 'oklch(0.06 0 0)' }}
     >
-      {/* Mobile fallback — dark gradient */}
-      {isMobile && (
+      {/* Static backdrop — mobile, and any browser where WebGL is unavailable */}
+      {(isMobile || rippleFailed) && (
         <div className="absolute inset-0" style={{
           background: 'radial-gradient(ellipse at center, oklch(0.12 0 0) 0%, oklch(0.06 0 0) 70%)',
         }} />
@@ -260,8 +275,8 @@ void main() {
         <div
           className="mb-10 transition-all duration-1000"
           style={{
-            opacity: rippleReady || isMobile ? 1 : 0,
-            transform: rippleReady || isMobile ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
+            opacity: rippleReady || isMobile || rippleFailed ? 1 : 0,
+            transform: rippleReady || isMobile || rippleFailed ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
           }}
         >
           <Image
