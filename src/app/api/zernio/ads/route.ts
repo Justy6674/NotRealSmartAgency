@@ -1,28 +1,224 @@
-import { NextResponse } from 'next/server';
-import { listZernioCampaigns, setZernioCampaignStatus } from '@/lib/zernio/client';
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { userSafeError } from '@/lib/errors/user-safe'
+import {
+  isZernioAdPlatform,
+  listZernioCampaigns,
+  setZernioCampaignStatus,
+  type ZernioAdPlatform,
+} from '@/lib/zernio/client'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * Paid campaigns for ONE brand the signed-in person owns.
+ *
+ * Two things this route used to get wrong, both of which mattered.
+ *
+ * First, it ran on the service-role key with no session and no ownership check,
+ * so anyone who could reach the URL with a brand uuid read that tenant's ad
+ * spend — and could POST to pause their live campaigns. /api/inbox already had
+ * the right pattern (session client, getUser, brand lookup scoped by user_id);
+ * it is copied here rather than reinvented. `brandId` is now required, because
+ * an unscoped list returns every campaign in the whole Zernio workspace.
+ *
+ * Second, an upstream failure was indistinguishable from an empty ledger. The
+ * client returns a discriminated result now, and this route forwards the
+ * difference — `reachable: false` with a plain sentence — so the page can say
+ * "these figures could not be read" instead of "no campaigns running".
+ */
+
+/** What the browser sees. `problem` is written for the owner, never upstream's words. */
+interface AdsPayload {
+  /** True when this brand is linked to a Zernio ad profile. */
+  configured: boolean
+  /** True when Zernio answered. Null when there was nothing to ask. */
+  reachable: boolean | null
+  problem: string | null
+  campaigns: unknown[]
+}
+
+const UNREACHABLE =
+  'Zernio did not answer, so the campaign figures below could not be read. Nothing has been changed. This can also mean the ad connection has stopped working — if a campaign should be running, check it in the platform’s Ads Manager.'
+
+const NOT_SET_UP =
+  'This site has no Zernio ad connection configured, so no campaign figures can be read for any brand.'
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const accountId = searchParams.get('accountId') ?? undefined;
-    const campaigns = await listZernioCampaigns(accountId);
-    return NextResponse.json({ campaigns });
-  } catch (err: any) {
-    console.error('Zernio campaigns list error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+    const { searchParams } = new URL(request.url)
+    const brandId = searchParams.get('brandId')
+    const accountId = searchParams.get('accountId') ?? undefined
+
+    if (!brandId) {
+      return NextResponse.json(
+        { error: 'Choose a brand first — ad spend is kept per brand.' },
+        { status: 400 },
+      )
+    }
+
+    const profileId = await profileIdForOwnedBrand(supabase, brandId, user.id)
+    if (profileId === 'not_found') {
+      return NextResponse.json({ error: 'That brand could not be found.' }, { status: 404 })
+    }
+    if (profileId === null) {
+      // Linked to nothing. A real answer, not a failure.
+      const payload: AdsPayload = { configured: false, reachable: null, problem: null, campaigns: [] }
+      return NextResponse.json(payload)
+    }
+
+    const result = await listZernioCampaigns(profileId, accountId)
+    if (!result.ok) {
+      const payload: AdsPayload = {
+        configured: true,
+        reachable: false,
+        problem: result.reason === 'not_configured' ? NOT_SET_UP : UNREACHABLE,
+        campaigns: [],
+      }
+      return NextResponse.json(payload)
+    }
+
+    const payload: AdsPayload = {
+      configured: true,
+      reachable: true,
+      problem: null,
+      campaigns: result.campaigns,
+    }
+    return NextResponse.json(payload)
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: userSafeError(
+          'api/zernio/ads GET',
+          err,
+          'The campaign figures could not be read just now. Nothing has been changed.',
+        ),
+      },
+      { status: 500 },
+    )
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const { campaignId, status } = await request.json();
-    if (!campaignId || !status) {
-      return NextResponse.json({ error: 'campaignId and status are required' }, { status: 400 });
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+    const body = (await request.json().catch(() => ({}))) as {
+      brandId?: unknown
+      campaignId?: unknown
+      status?: unknown
+      platform?: unknown
     }
-    const result = await setZernioCampaignStatus(campaignId, status);
-    return NextResponse.json({ success: true, result });
-  } catch (err: any) {
-    console.error('Zernio campaign status error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+
+    const brandId = typeof body.brandId === 'string' ? body.brandId : null
+    const campaignId = typeof body.campaignId === 'string' ? body.campaignId : null
+    const status = body.status === 'active' || body.status === 'paused' ? body.status : null
+
+    if (!brandId || !campaignId || !status) {
+      return NextResponse.json(
+        { error: 'This campaign was not changed. The request was missing the brand, the campaign or the new status.' },
+        { status: 400 },
+      )
+    }
+
+    const profileId = await profileIdForOwnedBrand(supabase, brandId, user.id)
+    if (profileId === 'not_found' || profileId === null) {
+      return NextResponse.json(
+        { error: 'That campaign could not be changed, because that brand is not linked to an ad profile here.' },
+        { status: 404 },
+      )
+    }
+
+    /**
+     * Ownership is checked against Zernio, not against the request.
+     *
+     * A campaign id in the body proves nothing — the whole point of the leak
+     * being fixed here is that one tenant could send another tenant's id. So
+     * the campaign has to appear in this brand's own profile before a single
+     * dollar of it can be stopped, and its platform is read from that record
+     * rather than taken from the caller.
+     */
+    const listed = await listZernioCampaigns(profileId)
+    if (!listed.ok) {
+      return NextResponse.json(
+        { error: 'Zernio did not answer, so this campaign was not changed. It is still running as it was. Try again in a moment.' },
+        { status: 502 },
+      )
+    }
+
+    const record = listed.campaigns
+      .map((c) => (c && typeof c === 'object' ? (c as Record<string, unknown>) : {}))
+      .find((c) => c.platformCampaignId === campaignId)
+
+    if (!record) {
+      // Covers both a campaign that belongs to someone else and one Zernio has
+      // not finished syncing an id for, without confirming which.
+      return NextResponse.json(
+        {
+          error:
+            'That campaign could not be matched to this brand in Zernio, so nothing was changed. If it is new it may still be syncing — try again shortly, or change it in the platform’s own Ads Manager.',
+        },
+        { status: 404 },
+      )
+    }
+
+    const platform = resolvePlatform(record.platform, body.platform)
+    if (!platform) {
+      return NextResponse.json(
+        { error: 'Zernio did not say which platform this campaign runs on, so it was not changed. Pause or resume it in the platform’s own Ads Manager.' },
+        { status: 422 },
+      )
+    }
+
+    const result = await setZernioCampaignStatus(campaignId, status, platform)
+    return NextResponse.json({ success: true, result })
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: userSafeError(
+          'api/zernio/ads POST',
+          err,
+          'This campaign was not changed and is still running as it was. Try again, or change it in the platform’s own Ads Manager.',
+        ),
+      },
+      { status: 500 },
+    )
   }
+}
+
+/**
+ * The brand's Zernio ad profile, but only if this person owns the brand.
+ *
+ * 'not_found' covers both "no such brand" and "not yours" deliberately: telling
+ * the two apart would let anyone enumerate which brand ids exist.
+ */
+async function profileIdForOwnedBrand(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+  userId: string,
+): Promise<string | null | 'not_found'> {
+  const { data: brand } = await supabase
+    .from('brands')
+    .select('id, social_urls')
+    .eq('id', brandId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!brand) return 'not_found'
+
+  const profileId = (brand.social_urls as { zernio_profile_id?: unknown } | null)?.zernio_profile_id
+  return typeof profileId === 'string' && profileId.trim() !== '' ? profileId : null
+}
+
+/** Zernio's own record wins; the caller's value is only a fallback. */
+function resolvePlatform(fromRecord: unknown, fromBody: unknown): ZernioAdPlatform | null {
+  if (isZernioAdPlatform(fromRecord)) return fromRecord
+  if (isZernioAdPlatform(fromBody)) return fromBody
+  return null
 }

@@ -59,7 +59,11 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* Secondary text carries the surface hue rather than being flat grey. The
+     chroma is 0.012 — enough to read as part of the silver palette, far too
+     little to move luminance, so the measured 4.73:1 against the page is
+     unchanged. */
+  --muted-foreground: oklch(0.556 0.012 240);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
@@ -94,7 +98,8 @@
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
+  /* Same tint on the dark side; 7.63:1 against the dark page is unchanged. */
+  --muted-foreground: oklch(0.708 0.014 240);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
