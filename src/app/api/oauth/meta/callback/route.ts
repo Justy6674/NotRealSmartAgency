@@ -10,6 +10,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { saveToken } from '@/lib/publishers/token-store'
@@ -71,7 +72,53 @@ export async function GET(request: Request) {
   // Clear the state cookie
   cookieStore.delete('meta_oauth_state')
 
-  const { brandId } = JSON.parse(state) as { brandId: string }
+  /*
+   * Establish WHO is connecting, and that the project is theirs.
+   *
+   * The state cookie above is a CSRF check and nothing more: it proves the same
+   * browser began the flow, because that browser set the cookie and chose the
+   * state. It does not say whose account this is. `brandId` was then read
+   * straight out of that same attacker-chosen blob and handed to the service
+   * role — which bypasses RLS — so anyone could start a Meta flow, name someone
+   * else's project in the state, finish with their own Facebook Page, and have
+   * their tokens written onto that project. Every later publish for it would
+   * have gone to their Page. /api/oauth/youtube/callback already authenticated
+   * first; this route never did.
+   */
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_APP_URL}/login?redirect=${encodeURIComponent('/agency/studio/accounts')}`,
+    )
+  }
+
+  let brandId: string
+  try {
+    ;({ brandId } = JSON.parse(state) as { brandId: string })
+  } catch {
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=Invalid+state+parameter`,
+    )
+  }
+
+  // Read through the session client, so RLS decides. A project belonging to
+  // anyone else simply returns nothing rather than reporting that it exists.
+  const { data: ownedBrand } = await supabase
+    .from('brands')
+    .select('id')
+    .eq('id', brandId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!ownedBrand) {
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent('That project is not yours to connect')}`,
+    )
+  }
 
   const appId = process.env.META_APP_ID!
   const appSecret = process.env.META_APP_SECRET!
