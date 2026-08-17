@@ -248,10 +248,40 @@ void main() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) { setError(error.message); setLoading(false) }
-    else { window.location.href = redirect }
+    // 20s ceiling so "Signing in..." cannot stick forever if the auth
+    // client hangs on a stolen Web Lock (automated Chrome) or a dead request.
+    const SIGN_IN_MS = 20_000
+    let timedOut = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true
+        reject(new Error('sign-in timed out'))
+      }, SIGN_IN_MS)
+    })
+    try {
+      const supabase = createClient()
+      const { error } = await Promise.race([
+        supabase.auth.signInWithPassword({ email, password }),
+        timeout,
+      ])
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+        return
+      }
+      window.location.href = redirect
+    } catch (err) {
+      console.error('[login] sign-in failed', err)
+      setError(
+        timedOut
+          ? 'Sign-in is taking too long. Open a new window and try again.'
+          : 'Could not sign in. Try again in a new window.',
+      )
+      setLoading(false)
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
   }
 
   return (

@@ -58,3 +58,16 @@ test('the static backdrop covers WebGL failure, not just mobile', () => {
     'without this the page falls back to flat black instead of the gradient',
   )
 })
+
+test('sign-in cannot leave the button stuck on Signing in forever', () => {
+  assert.match(
+    source,
+    /Promise\.race/,
+    'signInWithPassword must race a timeout — otherwise a hung gotrue lock never clears loading',
+  )
+  assert.match(
+    source,
+    /setLoading\(false\)/,
+    'the timeout path must unstick the button',
+  )
+})
