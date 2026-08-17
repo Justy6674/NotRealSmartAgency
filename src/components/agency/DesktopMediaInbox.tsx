@@ -5,7 +5,11 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AlertCircle, ArrowLeft, ArrowRight, Check, FileVideo, Image as ImageIcon, LayoutDashboard, Loader2, Music, Palette, Upload } from 'lucide-react'
 import { NrsDeskConversation } from '@/components/agency/NrsDeskConversation'
+import { MediaTile } from '@/components/agency/media/MediaTile'
+import { ReloadAppButton } from '@/components/agency/shell/ReloadAppButton'
+import { useBrandTheme } from '@/components/agency/shell/brand-theme'
 import { desktopInboxDisplayName } from '@/lib/media/desktop-inbox'
+import { useAgencyStore } from '@/stores/agency-store'
 import { FOCUS_RING_INSET, FOCUS_RING_INSET_ON_SOLID } from '@/lib/ui/focus'
 
 const MAX_MEDIA_INTAKE_BYTES = 500 * 1024 * 1024
@@ -25,6 +29,7 @@ interface InboxBrand {
   id: string
   name: string
   slug: string
+  brand_colours?: Record<string, string>
 }
 
 type UploadState = 'uploading' | 'filing' | 'ready' | 'error'
@@ -127,6 +132,12 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
   const [mediaReloadToken, setMediaReloadToken] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const setBrand = useAgencyStore((s) => s.setBrand)
+  const themeVars = useBrandTheme(selectedBrand)
+
+  useEffect(() => {
+    if (selectedBrand) setBrand(selectedBrand.id)
+  }, [selectedBrand, setBrand])
 
   const request = useCallback(async (body: Record<string, unknown>) => {
     if (!selectedBrand) throw new Error('Choose a business before uploading.')
@@ -236,6 +247,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
 
   const selectBrand = (brand: InboxBrand) => {
     setSelectedBrand(brand)
+    setBrand(brand.id)
     setUploads([])
     setExistingMedia([])
     setSelectedExistingMediaIds([])
@@ -272,7 +284,13 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
   }
 
   return (
-    <main className="flex min-h-[100dvh] flex-col bg-background text-foreground">
+    <main
+      data-nrs-shell=""
+      data-brand-id={selectedBrand?.id}
+      data-testid="nrs-desk-shell"
+      style={themeVars}
+      className="flex min-h-[100dvh] flex-col bg-background text-foreground"
+    >
       {/*
         The one piece of chrome that renders in every state. The way back into
         the app used to live inside the brand-selected branch only, so a person
@@ -282,7 +300,10 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: 'var(--brand-deep)', color: 'var(--brand-ink)' }}
+            >
               <Upload className="h-4 w-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -292,6 +313,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
           </div>
 
           <nav aria-label="Go to the main NRS workspace" className="flex shrink-0 items-center gap-2">
+            <ReloadAppButton />
             <Link
               href="/agency/board"
               className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-accent hover:text-foreground active:bg-accent/70 ${FOCUS_RING}`}
@@ -301,7 +323,8 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
             </Link>
             <Link
               href="/agency/studio"
-              className={`inline-flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors duration-200 hover:bg-foreground/90 active:bg-foreground/80 ${FOCUS_RING_ON_SOLID}`}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-200 ${FOCUS_RING_ON_SOLID}`}
+              style={{ background: 'var(--brand-deep)', color: 'var(--brand-ink)' }}
             >
               <Palette className="h-3.5 w-3.5" aria-hidden="true" />
               Creative Studio
@@ -542,7 +565,6 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                     <ul className="divide-y border-t" data-testid="nrs-desk-existing-media">
                       {existingMedia.map((item) => {
                         const selected = selectedExistingMediaIds.includes(item.id)
-                        const previewUrl = item.file_type.startsWith('video/') ? item.thumbnail_url : item.file_url
                         return (
                           <li key={item.id}>
                             <button
@@ -553,10 +575,11 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                             >
                               <SelectionBox selected={selected} />
                               <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                                {previewUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={previewUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                                ) : <MediaTypeIcon fileType={item.file_type} />}
+                                <MediaTile
+                                  fileType={item.file_type}
+                                  fileUrl={item.file_url}
+                                  thumbnailUrl={item.thumbnail_url}
+                                />
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-medium text-foreground">{item.file_name}</span>

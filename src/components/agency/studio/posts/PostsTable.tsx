@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MoreHorizontal, Pencil, Copy, CalendarClock, Sparkles, Trash2, ImageIcon } from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, CalendarClock, Sparkles, Trash2 } from 'lucide-react'
+import { MediaTile } from '@/components/agency/media/MediaTile'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -88,6 +89,7 @@ function formatDateTime(iso: string | null): string {
 
 interface MediaCacheEntry {
   url: string | null
+  fileUrl: string | null
   type: string | null
 }
 
@@ -114,7 +116,8 @@ function useMediaThumb(mediaId: string | null) {
         const item = items.find((m) => m.id === mediaId)
         if (!item) return
         const next: MediaCacheEntry = {
-          url: item.thumbnail_url ?? item.file_url ?? null,
+          url: item.thumbnail_url ?? null,
+          fileUrl: item.file_url ?? null,
           type: item.file_type ?? null,
         }
         mediaCache.set(mediaId, next)
@@ -215,19 +218,11 @@ function PostRow(props: {
           aria-label="Open post"
           className="block h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[7px] border border-border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {thumb?.url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={thumb.url}
-              alt=""
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center">
-              <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
-            </span>
-          )}
+          <MediaTile
+            fileType={thumb?.type}
+            fileUrl={thumb?.fileUrl}
+            thumbnailUrl={thumb?.url}
+          />
         </button>
       </td>
 

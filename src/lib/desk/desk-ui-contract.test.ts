@@ -17,6 +17,15 @@ test('the desktop upload page becomes NRS Desk rather than sending people back t
   assert.doesNotMatch(inbox, /Copy NRS draft instruction|paste it into Claude or ChatGPT/)
 })
 
+test('NRS Desk paints --brand tokens from the selected business, not house grey', () => {
+  assert.match(inbox, /useBrandTheme\(selectedBrand\)/)
+  assert.match(inbox, /data-nrs-shell/)
+  assert.match(inbox, /--brand-deep/)
+  assert.match(inbox, /brand_colours\?:/)
+  assert.match(inbox, /MediaTile/)
+  assert.doesNotMatch(inbox, /file_type\.startsWith\('video\/'\) \? item\.thumbnail_url : item\.file_url/)
+})
+
 test('uploads retain exact media IDs, client retry IDs and explicit selection state', () => {
   assert.match(inbox, /client_upload_id: id/)
   assert.match(inbox, /mediaItemId/)
@@ -94,6 +103,14 @@ test('the Director composer stays visible on desktop and mobile PWA screens', ()
 test('real draft receipts link to the exact Creator and Review work', () => {
   assert.match(conversation, /\/agency\/studio\/create\?conversation=/)
   assert.match(conversation, /\/agency\/studio\/review\?draft=/)
+})
+
+test('Compose Media never names a vendor on the owner desk', () => {
+  assert.match(postCreator, /Library/)
+  assert.match(postCreator, /Upload/)
+  assert.match(postCreator, /Canva/)
+  assert.match(postCreator, /AI Generate/)
+  assert.doesNotMatch(postCreator, /Blotato|Generate Visual/)
 })
 
 test('Creator and Review restore exact Desk receipts after navigation or refresh', () => {

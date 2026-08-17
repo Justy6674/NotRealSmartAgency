@@ -47,6 +47,12 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const brandId = searchParams.get('brandId')
+  const idsParam = searchParams.get('ids')
+  const idList = (idsParam ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, 50)
   const search = searchParams.get('search')
   const tags = searchParams.get('tags') // comma-separated
   const archived = searchParams.get('archived') ?? 'false'
@@ -79,9 +85,11 @@ export async function GET(request: Request) {
     .eq('user_id', user.id)
 
   if (brandId) query = query.eq('brand_id', brandId)
+  if (idList.length) query = query.in('id', idList)
 
-  // Archive filter (default: hide archived)
-  if (archived !== 'true') query = query.eq('is_archived', false)
+  // Archive filter (default: hide archived). A Posts-row lookup by id must
+  // still return the still even if that file was later archived.
+  if (!idList.length && archived !== 'true') query = query.eq('is_archived', false)
 
   // Type filter
   if (type === 'image') query = query.like('file_type', 'image/%')

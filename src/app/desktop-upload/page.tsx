@@ -13,7 +13,7 @@ export default async function DesktopUploadPage() {
 
   const { data: brands } = await supabase
     .from('brands')
-    .select('id, name, slug, user_id')
+    .select('id, name, slug, user_id, brand_colours')
     .in('slug', DESKTOP_INBOX_BRAND_SLUGS)
     .order('name')
 
@@ -32,7 +32,12 @@ export default async function DesktopUploadPage() {
         && canWriteDesktopInboxBrand(membership as TeamMembershipForUpload, brand.id)
       ))
     })
-    .map(({ id, name, slug }) => ({ id, name, slug }))
+    .map(({ id, name, slug, brand_colours }) => ({
+      id,
+      name,
+      slug,
+      brand_colours: brand_colours ?? {},
+    }))
 
   return <DesktopMediaInbox brands={writableBrands} />
 }

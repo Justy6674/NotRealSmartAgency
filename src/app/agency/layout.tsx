@@ -10,6 +10,7 @@ import { DirectorRailConnected } from '@/components/agency/shell/DirectorRailCon
 import { ThemeToggle } from '@/components/agency/ThemeToggle'
 import { UserMenu } from '@/components/agency/UserMenu'
 import { BrandThemeSync } from '@/components/agency/shell/BrandThemeSync'
+import { ReloadAppButton } from '@/components/agency/shell/ReloadAppButton'
 import type { Brand } from '@/types/database'
 
 /**
@@ -322,6 +323,7 @@ export default async function AgencyLayout({
             <UserMenu />
           </div>
           <ThemeToggle />
+          <ReloadAppButton />
           <Link
             href="https://help.notrealsmart.com.au"
             target="_blank"

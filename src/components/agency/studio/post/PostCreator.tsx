@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb, Image as ImageGenIcon, AlertTriangle } from 'lucide-react'
+import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -946,23 +946,6 @@ If any items have no AI description or transcription yet, name them and offer to
             >
               <Film className="h-3.5 w-3.5" />
               Build Video Plan
-            </button>
-          )}
-          {/* Blotato visual generation — alternative AI image source.
-              Blotato has 8 MCP tools (see src/lib/agents/tools/blotato.ts);
-              this pill triggers create_visual via the Director, which picks
-              the right Blotato endpoint based on the user's request. Shown
-              for content types that accept images. */}
-          {!['short_video', 'long_video'].includes(contentType) && (
-            <button
-              type="button"
-              onClick={() => sendToDirector(
-                `Generate a visual for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName} using Blotato. Use the Brand or Content team to pick the right Blotato template, then call blotato_create_visual. When it's ready, save it to my media library so I can pick it from the slot above.`,
-              )}
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-violet-400/40 bg-violet-400/5 px-3 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-400/10 transition-all"
-            >
-              <ImageGenIcon className="h-3.5 w-3.5" />
-              Generate Visual (Blotato)
             </button>
           )}
         </div>

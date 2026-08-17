@@ -152,7 +152,7 @@ export function MediaLibraryCard({
           </div>
         ) : item.file_type.startsWith('image/') ? (
           <img
-            src={item.file_url}
+            src={item.thumbnail_url || item.file_url}
             alt={item.file_name}
             className="h-40 w-full object-cover"
             onError={() => setDecodeFailed(true)}
