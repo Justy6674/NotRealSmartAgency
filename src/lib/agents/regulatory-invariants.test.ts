@@ -68,6 +68,39 @@ test('the outputs library is gated for regulated projects', () => {
   )
 })
 
+/**
+ * Every writer into the library, not just the one that was remembered.
+ *
+ * `save_output` gated correctly and `write_blog` did not. It ran
+ * `runComplianceFilter` for health brands, wrapped it in a try/catch commented
+ * "Non-blocking", stored the verdict in metadata, and then inserted the row
+ * unconditionally. So the SAME AHPRA-violating article was refused when the
+ * Director saved it and kept when the Director wrote it — and because
+ * `query_outputs` is given to every department, the kept copy came back as an
+ * example for later work to imitate. That is exactly the contagion save-gate.ts
+ * exists to stop, entering through the door nobody checked.
+ *
+ * A blog article is advertising under the same regime as the social posts. This
+ * enumerates the writers rather than trusting that the next one remembers.
+ */
+test('every tool that writes into the outputs library gates on the review', () => {
+  for (const file of [
+    'lib/agents/tools/save-output.ts',
+    'lib/agents/tools/write-blog.ts',
+  ]) {
+    const source = read(file)
+    assert.ok(
+      source.includes('complianceGateForSave'),
+      `${file} writes to outputs without gating on the regulatory review`,
+    )
+    assert.doesNotMatch(
+      source,
+      /catch\s*\{\s*(\/\/[^\n]*)?\s*\}\s*\n[\s\S]{0,400}?\.from\('outputs'\)\s*\n\s*\.insert/,
+      `${file} swallows a failed review and inserts anyway — a review that could not run must block`,
+    )
+  }
+})
+
 test('creating a project settles its regulatory flags', () => {
   const source = read('app/api/brands/route.ts')
   assert.ok(

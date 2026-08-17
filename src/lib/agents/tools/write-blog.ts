@@ -5,7 +5,8 @@ import { z } from 'zod/v3'
 import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ComplianceFlags } from '@/types/database'
-import { runComplianceFilter } from '../compliance-filter'
+import { runComplianceFilter, type GuardianResult } from '../compliance-filter'
+import { complianceGateForSave } from '../save-gate'
 
 function slugify(text: string): string {
   return text
@@ -231,8 +232,18 @@ slug: "url-friendly-slug"
         const headers = extractHeaders(blogContent)
         const readTime = estimateReadTime(actualWordCount)
 
-        // 4. Run compliance filter for health brands
-        let complianceResult = null
+        // 4. Regulatory review — and it decides, rather than being recorded.
+        //
+        // This ran the review, caught any fault as "non-blocking", stored the
+        // verdict in metadata and then saved the article regardless. So the same
+        // AHPRA-violating copy was refused by save_output and kept by write_blog,
+        // and because query_outputs is given to every department, the kept copy
+        // came back later as an example for other work to imitate. save-gate.ts
+        // exists to stop precisely that; this was the door it did not cover.
+        //
+        // A published article for a regulated service is advertising under the
+        // same regime as the social posts, so it gets the same answer.
+        let complianceResult: GuardianResult | null = null
         if (isHealthBrand) {
           try {
             complianceResult = await runComplianceFilter(
@@ -240,8 +251,19 @@ slug: "url-friendly-slug"
               complianceFlags!,
               brand.brand_dna_constraints
             )
-          } catch {
-            // Non-blocking
+          } catch (error) {
+            // Left null deliberately. complianceGateForSave(null) refuses, so a
+            // review that could not run blocks exactly like one that failed —
+            // an outage must never read as approval.
+            console.error('[write-blog] regulatory review could not run:', error)
+          }
+
+          const gate = complianceGateForSave(complianceResult)
+          if (!gate.allowed) {
+            return {
+              success: false,
+              error: gate.reason,
+            }
           }
         }
 
