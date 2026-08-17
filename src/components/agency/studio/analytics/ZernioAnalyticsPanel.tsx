@@ -37,16 +37,18 @@ export function ZernioAnalyticsPanel({ brandId, from, to }: ZernioAnalyticsPanel
     fetchZernioAnalytics()
   }, [brandId, from, to])
 
+  // Explicitly check for loading first
   if (loading) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-border bg-muted/20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-border bg-muted/10">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
+  // Fails silently if no account or not configured
   if (error || !data) {
-    return null // Fails silently, likely no Zernio account
+    return null 
   }
 
   const totals = data.totals || {}

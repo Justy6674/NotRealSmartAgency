@@ -13,9 +13,12 @@ export function ZernioAdsDataGrid({ brandId }: ZernioAdsDataGridProps) {
   const [loading, setLoading] = useState(true)
   const [configured, setConfigured] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetchCampaigns() {
+      setLoading(true)
+      setError(null)
       try {
         const res = await fetch(`/api/zernio/ads?brandId=${brandId}`)
         if (!res.ok) throw new Error('Failed to fetch campaigns')
@@ -23,9 +26,12 @@ export function ZernioAdsDataGrid({ brandId }: ZernioAdsDataGridProps) {
         if (json.configured) {
           setConfigured(true)
           setCampaigns(json.campaigns || [])
+        } else {
+          setConfigured(false)
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(err)
+        setError(err.message)
       } finally {
         setLoading(false)
       }
@@ -53,7 +59,7 @@ export function ZernioAdsDataGrid({ brandId }: ZernioAdsDataGridProps) {
   }
 
   if (loading) return null
-  if (!configured) return null
+  if (error || !configured) return null
 
   return (
     <div className="space-y-4">
