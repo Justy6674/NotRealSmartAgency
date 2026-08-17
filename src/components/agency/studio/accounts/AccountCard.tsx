@@ -70,7 +70,14 @@ export function AccountCard({ account, onManage, onDisconnect }: AccountCardProp
             </span>
             {statusIcon}
           </div>
-          <h3 className="text-sm font-medium text-foreground truncate">{account.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium text-foreground truncate">{account.name}</h3>
+            {account.is_zernio && (
+              <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400">
+                SaaS Active
+              </span>
+            )}
+          </div>
           {account.username && (
             <p className="text-[11px] text-muted-foreground truncate">@{account.username}</p>
           )}

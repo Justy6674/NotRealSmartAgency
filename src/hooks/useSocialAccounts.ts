@@ -25,6 +25,7 @@ export interface SocialAccount {
   last_refreshed_at?: string
   /** Platform-native id used by publishers */
   external_id?: string
+  is_zernio?: boolean
 }
 
 interface UseSocialAccountsResult {
@@ -75,7 +76,31 @@ export function useSocialAccounts(brandId: string | null): UseSocialAccountsResu
       const body = await res.json()
       // API returns { configured, accounts, brandMapping } — extract the array
       const raw: MixpostAccount[] = Array.isArray(body) ? body : (body.accounts ?? [])
-      setAccounts(raw.map(normaliseMixpostAccount))
+      let mergedAccounts = raw.map(normaliseMixpostAccount)
+      
+      try {
+        const zernioRes = await fetch(`/api/zernio/accounts?brandId=${brandId}`)
+        if (zernioRes.ok) {
+          const zData = await zernioRes.json()
+          const zAccs: SocialAccount[] = (zData.accounts || []).map((za: any) => ({
+            id: `zernio_${za.id || za._id}`,
+            name: za.displayName || za.username || za.platform,
+            platform: za.platform,
+            username: za.username,
+            status: 'active',
+            external_id: za.id || za._id,
+            is_zernio: true
+          }))
+          
+          // Merge: if Zernio has the platform, drop the Mixpost one (prioritize SaaS infra)
+          mergedAccounts = mergedAccounts.filter(ma => !zAccs.some(za => za.platform === ma.platform))
+          mergedAccounts = [...mergedAccounts, ...zAccs]
+        }
+      } catch (e) {
+        console.warn('Failed to fetch Zernio accounts in useSocialAccounts:', e)
+      }
+
+      setAccounts(mergedAccounts)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'fetch failed')
       setAccounts([])
