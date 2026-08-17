@@ -231,6 +231,21 @@ export function MediaLibrary() {
   }
 
   const [generatingId, setGeneratingId] = useState<string | null>(null)
+  const [regeneratingThumbId, setRegeneratingThumbId] = useState<string | null>(null)
+
+  const handleRegenerateThumb = async (id: string) => {
+    setRegeneratingThumbId(id)
+    try {
+      const res = await fetch('/api/media/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaItemId: id, runStages: ['thumbnail'] }),
+      })
+      if (res.ok) fetchMedia()
+    } finally {
+      setRegeneratingThumbId(null)
+    }
+  }
 
   const handleGenerate = async (id: string, contentType?: string) => {
     setGeneratingId(id)
@@ -764,6 +779,8 @@ export function MediaLibrary() {
               generating={generatingId === item.id}
               onRepurpose={handleRepurpose}
               onCreatePost={(id) => setPendingMediaId(id)}
+              onRegenerateThumb={handleRegenerateThumb}
+              regeneratingThumb={regeneratingThumbId === item.id}
               availableTags={availableTags}
             />
           ))}

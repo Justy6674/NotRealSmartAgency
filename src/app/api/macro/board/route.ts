@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { fetchMixpostAccounts } from '@/lib/mixpost/client'
-import { mapMixpostAccountsToBrands } from '@/lib/mixpost/brand-mapping'
 import { buildMacroBoard, type BoardAccountInput, type BoardApprovalInput } from '@/lib/macro/board'
+import { loadOwnerFacingBoardAccounts } from '@/lib/studio/owner-facing-accounts'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +27,7 @@ export async function GET() {
   since.setDate(since.getDate() - 30)
 
   try {
-    const [projectsResult, postsResult, approvalsResult, mixpostAccounts, tokensResult] = await Promise.all([
+    const [projectsResult, postsResult, approvalsResult, tokensResult] = await Promise.all([
       supabase
         .from('brands')
         .select('id, name, slug, logo_url, compliance_flags, social_urls')
@@ -50,8 +49,6 @@ export async function GET() {
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(200),
-
-      fetchMixpostAccounts(),
 
       // Connections published to directly report when they stop working.
       // Without this the board can only say an account has already lapsed,
@@ -98,17 +95,9 @@ export async function GET() {
 
     // A null here means the source was unreachable. That is carried through
     // rather than flattened to an empty list — the two mean opposite things.
-    let accounts: BoardAccountInput[] | null = null
-    if (mixpostAccounts) {
-      const mapped = mapMixpostAccountsToBrands(mixpostAccounts, projects)
-      accounts = Object.entries(mapped).flatMap(([brandId, list]) =>
-        list.map((account) => ({
-          brandId,
-          accountName: account.accountName,
-          authorized: account.authorized,
-        })),
-      )
-    }
+    // Linked brands use their own publisher list; others keep the brand-mapped
+    // workspace subset. Never merge the workspace onto a linked brand.
+    let accounts: BoardAccountInput[] | null = await loadOwnerFacingBoardAccounts(projects)
 
     // Directly-connected accounts sit alongside the ones reached through the
     // publisher; both can stop working, and the owner does not distinguish.

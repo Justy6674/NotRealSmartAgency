@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, RefreshCw, Loader2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useSocialAccounts, type SocialAccount } from '@/hooks/useSocialAccounts'
@@ -21,6 +21,19 @@ export function AccountsPage() {
   const { accounts, loading, error, refetch } = useSocialAccounts(activeBrandId)
   const [managingAccount, setManagingAccount] = useState<SocialAccount | null>(null)
   const [connectOpen, setConnectOpen] = useState(false)
+  const [controls, setControls] = useState<{
+    canControl: boolean
+    transport?: 'zernio' | 'mixpost'
+    linked?: boolean
+  } | null>(null)
+
+  useEffect(() => {
+    if (!activeBrandId) return
+    void fetch(`/api/brands/${activeBrandId}/publisher-controls`)
+      .then((r) => (r.ok ? r.json() : { canControl: false }))
+      .then(setControls)
+      .catch(() => setControls({ canControl: false }))
+  }, [activeBrandId])
 
   if (!activeBrandId) {
     return (
@@ -60,6 +73,62 @@ export function AccountsPage() {
           </button>
         </div>
       </div>
+
+      {controls?.canControl && (
+        <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 space-y-2">
+          <p className="text-xs font-medium text-foreground">How this business posts</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                void fetch(`/api/brands/${activeBrandId}/publisher-controls`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ publisher_transport: 'zernio' }),
+                }).then(() => setControls((c) => c ? { ...c, transport: 'zernio' } : c))
+              }}
+              className={`rounded-md px-3 py-1.5 text-[11px] font-medium ${
+                controls.transport !== 'mixpost'
+                  ? 'bg-[var(--brand-deep,oklch(0.33_0.08_240))] text-[var(--brand-ink,oklch(1_0_0))]'
+                  : 'border border-border bg-background text-foreground'
+              }`}
+            >
+              Post through the usual accounts
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void fetch(`/api/brands/${activeBrandId}/publisher-controls`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ publisher_transport: 'mixpost' }),
+                }).then(() => setControls((c) => c ? { ...c, transport: 'mixpost' } : c))
+              }}
+              className={`rounded-md px-3 py-1.5 text-[11px] font-medium ${
+                controls.transport === 'mixpost'
+                  ? 'bg-[var(--brand-deep,oklch(0.33_0.08_240))] text-[var(--brand-ink,oklch(1_0_0))]'
+                  : 'border border-border bg-background text-foreground'
+              }`}
+            >
+              Post through the self-hosted backup
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!window.confirm('Resume posting? Confirm billing is live first.')) return
+                void fetch(`/api/brands/${activeBrandId}/publisher-controls`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ resume: true }),
+                })
+              }}
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-[11px] font-medium text-foreground"
+            >
+              Resume posting
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-[oklch(0.65_0.2_25/0.3)] bg-[oklch(0.65_0.2_25/0.08)] px-4 py-3 text-xs text-[oklch(0.55_0.2_25)]">

@@ -16,9 +16,12 @@ import {
   type PostStatusKey,
 } from '@/lib/mixpost/ui-tokens'
 import type { ScheduledPost, MediaItem } from '@/types/database'
+import { ownerReceiptLine, type PublisherRunReceipt } from '@/lib/publishers/receipts'
+
+type PostWithReceipts = ScheduledPost & { receipts?: PublisherRunReceipt[] }
 
 interface PostsTableProps {
-  posts: ScheduledPost[]
+  posts: PostWithReceipts[]
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
   onToggleSelectAll: (ids: string[]) => void
@@ -166,7 +169,7 @@ function PlatformBadge({ platform }: { platform: string }) {
 /* ── Post row ────────────────────────────────────────────────────────────── */
 
 function PostRow(props: {
-  post: ScheduledPost
+  post: PostWithReceipts
   selected: boolean
   onToggleSelect: (id: string) => void
   onEdit: (id: string) => void
@@ -252,6 +255,27 @@ function PostRow(props: {
           </div>
           {dateLabel && (
             <p className="mt-0.5 text-[11.5px] text-muted-foreground">{dateLabel}</p>
+          )}
+          {(post.receipts ?? []).length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {(post.receipts ?? []).map((run) => (
+                <li key={`${run.account_id}-${run.created_at}`} className="text-[11.5px] text-muted-foreground">
+                  {run.external_permalink ? (
+                    <a
+                      href={run.external_permalink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline-offset-2 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {ownerReceiptLine(run)}
+                    </a>
+                  ) : (
+                    ownerReceiptLine(run)
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
         </button>
       </td>

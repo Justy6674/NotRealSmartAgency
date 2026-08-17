@@ -28,6 +28,7 @@ import { userSafeError } from '@/lib/errors/user-safe'
 import type { PostPlatform, PostType, ScheduledPostStatus } from '@/types/database'
 import { enforceBrandName } from '@/lib/brand/enforce-name'
 import { validateScentSellProductClaims } from '@/lib/products/scent-sell-product-gate'
+import { publisherTransportOf } from '@/lib/publishers/transport'
 
 /**
  * How long a caller waits for Mixpost before it reports 'pending' and moves on.
@@ -244,7 +245,7 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
   // from a hand edit, and the copy that goes to a customer must be correct
   // whichever door it came through. URLs and handles are left alone.
   const { data: namingBrand } = await supabase
-    .from('brands').select('name, name_never, slug').eq('id', brandId).maybeSingle()
+    .from('brands').select('name, name_never, slug, social_urls').eq('id', brandId).maybeSingle()
 
   const naming = namingBrand?.name
     ? enforceBrandName(caption, {
@@ -390,8 +391,11 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     mixpost: 'skipped',
   }
 
-  // Only drafts and scheduled posts belong in Mixpost.
+  // Only drafts and scheduled posts belong in Mixpost — and only when this
+  // brand is not on the usual (Zernio) accounts. Linked brands stay in NRS
+  // until Post; the self-hosted backup is Justin's D14 toggle only.
   if (status !== 'draft' && status !== 'scheduled') return base
+  if (publisherTransportOf(namingBrand?.social_urls) === 'zernio') return base
 
   const sync = pushToMixpost(postId)
 

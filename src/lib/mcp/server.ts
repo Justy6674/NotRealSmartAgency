@@ -6,9 +6,8 @@ import { registerDirectorChatTool } from './director-chat'
 import { registerGetDirectorResponseTool } from './director-job-tool'
 import { registerDraftPostTool } from './draft-post-tool'
 import { listGrantedProjectIds, type McpPrincipal } from '@/lib/security/project-access'
-import { buildMacroBoard, type BoardAccountInput } from '@/lib/macro/board'
-import { fetchMixpostAccounts } from '@/lib/mixpost/client'
-import { mapMixpostAccountsToBrands } from '@/lib/mixpost/brand-mapping'
+import { buildMacroBoard } from '@/lib/macro/board'
+import { loadOwnerFacingBoardAccounts } from '@/lib/studio/owner-facing-accounts'
 import { describeProjectState, loadProjectBrief } from '@/lib/projects/load-brief'
 import { z } from 'zod/v3'
 
@@ -46,7 +45,7 @@ export function createNRSMcpServer(principal: McpPrincipal): McpServer {
     const supabase = createAdminClient()
     const { data, error } = await supabase
       .from('brands')
-      .select('id, name, slug, description, niche, website_url')
+      .select('id, name, slug, description, niche, website_url, social_urls')
       .in('id', grantedProjectIds)
       .order('name')
 
@@ -68,23 +67,15 @@ export function createNRSMcpServer(principal: McpPrincipal): McpServer {
     const since = new Date()
     since.setDate(since.getDate() - 30)
 
-    const [postsResult, mixpostAccounts] = await Promise.all([
+    const [postsResult, accounts] = await Promise.all([
       supabase
         .from('scheduled_posts')
         .select('id, brand_id, status, scheduled_at, published_at, metadata')
         .in('brand_id', projects.map((p) => p.id))
         .gte('created_at', since.toISOString())
         .limit(1000),
-      fetchMixpostAccounts(),
+      loadOwnerFacingBoardAccounts(projects),
     ])
-
-    let accounts: BoardAccountInput[] | null = null
-    if (mixpostAccounts) {
-      const mapped = mapMixpostAccountsToBrands(mixpostAccounts, projects)
-      accounts = Object.entries(mapped).flatMap(([brandId, list]) =>
-        list.map((a) => ({ brandId, accountName: a.accountName, authorized: a.authorized })),
-      )
-    }
 
     const board = buildMacroBoard({
       projects,

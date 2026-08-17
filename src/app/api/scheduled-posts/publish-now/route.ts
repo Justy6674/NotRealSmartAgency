@@ -28,7 +28,7 @@ import { z } from 'zod/v3'
 import { fetchMixpostAccounts, type MixpostAccount } from '@/lib/mixpost/client'
 import { fetchZernioAccounts, type ZernioAccount } from '@/lib/zernio/client'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
-import { publishToPlatform } from '@/lib/publishers/dispatcher'
+import { publishTickedAccounts } from '@/lib/publishers/publish-ticked'
 import { asPublisherPlatform, type PublishMedia } from '@/lib/publishers/types'
 import { relayIfSafe, userSafeError } from '@/lib/errors/user-safe'
 
@@ -311,7 +311,7 @@ export async function POST(request: Request) {
       // `attempt` is 1 and must stay 1: the dispatcher skips the regulatory
       // review above attempt 1, on the understanding that a retry re-sends
       // content that already passed. A press of this button has not.
-      const result = await publishToPlatform(
+      const result = await publishTickedAccounts(
         {
           scheduled_post_id: post.id as string,
           brand_id: post.brand_id as string,
@@ -320,15 +320,11 @@ export async function POST(request: Request) {
           media: mediaRows.map(toPublishMedia),
           hashtags: (post.hashtags as string[] | null) ?? undefined,
           signature: signatureSuffix === '' ? undefined : signatureSuffix,
-          // Instagram reel-vs-feed and TikTok's carousel music are decided from
-          // post_type. This route built them itself, as a flat object Mixpost
-          // discards unread — Arr::only keys options by provider — so a vertical
-          // video published pillarboxed as a feed post and nobody could see why.
           post_type: (post as Record<string, unknown>).post_type as string | null,
           platform_options: platformOptionsOf(post as Record<string, unknown>),
           metadata: { source: 'scheduled-posts/publish-now' },
         },
-        1,
+        (post as Record<string, unknown>).metadata,
         { zernioAccounts, mixpostAccounts: mixpostAccounts ?? undefined },
       )
 

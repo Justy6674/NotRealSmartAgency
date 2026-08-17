@@ -14,6 +14,7 @@ import { BatchActions } from './review/BatchActions'
 import { ComplianceBadge } from './review/ComplianceBadge'
 import { PostActivityThread } from './review/PostActivityThread'
 import { recordReviewDecision } from '@/lib/media/review-memory'
+import { brandIsPublisherLinked } from '@/lib/studio/social-read-source'
 import type { ScheduledPost, DraftSource, ComplianceResult, PostPlatform } from '@/types/database'
 
 // Lightweight shape — only the fields the detail pane renders.
@@ -79,6 +80,7 @@ export function ReviewRoom({ initialDraftId }: { initialDraftId?: string } = {})
   const brandName = data.brand?.name ?? 'Brand'
   const complianceFlags = data.brand?.compliance_flags as unknown as Record<string, boolean> | null
   const isHealthBrand = !!complianceFlags?.ahpra || !!complianceFlags?.tga
+  const hideVendorChrome = brandIsPublisherLinked(data.brand?.social_urls)
 
   // ── Fetch drafts ────────────────────────────────────────────────────────────
 
@@ -86,7 +88,7 @@ export function ReviewRoom({ initialDraftId }: { initialDraftId?: string } = {})
     if (!activeBrandId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft`)
+      const res = await fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft,failed`)
       if (res.ok) {
         const posts = await res.json()
         setDrafts(Array.isArray(posts) ? posts : [])
@@ -655,16 +657,16 @@ export function ReviewRoom({ initialDraftId }: { initialDraftId?: string } = {})
                 for debugging or manual edits only. Day-to-day review
                 happens inside the native Details + Activity tabs. */}
             <div className="flex items-center gap-2">
-              {mixpostEditUrl && (
+              {!hideVendorChrome && mixpostEditUrl && (
                 <a
                   href={mixpostEditUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  title="Open this draft in the Mixpost admin (new tab) — debug/escape hatch only"
+                  title="Open this draft in the publishing admin (new tab)"
                 >
                   <ExternalLink className="h-3 w-3" />
-                  Open in Mixpost admin
+                  Open in publishing admin
                 </a>
               )}
             </div>

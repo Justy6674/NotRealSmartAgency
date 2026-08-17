@@ -7,9 +7,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { buildMacroBoard, type BoardAccountInput } from '@/lib/macro/board'
-import { fetchMixpostAccounts } from '@/lib/mixpost/client'
-import { mapMixpostAccountsToBrands } from '@/lib/mixpost/brand-mapping'
+import { buildMacroBoard } from '@/lib/macro/board'
+import { loadOwnerFacingBoardAccounts } from '@/lib/studio/owner-facing-accounts'
 import { buildProjectBrief, renderProjectBrief, type ProjectBrief } from './brief'
 
 export interface LoadBriefResult {
@@ -33,7 +32,7 @@ export async function loadProjectBrief(
   const since = new Date()
   since.setDate(since.getDate() - 30)
 
-  const [projectResult, sectionsResult, postsResult, approvalsResult, mixpostAccounts] =
+  const [projectResult, sectionsResult, postsResult, approvalsResult] =
     await Promise.all([
       supabase
         .from('brands')
@@ -62,23 +61,15 @@ export async function loadProjectBrief(
         .eq('status', 'pending')
         .limit(200),
 
-      fetchMixpostAccounts(),
     ])
 
   const project = projectResult.data
   if (!project) return null
 
   // Unreadable connections stay null so the brief says "not known" rather than
-  // reporting the project as having none.
-  let accounts: BoardAccountInput[] | null = null
-  if (mixpostAccounts) {
-    const mapped = mapMixpostAccountsToBrands(mixpostAccounts, [project])
-    accounts = (mapped[project.id] ?? []).map((a) => ({
-      brandId: project.id,
-      accountName: a.accountName,
-      authorized: a.authorized,
-    }))
-  }
+  // reporting the project as having none. Linked brands never fall through
+  // to the workspace list.
+  const accounts = await loadOwnerFacingBoardAccounts([project])
 
   const now = new Date()
   const board = buildMacroBoard({

@@ -27,6 +27,18 @@ import {
   fetchZernioAccounts,
   type ZernioAccount,
 } from '@/lib/zernio/client'
+import {
+  OWNER_ACCOUNT_MISSING,
+  OWNER_NO_TICK,
+  OWNER_POSTING_PAUSED,
+  publisherTransportOf,
+  zernioProfileIdFromSocialUrls,
+} from './transport'
+import {
+  emailJustinBillingPaused,
+  isBillingPausedError,
+  pauseLinkedBrandPosting,
+} from './billing-pause'
 import { getToken, refreshTokenIfNeeded } from './token-store'
 import { canPublish, recordPublish } from './rate-limiter'
 import { validateMedia } from './media-validator'
@@ -83,13 +95,19 @@ function isNativeEnabled(platform: PublisherPlatform): boolean {
  * that already works — not a dropped post.
  */
 export async function selectPublisherBackend(
-  brand: { social_urls?: Record<string, unknown> | null } | null | undefined,
+  brand: { id?: string; social_urls?: Record<string, unknown> | null } | null | undefined,
   platform: PublisherPlatform,
+  /**
+   * The exact account this call may touch. Required. Matching on platform
+   * alone posts two Instagram ticks to Instagram 1.
+   */
+  accountId: string,
   /**
    * The team's Zernio accounts, already listed by the caller. Pass the
    * UNFILTERED list — the cron lists it once per tick and reuses it across
    * every due post rather than making one API call per post. Omit it and this
-   * fetches the list itself.
+   * fetches the list itself. Isolation is still applied here after
+   * normaliseAccount (fetchZernioAccounts already filters).
    */
   zernioAccounts?: readonly ZernioAccount[],
 ): Promise<PublisherSelection> {
@@ -97,34 +115,42 @@ export async function selectPublisherBackend(
     ? { backend: 'native' }
     : { backend: 'mixpost' }
 
+  const wanted = accountId.trim()
+  if (wanted === '') {
+    return { backend: 'refused', reason: OWNER_NO_TICK }
+  }
+
+  const socialUrls = brand?.social_urls ?? null
+  const transport = publisherTransportOf(socialUrls)
+  const profileId = zernioProfileIdFromSocialUrls(socialUrls)
+
+  // Unlinked, or Justin flipped the backup toggle: Mixpost/native ids only.
+  // Empty Zernio map is irrelevant. Never look the Mixpost id up on the map.
+  if (transport === 'mixpost' || !profileId) {
+    return fallback
+  }
+
   try {
-    if (!process.env.ZERNIO_API_KEY) return fallback
+    if (!process.env.ZERNIO_API_KEY) {
+      return { backend: 'refused', reason: OWNER_ACCOUNT_MISSING }
+    }
 
-    const socialUrls = (brand?.social_urls ?? {}) as Record<string, unknown>
-    const rawProfile = socialUrls.zernio_profile_id
-    const profileId = typeof rawProfile === 'string' ? rawProfile.trim() : ''
-    if (profileId === '') return fallback
-
-    const accounts = zernioAccounts ?? (await fetchZernioAccounts())
-
-    // Both halves of this match matter. profileId is what ties an account to
-    // THIS brand — the list is the whole team's, so dropping that comparison
-    // would let a post land on another brand's connected account. The platform
-    // comparison is exact string equality rather than a provider expansion,
-    // matching the cron: Zernio has no facebook_page/facebook_group split to
-    // expand, so widening it would only invent matches.
+    const accounts = zernioAccounts ?? (await fetchZernioAccounts(profileId))
     const match = accounts.find(
-      (a) => a.profileId === profileId && a.platform === platform && a.id !== '',
+      (a) => a.id === wanted && a.profileId === profileId && a.platform === platform,
     )
-    if (!match) return fallback
+    if (!match) {
+      // Linked + no matching Zernio account → Didn’t send. No Mixpost hop.
+      return { backend: 'refused', reason: OWNER_ACCOUNT_MISSING }
+    }
 
     return { backend: 'zernio', zernioAccountId: match.id, zernioProfileId: profileId }
   } catch (err) {
     console.error(
-      '[dispatcher] Zernio selection failed, falling back:',
+      '[dispatcher] Zernio selection failed:',
       err instanceof Error ? err.message : String(err),
     )
-    return fallback
+    return { backend: 'refused', reason: OWNER_ACCOUNT_MISSING }
   }
 }
 
@@ -220,6 +246,8 @@ function readZernioOutcome(post: unknown): {
  */
 async function logRun(params: {
   scheduledPostId: string
+  brandId: string
+  accountId: string
   platform: string
   publisher: PublisherBackend
   status: string
@@ -230,6 +258,7 @@ async function logRun(params: {
   externalPermalink?: string
   error?: string
   durationMs?: number
+  idempotencyKey?: string
 }): Promise<string | null> {
   const supabase = createAdminClient()
 
@@ -237,6 +266,8 @@ async function logRun(params: {
     .from('publisher_runs')
     .insert({
       scheduled_post_id: params.scheduledPostId,
+      brand_id: params.brandId,
+      account_id: params.accountId,
       platform: params.platform,
       publisher: params.publisher,
       status: params.status,
@@ -247,6 +278,7 @@ async function logRun(params: {
       external_permalink: params.externalPermalink ?? null,
       error: params.error ?? null,
       duration_ms: params.durationMs ?? null,
+      idempotency_key: params.idempotencyKey ?? null,
       finished_at: params.status !== 'running' ? new Date().toISOString() : null,
     })
     .select('id')
@@ -302,11 +334,43 @@ export async function publishToPlatform(
     .eq('id', req.brand_id)
     .maybeSingle()
 
+  if (!req.account_id?.trim()) {
+    return {
+      ok: false,
+      publisher: 'zernio',
+      retryable: false,
+      error: OWNER_NO_TICK,
+    }
+  }
+
   const selection = await selectPublisherBackend(
-    brand as { social_urls?: Record<string, unknown> | null } | null,
+    brand as { id?: string; social_urls?: Record<string, unknown> | null } | null,
     req.platform,
+    req.account_id,
     options?.zernioAccounts,
   )
+
+  if (selection.backend === 'refused') {
+    await logRun({
+      scheduledPostId: req.scheduled_post_id,
+      brandId: req.brand_id,
+      accountId: req.account_id,
+      platform: req.platform,
+      publisher: 'zernio',
+      status: 'failed',
+      attempt,
+      error: selection.reason,
+      durationMs: Date.now() - start,
+      idempotencyKey: req.idempotency_key,
+    })
+    return {
+      ok: false,
+      publisher: 'zernio',
+      retryable: false,
+      error: selection.reason,
+    }
+  }
+
   const backend: PublisherBackend = selection.backend
   const useNative = selection.backend === 'native'
 
@@ -330,6 +394,8 @@ export async function publishToPlatform(
     if (!gate.allowed) {
       await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: backend,
         status: 'failed',
@@ -352,6 +418,8 @@ export async function publishToPlatform(
   if (!canPublish(req.platform, req.brand_id)) {
     const runId = await logRun({
       scheduledPostId: req.scheduled_post_id,
+      brandId: req.brand_id,
+      accountId: req.account_id,
       platform: req.platform,
       publisher: backend,
       status: 'rate_limited',
@@ -364,6 +432,8 @@ export async function publishToPlatform(
       await enqueueRetry({
         runId,
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         error: 'Rate limit exceeded',
         attempt,
@@ -385,6 +455,8 @@ export async function publishToPlatform(
     if (!validation.ok) {
       await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: backend,
         status: 'failed',
@@ -416,7 +488,8 @@ export async function publishToPlatform(
       // field would create the very problem the field solves.
       const result = await createZernioPost({
         content: buildCaption(req),
-        accounts: [{ platform: req.platform, accountId: selection.zernioAccountId }],
+        accounts: [{ platform: req.platform, accountId: req.account_id }],
+        requestId: req.idempotency_key,
         // Public URLs, not an upload: Zernio fetches them, and its docs state it
         // auto-proxies Supabase storage URLs, which is where this app's media
         // lives. Note createZernioPost types each item by file extension alone,
@@ -438,6 +511,8 @@ export async function publishToPlatform(
       // constraint is not this file's call to make.
       const runId = await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'zernio',
         status: outcome.ok ? 'success' : 'failed',
@@ -483,11 +558,38 @@ export async function publishToPlatform(
         error: outcome.error ?? 'Zernio publishing failed.',
       }
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err)
       const durationMs = Date.now() - start
+
+      if (isBillingPausedError(err)) {
+        await pauseLinkedBrandPosting()
+        await emailJustinBillingPaused()
+        await logRun({
+          scheduledPostId: req.scheduled_post_id,
+          brandId: req.brand_id,
+          accountId: req.account_id,
+          platform: req.platform,
+          publisher: 'zernio',
+          status: 'failed',
+          attempt,
+          error: OWNER_POSTING_PAUSED,
+          durationMs,
+        })
+        return {
+          ok: false,
+          publisher: 'zernio',
+          confirmed: false,
+          retryable: false,
+          error: OWNER_POSTING_PAUSED,
+        }
+      }
+
+      const error = OWNER_ACCOUNT_MISSING
+      console.error('[dispatcher] publisher call failed:', err instanceof Error ? err.message : String(err))
 
       const runId = await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'zernio',
         status: 'failed',
@@ -521,6 +623,8 @@ export async function publishToPlatform(
       if (!preCheck.ok) {
         await logRun({
           scheduledPostId: req.scheduled_post_id,
+          brandId: req.brand_id,
+          accountId: req.account_id,
           platform: req.platform,
           publisher: 'native',
           status: 'failed',
@@ -541,6 +645,8 @@ export async function publishToPlatform(
       if (!token) {
         await logRun({
           scheduledPostId: req.scheduled_post_id,
+          brandId: req.brand_id,
+          accountId: req.account_id,
           platform: req.platform,
           publisher: 'native',
           status: 'failed',
@@ -561,6 +667,8 @@ export async function publishToPlatform(
       if (!token) {
         await logRun({
           scheduledPostId: req.scheduled_post_id,
+          brandId: req.brand_id,
+          accountId: req.account_id,
           platform: req.platform,
           publisher: 'native',
           status: 'failed',
@@ -583,6 +691,8 @@ export async function publishToPlatform(
 
       const runId = await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'native',
         status: result.ok ? 'success' : 'failed',
@@ -619,6 +729,8 @@ export async function publishToPlatform(
 
       const runId = await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'native',
         status: 'failed',
@@ -651,6 +763,8 @@ export async function publishToPlatform(
     if (!accounts || accounts.length === 0) {
       await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'mixpost',
         status: 'failed',
@@ -718,6 +832,8 @@ export async function publishToPlatform(
       // none is the exact failure being removed.
       await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'mixpost',
         status: 'failed',
@@ -737,10 +853,16 @@ export async function publishToPlatform(
       }
     }
 
-    const accountIds = resolveAccountIdsForPlatform(req.platform, brandAccounts)
+    const platformIds = resolveAccountIdsForPlatform(req.platform, brandAccounts)
+    const wantedMixpost = brandAccounts.find((a) => String(a.id) === req.account_id)
+    const accountIds = wantedMixpost && platformIds.includes(wantedMixpost.id)
+      ? [wantedMixpost.id]
+      : []
     if (accountIds.length === 0) {
       await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'mixpost',
         status: 'failed',
@@ -815,6 +937,8 @@ export async function publishToPlatform(
     if (mediaFailures > 0) {
       await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'mixpost',
         status: 'failed',
@@ -917,6 +1041,8 @@ export async function publishToPlatform(
     if (result) {
       await logRun({
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         publisher: 'mixpost',
         status: 'success',
@@ -939,6 +1065,8 @@ export async function publishToPlatform(
 
     const runId = await logRun({
       scheduledPostId: req.scheduled_post_id,
+      brandId: req.brand_id,
+      accountId: req.account_id,
       platform: req.platform,
       publisher: 'mixpost',
       status: 'failed',
@@ -951,6 +1079,8 @@ export async function publishToPlatform(
       await enqueueRetry({
         runId,
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         error: 'Mixpost createPost returned null',
         attempt,
@@ -971,6 +1101,8 @@ export async function publishToPlatform(
 
     const runId = await logRun({
       scheduledPostId: req.scheduled_post_id,
+      brandId: req.brand_id,
+      accountId: req.account_id,
       platform: req.platform,
       publisher: 'mixpost',
       status: 'failed',
@@ -983,6 +1115,8 @@ export async function publishToPlatform(
       await enqueueRetry({
         runId,
         scheduledPostId: req.scheduled_post_id,
+        brandId: req.brand_id,
+        accountId: req.account_id,
         platform: req.platform,
         error,
         attempt,

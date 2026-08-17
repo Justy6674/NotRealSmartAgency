@@ -83,11 +83,24 @@ export async function fetchZernioAccounts(profileId?: string): Promise<ZernioAcc
   }
 }
 
-function getMediaType(url: string): 'image' | 'video' | 'gif' {
-  const lowerUrl = url.toLowerCase();
-  if (lowerUrl.endsWith('.mp4') || lowerUrl.endsWith('.mov') || lowerUrl.endsWith('.webm')) return 'video';
-  if (lowerUrl.endsWith('.gif')) return 'gif';
-  return 'image';
+/**
+ * Type a media URL by its path, not the signed query.
+ *
+ * createZernioPost used `endsWith('.mp4')` on the whole string. A Supabase
+ * signed URL is `clip.mp4?token=…`, so every real video was typed as an image
+ * and Zernio refused it after the caption was already written.
+ */
+export function mediaTypeFromUrl(url: string): 'image' | 'video' | 'gif' {
+  let path = url
+  try {
+    path = new URL(url).pathname
+  } catch {
+    path = url.split('?')[0]?.split('#')[0] ?? url
+  }
+  const lower = path.toLowerCase()
+  if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm')) return 'video'
+  if (lower.endsWith('.gif')) return 'gif'
+  return 'image'
 }
 
 export async function createZernioPost(params: {
@@ -96,6 +109,8 @@ export async function createZernioPost(params: {
   mediaUrls?: string[];
   scheduledFor?: string;
   publishNow?: boolean;
+  /** Stored on publisher_runs.idempotency_key. Retry the same UUID. */
+  requestId?: string;
 }) {
   try {
     if (!process.env.ZERNIO_API_KEY) throw new Error('Missing ZERNIO_API_KEY');
@@ -115,12 +130,17 @@ export async function createZernioPost(params: {
     
     if (params.mediaUrls && params.mediaUrls.length > 0) {
       body.mediaItems = params.mediaUrls.map(url => ({
-        type: getMediaType(url),
+        type: mediaTypeFromUrl(url),
         url: url
       }));
     }
 
-    const { data } = await zernio.posts.createPost({ body });
+    // Official SDKs auto-generate x-request-id per call. A retry without our
+    // stored UUID is a new logical request (docs.zernio.com/guides/idempotency).
+    const { data } = await zernio.posts.createPost({
+      ...(params.requestId ? { headers: { 'x-request-id': params.requestId } } : {}),
+      body,
+    });
     return data.post;
   } catch (err: any) {
     console.error('Failed to create Zernio post:', err.message);

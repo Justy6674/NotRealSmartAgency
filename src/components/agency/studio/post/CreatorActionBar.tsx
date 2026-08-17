@@ -224,7 +224,10 @@ export function CreatorActionBar({
           {/* Post now — primary fill button */}
           <button
             type="button"
-            onClick={() => onSave('now')}
+            onClick={() => {
+              if (!window.confirm('Post this now to the ticked accounts?')) return
+              onSave('now')
+            }}
             disabled={disabled || blockedByHealth}
             className={cn(
               'inline-flex shrink-0 items-center gap-[6px]',
@@ -268,6 +271,7 @@ export function CreatorActionBar({
             type="button"
             disabled={disabled || !when}
             onClick={() => {
+              if (!window.confirm('Schedule this post to the ticked accounts?')) return
               const iso = new Date(when).toISOString()
               onSave('schedule', iso)
               setPickingTime(false)

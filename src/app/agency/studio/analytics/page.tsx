@@ -26,6 +26,7 @@ import { PinterestReport } from '@/components/agency/studio/analytics/reports/Pi
 import { ThreadsReport } from '@/components/agency/studio/analytics/reports/ThreadsReport'
 import { BlueskyReport } from '@/components/agency/studio/analytics/reports/BlueskyReport'
 import { MastodonReport } from '@/components/agency/studio/analytics/reports/MastodonReport'
+import { SocialHangOffs } from '@/components/agency/social/SocialHangOffs'
 
 const PLATFORM_TABS: PlatformKey[] = [
   'facebook',
@@ -75,6 +76,7 @@ export default function StudioAnalyticsPage() {
         >
           Cross-channel results for the last 28 days. Click a channel to drill in.
         </p>
+        <SocialHangOffs />
       </div>
 
       <Tabs

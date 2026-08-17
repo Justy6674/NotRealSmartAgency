@@ -8,6 +8,7 @@ import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
 
 const ProcessSchema = z.object({
   mediaItemId: z.string().uuid(),
+  runStages: z.array(z.enum(['thumbnail', 'delivery', 'transcription', 'ai'])).optional(),
 })
 
 /**
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
-  const { mediaItemId } = parsed.data
+  const { mediaItemId, runStages } = parsed.data
 
   // Verify ownership before running — the pipeline itself trusts whoever
   // the supabase client is scoped to, so we check here on the user path.
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 })
   }
 
-  const result = await runMediaProcessingPipeline({ supabase, mediaItemId })
+  const result = await runMediaProcessingPipeline({ supabase, mediaItemId, runStages })
 
   if (!result.success) {
     return NextResponse.json(

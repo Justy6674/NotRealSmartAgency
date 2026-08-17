@@ -61,13 +61,10 @@ const NOT_YOURS =
   'That brand could not be opened under this sign-in, so no connection was started. If it belongs to someone else’s workspace, it has to be connected from their account.'
 
 const NOT_SET_UP =
-  'This site has no Zernio connection configured, so a sign-in cannot be started for any brand. Nothing has been changed.'
+  'This site has no account connection configured, so a sign-in cannot be started for any brand. Nothing has been changed.'
 
 const UNREACHABLE =
-  'Zernio did not answer, so the sign-in was not started and nothing has been changed here. Try again in a moment.'
-
-const NOT_SAVED =
-  'The Zernio profile for this brand could not be saved, so the sign-in was not started. Nothing has been changed here. Try again.'
+  'The account service did not answer, so the sign-in was not started and nothing has been changed here. Try again in a moment.'
 
 export async function GET(request: Request) {
   try {
@@ -81,7 +78,7 @@ export async function GET(request: Request) {
 
     if (!brandId || !platform) {
       return NextResponse.json(
-        { error: 'Choose a brand and a platform first — a Zernio connection belongs to one brand.' },
+        { error: 'Choose a brand and a platform first — a connection belongs to one brand.' },
         { status: 400 },
       )
     }
@@ -104,26 +101,15 @@ export async function GET(request: Request) {
     if (access.access === 'denied') return NextResponse.json({ error: NOT_YOURS }, { status: 403 })
 
     const brand = access.brand
-    let zernioProfileId = brand.profileId
+    const zernioProfileId = brand.profileId
 
+    // D28 / T13: connect only when this brand is already linked. An empty
+    // account map is fine. Creating a new profile from an unlinked brand is not.
     if (!zernioProfileId) {
-      const created = await createZernioProfile(brand.brandName)
-      if (!created) return NextResponse.json({ error: UNREACHABLE }, { status: 502 })
-
-      const { error: saveError } = await supabase
-        .from('brands')
-        .update({ social_urls: { ...brand.socialUrls, zernio_profile_id: created } })
-        .eq('id', brand.brandId)
-
-      // A profile that exists upstream but was never written back is worse than
-      // no profile: the next attempt makes another one. The old code ignored
-      // this result entirely. Fail closed and say so.
-      if (saveError) {
-        console.error('[api/zernio/connect] could not save zernio_profile_id:', saveError.message)
-        return NextResponse.json({ error: NOT_SAVED }, { status: 500 })
-      }
-
-      zernioProfileId = created
+      return NextResponse.json(
+        { error: 'This business isn’t set up to connect accounts yet.' },
+        { status: 400 },
+      )
     }
 
     // Where Zernio sends the person back. The platform and the brand still ride
@@ -178,42 +164,6 @@ export async function GET(request: Request) {
       },
       { status: 500 },
     )
-  }
-}
-
-/**
- * A Zernio profile for this brand, or null if Zernio would not make one.
- *
- * Upstream's response body goes to the log, never to the browser: it echoes
- * request detail back and has no words in it written for the owner.
- */
-async function createZernioProfile(name: string): Promise<string | null> {
-  try {
-    const res = await fetch('https://zernio.com/api/v1/profiles', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.ZERNIO_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ name, description: `NRS Brand: ${name}` }),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    })
-
-    if (!res.ok) {
-      console.error(
-        `[api/zernio/connect] create profile ${res.status}:`,
-        await res.text().catch(() => ''),
-      )
-      return null
-    }
-
-    const data = await res.json()
-    const id = data?.profile?._id ?? data?._id
-    return typeof id === 'string' && id.trim() !== '' ? id : null
-  } catch (err) {
-    console.error('[api/zernio/connect] create profile failed:', err)
-    return null
   }
 }
 

@@ -95,7 +95,7 @@ function SocialDepartmentChromeInner({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!activeBrandId || fetchedForBrand.current === activeBrandId) return
     fetchedForBrand.current = activeBrandId
-    void fetch('/api/approvals?status=pending')
+    void fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft,failed`)
       .then((r) => (r.ok ? r.json() : []))
       .then((items: unknown) => {
         const count = Array.isArray(items) ? items.length : 0

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchMixpostPost } from '@/lib/mixpost/client'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
-import { publishToPlatform } from '@/lib/publishers/dispatcher'
+import { publishTickedAccounts } from '@/lib/publishers/publish-ticked'
 import {
   fetchZernioAccounts,
   fetchZernioPostStatus,
@@ -396,7 +396,7 @@ export async function GET(request: Request) {
       // review on attempts above 1, on the understanding that a retry is
       // re-sending content that already passed. Content arriving from this
       // loop has not.
-      const result = await publishToPlatform(
+      const result = await publishTickedAccounts(
         {
           scheduled_post_id: post.id as string,
           brand_id: post.brand_id as string,
@@ -405,16 +405,12 @@ export async function GET(request: Request) {
           media: mediaRows.map(toPublishMedia),
           hashtags: (post.hashtags as string[] | null) ?? undefined,
           signature: signatureSuffix === '' ? undefined : signatureSuffix,
-          // post_type decides Instagram reel-vs-feed, TikTok's carousel music
-          // and YouTube's synthetic-media disclosure. It travels with the
-          // request so the dispatcher can apply them in one place; a publisher
-          // that ignores it drops the AI disclosure on a regulated brand.
           metadata: {
             source: 'cron/publish-posts',
             post_type: (post as Record<string, unknown>).post_type ?? null,
           },
         },
-        1,
+        (post as Record<string, unknown>).metadata,
         { zernioAccounts },
       )
 

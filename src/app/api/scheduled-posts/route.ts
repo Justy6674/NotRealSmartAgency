@@ -38,7 +38,10 @@ export async function GET(request: Request) {
 
   if (from) query = query.gte('scheduled_at', from)
   if (to) query = query.lte('scheduled_at', to)
-  if (status) query = query.eq('status', status)
+  if (status) {
+    const statuses = status.split(',').map((s) => s.trim()).filter(Boolean)
+    query = statuses.length > 1 ? query.in('status', statuses) : query.eq('status', statuses[0])
+  }
 
   const { data, error } = await query
 
@@ -46,7 +49,33 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json(data)
+  const posts = data ?? []
+  const ids = posts.map((row) => row.id as string)
+  if (ids.length === 0) return NextResponse.json(posts)
+
+  // Receipts live on publisher_runs (matched by external_post_id in the
+  // webhook). The owner sees one line per ticked account, never a vendor name.
+  const admin = createAdminClient()
+  const { data: runs } = await admin
+    .from('publisher_runs')
+    .select('scheduled_post_id, account_id, platform, status, external_permalink, created_at')
+    .in('scheduled_post_id', ids)
+    .order('created_at', { ascending: false })
+
+  const byPost = new Map<string, typeof runs>()
+  for (const run of runs ?? []) {
+    const key = String(run.scheduled_post_id)
+    const list = byPost.get(key) ?? []
+    list.push(run)
+    byPost.set(key, list)
+  }
+
+  return NextResponse.json(
+    posts.map((post) => ({
+      ...post,
+      receipts: byPost.get(post.id as string) ?? [],
+    })),
+  )
 }
 
 const PatchSchema = z.object({

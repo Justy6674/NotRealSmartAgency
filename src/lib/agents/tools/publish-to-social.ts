@@ -4,7 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { validateScentSellProductClaims } from '@/lib/products/scent-sell-product-gate'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
 import { createDraftPost } from '@/lib/posts/create-draft'
-import { publishToPlatform } from '@/lib/publishers/dispatcher'
+import { publishTickedAccounts } from '@/lib/publishers/publish-ticked'
+import { OWNER_NO_TICK, resolveDirectorAccountIds } from '@/lib/publishers/transport'
 import type { PublishMedia, PublisherPlatform } from '@/lib/publishers/types'
 import { relayIfSafe, userSafeError } from '@/lib/errors/user-safe'
 
@@ -147,7 +148,7 @@ export function createPublishToSocialTool(
       try {
         const { data: brand } = await supabase
           .from('brands')
-          .select('name, slug, compliance_flags, brand_dna_constraints')
+          .select('name, slug, compliance_flags, brand_dna_constraints, social_urls')
           .eq('id', brandId)
           .maybeSingle()
 
@@ -314,6 +315,18 @@ export function createPublishToSocialTool(
           // one and the cron publishes the NRS row; 'publishing' skips the sync
           // entirely, because on the immediate path the dispatcher is about to
           // create the real post and a draft alongside it is just litter.
+          const ticks = await resolveDirectorAccountIds({
+            brandId,
+            platform,
+            socialUrls: brand.social_urls,
+            brandName,
+            brandSlug,
+          })
+          if ('error' in ticks) {
+            results.push(`${label}: NOT published. ${OWNER_NO_TICK}`)
+            continue
+          }
+
           let draft
           try {
             draft = await createDraftPost({
@@ -336,6 +349,7 @@ export function createPublishToSocialTool(
               metadata: {
                 source: 'publish_to_social',
                 created_by: 'Director',
+                account_ids: ticks,
                 ...(hasVideo ? { has_video: true } : {}),
               },
             })
@@ -382,18 +396,18 @@ export function createPublishToSocialTool(
             .eq('id', draft.id)
             .maybeSingle()
 
-          const result = await publishToPlatform({
-            scheduled_post_id: draft.id,
-            brand_id: brandId,
-            platform,
-            caption: (stored?.caption as string | null) ?? caption,
-            media,
-            hashtags: (stored?.hashtags as string[] | null) ?? hashtags,
-            // Decides Instagram/Facebook reel-vs-feed and whether TikTok is
-            // asked to add music. Derived once by createDraftPost so the row and
-            // the send cannot disagree about what kind of post this is.
-            post_type: draft.postType,
-          })
+          const result = await publishTickedAccounts(
+            {
+              scheduled_post_id: draft.id,
+              brand_id: brandId,
+              platform,
+              caption: (stored?.caption as string | null) ?? caption,
+              media,
+              hashtags: (stored?.hashtags as string[] | null) ?? hashtags,
+              post_type: draft.postType,
+            },
+            { account_ids: ticks },
+          )
 
           // Relay what the publisher actually said.
           //

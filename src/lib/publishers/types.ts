@@ -78,6 +78,11 @@ export type PublisherSelection =
     }
   | { backend: 'native' }
   | { backend: 'mixpost' }
+  | {
+      backend: 'refused'
+      /** Owner-facing. Never names a vendor. */
+      reason: string
+    }
 
 export type PublishRunStatus =
   | 'pending'
@@ -142,6 +147,15 @@ export interface PublishMedia {
 export interface PublishRequest {
   scheduled_post_id: string
   brand_id: string
+  /**
+   * The exact account this call may touch. Required. Two Instagrams on one
+   * brand are two ids — matching on platform alone posts twice to the first.
+   * Linked + zernio: a live zernio_account_map row. Unlinked / toggle=mixpost:
+   * the Mixpost uuid or native OAuth id — never looked up on the Zernio map.
+   */
+  account_id: string
+  /** UUIDv4 sent as Zernio x-request-id and stored on the run. */
+  idempotency_key?: string
   platform: PublisherPlatform
   caption: string
   media: PublishMedia[]

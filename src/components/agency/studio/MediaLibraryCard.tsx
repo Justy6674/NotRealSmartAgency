@@ -14,8 +14,10 @@ import {
   Music,
   Loader2,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react'
 import type { MediaItemWithUsage } from '@/types/database'
+import { formatFileSize } from '@/lib/media/format-file-size'
 
 const CONTENT_TYPES = [
   { value: '', label: 'Auto-detect' },
@@ -45,6 +47,8 @@ interface MediaLibraryCardProps {
   generating?: boolean
   onRepurpose: (id: string) => void
   onCreatePost?: (id: string) => void
+  onRegenerateThumb?: (id: string) => void
+  regeneratingThumb?: boolean
   availableTags: string[]
 }
 
@@ -62,12 +66,6 @@ function relativeTime(dateStr: string): string {
   })
 }
 
-function formatFileSize(bytes: number | null): string {
-  if (!bytes) return ''
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
-
 export function MediaLibraryCard({
   item,
   selected,
@@ -83,8 +81,11 @@ export function MediaLibraryCard({
   generating,
   onRepurpose,
   onCreatePost,
+  onRegenerateThumb,
+  regeneratingThumb,
   availableTags,
 }: MediaLibraryCardProps) {
+  const [decodeFailed, setDecodeFailed] = useState(false)
   const [showTagInput, setShowTagInput] = useState(false)
   const [tagValue, setTagValue] = useState('')
   const [showGenerateMenu, setShowGenerateMenu] = useState(false)
@@ -145,18 +146,30 @@ export function MediaLibraryCard({
         className="relative h-40 w-full overflow-hidden rounded-t-lg bg-muted cursor-pointer"
         onClick={() => onClick?.(item)}
       >
-        {item.file_type.startsWith('image/') ? (
+        {decodeFailed ? (
+          <div className="flex h-full items-center justify-center px-3 text-center text-[11px] text-muted-foreground">
+            This file didn’t save. Upload it again.
+          </div>
+        ) : item.file_type.startsWith('image/') ? (
           <img
             src={item.file_url}
             alt={item.file_name}
             className="h-40 w-full object-cover"
+            onError={() => setDecodeFailed(true)}
           />
         ) : item.file_type.startsWith('video/') ? (
-          <video
-            src={item.file_url}
-            className="h-40 w-full object-cover"
-            preload="metadata"
-          />
+          item.thumbnail_url ? (
+            <img
+              src={item.thumbnail_url}
+              alt={item.file_name}
+              className="h-40 w-full object-cover"
+              onError={() => setDecodeFailed(true)}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+              Picture not ready yet
+            </div>
+          )
         ) : (
           <div className="flex h-full items-center justify-center">
             <Music className="h-10 w-10 text-muted-foreground" />
@@ -197,9 +210,15 @@ export function MediaLibraryCard({
         <div className="flex items-start justify-between gap-2">
           <button onClick={() => onClick?.(item)} className="line-clamp-1 text-sm font-medium text-left hover:text-primary transition-colors">{item.file_name}</button>
           <span className="shrink-0 text-[10px] text-muted-foreground">
-            {formatFileSize(item.file_size_bytes)}
+            {decodeFailed && item.file_size_bytes === 0
+              ? ''
+              : formatFileSize(item.file_size_bytes)}
           </span>
         </div>
+
+        {item.ai_description && !decodeFailed && (
+          <p className="line-clamp-2 text-[11px] text-muted-foreground">{item.ai_description}</p>
+        )}
 
         {/* Tags */}
         <div className="flex flex-wrap gap-1">
@@ -303,6 +322,18 @@ export function MediaLibraryCard({
 
         {/* Actions */}
         <div className="mt-auto flex items-center gap-1 pt-1">
+          {onRegenerateThumb && item.file_type.startsWith('video/') && (
+            <button
+              onClick={() => onRegenerateThumb(item.id)}
+              disabled={regeneratingThumb}
+              className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
+              title="Make a new picture from this video"
+            >
+              {regeneratingThumb ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Picture
+            </button>
+          )}
+          {!decodeFailed && (
           <div className="relative" ref={generateMenuRef}>
             <div className="inline-flex">
               <button
@@ -337,7 +368,8 @@ export function MediaLibraryCard({
               </div>
             )}
           </div>
-          {onCreatePost && (
+          )}
+          {!decodeFailed && onCreatePost && (
             <button
               onClick={() => onCreatePost(item.id)}
               className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:bg-muted/80 transition-colors"

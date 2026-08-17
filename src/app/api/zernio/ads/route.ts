@@ -47,10 +47,10 @@ interface AdsPayload {
 }
 
 const UNREACHABLE =
-  'Zernio did not answer, so the campaign figures below could not be read. Nothing has been changed. This can also mean the ad connection has stopped working — if a campaign should be running, check it in the platform’s Ads Manager.'
+  'Ads figures could not be read just now. Nothing has been changed. If a campaign should be running, check it in the platform’s Ads Manager.'
 
 const NOT_SET_UP =
-  'This site has no Zernio ad connection configured, so no campaign figures can be read for any brand.'
+  'Ads are not set up for this site, so no campaign figures can be read for any brand.'
 
 export async function GET(request: Request) {
   try {
