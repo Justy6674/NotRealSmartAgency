@@ -44,3 +44,4 @@ supabase/.temp
 
 # Local Hermes attachments — large media, never belongs in git
 .hermes/
+.gstack/
