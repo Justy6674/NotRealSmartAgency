@@ -28,6 +28,7 @@ import { createSearchBrainTool } from './search-brain'
 import { createQueryMediaTool } from './query-media'
 import { createProcessMediaTool } from './process-media'
 import { createRepurposeContentTool } from './repurpose-content'
+import { getZernioReplyTool } from './zernio-reply'
 import { createFillCalendarTool } from './fill-calendar'
 import { createSaveBrandInfoTool } from './save-brand-info'
 import { createReadProformaTool, createUpdateProformaTool } from './proforma'
@@ -101,6 +102,8 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const scanSocial = createScanSocialTool(ctx.supabase, ctx.userId, ctx.brandId)
   const marketingAudit = createMarketingAuditTool(ctx.supabase, ctx.userId, ctx.brandId)
 
+  const zernioReply = getZernioReplyTool(ctx.supabase, ctx.userId, ctx.brandId)
+  
   // Management tools — available to all agents
   const createTask = createCreateTaskTool({
     supabase: ctx.supabase,
@@ -290,6 +293,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   // Note: delegate_to_agent is added separately in the chat route for the Director
   const toolSets: Partial<Record<AgentType, Record<string, unknown>>> = {
     overall: {
+      zernio_reply: zernioReply,
       save_output: saveOutput,
       save_brand_info: saveBrandInfo,
       scan_website: scanWebsite,

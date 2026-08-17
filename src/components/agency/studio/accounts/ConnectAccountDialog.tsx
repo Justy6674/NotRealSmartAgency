@@ -1,6 +1,8 @@
 'use client'
 
-import { X, ExternalLink } from 'lucide-react'
+import { useState } from 'react'
+import { X, ExternalLink, Loader2 } from 'lucide-react'
+import { useAgencyStore } from '@/stores/agency-store'
 import {
   PLATFORM_BRAND_COLOURS,
   PLATFORM_LABELS,
@@ -11,17 +13,6 @@ interface ConnectAccountDialogProps {
   onClose: () => void
   onRefresh: () => void
 }
-
-/**
- * "Connect new account" dialog on the Accounts management page.
- *
- * ALL platforms connect through Mixpost's OAuth flow. The user clicks a
- * platform button → opens Mixpost's accounts page in a new tab → completes
- * OAuth there → clicks "Refresh" here to pull the new account into NRS.
- *
- * Phase 10 direct OAuth routes exist but are behind feature flags. Until
- * those are activated, every connection goes through Mixpost.
- */
 
 const PLATFORMS: PlatformKey[] = [
   'facebook',
@@ -37,6 +28,9 @@ const PLATFORMS: PlatformKey[] = [
 ]
 
 export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialogProps) {
+  const { activeBrandId } = useAgencyStore()
+  const [connecting, setConnecting] = useState<PlatformKey | null>(null)
+
   const mixpostBase =
     process.env.NEXT_PUBLIC_MIXPOST_WEB_URL ??
     'https://mixpost.notrealsmart.com.au/mixpost'
@@ -44,6 +38,27 @@ export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialo
   const mixpostAccountsUrl = workspaceUuid
     ? `${mixpostBase}/${workspaceUuid}/accounts`
     : `${mixpostBase}/accounts`
+
+  const handleZernioConnect = async (platform: PlatformKey) => {
+    if (!activeBrandId) return
+    try {
+      setConnecting(platform)
+      const res = await fetch(`/api/zernio/connect?platform=${platform}&brandId=${activeBrandId}`)
+      if (!res.ok) {
+        const err = await res.json()
+        alert(`Zernio connection error: ${err.error || 'Unknown error'}`)
+        setConnecting(null)
+        return
+      }
+      const data = await res.json()
+      if (data.authUrl) {
+        window.location.href = data.authUrl
+      }
+    } catch (e: any) {
+      alert(`Connection error: ${e.message}`)
+      setConnecting(null)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -61,34 +76,38 @@ export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialo
 
         <div className="px-5 py-4 space-y-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Pick the platform you want to connect. The OAuth flow happens in a secure popup — once you&apos;re done, click <strong>Refresh</strong> below and your new account will appear on this page.
+            NRS is transitioning to Zernio infrastructure for SaaS accounts. Click a platform below to authorize it directly via Zernio (Phase 1 monetization test).
           </p>
 
           <div className="grid grid-cols-2 gap-2">
             {PLATFORMS.map((p) => {
               const colour = PLATFORM_BRAND_COLOURS[p]
               const label = PLATFORM_LABELS[p]
+              const isConnecting = connecting === p
+              
               return (
-                <a
+                <button
                   key={p}
-                  href={mixpostAccountsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground hover:shadow-sm transition-all"
+                  disabled={!!connecting}
+                  onClick={() => handleZernioConnect(p)}
+                  className="group inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground hover:shadow-sm transition-all text-left"
                   style={{ borderLeftWidth: 3, borderLeftColor: colour }}
                 >
                   <span
                     className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
                     style={{ backgroundColor: colour }}
                   >
-                    {label.charAt(0)}
+                    {isConnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : label.charAt(0)}
                   </span>
                   <span className="flex-1 min-w-0 truncate">{label}</span>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
-                </a>
+                </button>
               )
             })}
           </div>
+
+          <p className="text-[10px] text-muted-foreground pt-2">
+            Need a legacy Mixpost connection? <a href={mixpostAccountsUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Click here to open Mixpost</a>.
+          </p>
 
           <div className="flex gap-2 pt-2 border-t border-border">
             <button

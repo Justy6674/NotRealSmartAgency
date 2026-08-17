@@ -55,6 +55,7 @@
     "@tiptap/suggestion": "^3.22.3",
     "@types/pg": "^8.21.0",
     "@types/three": "^0.183.1",
+    "@zernio/node": "^0.2.580",
     "ai": "^6.0.235",
     "chart.js": "^4.5.1",
     "chartjs-plugin-zoom": "^2.2.0",

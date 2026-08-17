@@ -12,6 +12,7 @@ import {
 } from '@/lib/mixpost/client'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
+import { fetchZernioAccounts, createZernioPost, uploadZernioMedia, type ZernioAccount } from '@/lib/zernio/client'
 
 
 
@@ -138,6 +139,25 @@ export async function GET(request: Request) {
     }
   }
 
+  // Pre-fetch Zernio accounts for all profiles associated with these posts
+  let zernioAccountMap: Map<string, ZernioAccount[]> = new Map();
+  if (process.env.ZERNIO_API_KEY) {
+    const allZernioAccounts = await fetchZernioAccounts();
+    if (allZernioAccounts && allZernioAccounts.length > 0) {
+      duePosts.forEach(p => {
+        const brand = p.brands as Record<string, unknown> | null;
+        if (brand) {
+          const socialUrls = (brand.social_urls as Record<string, string>) ?? {};
+          const profileId = socialUrls.zernio_profile_id;
+          if (profileId) {
+            const accs = allZernioAccounts.filter(a => a.profileId === profileId);
+            zernioAccountMap.set(brand.id as string, accs);
+          }
+        }
+      });
+    }
+  }
+
   let published = 0
   let failed = 0
 
@@ -187,11 +207,64 @@ export async function GET(request: Request) {
 
       let externalPostId: string | null = null
 
-      if (useMixpost && brandAccountMap) {
+      const brandId = post.brand_id as string
+      const zernioAccs = zernioAccountMap.get(brandId) || []
+      const zernioAccount = zernioAccs.find(a => a.platform === post.platform)
+
+      // Gather media URLs from media_items (shared across publishers)
+      const mediaUrls: string[] = []
+      
+      // Carousel support: media_item_ids array
+      const mediaItemIds = (post as Record<string, unknown>).media_item_ids as string[] | undefined
+      if (mediaItemIds?.length) {
+        const { data: mediaItems } = await supabase
+          .from('media_items')
+          .select('file_url')
+          .in('id', mediaItemIds)
+        mediaUrls.push(...(mediaItems ?? []).map((m: { file_url: string }) => m.file_url))
+      }
+
+      // Single media fallback (joined relation)
+      if (mediaUrls.length === 0 && post.media_items?.file_url) {
+        mediaUrls.push(post.media_items.file_url as string)
+      }
+
+      // image_url fallback (from publish_to_social or generate_image)
+      if (mediaUrls.length === 0 && (post as Record<string, unknown>).image_url) {
+        mediaUrls.push((post as Record<string, unknown>).image_url as string)
+      }
+
+      if (zernioAccount) {
+        // ── Primary SaaS Path: Zernio ──
+        
+        // 1. Handle media
+        const zernioMediaIds: string[] = []
+        for (const url of mediaUrls) {
+          const mId = await uploadZernioMedia(url)
+          if (mId) zernioMediaIds.push(mId)
+        }
+
+        // 2. Build caption
+        let caption = post.caption as string
+        const hashtags = post.hashtags as string[] | null
+        if (hashtags?.length) {
+          caption += '\n\n' + hashtags.map((h: string) => `#${h}`).join(' ')
+        }
+        caption += signatureSuffix
+
+        // 3. Post
+        const result = await createZernioPost({
+          content: caption,
+          accounts: [{ platform: post.platform, accountId: zernioAccount.id }],
+          mediaIds: zernioMediaIds,
+          publishNow: true
+        })
+        
+        externalPostId = result._id || result.id || null;
+      } else if (useMixpost && brandAccountMap) {
         // ── Publish via Mixpost (self-hosted, free) ──
 
         // 1. Resolve Mixpost account IDs for this brand + platform
-        const brandId = post.brand_id as string
         const brandAccounts = brandAccountMap.get(brandId) ?? []
         const accountIds = resolveAccountIdsForPlatform(post.platform, brandAccounts)
 
@@ -199,29 +272,6 @@ export async function GET(request: Request) {
           throw new Error(
             `No Mixpost account found for platform "${post.platform}" on brand "${(post.brands as Record<string, unknown>)?.name ?? brandId}". Connect this platform in Mixpost first.`
           )
-        }
-
-        // 2. Gather media URLs from media_items
-        const mediaUrls: string[] = []
-
-        // Carousel support: media_item_ids array
-        const mediaItemIds = (post as Record<string, unknown>).media_item_ids as string[] | undefined
-        if (mediaItemIds?.length) {
-          const { data: mediaItems } = await supabase
-            .from('media_items')
-            .select('file_url')
-            .in('id', mediaItemIds)
-          mediaUrls.push(...(mediaItems ?? []).map((m: { file_url: string }) => m.file_url))
-        }
-
-        // Single media fallback (joined relation)
-        if (mediaUrls.length === 0 && post.media_items?.file_url) {
-          mediaUrls.push(post.media_items.file_url as string)
-        }
-
-        // image_url fallback (from publish_to_social or generate_image)
-        if (mediaUrls.length === 0 && (post as Record<string, unknown>).image_url) {
-          mediaUrls.push((post as Record<string, unknown>).image_url as string)
         }
 
         // 3. Upload media to Mixpost
