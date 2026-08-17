@@ -18,6 +18,8 @@ import {
 import type { PlatformMetrics } from '@/lib/analytics/platform-metrics'
 import { MetricCard } from './MetricCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ZernioAnalyticsPanel } from './ZernioAnalyticsPanel'
+import { ZernioAdsDataGrid } from './ZernioAdsDataGrid'
 
 export interface AnalyticsOverviewProps {
   brandId: string
@@ -189,7 +191,10 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
         ]}
       />
 
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+      <ZernioAnalyticsPanel brandId={brandId} from={from} to={to} />
+      <ZernioAdsDataGrid brandId={brandId} />
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Total reach"
           value={summary.totalReach}
