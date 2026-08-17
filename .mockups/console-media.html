@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NRS Console — media library mockup</title>
+<style>
+/* Tokens. Silver/chrome, hue 240. Brand accent is a variable the rail sets. */
+:root{
+  --h: 240;
+  --bg:        oklch(0.975 0.004 var(--h));
+  --surface:   oklch(1 0 0);
+  --surface-2: oklch(0.965 0.005 var(--h));
+  --line:      oklch(0.905 0.008 var(--h));
+  --line-soft: oklch(0.945 0.006 var(--h));
+  --ink:       oklch(0.22 0.015 var(--h));
+  --ink-2:     oklch(0.44 0.014 var(--h));
+  --ink-3:     oklch(0.60 0.012 var(--h));
+  --brand:     oklch(0.52 0.055 var(--h));
+  --brand-ink: oklch(0.34 0.07 var(--h));
+  --brand-wash:oklch(0.965 0.018 var(--h));
+  --ok:   oklch(0.55 0.13 155);
+  --warn: oklch(0.62 0.13 75);
+  --stop: oklch(0.55 0.17 27);
+  --r: 10px;
+  --shadow: 0 1px 2px oklch(0.22 0.02 var(--h) / .06),
+            0 10px 30px -18px oklch(0.22 0.02 var(--h) / .30);
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:        oklch(0.185 0.010 var(--h));
+    --surface:   oklch(0.225 0.012 var(--h));
+    --surface-2: oklch(0.255 0.013 var(--h));
+    --line:      oklch(0.325 0.016 var(--h));
+    --line-soft: oklch(0.285 0.014 var(--h));
+    --ink:       oklch(0.955 0.006 var(--h));
+    --ink-2:     oklch(0.79 0.012 var(--h));
+    --ink-3:     oklch(0.63 0.014 var(--h));
+    --brand:     oklch(0.74 0.075 var(--h));
+    --brand-ink: oklch(0.86 0.06 var(--h));
+    --brand-wash:oklch(0.275 0.030 var(--h));
+    --shadow: 0 1px 2px oklch(0 0 0 / .5), 0 12px 34px -18px oklch(0 0 0 / .8);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-columns:64px 1fr;height:100vh;overflow:hidden;
+}
+.rail{
+  background:var(--surface);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0;overflow-y:auto;
+}
+.rail .mark{
+  width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+  font:600 12px/1 var(--sans);letter-spacing:.02em;color:oklch(1 0 0);
+  border:1px solid oklch(0 0 0 / .06);cursor:pointer;position:relative;flex-shrink:0;
+  transition:transform .12s ease;
+}
+.rail .mark:hover{transform:translateY(-1px)}
+.rail .mark[aria-current="true"]::before{
+  content:"";position:absolute;left:-10px;top:6px;bottom:6px;width:3px;
+  border-radius:0 3px 3px 0;background:var(--brand);
+}
+.rail .mark[aria-current="true"]{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--brand)}
+.rail hr{width:26px;border:0;border-top:1px solid var(--line);margin:6px 0}
+.rail .add{
+  width:34px;height:34px;border-radius:9px;border:1px dashed var(--line);
+  background:none;color:var(--ink-3);font-size:17px;cursor:pointer;flex-shrink:0;
+}
+.shell{display:grid;grid-template-rows:auto 1fr;min-width:0}
+.top{
+  display:flex;align-items:center;gap:14px;padding:0 16px;height:52px;
+  border-bottom:1px solid var(--line);background:var(--surface);
+}
+.brandnow{display:flex;align-items:center;gap:9px;min-width:0}
+.brandnow .dot{width:9px;height:9px;border-radius:50%;background:var(--brand);flex-shrink:0}
+.brandnow b{font-weight:600;letter-spacing:-.01em;white-space:nowrap}
+.brandnow .meta{color:var(--ink-3);font-size:12px;white-space:nowrap}
+.flags{display:flex;gap:5px;margin-left:2px}
+.flag{
+  font:600 10px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 6px;border-radius:5px;background:var(--brand-wash);color:var(--brand-ink);
+  border:1px solid oklch(0 0 0 / .05);white-space:nowrap;
+}
+.spacer{flex:1}
+.kbd{
+  display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--ink-3);
+  font-size:12.5px;cursor:pointer;white-space:nowrap;
+}
+.kbd kbd{font-family:var(--mono);font-size:11px;background:var(--surface);
+  border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 4px;color:var(--ink-2)}
+.work{display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:0}
+@media (max-width:1180px){.work{grid-template-columns:minmax(0,1fr)} .panel{display:none}}
+.convo{display:flex;flex-direction:column;min-width:0;min-height:0}
+.stream{flex:1;overflow-y:auto;padding:22px 26px 8px;display:flex;flex-direction:column;gap:18px}
+.turn{display:flex;gap:11px;max-width:74ch}
+.turn .av{
+  width:26px;height:26px;border-radius:7px;flex-shrink:0;display:grid;place-items:center;
+  font:600 10px/1 var(--sans);color:oklch(1 0 0);background:var(--brand);
+}
+.turn.me{margin-left:auto;flex-direction:row-reverse}
+.turn.me .av{background:var(--ink-3)}
+.turn.me .bubble{background:var(--brand-wash);border-color:oklch(0 0 0 / .06)}
+.bubble{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;box-shadow:var(--shadow)}
+.bubble p{margin:0 0 8px}
+.bubble p:last-child{margin:0}
+.who{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:600}
+.agents{
+  border:1px solid var(--line);border-radius:var(--r);background:var(--surface);
+  overflow:hidden;box-shadow:var(--shadow);
+}
+.agents summary{
+  list-style:none;cursor:pointer;padding:9px 12px;display:flex;align-items:center;gap:9px;
+  font-size:12.5px;color:var(--ink-2);background:var(--surface-2);
+}
+.agents summary::-webkit-details-marker{display:none}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--ok);flex-shrink:0;
+  box-shadow:0 0 0 0 oklch(0.55 0.13 155 / .5);animation:p 1.8s ease-out infinite}
+@keyframes p{70%{box-shadow:0 0 0 7px oklch(0.55 0.13 155 / 0)}100%{box-shadow:0 0 0 0 oklch(0.55 0.13 155 / 0)}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+.agents ol{margin:0;padding:4px 0;list-style:none}
+.agents li{display:grid;grid-template-columns:16px 1fr auto;gap:9px;align-items:center;padding:6px 12px;font-size:12.5px}
+.agents li + li{border-top:1px solid var(--line-soft)}
+.agents .tick{color:var(--ok);font-size:12px}
+.agents .run{color:var(--warn)}
+.agents .dept{color:var(--ink);font-weight:500}
+.agents .what{color:var(--ink-3)}
+.agents .t{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.composer{padding:12px 26px 18px;border-top:1px solid var(--line);background:var(--surface)}
+.box{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:10px 12px;box-shadow:var(--shadow)}
+.box .ph{color:var(--ink-3)}
+.tools{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;align-items:center}
+.chip{
+  font-size:12px;padding:4px 9px;border-radius:99px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink-2);cursor:pointer;white-space:nowrap;
+}
+.chip.on{background:var(--brand-wash);border-color:var(--brand);color:var(--brand-ink);font-weight:500}
+.send{margin-left:auto;background:var(--brand);color:oklch(1 0 0);border:0;border-radius:8px;
+  padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.panel{border-left:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+.ptop{display:flex;align-items:center;gap:8px;padding:0 14px;height:52px;border-bottom:1px solid var(--line)}
+.ptop b{font-size:13px;font-weight:600}
+.ptop .x{margin-left:auto;color:var(--ink-3);cursor:pointer;font-size:16px;line-height:1}
+.pbody{overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.tabs{display:flex;gap:4px;padding:0 14px 10px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.tab{font-size:12px;padding:4px 9px;border-radius:7px;color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.tab.on{background:var(--brand-wash);color:var(--brand-ink);font-weight:600}
+.phone{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface-2)}
+.phone .hd{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--line-soft)}
+.phone .hd .a{width:20px;height:20px;border-radius:50%;background:var(--brand)}
+.phone .hd span{font-size:12px;font-weight:600}
+.phone .img{aspect-ratio:4/5;background:
+  linear-gradient(135deg, var(--brand-wash), var(--surface-2));
+  display:grid;place-items:center;color:var(--ink-3);font-size:12px}
+.phone .cap{padding:9px 10px;font-size:12.5px;color:var(--ink-2)}
+.phone .cap b{color:var(--ink)}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.field .val{border:1px solid var(--line);border-radius:8px;background:var(--surface-2);padding:8px 10px;font-size:13px}
+.counter{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;text-align:right}
+.note{display:flex;gap:8px;border:1px solid var(--line);border-left:3px solid var(--ok);
+  border-radius:8px;padding:9px 11px;font-size:12.5px;color:var(--ink-2);background:var(--surface-2)}
+.note.warn{border-left-color:var(--warn)}
+.note b{color:var(--ink)}
+
+/* ── Media library. Same tokens, no new palette. ─────────────────────────── */
+
+/* Containment. A library is longer than a viewport, so every column that scrolls
+   needs its automatic minimum size removed — otherwise the whole shell grows and
+   the page clips instead of the grid scrolling. Layout only; nothing visual moves. */
+.shell{min-height:0}
+.stream{min-height:0}
+.pbody{flex:1;min-height:0}
+
+/* Files the owner picked, shown handed over inside the conversation. */
+.attach{display:flex;align-items:center;gap:9px;margin-top:9px;padding-top:9px;border-top:1px solid oklch(0 0 0 / .07)}
+.attach .th{width:34px;height:34px;border-radius:7px;border:1px solid oklch(0 0 0 / .10);flex-shrink:0}
+.attach .nm{font-size:11.5px;color:var(--ink-2);line-height:1.3}
+.attach .nm b{display:block;color:var(--ink);font-weight:600;font-size:12px}
+
+/* Filter row. Radios + toggles, so the mockup filters for real with no script. */
+.filters{display:flex;gap:4px;padding:10px 14px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.panel > input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.fchip{font-size:12px;padding:4px 9px;border-radius:7px;color:var(--ink-3);cursor:pointer;
+  white-space:nowrap;border:1px solid transparent}
+.fchip:hover{color:var(--ink-2);background:var(--surface-2)}
+#t-all:checked   ~ .filters [for=t-all],
+#t-video:checked ~ .filters [for=t-video],
+#t-image:checked ~ .filters [for=t-image],
+#c-unused:checked ~ .filters [for=c-unused],
+#c-brand:checked  ~ .filters [for=c-brand]{
+  background:var(--brand-wash);color:var(--brand-ink);font-weight:600;border-color:var(--brand);
+}
+#t-all:focus-visible   ~ .filters [for=t-all],
+#t-video:focus-visible ~ .filters [for=t-video],
+#t-image:focus-visible ~ .filters [for=t-image],
+#c-unused:focus-visible ~ .filters [for=c-unused],
+#c-brand:focus-visible  ~ .filters [for=c-brand]{outline:2px solid var(--brand);outline-offset:1px}
+
+#t-video:checked  ~ .pbody .tile:not(.vid){display:none}
+#t-image:checked  ~ .pbody .tile:not(.img){display:none}
+#c-unused:checked ~ .pbody .tile:not(.unused){display:none}
+#c-brand:checked  ~ .pbody .tile.other{display:none}
+/* Never leave a heading standing over nothing. */
+#t-image:checked  ~ .pbody .grp-unused{display:none}
+#c-unused:checked ~ .pbody .grp-used{display:none}
+/* Counts are only true for the whole library of this business — hide them when they aren't. */
+#t-video:checked ~ .pbody .n, #t-video:checked ~ .pbody .hint,
+#t-image:checked ~ .pbody .n, #t-image:checked ~ .pbody .hint,
+#c-brand:not(:checked) ~ .pbody .n, #c-brand:not(:checked) ~ .pbody .hint{display:none}
+
+.grp{display:flex;flex-direction:column;gap:9px}
+.grph{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.grph .h{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.grph .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.grph .hint{font-size:11.5px;color:var(--ink-3)}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.tile{margin:0;display:flex;flex-direction:column;gap:6px;cursor:pointer;min-width:0}
+.thumb{position:relative;aspect-ratio:1;border-radius:9px;overflow:hidden;
+  border:1px solid oklch(0 0 0 / .10);background:var(--surface-2)}
+/* Depth, so a drawn thumbnail reads as a photograph and not a colour swatch:
+   a sheen top-left, a soft form in the middle, and the ground darkened so the
+   duration label stays legible on a pale image. */
+.thumb::after{content:"";position:absolute;inset:0;
+  background:radial-gradient(115% 85% at 28% 12%, oklch(1 0 0 / .30), oklch(1 0 0 / 0) 62%)}
+.thumb::before{content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(34% 46% at 52% 58%, oklch(1 0 0 / .17), oklch(1 0 0 / 0) 72%),
+    linear-gradient(0deg, oklch(0.18 0.02 var(--h) / .34), oklch(0.18 0.02 var(--h) / 0) 52%)}
+.tile:hover .thumb{border-color:var(--brand)}
+.lbl{position:absolute;left:6px;bottom:6px;z-index:1;font-family:var(--mono);font-size:10px;
+  color:oklch(1 0 0);background:oklch(0.22 0.02 var(--h) / .55);padding:2px 5px;border-radius:4px;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em}
+/* Used before: a quiet pip, not a badge. The where and when sits in the caption. */
+.pip{position:absolute;top:7px;right:7px;z-index:1;width:7px;height:7px;border-radius:50%;
+  background:oklch(1 0 0 / .92);box-shadow:0 0 0 1px oklch(0.22 0.02 var(--h) / .35)}
+.tile.sel .thumb{outline:2px solid var(--brand);outline-offset:2px;border-color:var(--brand)}
+.pick{position:absolute;top:6px;right:6px;z-index:2;width:19px;height:19px;border-radius:50%;
+  background:var(--brand);color:oklch(1 0 0);display:grid;place-items:center;font-size:10px;
+  box-shadow:0 0 0 2px var(--surface)}
+.tile b{font-size:12px;font-weight:600;line-height:1.3;color:var(--ink);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{display:block;font-size:11px;line-height:1.4;color:var(--ink-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st.fresh{color:var(--brand-ink);font-weight:500}
+.st.wait{color:var(--warn);font-weight:500}
+.st.owner{color:var(--ink-3)}
+.st.owner::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:oklch(0.56 0.12 45);margin-right:5px;vertical-align:middle}
+
+/* Still being prepared. It has to LOOK unfinished, not just say so. */
+.tile.prep{cursor:default}
+.tile.prep b{color:var(--ink-2)}
+.thumb.prep{display:grid;place-items:center;border-style:dashed;border-color:var(--line);
+  background:repeating-linear-gradient(135deg,var(--surface-2) 0 9px,var(--line-soft) 9px 18px)}
+.thumb.prep::after,.thumb.prep::before{display:none}
+.bar{width:62%;height:5px;border-radius:99px;background:var(--surface);
+  border:1px solid var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--warn);border-radius:99px}
+
+.tile.ghost{cursor:pointer}
+.tile.ghost .thumb{display:grid;place-items:center;text-align:center;padding:12px;
+  border-style:dashed;background:var(--surface-2);color:var(--ink-3);font-size:11.5px;line-height:1.4}
+.tile.ghost .thumb::after,.tile.ghost .thumb::before{display:none}
+.brk{flex-basis:100%;height:0}
+
+/* The empty state is a state, not a gap. Shown when photos + not-used-yet meet. */
+.empty{display:none;flex-direction:column;align-items:center;text-align:center;gap:9px;
+  border:1px dashed var(--line);border-radius:var(--r);background:var(--surface-2);padding:26px 20px}
+#t-image:checked ~ #c-unused:checked ~ .pbody .empty{display:flex}
+.empty .glyph{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;
+  background:var(--brand-wash);color:var(--brand-ink);font-size:17px;border:1px solid var(--line)}
+.empty b{font-size:13px}
+.empty p{margin:0;font-size:12.5px;color:var(--ink-2);max-width:30ch}
+.empty .go{font-size:12px;font-weight:600;padding:5px 11px;border-radius:8px;cursor:pointer;
+  background:var(--brand);color:oklch(1 0 0)}
+
+.pfoot{border-top:1px solid var(--line);background:var(--surface-2);padding:10px 14px;
+  display:flex;align-items:center;gap:10px}
+.pfoot .cnt{display:flex;align-items:center;gap:7px;min-width:0}
+.pfoot .cnt .tk{width:17px;height:17px;border-radius:50%;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font-size:9px;flex-shrink:0}
+.pfoot .cnt span{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfoot .clear{font-size:12px;color:var(--ink-3);cursor:pointer;margin-left:auto;white-space:nowrap}
+.pfoot .hand{background:var(--brand);color:oklch(1 0 0);border:0;border-radius:8px;
+  padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+
+/* Thumbnails, drawn not fetched. */
+.g1{background:linear-gradient(152deg, oklch(0.66 0.15 20),  oklch(0.38 0.10 12))}
+.g2{background:linear-gradient(160deg, oklch(0.80 0.13 78),  oklch(0.45 0.09 55))}
+.g3{background:linear-gradient(140deg, oklch(0.42 0.06 62),  oklch(0.22 0.03 44))}
+.g4{background:linear-gradient(150deg, oklch(0.86 0.13 100), oklch(0.55 0.11 84))}
+.g5{background:linear-gradient(158deg, oklch(0.90 0.02 88),  oklch(0.70 0.03 70))}
+.g6{background:linear-gradient(150deg, oklch(0.62 0.09 152), oklch(0.33 0.05 160))}
+.g7{background:linear-gradient(150deg, oklch(0.60 0.10 302), oklch(0.34 0.07 288))}
+.g8{background:linear-gradient(150deg, oklch(0.64 0.09 222), oklch(0.35 0.06 244))}
+.g9{background:linear-gradient(150deg, oklch(0.74 0.09 40),  oklch(0.46 0.07 28))}
+.g10{background:linear-gradient(150deg,oklch(0.82 0.012 240),oklch(0.46 0.02 240))}
+.g11{background:linear-gradient(150deg, oklch(0.70 0.11 340), oklch(0.40 0.08 330))}
+.g12{background:linear-gradient(150deg, oklch(0.78 0.08 130), oklch(0.44 0.06 140))}
+</style>
+</head>
+<body>
+
+<nav class="rail" aria-label="Businesses">
+  <div class="mark" style="background:oklch(0.55 0.14 25)"  title="Downscale Weight Loss">DW</div>
+  <div class="mark" aria-current="true" style="background:oklch(0.58 0.13 85)" title="Scent Sell">SS</div>
+  <div class="mark" style="background:oklch(0.55 0.10 160)" title="Endorse Me">EM</div>
+  <div class="mark" style="background:oklch(0.50 0.09 250)" title="TeleScribe">TS</div>
+  <div class="mark" style="background:oklch(0.52 0.11 300)" title="Sniffopotamus">SN</div>
+  <div class="mark" style="background:oklch(0.48 0.08 210)" title="TeleCheck">TC</div>
+  <div class="mark" style="background:oklch(0.56 0.12 45)"  title="Underground Parfums">UP</div>
+  <div class="mark" style="background:oklch(0.50 0.10 130)" title="Do Today">DT</div>
+  <div class="mark" style="background:oklch(0.46 0.06 265)" title="Black Health Intelligence">BH</div>
+  <div class="mark" style="background:oklch(0.54 0.11 350)" title="ManClinic">MC</div>
+  <hr>
+  <button class="add" title="Add a business">+</button>
+</nav>
+
+<div class="shell">
+  <header class="top">
+    <div class="brandnow">
+      <span class="dot"></span>
+      <b>Scent Sell</b>
+      <span class="meta">&middot; 240 files &middot; 4 accounts connected</span>
+    </div>
+    <div class="flags">
+      <span class="flag">2 preparing</span>
+      <span class="flag">Nothing scheduled</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="kbd"><kbd>&#8984;</kbd><kbd>K</kbd> Search, jump, or run anything</div>
+  </header>
+
+  <div class="work">
+    <section class="convo">
+      <div class="stream">
+
+        <div class="turn me">
+          <div class="av">JB</div>
+          <div class="bubble"><p>Find me the clips we haven&rsquo;t used yet. I keep posting the same bottle pour.</p></div>
+        </div>
+
+        <div class="turn">
+          <div class="av">ND</div>
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+            <details class="agents" open>
+              <summary><span class="pulse"></span> <b>4 departments working</b> &middot; 3 done, 1 running</summary>
+              <ol>
+                <li><span class="tick">&#10003;</span><span><span class="dept">Media</span> <span class="what">&mdash; read all 240 files and lined them up against what has actually gone out</span></span><span class="t">0:11</span></li>
+                <li><span class="tick">&#10003;</span><span><span class="dept">Analytics</span> <span class="what">&mdash; checked every post since March across your four accounts</span></span><span class="t">0:19</span></li>
+                <li><span class="tick">&#10003;</span><span><span class="dept">Brand</span> <span class="what">&mdash; set aside two clips that still show the old label</span></span><span class="t">0:06</span></li>
+                <li><span class="run">&#9680;</span><span><span class="dept">Content</span> <span class="what">&mdash; reading the words out of the newest clips so you can search them</span></span><span class="t">1:42</span></li>
+              </ol>
+            </details>
+
+            <div class="bubble">
+              <div class="who">NRS Director</div>
+              <p><b>Eleven files have never gone anywhere.</b> They&rsquo;re on the right, newest first &mdash; nine ready to use now, two still being prepared and greyed out until they are.</p>
+              <p>Everything else shows where it went and when, so you can see the bottle pour has already been out twice.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="turn me">
+          <div class="av">JB</div>
+          <div class="bubble">
+            <p>These two. Which one leads?</p>
+            <div class="attach">
+              <span class="th g1"></span>
+              <span class="th g2"></span>
+              <span class="nm"><b>2 files handed to the Director</b>Souk Rose &mdash; teaser &middot; Bottle pour, slow</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="turn">
+          <div class="av">ND</div>
+          <div class="bubble">
+            <div class="who">NRS Director</div>
+            <p>Neither has been anywhere, so both are new to your buyers. <b>Souk Rose leads</b> &mdash; its spoken words are already saved, so the caption can come straight off it. The bottle pour follows two days later.</p>
+            <p style="color:var(--ink-2)">Nothing is scheduled and nothing has been posted today. Say the word and I&rsquo;ll write both captions for you to read first.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="composer">
+        <div class="box">
+          <div class="ph">Ask NRS about Scent Sell&hellip;</div>
+          <div class="tools">
+            <span class="chip on">&#65291; Media &middot; 2 attached</span>
+            <span class="chip">Canva</span>
+            <span class="chip">/ commands</span>
+            <span class="chip">@ a product</span>
+            <button class="send">Send</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="ptop"><b>Your media</b> <span style="color:var(--ink-3);font-size:12px">240 files</span><span class="x">&#10005;</span></div>
+
+      <input type="radio" name="type" id="t-all" checked>
+      <input type="radio" name="type" id="t-video">
+      <input type="radio" name="type" id="t-image">
+      <input type="checkbox" id="c-unused">
+      <input type="checkbox" id="c-brand" checked>
+
+      <div class="filters">
+        <label class="fchip" for="t-all">Everything</label>
+        <label class="fchip" for="t-video">Video</label>
+        <label class="fchip" for="t-image">Photos</label>
+        <span class="brk"></span>
+        <label class="fchip" for="c-unused">Not used yet</label>
+        <label class="fchip" for="c-brand">Scent Sell only</label>
+      </div>
+
+      <div class="pbody">
+
+        <section class="grp grp-unused">
+          <div class="grph">
+            <span class="h">Not used yet</span>
+            <span class="n">11</span>
+            <span class="hint">9 ready &middot; 2 still being prepared</span>
+          </div>
+          <div class="grid">
+
+            <figure class="tile vid unused sel">
+              <div class="thumb g1"><span class="lbl">0:24</span><span class="pick">&#10003;</span></div>
+              <b>Souk Rose &mdash; teaser</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">Words ready</span>
+            </figure>
+
+            <figure class="tile vid unused sel">
+              <div class="thumb g2"><span class="lbl">0:12</span><span class="pick">&#10003;</span></div>
+              <b>Bottle pour, slow</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">No words yet</span>
+            </figure>
+
+            <figure class="tile vid unused">
+              <div class="thumb g3"><span class="lbl">0:38</span></div>
+              <b>Unboxing &mdash; Mahajad</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">Words ready</span>
+            </figure>
+
+            <figure class="tile vid unused">
+              <div class="thumb g4"><span class="lbl">0:47</span></div>
+              <b>Shelf tour, morning light</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">Words ready</span>
+            </figure>
+
+            <figure class="tile vid unused">
+              <div class="thumb g6"><span class="lbl">0:19</span></div>
+              <b>Sample vials pack-out</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">No words yet</span>
+            </figure>
+
+            <figure class="tile vid unused">
+              <div class="thumb g9"><span class="lbl">0:31</span></div>
+              <b>Swap parcel &mdash; packing</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">Words ready</span>
+            </figure>
+
+            <figure class="tile vid unused">
+              <div class="thumb g11"><span class="lbl">1:04</span></div>
+              <b>Rose harvest b-roll</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">No words yet</span>
+            </figure>
+
+            <figure class="tile vid unused">
+              <div class="thumb g7"><span class="lbl">0:52</span></div>
+              <b>Bench notes &mdash; three wears</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">Words ready</span>
+            </figure>
+
+            <figure class="tile vid unused">
+              <div class="thumb g8"><span class="lbl">0:08</span></div>
+              <b>Courier drop, Thursday</b>
+              <span class="st fresh">Never posted</span>
+              <span class="st">No words yet</span>
+            </figure>
+
+            <figure class="tile vid unused prep">
+              <div class="thumb prep"><span class="bar"><i style="width:62%"></i></span></div>
+              <b>Warehouse walkthrough</b>
+              <span class="st wait">Still being prepared</span>
+              <span class="st">Ready in about 2 minutes</span>
+            </figure>
+
+            <figure class="tile vid unused prep">
+              <div class="thumb prep"><span class="bar"><i style="width:18%"></i></span></div>
+              <b>New arrivals &mdash; 14 bottles</b>
+              <span class="st wait">Still being prepared</span>
+              <span class="st">Ready in about 6 minutes</span>
+            </figure>
+
+            <figure class="tile vid unused other">
+              <div class="thumb g12"><span class="lbl">0:27</span></div>
+              <b>Vetiver bench pour</b>
+              <span class="st owner">Underground Parfums</span>
+              <span class="st fresh">Never posted</span>
+            </figure>
+
+            <figure class="tile vid unused other">
+              <div class="thumb g5"><span class="lbl">0:15</span></div>
+              <b>Lab strip test</b>
+              <span class="st owner">Underground Parfums</span>
+              <span class="st fresh">Never posted</span>
+            </figure>
+
+          </div>
+        </section>
+
+        <section class="grp grp-used">
+          <div class="grph">
+            <span class="h">Used before</span>
+            <span class="n">229</span>
+            <span class="hint">where each one went</span>
+          </div>
+          <div class="grid">
+
+            <figure class="tile img">
+              <div class="thumb g5"><span class="lbl">1080 &times; 1350</span><span class="pip" title="Used before"></span></div>
+              <b>Bottle on linen</b>
+              <span class="st">Instagram &middot; 3 Aug</span>
+            </figure>
+
+            <figure class="tile vid">
+              <div class="thumb g2"><span class="lbl">0:24</span><span class="pip" title="Used before"></span></div>
+              <b>Hibiscus Mahajad &mdash; reel</b>
+              <span class="st">Instagram, Facebook &middot; 28 Jul</span>
+            </figure>
+
+            <figure class="tile img">
+              <div class="thumb g10"><span class="lbl">1080 &times; 1080</span><span class="pip" title="Used before"></span></div>
+              <b>Price card &mdash; August</b>
+              <span class="st">Facebook &middot; 1 Aug</span>
+            </figure>
+
+            <figure class="tile img">
+              <div class="thumb g3"><span class="lbl">1350 &times; 1080</span><span class="pip" title="Used before"></span></div>
+              <b>Cabinet shelf, full</b>
+              <span class="st">Instagram &middot; 22 Jul</span>
+            </figure>
+
+            <figure class="tile img">
+              <div class="thumb g11"><span class="lbl">1080 &times; 1920</span><span class="pip" title="Used before"></span></div>
+              <b>Swap story frame</b>
+              <span class="st">Instagram &middot; 19 Jul &middot; twice</span>
+            </figure>
+
+            <figure class="tile img">
+              <div class="thumb g9"><span class="lbl">1080 &times; 1350</span><span class="pip" title="Used before"></span></div>
+              <b>Ateliers stack</b>
+              <span class="st">Facebook &middot; 12 Jul</span>
+            </figure>
+
+            <figure class="tile ghost">
+              <div class="thumb">and 223 more,<br>oldest first</div>
+              <b>&nbsp;</b>
+            </figure>
+
+          </div>
+        </section>
+
+        <div class="empty">
+          <div class="glyph">&#9635;</div>
+          <b>Every photo has been used at least once.</b>
+          <p>All 148 photos for Scent Sell have gone out somewhere. The files you haven&rsquo;t used yet are all video.</p>
+          <label class="go" for="t-video">Show the unused video</label>
+        </div>
+
+      </div>
+
+      <div class="pfoot">
+        <span class="cnt"><span class="tk">&#10003;</span><span>2 selected &mdash; Souk Rose, Bottle pour</span></span>
+        <span class="clear">Clear</span>
+        <button class="hand">Hand to Director</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+</body>
+</html>

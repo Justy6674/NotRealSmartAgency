@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NRS — Connections — Downscale Weight Loss</title>
+<style>
+:root{
+  --h:240;
+  --bg:oklch(0.985 0.002 var(--h));
+  --panel:oklch(1 0 0);
+  --panel-2:oklch(0.975 0.004 var(--h));
+  --line:oklch(0.915 0.007 var(--h));
+  --line-soft:oklch(0.950 0.005 var(--h));
+  --ink:oklch(0.20 0.014 var(--h));
+  --ink-2:oklch(0.46 0.012 var(--h));
+  --ink-3:oklch(0.615 0.011 var(--h));
+  /* Business accent. One variable — switching business retints the product. */
+  --brand:oklch(0.545 0.115 205);
+  --brand-deep:oklch(0.33 0.080 205);
+  --brand-wash:oklch(0.966 0.026 205);
+  --ok:oklch(0.55 0.13 155);
+  --ok-wash:oklch(0.965 0.030 155);
+  --warn:oklch(0.63 0.13 75);
+  --stop:oklch(0.55 0.17 27);
+  /* Healthcare mode. Warm red, hue 25 — only appears when the switch is on. */
+  --care:oklch(0.52 0.150 25);
+  --care-wash:oklch(0.965 0.028 25);
+  --care-line:oklch(0.885 0.055 25);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --shadow:0 1px 2px oklch(0.2 0.02 var(--h)/.05),0 8px 24px -16px oklch(0.2 0.02 var(--h)/.28);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:oklch(0.175 0.010 var(--h));
+    --panel:oklch(0.215 0.012 var(--h));
+    --panel-2:oklch(0.245 0.013 var(--h));
+    --line:oklch(0.315 0.015 var(--h));
+    --line-soft:oklch(0.275 0.013 var(--h));
+    --ink:oklch(0.960 0.005 var(--h));
+    --ink-2:oklch(0.795 0.011 var(--h));
+    --ink-3:oklch(0.640 0.013 var(--h));
+    --brand:oklch(0.74 0.11 205);
+    --brand-deep:oklch(0.87 0.08 205);
+    --brand-wash:oklch(0.272 0.038 205);
+    --ok:oklch(0.72 0.13 155);
+    --ok-wash:oklch(0.265 0.042 155);
+    --warn:oklch(0.78 0.13 75);
+    --care:oklch(0.78 0.13 25);
+    --care-wash:oklch(0.285 0.045 25);
+    --care-line:oklch(0.395 0.070 25);
+    --shadow:0 1px 2px oklch(0 0 0/.5),0 10px 30px -18px oklch(0 0 0/.75);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  line-height:1.5;-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-columns:236px minmax(0,1fr) 380px;height:100vh;overflow:hidden;
+}
+
+/* ── SIDEBAR ─────────────────────────────────────────────────
+   Identical on every screen. Flat, always expanded, sub-items visible. */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+
+/* Most subscribers have ONE business, so this reads as a quiet label, not a big switcher. */
+.biz{padding:13px 13px 12px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.bizsel{
+  display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left;
+}
+.bizsel .logo{width:26px;height:26px;border-radius:7px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans);flex-shrink:0}
+.bizsel .nm{flex:1;min-width:0}
+.bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.25}
+.bizsel .nm span{display:block;font-size:11px;color:var(--ink-3)}
+.bizsel .chev{color:var(--ink-3);font-size:11px}
+
+.caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+  background:var(--care-wash);border:1px solid var(--care-line);cursor:pointer;width:100%;text-align:left}
+.caretog .sw{width:28px;height:16px;border-radius:99px;background:var(--care);position:relative;flex-shrink:0;display:block}
+.caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+  border-radius:50%;background:oklch(1 0 0)}
+.caretog .tx{font-size:11.5px;color:var(--care);font-weight:600;line-height:1.35}
+
+.cta{margin:12px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--brand-deep);color:oklch(1 0 0);border:0;border-radius:10px;
+  padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer;box-shadow:var(--shadow)}
+
+nav{padding:0 9px 16px}
+.top{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;
+  font-size:13.5px;color:var(--ink);font-weight:560;margin-top:2px;cursor:pointer;text-decoration:none}
+.top:hover{background:var(--panel-2)}
+.top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.top .ic{width:16px;text-align:center;font-size:13px;color:var(--ink-3);flex-shrink:0}
+.top.on .ic{color:var(--brand-deep)}
+.top .cnt{margin-left:auto;font-size:10px;font-weight:650;padding:2px 5px;border-radius:5px;
+  background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+.sub{margin:1px 0 5px 34px;display:flex;flex-direction:column;gap:1px}
+.sub a{font-size:12.5px;color:var(--ink-2);padding:4px 8px;border-radius:6px;text-decoration:none;
+  display:flex;align-items:flex-start;gap:7px;cursor:pointer;line-height:1.4}
+.sub a:hover{background:var(--panel-2);color:var(--ink)}
+.sub a::before{content:"";width:3px;height:3px;margin-top:7px;border-radius:50%;background:var(--ink-3);opacity:.5;flex-shrink:0}
+.sub a.care{color:var(--care)}
+.sub .glbl{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:6px 8px 2px}
+.grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:14px 9px 5px}
+.me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;align-items:center;gap:9px}
+.me .av{width:26px;height:26px;border-radius:50%;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans)}
+.me span{font-size:13px;color:var(--ink-2)}
+
+/* ── CENTRE ──────────────────────────────────────────────── */
+.main{overflow-y:auto;padding:24px 26px 48px;min-width:0}
+h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
+.lede{color:var(--ink-2);font-size:13.5px;margin:0 0 14px;max-width:66ch}
+
+/* Honest tally. Says what is true before you scroll. */
+.tally{display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);
+  border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 14px;margin-bottom:20px}
+.tally span{display:flex;align-items:center;gap:7px}
+.tally i{width:8px;height:8px;border-radius:50%;display:block;font-style:normal;flex-shrink:0}
+.tally b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
+.tally .last{margin-left:auto;color:var(--ink-3);font-size:11.5px;font-family:var(--mono)}
+.i-ok{background:var(--ok)}.i-stop{background:var(--care)}.i-off{background:var(--ink-3);opacity:.55}
+
+/* ── THE LOUDEST THING ON THE SCREEN ─────────────────────────
+   A channel that silently cannot publish is the most expensive failure in this
+   product: posts pile up, nothing errors in the owner's face, and weeks go by.
+   So a stopped account gets its own block at the top — not a red dot on a tile. */
+.broke{border:1px solid var(--care-line);border-left:4px solid var(--care);background:var(--care-wash);
+  border-radius:14px;padding:18px 20px 17px;margin-bottom:26px;box-shadow:var(--shadow)}
+.broke .flag{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;
+  letter-spacing:.10em;text-transform:uppercase;color:var(--care);margin-bottom:9px}
+.broke .flag i{width:7px;height:7px;border-radius:50%;background:var(--care);display:block;font-style:normal}
+.broke h2{font-size:17.5px;font-weight:650;letter-spacing:-.015em;margin:0 0 6px;color:var(--ink)}
+.broke .who{display:flex;align-items:center;gap:9px;margin:0 0 11px}
+.broke .who .mk{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;
+  color:oklch(1 0 0);font-size:12px;flex-shrink:0}
+.broke .who span{font-size:13px;color:var(--ink-2)}
+.broke p{margin:0 0 9px;font-size:13.5px;color:var(--ink-2);max-width:70ch}
+.broke p b{color:var(--ink)}
+.broke .held{display:flex;gap:9px;align-items:flex-start;background:var(--panel);border:1px solid var(--care-line);
+  border-radius:10px;padding:11px 13px;margin:12px 0 14px;font-size:13px;color:var(--ink-2);max-width:70ch}
+.broke .held b{color:var(--ink)}
+.broke .acts{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.broke .note{font-size:12px;color:var(--ink-3);margin:10px 0 0}
+
+.btn{border:0;border-radius:9px;padding:10px 15px;font-size:13px;font-weight:600;cursor:pointer;
+  font-family:var(--sans);display:inline-flex;align-items:center;gap:7px}
+.btn.fix{background:var(--care);color:oklch(1 0 0)}
+.btn.pri{background:var(--brand-deep);color:oklch(1 0 0)}
+.btn.gh{background:var(--panel);color:var(--ink-2);border:1px solid var(--line)}
+.btn.gh:hover{color:var(--ink);background:var(--panel-2)}
+.btn.wide{width:100%;justify-content:center}
+
+/* ── SECTIONS ─────────────────────────────────────────────── */
+.sec{margin-bottom:26px}
+.sec .hd{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.sec h3{font-size:14.5px;font-weight:650;letter-spacing:-.01em;margin:0}
+.sec .cnt{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.sec .say{font-size:12.5px;color:var(--ink-3);margin:0 0 13px;max-width:64ch}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:13px}
+
+/* Big obvious tile. Same shape whatever the service, so the eye compares states,
+   not layouts. Status is a word, never colour alone. */
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 15px 14px;
+  display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow)}
+.tile.stopped{border-color:var(--care-line);box-shadow:0 0 0 1px var(--care-line),var(--shadow)}
+.tile .th{display:flex;align-items:center;gap:10px}
+.mk{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:oklch(1 0 0);
+  font:600 14px/1 var(--sans);flex-shrink:0}
+.fb{background:oklch(0.48 0.19 265)}
+.ig{background:oklch(0.55 0.21 15)}
+.tt{background:oklch(0.25 0.02 var(--h))}
+.yt{background:oklch(0.53 0.22 27)}
+.li{background:oklch(0.45 0.14 245)}
+.web{background:oklch(0.46 0.10 205)}
+.cv{background:oklch(0.55 0.15 195)}
+.gg{background:oklch(0.52 0.16 145)}
+.cd{background:oklch(0.36 0.03 var(--h))}
+.em{background:oklch(0.50 0.13 300)}
+.tile .tn{min-width:0;flex:1}
+.tile .tn b{display:block;font-size:14.5px;font-weight:650;letter-spacing:-.01em}
+.tile .tn span{display:block;font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.state{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:650;
+  padding:4px 9px;border-radius:7px;align-self:flex-start;border:1px solid transparent}
+.state i{width:7px;height:7px;border-radius:50%;display:block;font-style:normal;flex-shrink:0}
+.state.on{background:var(--ok-wash);color:var(--ok)}
+.state.on i{background:var(--ok)}
+.state.bad{background:var(--care-wash);color:var(--care);border-color:var(--care-line)}
+.state.bad i{background:var(--care)}
+.state.off{background:var(--panel-2);color:var(--ink-3);border-color:var(--line)}
+.state.off i{background:var(--ink-3);opacity:.55}
+
+.does{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.does b{color:var(--ink);font-weight:600}
+.stamp{font-size:11px;color:var(--ink-3);font-family:var(--mono);margin:0}
+
+/* Healthcare mode only. The guardrail is visible on the channels it applies to. */
+.carebar{display:flex;gap:7px;align-items:flex-start;background:var(--care-wash);border:1px solid var(--care-line);
+  border-radius:8px;padding:7px 9px;font-size:11.5px;color:var(--care);line-height:1.4}
+.carebar i{font-style:normal;flex-shrink:0}
+
+.tile .foot{margin-top:auto;padding-top:3px}
+.signin{font-size:11.5px;color:var(--ink-3);text-align:center;margin:7px 0 0}
+
+/* ── RIGHT: the Director lives here, always. ──────────────
+   A persistent panel with the input pinned at the bottom. It does not go away
+   when you navigate; it follows you and stays current to whatever is on screen.
+   Collapse it and every screen is still complete on its own. */
+.right{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.rtabs{display:flex;align-items:center;gap:1px;padding:0 8px;height:50px;border-bottom:1px solid var(--line)}
+.rtab{display:flex;align-items:center;gap:5px;padding:7px 7px;border-radius:8px;font-size:12.5px;color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.rtab.on{color:var(--brand-deep);font-weight:650;background:var(--brand-wash)}
+/* Collapse is a labelled control, not a hidden gesture. Every screen is whole without the rail. */
+.rtabs .hide{margin-left:auto;flex-shrink:0;background:var(--panel-2);border:1px solid var(--line);
+  color:var(--ink-3);font:600 11.5px/1 var(--sans);cursor:pointer;padding:6px 8px;border-radius:7px;
+  display:flex;align-items:center;gap:5px;white-space:nowrap}
+.rtabs .hide:hover{color:var(--ink-2);background:var(--panel)}
+.rbody{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:0}
+
+/* Director conversation */
+.dmsg{display:flex;gap:9px}
+.dmsg .av{width:22px;height:22px;border-radius:6px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 9px/1 var(--sans);flex-shrink:0}
+.dmsg .bd{font-size:13px;color:var(--ink-2);min-width:0}
+.dmsg .bd p{margin:0 0 8px}.dmsg .bd p:last-child{margin:0}
+.dmsg .bd b{color:var(--ink)}
+.dmsg.me{flex-direction:row-reverse}
+.dmsg.me .av{background:var(--ink-3)}
+.dmsg.me .bd{background:var(--brand-wash);border-radius:10px;padding:8px 11px;color:var(--ink)}
+
+.ideas{margin-top:2px}
+.ideas .h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650;margin-bottom:7px}
+.ideas a{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;color:var(--ink-2);
+  font-size:13px;cursor:pointer;text-decoration:none}
+.ideas a:hover{background:var(--panel-2)}
+.ideas a .ic{color:var(--ink-3);font-size:12px;width:14px;text-align:center;flex-shrink:0}
+
+/* Input pinned to the bottom — the thing that makes it feel always-on. */
+.ask{border-top:1px solid var(--line);padding:11px 12px 12px;background:var(--panel)}
+.askbox{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:9px 11px;
+  display:flex;align-items:flex-end;gap:9px}
+.askbox .ph{flex:1;color:var(--ink-3);font-size:13px;min-height:34px}
+.askbox .go{width:27px;height:27px;border-radius:7px;border:0;background:var(--brand-deep);
+  color:oklch(1 0 0);font-size:13px;cursor:pointer;flex-shrink:0}
+.askfoot{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:11px;color:var(--ink-3)}
+.askfoot .pill{border:1px solid var(--line);border-radius:6px;padding:2px 6px;background:var(--panel-2)}
+.askfoot .live{display:flex;align-items:center;gap:5px;margin-left:auto}
+.askfoot .live i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:block;font-style:normal}
+.chk{display:flex;gap:9px;border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:9px;
+  padding:10px 12px;font-size:12.5px;color:var(--ink-2);background:var(--panel-2)}
+.chk.w{border-left-color:var(--care)}
+.chk b{color:var(--ink)}
+
+/* Last, so it wins. In dark mode the brand and healthcare tokens invert to LIGHT
+   fills — white text on them goes unreadable, so filled controls take dark ink.
+   Platform marks keep white: their colours are fixed and stay dark in both themes. */
+@media (prefers-color-scheme:dark){
+  .cta,.btn.pri,.askbox .go,.bizsel .logo,.me .av,.dmsg .av{color:oklch(0.17 0.02 205)}
+  .btn.fix{color:oklch(0.17 0.04 25)}
+  .caretog .sw::after{background:oklch(0.20 0.04 25)}
+}
+
+/* ── SIDEBAR NORMALISER ──────────────────────────────────────────────────
+   Six screens were authored in parallel and the sidebar drifted: different
+   widths, different paddings, one screen used `.subs` instead of `.sub`, and
+   two grew extra rows. Everything the sidebar needs is pinned here and scoped
+   to `.side`, so nothing in the centre column moves. Colours are custom
+   properties, so each file's dark-mode block still overrides them. */
+:root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
+@media (prefers-color-scheme:dark){
+  :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+}
+
+.side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+      display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.side .biz{padding:13px 13px 12px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.side .bizsel{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+      border:1px solid var(--line);background:var(--panel);text-align:left;cursor:pointer}
+.side .bizsel .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .bizsel .nm{flex:1;min-width:0;text-align:left}
+.side .bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.25;
+      white-space:normal;overflow:visible;text-overflow:clip;color:var(--ink)}
+.side .bizsel .nm span{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.side .bizsel .chev{font-size:11px;flex-shrink:0;color:var(--ink-3)}
+
+.side .caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+      width:100%;text-align:left;cursor:pointer;background:var(--care-wash);
+      border:1px solid var(--nrs-care-line)}
+.side .caretog .sw{width:28px;height:16px;border-radius:99px;flex-shrink:0;display:block;
+      position:relative;background:var(--care)}
+.side .caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+      border-radius:50%;background:var(--nrs-knob)}
+.side .caretog .tx{font-size:11.5px;font-weight:600;line-height:1.35;color:var(--care)}
+
+.side .cta{margin:12px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;
+      border-radius:10px;padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer}
+.side nav{padding:0 8px 6px;display:block}
+
+.side .top{display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:7px 9px;
+      border-radius:8px;font-size:13.5px;font-weight:560;margin-top:2px;text-decoration:none;
+      text-align:left;color:var(--ink);cursor:pointer;background:none}
+.side .top:hover{background:var(--panel-2)}
+.side .top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.side .top .ic{width:16px;text-align:center;font-size:13px;flex-shrink:0;color:var(--ink-3)}
+.side .top.on .ic{color:var(--brand-deep)}
+.side .top .cnt{margin-left:auto;font-size:10px;font-weight:650;padding:2px 5px;border-radius:5px;
+      background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+
+/* align-items:stretch matters: one file centred its sub-items, which in a
+   column flex container staircases every row toward the middle. */
+.side .sub{margin:1px 0 5px 34px;padding:0;display:flex;flex-direction:column;
+      align-items:stretch;gap:1px;text-align:left}
+.side .sub a{font-size:12.5px;padding:4px 8px;border-radius:6px;text-decoration:none;display:flex;
+      align-items:flex-start;justify-content:flex-start;gap:7px;line-height:1.4;text-align:left;
+      color:var(--ink-2);cursor:pointer;background:none;font-weight:400}
+.side .sub a:hover{background:var(--panel-2);color:var(--ink)}
+/* One file wrote `.sub:before` — on the list, not the item — which dropped a
+   stray dot at the top of every group. The bullet belongs to the row. */
+.side .sub::before,.side .sub::after{content:none;display:none}
+.side .sub a::before{content:"";width:3px;height:3px;margin-top:7px;border-radius:50%;
+      background:var(--ink-3);opacity:.55;flex-shrink:0}
+.side .sub a.care{color:var(--care)}
+.side .sub a.care::before{background:var(--care);opacity:.85}
+.side .sub .glbl{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:650;
+      padding:6px 8px 2px;display:block;color:var(--ink-3);text-align:left}
+.side .grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
+      padding:14px 9px 5px;color:var(--ink-3);text-align:left}
+.side .me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;
+      align-items:center;gap:9px}
+.side .me .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .me span{font-size:13px;color:var(--ink-2)}
+
+/* ── DIRECTOR RAIL: the collapse control must stay visible ────────────────
+   It is the only way back once the rail is hidden, so it never shrinks and
+   never sits past the panel edge. The four tabs give up the space instead. */
+.right{overflow-x:hidden}
+.right .rtabs{display:flex;align-items:center;gap:1px;padding:0 8px;height:50px;min-width:0}
+.right .rtab{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      font-size:11.5px;padding:5px 7px}
+.right .ctl{margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.rtabs .ctl button.hide,.right .ctl .hide,.right .hide{width:auto;height:auto;display:inline-flex;
+      align-items:center;gap:5px;white-space:nowrap;font-size:11.5px;font-weight:600;padding:5px 9px;
+      border-radius:7px;cursor:pointer;flex-shrink:0;border:1px solid var(--line);
+      background:var(--panel-2);color:var(--ink-2)}
+.rtabs .ctl button.hide:hover,.right .hide:hover{background:var(--panel);color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR — identical on every screen ═══ -->
+<aside class="side">
+  <div class="biz">
+    <button class="bizsel">
+      <span class="logo">DW</span>
+      <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
+      <span class="chev">&#9662;</span>
+    </button>
+    <button class="caretog on">
+      <span class="sw"></span>
+      <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
+    </button>
+  </div>
+
+  <button class="cta">&#43;&nbsp; Create post</button>
+
+  <nav>
+    <a class="top"><span class="ic">&#9636;</span> Dashboard</a>
+
+    <a class="top"><span class="ic">&#9635;</span> Business analysis</a>
+    <div class="sub">
+      <a>What the business is</a><a>Who buys from you</a>
+      <a>What makes you different</a><a>Goals &amp; targets</a>
+    </div>
+
+    <a class="top"><span class="ic">&#10022;</span> Branding &amp; voice</a>
+    <div class="sub">
+      <a>Logo, colours, fonts</a><a>How you sound</a>
+      <a>Words to use &amp; avoid</a><a>What you talk about</a>
+    </div>
+
+    <a class="top on"><span class="ic">&#9741;</span> Connections</a>
+    <div class="sub">
+      <a>Social accounts</a><a>Your website</a><a>Canva</a>
+      <a>Google</a><a>Code &amp; hosting</a><a>Email</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9880;</span> Competitors</a>
+    <div class="sub">
+      <a>Who they are</a><a>What they post</a>
+      <a>What they rank for</a><a>Where you are behind</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9906;</span> Google searchability</a>
+    <div class="sub">
+      <a>What you rank for</a><a>What people search</a>
+      <a>Your Google listing</a><a>Local &amp; maps</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9673;</span> AI searchability</a>
+    <div class="sub">
+      <a>Can AI find you</a><a>How AI describes you</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9737;</span> Website</a>
+    <div class="sub">
+      <a>Speed on phone &amp; desktop</a><a>Pages</a>
+      <a>Structure &amp; sitemap</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9998;</span> Blogging <span class="cnt">4</span></a>
+    <div class="sub">
+      <a>Your posts</a><a>What to write next</a>
+      <a>Search terms</a><a>Images</a>
+      <a class="care">Checked before you publish</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9634;</span> Social media</a>
+    <div class="sub">
+      <span class="glbl">Content</span>
+      <a>Posts</a><a>Calendar</a><a>Media library</a><a>Templates</a>
+      <span class="glbl">Setup</span>
+      <a>Social accounts</a><a>Posting schedule</a>
+      <span class="glbl">Results</span>
+      <a>Analytics</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9650;</span> Advertising</a>
+    <div class="sub">
+      <a>Campaigns</a><a>What you are spending</a>
+      <a>What it is returning</a><a>Audiences</a>
+      <a class="care">Ad rules for health</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9993;</span> Engagement <span class="cnt">7</span></a>
+    <div class="sub">
+      <a>Comments</a><a>Messages</a><a>Mentions</a><a>Reviews</a>
+    </div>
+
+    <div class="grp">This business</div>
+    <a class="top"><span class="ic">&#9881;</span> Settings</a>
+    <div class="sub">
+      <a>People &amp; access</a><a>What it costs</a>
+      <a class="care">Compliance record</a>
+    </div>
+  </nav>
+
+  <div class="me"><span class="av">JB</span><span>Justin Black</span></div>
+</aside>
+
+<!-- ═══ CENTRE ═══ -->
+<main class="main">
+  <h1>Connections</h1>
+  <p class="lede">Everything Downscale is plugged into. Connect something and the work it unlocks
+     starts the same day &mdash; nothing here needs setting up twice.</p>
+
+  <div class="tally">
+    <span><i class="i-ok"></i> <b>4</b> working</span>
+    <span><i class="i-stop"></i> <b>1</b> stopped working</span>
+    <span><i class="i-off"></i> <b>5</b> not connected yet</span>
+    <span class="last">Last checked 6 minutes ago</span>
+  </div>
+
+  <!-- The loudest thing on the screen. Its own block, not a dot on a tile. -->
+  <section class="broke">
+    <div class="flag"><i></i> Needs you today</div>
+    <h2>Instagram has stopped working</h2>
+    <div class="who">
+      <span class="mk ig">&#9673;</span>
+      <span>downscaleweightloss &middot; stopped Thursday 14 August, 6:02pm</span>
+    </div>
+    <p>Instagram asked for your sign-in again after a security change on their side. Until you sign
+       back in, <b>nothing can go out to this account</b> and nothing can come back in from it.</p>
+
+    <div class="held">
+      <span>&#9888;</span>
+      <span><b>2 posts have been waiting since Thursday.</b> They were never published and they were
+        never lost &mdash; they are still sitting as drafts, with their pictures. Sign back in and you
+        choose whether to send them now or leave them.</span>
+    </div>
+
+    <div class="acts">
+      <button class="btn fix">Reconnect Instagram</button>
+      <button class="btn gh">See the 2 posts waiting</button>
+      <button class="btn gh">Leave it for now</button>
+    </div>
+    <p class="note">We will ask you to sign in to Instagram. It takes about a minute and you keep
+       every past post, comment and figure.</p>
+  </section>
+
+  <!-- ── SOCIAL ACCOUNTS — each platform on its own tile ── -->
+  <section class="sec">
+    <div class="hd"><h3>Social accounts</h3><span class="cnt">2 working &middot; 1 stopped &middot; 2 not connected</span></div>
+    <p class="say">Each account is separate. Connecting one has no effect on the others, and you can
+       remove any of them at any time.</p>
+
+    <div class="grid">
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk fb">f</span>
+          <span class="tn"><b>Facebook</b><span>DownscaleClinic</span></span>
+        </div>
+        <span class="state on"><i></i> Connected</span>
+        <p class="does">Posts, photos and videos go out here. Comments and messages come back to you
+           under <b>Engagement</b>.</p>
+        <div class="carebar"><i>&#9878;</i><span>Every post is checked against AHPRA and TGA before it goes out.</span></div>
+        <p class="stamp">Working &middot; checked 6 min ago</p>
+        <div class="foot"><button class="btn gh wide">Manage</button></div>
+      </div>
+
+      <div class="tile stopped">
+        <div class="th">
+          <span class="mk ig">&#9673;</span>
+          <span class="tn"><b>Instagram</b><span>downscaleweightloss</span></span>
+        </div>
+        <span class="state bad"><i></i> Stopped working</span>
+        <p class="does">Instagram wants you to sign in again. <b>2 posts are waiting</b> and nothing
+           can go out until you do.</p>
+        <div class="carebar"><i>&#9878;</i><span>Every post is checked against AHPRA and TGA before it goes out.</span></div>
+        <p class="stamp">Stopped Thu 14 Aug, 6:02pm</p>
+        <div class="foot">
+          <button class="btn fix wide">Reconnect Instagram</button>
+          <p class="signin">We will ask you to sign in.</p>
+        </div>
+      </div>
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk yt">&#9658;</span>
+          <span class="tn"><b>YouTube</b><span>DownscaleAU</span></span>
+        </div>
+        <span class="state on"><i></i> Connected</span>
+        <p class="does">Long videos and Shorts go out here, with titles and descriptions written for
+           what people search.</p>
+        <div class="carebar"><i>&#9878;</i><span>Every video is checked against AHPRA and TGA before it goes out.</span></div>
+        <p class="stamp">Working &middot; checked 6 min ago</p>
+        <div class="foot"><button class="btn gh wide">Manage</button></div>
+      </div>
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk tt">&#9834;</span>
+          <span class="tn"><b>TikTok</b><span>Not connected</span></span>
+        </div>
+        <span class="state off"><i></i> Not connected</span>
+        <p class="does">Once connected, short videos you already have can go out here too, and you
+           will see what each one earned.</p>
+        <div class="foot">
+          <button class="btn pri wide">Connect TikTok</button>
+          <p class="signin">We will ask you to sign in.</p>
+        </div>
+      </div>
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk li">in</span>
+          <span class="tn"><b>LinkedIn</b><span>Not connected</span></span>
+        </div>
+        <span class="state off"><i></i> Not connected</span>
+        <p class="does">Once connected, the clinic can post to other health professionals &mdash;
+           where most referrals come from.</p>
+        <div class="foot">
+          <button class="btn pri wide">Connect LinkedIn</button>
+          <p class="signin">We will ask you to sign in.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── EVERYTHING ELSE ── -->
+  <section class="sec">
+    <div class="hd"><h3>Everything else</h3><span class="cnt">2 working &middot; 3 not connected</span></div>
+    <p class="say">These are not for posting. They are how NRS sees your website, your pictures,
+       your search results and your emails.</p>
+
+    <div class="grid">
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk web">&#9737;</span>
+          <span class="tn"><b>Your website</b><span>downscale.com.au</span></span>
+        </div>
+        <span class="state on"><i></i> Connected</span>
+        <p class="does">Reads every page, watches how fast it loads on a phone, and publishes your
+           blog posts straight to it.</p>
+        <div class="carebar"><i>&#9878;</i><span>Blog posts are checked against AHPRA and TGA before they publish.</span></div>
+        <p class="stamp">Working &middot; read 41 pages today</p>
+        <div class="foot"><button class="btn gh wide">Manage</button></div>
+      </div>
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk em">&#9993;</span>
+          <span class="tn"><b>Email</b><span>hello@downscale.com.au</span></span>
+        </div>
+        <span class="state on"><i></i> Connected</span>
+        <p class="does">Sends your newsletters and patient updates from your own address, and tells
+           you who opened them.</p>
+        <div class="carebar"><i>&#9878;</i><span>Emails are checked against AHPRA and TGA before they send.</span></div>
+        <p class="stamp">Working &middot; last sent 11 Aug</p>
+        <div class="foot"><button class="btn gh wide">Manage</button></div>
+      </div>
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk gg">G</span>
+          <span class="tn"><b>Google</b><span>Not connected</span></span>
+        </div>
+        <span class="state off"><i></i> Not connected</span>
+        <p class="does">Once connected, you will see <b>what people actually searched</b> to find you,
+           and your clinic listing and reviews come in here.</p>
+        <div class="foot">
+          <button class="btn pri wide">Connect Google</button>
+          <p class="signin">We will ask you to sign in.</p>
+        </div>
+      </div>
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk cv">&#9635;</span>
+          <span class="tn"><b>Canva</b><span>Not connected</span></span>
+        </div>
+        <span class="state off"><i></i> Not connected</span>
+        <p class="does">Once connected, your Canva designs appear in your media library, and new
+           images can be made in your own colours and fonts.</p>
+        <div class="foot">
+          <button class="btn pri wide">Connect Canva</button>
+          <p class="signin">We will ask you to sign in.</p>
+        </div>
+      </div>
+
+      <div class="tile">
+        <div class="th">
+          <span class="mk cd">&#9001;&#9002;</span>
+          <span class="tn"><b>Code &amp; hosting</b><span>Not connected</span></span>
+        </div>
+        <span class="state off"><i></i> Not connected</span>
+        <p class="does">Only if someone builds your website for you. Once connected, changes to the
+           site can be made and put live here.</p>
+        <div class="foot">
+          <button class="btn pri wide">Connect code &amp; hosting</button>
+          <p class="signin">We will ask you to sign in. Most people never need this one.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<!-- ═══ RIGHT — the Director, on every screen ═══ -->
+<aside class="right">
+  <div class="rtabs">
+    <span class="rtab on">&#10022; Director</span>
+      <span class="rtab">&#128065; Preview</span>
+      <span class="rtab">&#9993; Activity</span>
+      <span class="rtab">&#9650; Analytics</span>
+      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+    
+  </div>
+
+  <div class="rbody">
+    <div class="dmsg">
+      <span class="av">ND</span>
+      <div class="bd">
+        <p>Instagram stopped on <b>Thursday evening</b>. Two posts have been sitting since &mdash;
+           neither went out, neither was lost.</p>
+        <p>It is a sign-in, not a fault at your end. I can walk you through it, or you can press
+           Reconnect on the screen yourself &mdash; same thing.</p>
+      </div>
+    </div>
+
+    <div class="dmsg">
+      <span class="av">ND</span>
+      <div class="bd">
+        <p>After that, <b>Google</b> is the gap I would close next. You are writing four blog posts a
+           month without seeing what people searched to find you.</p>
+      </div>
+    </div>
+
+    <div class="ideas">
+      <div class="h">Suggested</div>
+      <a><span class="ic">&#8635;</span> Walk me through reconnecting Instagram</a>
+      <a><span class="ic">&#9634;</span> Show the 2 posts that are waiting</a>
+      <a><span class="ic">&#9906;</span> What would connecting Google give me?</a>
+      <a><span class="ic">&#9202;</span> Is anything else about to stop?</a>
+      <a><span class="ic">&#9650;</span> Which account is worth the most to me?</a>
+      <a><span class="ic">&#9878;</span> Show my compliance record</a>
+    </div>
+
+    <div class="chk"><span>&#10003;</span><span><b>Facebook, YouTube, your website and email are all working.</b> Last checked 6 minutes ago.</span></div>
+    <div class="chk w"><span>&#9711;</span><span><b>Nothing has been sent while Instagram is down.</b> The 2 waiting posts stay drafts until you say otherwise.</span></div>
+  </div>
+
+  <div class="ask">
+    <div class="askbox">
+      <div class="ph">Ask NRS about Downscale&hellip;</div>
+      <button class="go">&#8593;</button>
+    </div>
+    <div class="askfoot">
+      <span class="pill">Director</span>
+      <span>sees this screen</span>
+      <span class="live"><i></i> 14 departments ready</span>
+    </div>
+  </div>
+</aside>
+
+</body>
+</html>

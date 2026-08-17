@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NRS — Google searchability &amp; AI searchability — Downscale</title>
+<style>
+/* ══════════════════════════════════════════════════════════════
+   TOKENS — carried unchanged from nrs-mixpost-shape.html so every
+   screen is visibly the same product. Only the three business
+   variables change: --brand / --brand-deep / --brand-wash.
+   Downscale = hue 205, clinical teal.
+   NEVER color-mix() in oklch. It goes pink. Rejected twice.
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  --h:240;
+  --bg:oklch(0.985 0.002 var(--h));
+  --panel:oklch(1 0 0);
+  --panel-2:oklch(0.975 0.004 var(--h));
+  --line:oklch(0.915 0.007 var(--h));
+  --line-soft:oklch(0.950 0.005 var(--h));
+  --ink:oklch(0.20 0.014 var(--h));
+  --ink-2:oklch(0.46 0.012 var(--h));
+  --ink-3:oklch(0.615 0.011 var(--h));
+  /* Business accent. One variable — switching business retints the product. */
+  --brand:oklch(0.545 0.115 205);
+  --brand-deep:oklch(0.33 0.080 205);
+  --brand-wash:oklch(0.966 0.026 205);
+  --ok:oklch(0.55 0.13 155);
+  --warn:oklch(0.63 0.13 75);
+  --stop:oklch(0.55 0.17 27);
+  /* Healthcare mode — warm red, hue 25 */
+  --care:oklch(0.52 0.150 25);
+  --care-deep:oklch(0.42 0.14 25);
+  --care-wash:oklch(0.965 0.028 25);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --shadow:0 1px 2px oklch(0.2 0.02 var(--h)/.05),0 8px 24px -16px oklch(0.2 0.02 var(--h)/.28);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:oklch(0.175 0.010 var(--h));
+    --panel:oklch(0.215 0.012 var(--h));
+    --panel-2:oklch(0.245 0.013 var(--h));
+    --line:oklch(0.315 0.015 var(--h));
+    --line-soft:oklch(0.275 0.013 var(--h));
+    --ink:oklch(0.960 0.005 var(--h));
+    --ink-2:oklch(0.795 0.011 var(--h));
+    --ink-3:oklch(0.640 0.013 var(--h));
+    --brand:oklch(0.76 0.14 205);
+    --brand-deep:oklch(0.88 0.10 205);
+    --brand-wash:oklch(0.275 0.045 205);
+    --ok:oklch(0.74 0.14 155);
+    --warn:oklch(0.80 0.13 78);
+    --stop:oklch(0.70 0.16 27);
+    --care:oklch(0.72 0.16 25);
+    --care-deep:oklch(0.86 0.11 25);
+    --care-wash:oklch(0.295 0.055 25);
+    --shadow:0 1px 2px oklch(0 0 0/.5),0 10px 30px -18px oklch(0 0 0/.75);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  line-height:1.5;-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-columns:236px minmax(0,1fr) 380px;height:100vh;overflow:hidden;
+}
+
+/* ── SIDEBAR ─────────────────────────────────────────────── */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+
+/* The business selector. Most owners have ONE business, so this reads as a
+   quiet label rather than a big switcher. */
+.biz{padding:14px 14px 12px;border-bottom:1px solid var(--line-soft)}
+.bizsel{
+  display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel-2);cursor:pointer;text-align:left;
+}
+.bizsel .logo{width:26px;height:26px;border-radius:7px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans);flex-shrink:0}
+.bizsel .nm{flex:1;min-width:0}
+.bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.015em;line-height:1.25}
+.bizsel .nm span{display:block;font-size:11px;color:var(--ink-3)}
+.bizsel .chev{color:var(--ink-3);font-size:11px}
+
+/* Healthcare toggle. ON = warm red. Turns on the [care] items below. */
+.caretog{display:flex;align-items:center;gap:8px;width:100%;margin-top:9px;padding:7px 9px;
+  border-radius:9px;border:1px solid var(--line);background:var(--panel-2);cursor:pointer;text-align:left;
+  font-size:11.5px;color:var(--ink-3);line-height:1.3}
+.caretog.on{background:var(--care-wash);border-color:transparent;color:var(--care-deep);font-weight:600}
+.caretog .sw{width:26px;height:15px;border-radius:99px;background:var(--line);position:relative;flex-shrink:0}
+.caretog.on .sw{background:var(--care)}
+.caretog .sw i{position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;
+  background:oklch(1 0 0);display:block}
+.caretog.on .sw i{left:13px}
+
+.cta{margin:14px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--brand-deep);color:oklch(1 0 0);border:0;border-radius:10px;
+  padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer;box-shadow:var(--shadow)}
+
+nav{padding:0 10px 14px;display:flex;flex-direction:column;gap:1px}
+.grp{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:15px 8px 6px;display:flex;align-items:center;gap:6px}
+.item{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:8px;
+  color:var(--ink-2);font-size:13.5px;cursor:pointer;text-decoration:none}
+.item:hover{background:var(--panel-2)}
+.item.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:600}
+.item .ic{width:17px;text-align:center;font-size:14px;opacity:.75;flex-shrink:0}
+.item .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .tag{font-size:10px;font-weight:650;letter-spacing:.04em;padding:2px 5px;border-radius:5px;
+  background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+.item .tag.due{background:oklch(0.96 0.06 75);color:oklch(0.42 0.11 60);border-color:transparent}
+@media (prefers-color-scheme:dark){
+  .item .tag.due{background:oklch(0.32 0.07 70);color:oklch(0.87 0.11 80)}
+}
+/* Sub-items — always visible. Justin: this flat format is easy to follow. */
+.subs{display:flex;flex-direction:column;gap:1px;padding:2px 0 6px 10px;margin-left:16px;
+  border-left:1px solid var(--line-soft)}
+.sub2{display:flex;align-items:center;gap:7px;padding:3px 7px;border-radius:6px;
+  font-size:12.5px;color:var(--ink-3);cursor:pointer;text-decoration:none;line-height:1.35}
+.sub2:hover{background:var(--panel-2);color:var(--ink-2)}
+.sub2::before{content:"";width:3px;height:3px;border-radius:50%;background:var(--ink-3);
+  flex-shrink:0;opacity:.65}
+.sub2.on{color:var(--brand-deep);font-weight:600}
+.sub2 .caremark{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  padding:1px 4px;border-radius:4px;background:var(--care-wash);color:var(--care-deep)}
+.glbl{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:8px 7px 3px;opacity:.85}
+.me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;align-items:center;gap:9px}
+.me .av{width:26px;height:26px;border-radius:50%;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans)}
+.me span{font-size:13px;color:var(--ink-2)}
+
+/* ── CENTRE ──────────────────────────────────────────────── */
+/* Cap the column so the screen still reads well with the Director collapsed. */
+.main{overflow-y:auto;padding:22px 26px 60px;min-width:0}
+.main>*{max-width:1040px}
+h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
+.sub{color:var(--ink-3);font-size:13px;margin:0 0 18px;max-width:76ch}
+
+/* Manual jump control. A person clicks to move between the two sections. */
+.jump{display:flex;gap:9px;margin:0 0 24px;flex-wrap:wrap}
+.jump a{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink-2);font-size:12.5px;
+  text-decoration:none;box-shadow:var(--shadow)}
+.jump a b{color:var(--ink);font-weight:650;font-size:13px}
+.jump a .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.jump a:hover{border-color:var(--brand)}
+
+.sect{margin:0 0 34px;scroll-margin-top:14px}
+.shead{border-left:3px solid var(--brand);padding-left:14px;margin-bottom:16px}
+.kick{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.htitle{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:4px 0 5px}
+h2{font-size:18px;font-weight:650;letter-spacing:-.02em;margin:0}
+.shead p{margin:0;font-size:13.5px;color:var(--ink-2);max-width:72ch}
+.state{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:650;
+  padding:3px 9px;border-radius:7px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-3)}
+.state i{width:7px;height:7px;border-radius:50%;display:block;font-style:normal}
+.state.off i{background:var(--ink-3)}
+.state.live i{background:var(--ok)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);padding:17px 19px;margin-bottom:14px}
+.card h3{font-size:15px;font-weight:650;letter-spacing:-.01em;margin:0 0 7px}
+.card>p{margin:0 0 11px;font-size:13.5px;color:var(--ink-2);max-width:72ch}
+.card>p:last-child{margin-bottom:0}
+.card p b{color:var(--ink)}
+
+.gets{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:9px}
+.gets li{display:flex;gap:10px;font-size:13.5px;color:var(--ink-2)}
+.gets li em{font-style:normal;color:var(--brand-deep);flex-shrink:0;font-size:12px;padding-top:1px}
+.getshd{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;margin:16px 0 0}
+
+.btnrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:9px;padding:10px 15px;
+  font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--ink-2);text-decoration:none}
+.btn:hover{border-color:var(--brand);color:var(--ink)}
+.btn.pri{background:var(--brand-deep);color:oklch(1 0 0);border-color:transparent;box-shadow:var(--shadow)}
+.btn.pri:hover{color:oklch(1 0 0)}
+.btn.sm{padding:6px 11px;font-size:12px;border-radius:8px}
+.btn.quiet{background:none;border-color:transparent;color:var(--ink-3);padding-left:2px;padding-right:2px}
+.note{font-size:11.5px;color:var(--ink-3);line-height:1.45;max-width:60ch}
+.btnrow .note{flex-basis:100%;margin-top:-4px}
+
+/* Honest empty. No chart, no estimate, no placeholder number. */
+.empty{border:1px dashed var(--line);border-radius:12px;padding:28px 20px;text-align:center;
+  background:var(--panel-2);margin-top:14px}
+.empty b{display:block;color:var(--ink-2);font-size:13.5px;font-weight:600;margin-bottom:5px}
+.empty span{font-size:12.5px;color:var(--ink-3)}
+
+/* Findings — the agency answer, readable without asking anyone. */
+.find{display:flex;gap:14px;padding:16px 0;border-top:1px solid var(--line-soft)}
+.find:first-of-type{border-top:0;padding-top:4px}
+.find .no{width:22px;height:22px;border-radius:7px;background:var(--brand-wash);color:var(--brand-deep);
+  display:grid;place-items:center;font:700 11px/1 var(--sans);flex-shrink:0;margin-top:2px}
+.find .bd{min-width:0;flex:1}
+.find h4{font-size:15px;font-weight:650;letter-spacing:-.015em;margin:0 0 6px;color:var(--ink);line-height:1.35}
+.find p{margin:0;font-size:13.5px;color:var(--ink-2);max-width:70ch}
+.src{font-size:11.5px;color:var(--ink-3);margin-top:9px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.src .d{opacity:.5}
+.acts{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px;align-items:center}
+
+.care{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:650;
+  padding:3px 8px;border-radius:6px;background:var(--care-wash);color:var(--care-deep)}
+
+/* AI rows */
+.arow{display:grid;grid-template-columns:236px minmax(0,1fr) 380px auto;gap:14px;align-items:center;
+  padding:14px 0;border-top:1px solid var(--line-soft)}
+.arow:first-of-type{border-top:0;padding-top:4px}
+.arow .who{font-size:13.5px;font-weight:650;color:var(--ink)}
+.arow .qq{font-size:13px;color:var(--ink-2);min-width:0}
+.arow .res{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-2);line-height:1.4}
+.arow .res i{width:8px;height:8px;border-radius:50%;display:block;font-style:normal;flex-shrink:0;margin-top:4px}
+.arow .res i.ok{background:var(--ok)}
+.arow .res i.warn{background:var(--warn)}
+.arow .res i.stop{background:var(--stop)}
+.arow .res i.none{background:var(--ink-3);opacity:.55}
+.askown{display:flex;gap:10px;align-items:center;margin-top:16px;padding-top:15px;
+  border-top:1px solid var(--line-soft);flex-wrap:wrap}
+.askown .fld{flex:1;min-width:240px;border:1px solid var(--line);border-radius:9px;
+  background:var(--panel-2);padding:10px 12px;font-size:13px;color:var(--ink-3)}
+
+/* Quotes — what an assistant actually said, plus YOUR verdict. */
+.q{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:15px 16px;margin-bottom:12px}
+.q .qh{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--ink-3);margin-bottom:10px;flex-wrap:wrap}
+.q .qh b{font-size:13px;color:var(--ink);font-weight:650}
+.q blockquote{margin:0;font-size:14px;color:var(--ink);line-height:1.55;
+  border-left:2px solid var(--line);padding-left:13px}
+.q .after{margin:12px 0 0;font-size:13px;color:var(--ink-2)}
+.q .after b{color:var(--ink)}
+.verdict{display:flex;gap:9px;align-items:center;margin-top:13px;flex-wrap:wrap}
+.verdict .said{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+  padding:5px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--line);color:var(--ink-2)}
+.verdict .said.yes{color:var(--ok)}
+.verdict .said.no{color:var(--stop)}
+.q.bad{border-left:3px solid var(--care)}
+.q.none{border-style:dashed}
+
+.footline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:4px;
+  font-size:12.5px;color:var(--ink-3)}
+
+/* ── RIGHT: the Director lives here, always. ──────────────
+   Same shape as Vercel's Agent and Supabase's assistant — a persistent
+   panel with the input pinned at the bottom. It does not go away when you
+   navigate; it follows you and stays current to whatever is on screen.
+   It is optional: collapse it and the screen is still whole. */
+.right{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.rtabs{display:flex;align-items:center;gap:2px;padding:0 10px;height:50px;border-bottom:1px solid var(--line)}
+.rtab{display:flex;align-items:center;gap:5px;padding:7px 8px;border-radius:8px;font-size:12px;color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.rtab.on{color:var(--brand-deep);font-weight:650;background:var(--brand-wash)}
+.rtabs .ctl{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:13px;flex-shrink:0}
+.rtabs .ctl .hide{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+  white-space:nowrap;padding:5px 9px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink-3);cursor:pointer}
+.rtabs .ctl .hide:hover{color:var(--ink-2);border-color:var(--brand)}
+.rbody{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:0}
+
+/* Director conversation */
+.dmsg{display:flex;gap:9px}
+.dmsg .av{width:22px;height:22px;border-radius:6px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 9px/1 var(--sans);flex-shrink:0}
+.dmsg .bd{font-size:13px;color:var(--ink-2);min-width:0}
+.dmsg .bd p{margin:0 0 8px}.dmsg .bd p:last-child{margin:0}
+.dmsg .bd b{color:var(--ink)}
+.dmsg.me{flex-direction:row-reverse}
+.dmsg.me .av{background:var(--ink-3)}
+.dmsg.me .bd{background:var(--brand-wash);border-radius:10px;padding:8px 11px;color:var(--ink)}
+
+.ideas{margin-top:2px}
+.ideas .h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650;margin-bottom:7px}
+.ideas a{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;color:var(--ink-2);
+  font-size:13px;cursor:pointer;text-decoration:none}
+.ideas a:hover{background:var(--panel-2)}
+.ideas a .ic{color:var(--ink-3);font-size:12px;width:14px;text-align:center;flex-shrink:0}
+
+/* Input pinned to the bottom — the thing that makes it feel always-on. */
+.ask{border-top:1px solid var(--line);padding:11px 12px 12px;background:var(--panel)}
+.askbox{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:9px 11px;
+  display:flex;align-items:flex-end;gap:9px}
+.askbox .ph{flex:1;color:var(--ink-3);font-size:13px;min-height:34px}
+.askbox .go{width:27px;height:27px;border-radius:7px;border:0;background:var(--brand-deep);
+  color:oklch(1 0 0);font-size:13px;cursor:pointer;flex-shrink:0}
+.askfoot{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:11px;color:var(--ink-3)}
+.askfoot .pill{border:1px solid var(--line);border-radius:6px;padding:2px 6px;background:var(--panel-2)}
+.askfoot .live{display:flex;align-items:center;gap:5px;margin-left:auto}
+.askfoot .live i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:block;font-style:normal}
+.chk{display:flex;gap:9px;border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:9px;
+  padding:10px 12px;font-size:12.5px;color:var(--ink-2);background:var(--panel-2)}
+.chk.w{border-left-color:var(--warn)}
+.chk.c{border-left-color:var(--care)}
+.chk b{color:var(--ink)}
+
+/* Collapse the rail. No script — the screen must be whole without it. */
+#railtoggle{position:absolute;width:0;height:0;opacity:0;pointer-events:none}
+body:has(#railtoggle:checked){grid-template-columns:236px minmax(0,1fr) 0}
+body:has(#railtoggle:checked) .right{display:none}
+.reopen{display:none;position:fixed;top:14px;right:14px;align-items:center;gap:7px;
+  padding:8px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel);
+  color:var(--ink-2);font-size:12px;font-weight:600;cursor:pointer;box-shadow:var(--shadow);z-index:5}
+body:has(#railtoggle:checked) .reopen{display:inline-flex}
+
+/* ── SIDEBAR NORMALISER ──────────────────────────────────────────────────
+   Six screens were authored in parallel and the sidebar drifted: different
+   widths, different paddings, one screen used `.subs` instead of `.sub`, and
+   two grew extra rows. Everything the sidebar needs is pinned here and scoped
+   to `.side`, so nothing in the centre column moves. Colours are custom
+   properties, so each file's dark-mode block still overrides them. */
+:root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
+@media (prefers-color-scheme:dark){
+  :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+}
+
+.side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+      display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.side .biz{padding:13px 13px 12px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.side .bizsel{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+      border:1px solid var(--line);background:var(--panel);text-align:left;cursor:pointer}
+.side .bizsel .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .bizsel .nm{flex:1;min-width:0;text-align:left}
+.side .bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.25;
+      white-space:normal;overflow:visible;text-overflow:clip;color:var(--ink)}
+.side .bizsel .nm span{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.side .bizsel .chev{font-size:11px;flex-shrink:0;color:var(--ink-3)}
+
+.side .caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+      width:100%;text-align:left;cursor:pointer;background:var(--care-wash);
+      border:1px solid var(--nrs-care-line)}
+.side .caretog .sw{width:28px;height:16px;border-radius:99px;flex-shrink:0;display:block;
+      position:relative;background:var(--care)}
+.side .caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+      border-radius:50%;background:var(--nrs-knob)}
+.side .caretog .tx{font-size:11.5px;font-weight:600;line-height:1.35;color:var(--care)}
+
+.side .cta{margin:12px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;
+      border-radius:10px;padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer}
+.side nav{padding:0 8px 6px;display:block}
+
+.side .top{display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:7px 9px;
+      border-radius:8px;font-size:13.5px;font-weight:560;margin-top:2px;text-decoration:none;
+      text-align:left;color:var(--ink);cursor:pointer;background:none}
+.side .top:hover{background:var(--panel-2)}
+.side .top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.side .top .ic{width:16px;text-align:center;font-size:13px;flex-shrink:0;color:var(--ink-3)}
+.side .top.on .ic{color:var(--brand-deep)}
+.side .top .cnt{margin-left:auto;font-size:10px;font-weight:650;padding:2px 5px;border-radius:5px;
+      background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+
+/* align-items:stretch matters: one file centred its sub-items, which in a
+   column flex container staircases every row toward the middle. */
+.side .sub{margin:1px 0 5px 34px;padding:0;display:flex;flex-direction:column;
+      align-items:stretch;gap:1px;text-align:left}
+.side .sub a{font-size:12.5px;padding:4px 8px;border-radius:6px;text-decoration:none;display:flex;
+      align-items:flex-start;justify-content:flex-start;gap:7px;line-height:1.4;text-align:left;
+      color:var(--ink-2);cursor:pointer;background:none;font-weight:400}
+.side .sub a:hover{background:var(--panel-2);color:var(--ink)}
+/* One file wrote `.sub:before` — on the list, not the item — which dropped a
+   stray dot at the top of every group. The bullet belongs to the row. */
+.side .sub::before,.side .sub::after{content:none;display:none}
+.side .sub a::before{content:"";width:3px;height:3px;margin-top:7px;border-radius:50%;
+      background:var(--ink-3);opacity:.55;flex-shrink:0}
+.side .sub a.care{color:var(--care)}
+.side .sub a.care::before{background:var(--care);opacity:.85}
+.side .sub .glbl{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:650;
+      padding:6px 8px 2px;display:block;color:var(--ink-3);text-align:left}
+.side .grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
+      padding:14px 9px 5px;color:var(--ink-3);text-align:left}
+.side .me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;
+      align-items:center;gap:9px}
+.side .me .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .me span{font-size:13px;color:var(--ink-2)}
+
+/* ── DIRECTOR RAIL: the collapse control must stay visible ────────────────
+   It is the only way back once the rail is hidden, so it never shrinks and
+   never sits past the panel edge. The four tabs give up the space instead. */
+.right{overflow-x:hidden}
+.right .rtabs{display:flex;align-items:center;gap:1px;padding:0 8px;height:50px;min-width:0}
+.right .rtab{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      font-size:11.5px;padding:5px 7px}
+.right .ctl{margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.rtabs .ctl button.hide,.right .ctl .hide,.right .hide{width:auto;height:auto;display:inline-flex;
+      align-items:center;gap:5px;white-space:nowrap;font-size:11.5px;font-weight:600;padding:5px 9px;
+      border-radius:7px;cursor:pointer;flex-shrink:0;border:1px solid var(--line);
+      background:var(--panel-2);color:var(--ink-2)}
+.rtabs .ctl button.hide:hover,.right .hide:hover{background:var(--panel);color:var(--ink)}
+</style>
+</head>
+<body>
+<input type="checkbox" id="railtoggle">
+<label class="reopen" for="railtoggle">&#10022; Director</label>
+
+<!-- ═══ SIDEBAR — identical on every screen ═══ -->
+<aside class="side">
+  <div class="biz">
+    <button class="bizsel">
+      <span class="logo">DW</span>
+      <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
+      <span class="chev">&#9662;</span>
+    </button>
+    <button class="caretog on">
+      <span class="sw"></span>
+      <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
+    </button>
+  </div>
+
+  <button class="cta">&#43;&nbsp; Create post</button>
+
+  <nav>
+    <a class="top"><span class="ic">&#9636;</span> Dashboard</a>
+
+    <a class="top"><span class="ic">&#9635;</span> Business analysis</a>
+    <div class="sub">
+      <a>What the business is</a><a>Who buys from you</a>
+      <a>What makes you different</a><a>Goals &amp; targets</a>
+    </div>
+
+    <a class="top"><span class="ic">&#10022;</span> Branding &amp; voice</a>
+    <div class="sub">
+      <a>Logo, colours, fonts</a><a>How you sound</a>
+      <a>Words to use &amp; avoid</a><a>What you talk about</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9741;</span> Connections</a>
+    <div class="sub">
+      <a>Social accounts</a><a>Your website</a><a>Canva</a>
+      <a>Google</a><a>Code &amp; hosting</a><a>Email</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9880;</span> Competitors</a>
+    <div class="sub">
+      <a>Who they are</a><a>What they post</a>
+      <a>What they rank for</a><a>Where you are behind</a>
+    </div>
+
+    <a class="top on"><span class="ic">&#9906;</span> Google searchability</a>
+    <div class="sub">
+      <a>What you rank for</a><a>What people search</a>
+      <a>Your Google listing</a><a>Local &amp; maps</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9673;</span> AI searchability</a>
+    <div class="sub">
+      <a>Can AI find you</a><a>How AI describes you</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9737;</span> Website</a>
+    <div class="sub">
+      <a>Speed on phone &amp; desktop</a><a>Pages</a>
+      <a>Structure &amp; sitemap</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9998;</span> Blogging <span class="cnt">4</span></a>
+    <div class="sub">
+      <a>Your posts</a><a>What to write next</a>
+      <a>Search terms</a><a>Images</a>
+      <a class="care">Checked before you publish</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9634;</span> Social media</a>
+    <div class="sub">
+      <span class="glbl">Content</span>
+      <a>Posts</a><a>Calendar</a><a>Media library</a><a>Templates</a>
+      <span class="glbl">Setup</span>
+      <a>Social accounts</a><a>Posting schedule</a>
+      <span class="glbl">Results</span>
+      <a>Analytics</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9650;</span> Advertising</a>
+    <div class="sub">
+      <a>Campaigns</a><a>What you are spending</a>
+      <a>What it is returning</a><a>Audiences</a>
+      <a class="care">Ad rules for health</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9993;</span> Engagement <span class="cnt">7</span></a>
+    <div class="sub">
+      <a>Comments</a><a>Messages</a><a>Mentions</a><a>Reviews</a>
+    </div>
+
+    <div class="grp">This business</div>
+    <a class="top"><span class="ic">&#9881;</span> Settings</a>
+    <div class="sub">
+      <a>People &amp; access</a><a>What it costs</a>
+      <a class="care">Compliance record</a>
+    </div>
+  </nav>
+
+  <div class="me"><span class="av">JB</span><span>Justin Black</span></div>
+</aside>
+
+<!-- ═══ CENTRE ═══ -->
+<main class="main">
+  <h1>Being found</h1>
+  <p class="sub">Two different jobs, and they are fixed in different ways. Google is someone typing a search.
+     AI searchability is someone asking an assistant instead. You need both.</p>
+
+  <div class="jump">
+    <a href="#google"><span class="dot" style="background:var(--ink-3)"></span><b>Google searchability</b> &middot; not connected</a>
+    <a href="#ai"><span class="dot" style="background:var(--ok)"></span><b>AI searchability</b> &middot; checked 16 Aug</a>
+  </div>
+
+  <!-- ─────────── SECTION ONE — GOOGLE ─────────── -->
+  <section class="sect" id="google">
+    <div class="shead">
+      <div class="kick">Section one</div>
+      <div class="htitle">
+        <h2>Google searchability</h2>
+        <span class="state off"><i></i> Not connected</span>
+      </div>
+      <p>Being found when someone types something like &ldquo;weight loss clinic Brisbane&rdquo; into Google.</p>
+    </div>
+
+    <div class="card">
+      <h3>We cannot see your Google results yet</h3>
+      <p>Google keeps a private record of every search that showed your site &mdash; the exact words people
+         typed, where you appeared on the page, and how many clicked. Only you can open that record to us.
+         It takes about a minute. <b>We only read it.</b> We never change your site or your listing.</p>
+
+      <div class="getshd">What you get the moment it is connected</div>
+      <ul class="gets">
+        <li><em>&#10003;</em><span>The searches you already appear for, and what position you sit at.</span></li>
+        <li><em>&#10003;</em><span>What people near you are actually typing &mdash; in their words, not ours.</span></li>
+        <li><em>&#10003;</em><span>Whether your Google listing is correct: hours, phone, address, categories.</span></li>
+        <li><em>&#10003;</em><span>Where you come up in the map results for each suburb you serve.</span></li>
+      </ul>
+
+      <div class="btnrow">
+        <button class="btn pri">Connect Google</button>
+        <button class="btn quiet">I&rsquo;ll do this later</button>
+        <span class="note">Opens Google&rsquo;s own sign-in page. You pick which account, and you can
+          disconnect it any time from Connections.</span>
+      </div>
+
+      <div class="empty">
+        <b>Your searches, positions and clicks will show here.</b>
+        <span>Empty on purpose. We have not measured any of it, so we are not going to draw you a chart of it.</span>
+      </div>
+    </div>
+
+    <!-- The agency answer. On the screen, not hidden behind a chat message. -->
+    <div class="card">
+      <h3>Why you are behind &mdash; and none of this needed Google</h3>
+      <p>We measured all four of these ourselves, from your own website and from your competitors&rsquo;
+         public pages. They are true today, connected or not, and they are the reason you are not showing up.</p>
+
+      <div class="find">
+        <span class="no">1</span>
+        <div class="bd">
+          <h4>Your competitors have 90 blog posts between them. You have 4.</h4>
+          <p>Google hands its answers to whoever has written the most useful page about a question.
+             With four posts, that is almost never you. Juniper has 41, Eucalyptus 32, Mosh 17.</p>
+          <div class="src"><span>Counted on their websites</span><span class="d">&middot;</span><span>14 August</span></div>
+          <div class="acts">
+            <button class="btn sm">See what to write next</button>
+            <button class="btn sm">See the competitors</button>
+            <span class="care">&#9878; Anything written for you is checked against AHPRA &amp; TGA rules before you can publish it</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="find">
+        <span class="no">2</span>
+        <div class="bd">
+          <h4>Your site takes 6.0 seconds to open on a phone. Google starts holding sites back after about 2.5.</h4>
+          <p>Most people who search for you are on a phone on mobile data. Half of them leave before your page
+             appears. The single biggest cause is the picture at the top of your home page: it is 4.2&nbsp;MB,
+             around twenty times bigger than it needs to be.</p>
+          <div class="src"><span>Measured on your home page, normal 4G phone connection</span><span class="d">&middot;</span><span>16 August</span></div>
+          <div class="acts">
+            <button class="btn sm">Open the website report</button>
+            <button class="btn sm">Shrink the pictures for me</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="find">
+        <span class="no">3</span>
+        <div class="bd">
+          <h4>Nine of your pages carry the same one-line description.</h4>
+          <p>That line is what Google prints under your name in the results. When nine pages share it, eight of
+             them look like copies and get buried. Each one needs a sentence of its own.</p>
+          <div class="src"><span>Found in your website scan</span><span class="d">&middot;</span><span>16 August</span></div>
+          <div class="acts">
+            <button class="btn sm">Write the nine descriptions</button>
+            <button class="btn sm">Show me the pages</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="find">
+        <span class="no">4</span>
+        <div class="bd">
+          <h4>You have no page for the places you actually treat people.</h4>
+          <p>People search for a service and a suburb together. You have one page covering all of Australia.
+             Juniper has 46 separate location pages, so they appear and you do not.</p>
+          <div class="src"><span>Counted on their website</span><span class="d">&middot;</span><span>14 August</span></div>
+          <div class="acts">
+            <button class="btn sm">Plan the location pages</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="footline">
+      <span>Everything in this section came from your website scan (16 Aug) and the competitor check (14 Aug).</span>
+      <span class="d">&middot;</span><span>Nothing here came from Google.</span>
+    </p>
+  </section>
+
+  <!-- ─────────── SECTION TWO — AI ─────────── -->
+  <section class="sect" id="ai">
+    <div class="shead">
+      <div class="kick">Section two</div>
+      <div class="htitle">
+        <h2>AI searchability</h2>
+        <span class="state live"><i></i> Checked 16 August</span>
+      </div>
+      <p>Being found &mdash; and described correctly &mdash; when someone asks ChatGPT, Claude, Perplexity or
+         Gemini instead of searching Google. They answer in one paragraph, and either you are in it or you are not.</p>
+    </div>
+
+    <div class="card">
+      <h3>Can AI find you</h3>
+      <p>We asked each assistant the questions a patient would ask. Here is what came back, word for word.
+         You can change the questions or add your own at any time.</p>
+
+      <div class="arow">
+        <div class="who">ChatGPT</div>
+        <div class="qq">&ldquo;Who does telehealth weight loss in Australia?&rdquo;</div>
+        <div class="res"><i class="stop"></i><span>Did not mention you. Named 5 others.</span></div>
+        <div><button class="btn sm">Ask again</button></div>
+      </div>
+
+      <div class="arow">
+        <div class="who">Claude</div>
+        <div class="qq">&ldquo;Best telehealth weight loss clinics in Australia&rdquo;</div>
+        <div class="res"><i class="ok"></i><span>Mentioned you, 4th of 6.</span></div>
+        <div><button class="btn sm">Ask again</button></div>
+      </div>
+
+      <div class="arow">
+        <div class="who">Perplexity</div>
+        <div class="qq">&ldquo;Telehealth weight loss Brisbane&rdquo;</div>
+        <div class="res"><i class="warn"></i><span>Mentioned you, with the wrong phone number.</span></div>
+        <div><button class="btn sm">Ask again</button></div>
+      </div>
+
+      <div class="arow">
+        <div class="who">Gemini</div>
+        <div class="qq">&ldquo;Telehealth weight loss Brisbane&rdquo;</div>
+        <div class="res"><i class="none"></i><span>Not asked yet. We have never run this one.</span></div>
+        <div><button class="btn sm">Ask it now</button></div>
+      </div>
+
+      <div class="askown">
+        <span class="fld">Ask them something of your own &mdash; e.g. &ldquo;is Downscale bulk billed?&rdquo;</span>
+        <button class="btn">Ask all four</button>
+        <button class="btn quiet">Change the standard questions</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>How AI currently describes you</h3>
+      <p>This is the part that matters most. Being mentioned is no good if what they say is wrong.
+         You are the one who decides whether each of these is right &mdash; tick it or flag it.</p>
+
+      <div class="q">
+        <div class="qh"><b>Claude</b><span class="d">&middot;</span><span>asked 16 August</span></div>
+        <blockquote>&ldquo;Downscale is an Australian telehealth clinic led by nurse practitioners, offering
+          medical weight management with regular reviews and ongoing support.&rdquo;</blockquote>
+        <div class="verdict">
+          <span class="said yes">&#10003; You marked this right &mdash; 16 August</span>
+          <button class="btn sm">Change my mind</button>
+        </div>
+      </div>
+
+      <div class="q bad">
+        <div class="qh"><b>Perplexity</b><span class="d">&middot;</span><span>asked 16 August</span>
+          <span class="care">&#9878; This one breaks the rules</span></div>
+        <blockquote>&ldquo;Downscale will get you a prescription for weight-loss injections online, no
+          assessment needed. Phone (07) 5550&nbsp;0198.&rdquo;</blockquote>
+        <p class="after">Three things wrong. <b>Advertising a prescription-only treatment like that is against
+          the TGA rules</b> &mdash; we could not say it, so we certainly do not want an assistant saying it for us.
+          <b>&ldquo;No assessment needed&rdquo; is untrue</b>: every patient is assessed by a nurse practitioner.
+          And <b>that phone number is not yours</b> &mdash; it is the old one from your Facebook page.</p>
+        <div class="verdict">
+          <span class="said no">&#10007; You flagged this &mdash; 16 August</span>
+          <button class="btn sm">Draft a correction to send</button>
+          <button class="btn sm">Add to the compliance record</button>
+        </div>
+      </div>
+
+      <div class="q none">
+        <div class="qh"><b>ChatGPT</b><span class="d">&middot;</span><span>asked 16 August</span></div>
+        <blockquote>No description. It does not know you exist.</blockquote>
+        <p class="after">Nothing to correct here &mdash; there is nothing to correct <em>with</em>. The three
+          fixes below are what changes this one.</p>
+        <div class="verdict">
+          <span class="said">Nothing said about you</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>What to fix</h3>
+      <p>Assistants read your website the way a person skim-reads it: the opening, the headings, and any page
+         that answers a question directly. Three things are stopping them.</p>
+
+      <div class="find">
+        <span class="no">1</span>
+        <div class="bd">
+          <h4>Your home page never says, in plain words, what you do.</h4>
+          <p>It opens with &ldquo;Transform your journey&rdquo;. Nowhere in the first 200 words does it say
+             telehealth, weight loss, Australia, or nurse practitioner. An assistant reading that has nothing
+             to repeat back to someone.</p>
+          <div class="acts"><button class="btn sm">Rewrite the opening</button><button class="btn sm">See the page as they read it</button></div>
+        </div>
+      </div>
+
+      <div class="find">
+        <span class="no">2</span>
+        <div class="bd">
+          <h4>There is no page that answers the questions people actually ask.</h4>
+          <p>Assistants quote whichever page answers the question straight out. &ldquo;How much does it cost&rdquo;,
+             &ldquo;do I need a referral&rdquo;, &ldquo;is it covered by Medicare&rdquo; &mdash; you have a page
+             for none of them, and your competitors have all three.</p>
+          <div class="acts"><button class="btn sm">Draft the questions page</button>
+            <span class="care">&#9878; Checked before you publish</span></div>
+        </div>
+      </div>
+
+      <div class="find">
+        <span class="no">3</span>
+        <div class="bd">
+          <h4>Your contact details are different in three places.</h4>
+          <p>The phone number on your website, on your Google listing and on your Facebook page do not match.
+             When they disagree, an assistant picks one. That is exactly where Perplexity got the wrong number above.</p>
+          <div class="acts"><button class="btn sm">Show me the three</button><button class="btn sm">Make them all match</button></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="footline">
+      <span>Last check 16 August, 6:40am.</span><span class="d">&middot;</span>
+      <span>We check weekly and tell you if an answer changes.</span>
+      <button class="btn sm">Run a check now</button>
+    </p>
+  </section>
+</main>
+
+<!-- ═══ RIGHT — the Director. Optional, never the only way in. ═══ -->
+<aside class="right">
+  <div class="rtabs">
+    <span class="rtab on">&#10022; Director</span>
+    <span class="rtab">&#128065; Preview</span>
+    <span class="rtab">&#9993; Activity</span>
+    <span class="rtab">&#9650; Analytics</span>
+      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+    </div>
+
+  <div class="rbody">
+    <div class="dmsg">
+      <span class="av">ND</span>
+      <div class="bd">
+        <p>Google is not connected, so I have not guessed anything for you. What I can tell you is
+           <b>why</b> you are behind, and it is all on the screen &mdash; the blog gap and the phone
+           speed are doing most of the damage.</p>
+        <p>Connecting Google would take you about a minute, and I can stay on the call while you do it.</p>
+      </div>
+    </div>
+
+    <div class="dmsg">
+      <span class="av">ND</span>
+      <div class="bd">
+        <p>On the AI side there is one thing that needs you, not me: <b>Perplexity is telling people
+           you prescribe online with no assessment</b>. That is untrue and it breaks the advertising
+           rules for health. I can draft the correction &mdash; you decide whether to send it.</p>
+      </div>
+    </div>
+
+    <div class="ideas">
+      <div class="h">Suggested</div>
+      <a><span class="ic">&#9906;</span> Walk me through connecting Google</a>
+      <a><span class="ic">&#9878;</span> Draft the correction to Perplexity</a>
+      <a><span class="ic">&#9998;</span> Write the first of the missing blog posts</a>
+      <a><span class="ic">&#10022;</span> Rewrite the opening of my home page</a>
+      <a><span class="ic">&#9880;</span> What did Juniper publish this month?</a>
+      <a><span class="ic">&#9737;</span> Ask the four assistants a question of mine</a>
+    </div>
+
+    <div class="chk"><span>&#10003;</span><span><b>Nothing sent.</b> No correction has gone to anyone.
+      Nothing is published. You decide, every time.</span></div>
+    <div class="chk w"><span>&#9711;</span><span><b>Google is not connected.</b> Every number on this
+      screen was measured by us, from your site and theirs.</span></div>
+    <div class="chk c"><span>&#9878;</span><span><b>Healthcare rules are on.</b> Anything written for
+      Downscale is checked against AHPRA and TGA rules before it can be published.</span></div>
+  </div>
+
+  <div class="ask">
+    <div class="askbox">
+      <div class="ph">Ask NRS about Downscale&hellip;</div>
+      <button class="go">&#8593;</button>
+    </div>
+    <div class="askfoot">
+      <span class="pill">Director</span>
+      <span>sees this screen</span>
+      <span class="live"><i></i> 14 departments ready</span>
+    </div>
+  </div>
+</aside>
+
+</body>
+</html>

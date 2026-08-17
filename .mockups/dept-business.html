@@ -1,0 +1,1380 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Downscale — Business analysis &amp; Branding and voice</title>
+<style>
+:root{
+  --h:240;
+  --bg:oklch(0.985 0.002 var(--h));
+  --panel:oklch(1 0 0);
+  --panel-2:oklch(0.975 0.004 var(--h));
+  --line:oklch(0.915 0.007 var(--h));
+  --line-soft:oklch(0.950 0.005 var(--h));
+  --ink:oklch(0.20 0.014 var(--h));
+  --ink-2:oklch(0.46 0.012 var(--h));
+  --ink-3:oklch(0.615 0.011 var(--h));
+  /* Business accent. One variable — switching business retints the product.
+     Downscale Weight Loss: hue 205, clinical teal. */
+  --brand:oklch(0.545 0.115 205);
+  --brand-deep:oklch(0.33 0.080 205);
+  --brand-wash:oklch(0.966 0.026 205);
+  /* Healthcare. Hue 25, warm red. Used ONLY for AHPRA/TGA matters, never decoration. */
+  --care:oklch(0.52 0.150 25);
+  --care-deep:oklch(0.42 0.14 25);
+  --care-wash:oklch(0.965 0.028 25);
+  --care-line:oklch(0.90 0.045 25);
+  --ok:oklch(0.55 0.13 155);
+  --ok-wash:oklch(0.965 0.030 155);
+  --warn:oklch(0.63 0.13 75);
+  --warn-wash:oklch(0.965 0.045 80);
+  --stop:oklch(0.55 0.17 27);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --shadow:0 1px 2px oklch(0.2 0.02 var(--h)/.05),0 8px 24px -16px oklch(0.2 0.02 var(--h)/.28);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:oklch(0.175 0.010 var(--h));
+    --panel:oklch(0.215 0.012 var(--h));
+    --panel-2:oklch(0.245 0.013 var(--h));
+    --line:oklch(0.315 0.015 var(--h));
+    --line-soft:oklch(0.275 0.013 var(--h));
+    --ink:oklch(0.960 0.005 var(--h));
+    --ink-2:oklch(0.795 0.011 var(--h));
+    --ink-3:oklch(0.640 0.013 var(--h));
+    --brand:oklch(0.74 0.11 205);
+    --brand-deep:oklch(0.87 0.08 205);
+    --brand-wash:oklch(0.275 0.038 205);
+    --care:oklch(0.68 0.15 25);
+    --care-deep:oklch(0.86 0.10 25);
+    --care-wash:oklch(0.285 0.050 25);
+    --care-line:oklch(0.38 0.075 25);
+    --ok-wash:oklch(0.27 0.045 155);
+    --warn-wash:oklch(0.285 0.050 80);
+    --shadow:0 1px 2px oklch(0 0 0/.5),0 10px 30px -18px oklch(0 0 0/.75);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  line-height:1.5;-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-columns:236px minmax(0,1fr) 380px;height:100vh;overflow:hidden;
+}
+body.railoff{grid-template-columns:236px minmax(0,1fr) 0}
+body.railoff .right{display:none}
+button{font-family:inherit}
+
+/* ── SIDEBAR ─────────────────────────────────────────────── */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+
+/* Quiet label, not a big switcher — most subscribers run one business. */
+.biz{padding:14px 14px 12px;border-bottom:1px solid var(--line-soft)}
+.bizsel{
+  display:flex;align-items:center;gap:9px;width:100%;padding:7px 8px;border-radius:10px;
+  border:1px solid transparent;background:none;cursor:pointer;text-align:left;
+}
+.bizsel:hover{background:var(--panel-2);border-color:var(--line)}
+.bizsel .logo{width:26px;height:26px;border-radius:7px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans);flex-shrink:0}
+.bizsel .nm{flex:1;min-width:0}
+.bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.bizsel .nm span{display:block;font-size:11px;color:var(--ink-3)}
+.bizsel .chev{color:var(--ink-3);font-size:10px}
+
+/* Healthcare switch. On = warm red. It is a claim about the business, so it reads as one. */
+.caretog{display:flex;align-items:center;gap:9px;width:100%;margin-top:8px;padding:8px 9px;border-radius:9px;
+  border:1px solid var(--line);background:var(--panel-2);cursor:pointer;text-align:left;
+  font-size:11.5px;line-height:1.35;color:var(--ink-3)}
+.caretog .sw{width:28px;height:16px;border-radius:99px;background:var(--line);flex-shrink:0;position:relative;transition:background .15s}
+.caretog .sw i{position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--panel);
+  box-shadow:var(--shadow);transition:left .15s}
+body.care .caretog{background:var(--care-wash);border-color:var(--care-line);color:var(--care-deep);font-weight:600}
+body.care .caretog .sw{background:var(--care)}
+body.care .caretog .sw i{left:14px}
+.carewarn{display:none;margin:8px 2px 0;font-size:11px;line-height:1.4;color:var(--care-deep);
+  background:var(--care-wash);border:1px solid var(--care-line);border-radius:8px;padding:7px 9px}
+body:not(.care) .carewarn{display:block}
+
+.cta{margin:14px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--brand-deep);color:oklch(1 0 0);border:0;border-radius:10px;
+  padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer;box-shadow:var(--shadow)}
+
+nav{padding:0 10px 14px;display:flex;flex-direction:column}
+.item{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;
+  color:var(--ink-2);font-size:13.5px;cursor:pointer;text-decoration:none}
+.item:hover{background:var(--panel-2)}
+.item.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:600}
+.item .ic{width:17px;text-align:center;font-size:14px;opacity:.75;flex-shrink:0}
+.item .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .tag{font-size:10px;font-weight:650;letter-spacing:.04em;padding:2px 5px;border-radius:5px;
+  background:var(--warn-wash);color:oklch(0.42 0.11 60);border:1px solid transparent}
+@media (prefers-color-scheme:dark){.item .tag{color:oklch(0.87 0.11 80)}}
+.subs{display:flex;flex-direction:column;padding:1px 0 6px 36px}
+.sub{display:flex;align-items:center;gap:7px;padding:3px 6px;border-radius:6px;
+  font-size:12.5px;color:var(--ink-3);cursor:pointer;text-decoration:none;line-height:1.35}
+.sub:hover{background:var(--panel-2);color:var(--ink-2)}
+.sub:before{content:"";width:3px;height:3px;border-radius:50%;background:var(--ink-3);opacity:.55;flex-shrink:0}
+.sub.on{color:var(--brand-deep);font-weight:600}
+.sub.on:before{background:var(--brand-deep);opacity:1}
+.subgrp{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:8px 6px 3px;opacity:.85}
+.subgrp:first-child{padding-top:3px}
+.navsec{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:16px 9px 5px}
+.care-only{display:flex}
+.wordcol.care-only{display:block}
+/* Beats any local display rule — when the switch is off, health-only blocks go. */
+body:not(.care) .care-only{display:none}
+.caremark{color:var(--care);font-size:9px;flex-shrink:0}
+.me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;align-items:center;gap:9px}
+.me .av{width:26px;height:26px;border-radius:50%;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans)}
+.me span{font-size:13px;color:var(--ink-2)}
+
+/* ── CENTRE ──────────────────────────────────────────────── */
+.main{overflow-y:auto;padding:22px 26px 0;min-width:0;display:flex;flex-direction:column}
+h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
+.sub-h{color:var(--ink-3);font-size:13px;margin:0 0 14px;max-width:74ch}
+.jump{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.jump a{font-size:12.5px;padding:6px 12px;border-radius:99px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink-2);text-decoration:none;cursor:pointer}
+.jump a:hover{background:var(--panel-2);color:var(--ink)}
+.jump .hint{margin-left:auto;font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.jump .hint .pen{pointer-events:none}
+
+h2{font-size:15px;font-weight:650;letter-spacing:-.01em;margin:0;display:flex;align-items:center;gap:9px}
+h2 .num{width:19px;height:19px;border-radius:6px;background:var(--brand-deep);color:oklch(1 0 0);
+  display:grid;place-items:center;font:650 10.5px/1 var(--sans);flex-shrink:0}
+.sechd{display:flex;align-items:flex-end;gap:12px;margin:8px 0 12px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.sechd .why{font-size:12px;color:var(--ink-3);margin:0 0 1px;flex:1;min-width:0}
+
+/* Cards */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);
+  padding:15px 16px 13px;margin-bottom:14px}
+.chd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.chd h3{font-size:13.5px;font-weight:650;margin:0;letter-spacing:-.005em}
+.chd .note{font-size:11.5px;color:var(--ink-3)}
+.acts{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
+.btn{font-size:12px;font-weight:600;padding:6px 11px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel-2);color:var(--ink-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--panel);color:var(--ink);border-color:var(--ink-3)}
+.btn.solid{background:var(--brand-deep);border-color:transparent;color:oklch(1 0 0)}
+.btn.solid:hover{background:var(--brand)}
+/* The AI offer. Quieter than the manual control, never instead of it. */
+.btn.ai{background:none;border-color:transparent;color:var(--ink-3);font-weight:500}
+.btn.ai:hover{background:var(--brand-wash);color:var(--brand-deep);border-color:transparent}
+.cfoot{display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:9px;border-top:1px solid var(--line-soft);
+  font-size:11.5px;color:var(--ink-3)}
+.cfoot .r{margin-left:auto;display:flex;gap:10px}
+.cfoot button{background:none;border:0;color:var(--ink-3);font-size:11.5px;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+.cfoot button:hover{color:var(--ink-2)}
+
+/* Editable-in-place. Nothing on this page is read-only. */
+.ed{border-radius:6px;padding:2px 5px;margin:-2px -5px;cursor:text;outline:none;
+  transition:background .12s,box-shadow .12s;display:inline-block}
+.ed:hover{background:var(--panel-2);box-shadow:inset 0 0 0 1px var(--line)}
+.ed:focus{background:var(--panel);box-shadow:inset 0 0 0 2px var(--brand)}
+.ed.blk{display:block}
+.pen{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink-3);font-size:11px;cursor:pointer;flex-shrink:0;display:grid;place-items:center;line-height:1}
+.pen:hover{background:var(--brand-wash);color:var(--brand-deep);border-color:transparent}
+input.ed,select.ed{font:inherit;color:inherit;background:var(--panel-2);border:1px solid var(--line);
+  border-radius:7px;padding:5px 8px;margin:0}
+input.ed:focus,select.ed:focus{background:var(--panel);box-shadow:0 0 0 2px var(--brand);border-color:transparent}
+input.num{width:76px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* Fact rows */
+.flds{display:grid;grid-template-columns:1fr 1fr;gap:2px 22px}
+.fld{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line-soft);min-width:0}
+.fld .k{font-size:12px;color:var(--ink-3);width:132px;flex-shrink:0}
+.fld .v{flex:1;min-width:0;font-size:13px}
+.body-txt{font-size:14px;line-height:1.6;color:var(--ink-2);margin:0}
+.body-txt b{color:var(--ink)}
+
+/* Audience cards */
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:11px}
+.who{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel-2)}
+.who .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.who .top b{font-size:13px;font-weight:650}
+.who .top .pen{margin-left:auto}
+.who dl{margin:0;display:grid;gap:7px}
+.who dt{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
+.who dd{margin:2px 0 0;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.who .rm{background:none;border:0;color:var(--ink-3);font-size:11.5px;cursor:pointer;padding:0;margin-top:9px;
+  text-decoration:underline;text-underline-offset:2px}
+.who .rm:hover{color:var(--stop)}
+
+/* Differentiators */
+.pts{display:flex;flex-direction:column}
+.pt{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+.pt:last-child{border-bottom:0}
+.pt .drag{color:var(--ink-3);font-size:12px;cursor:grab;padding-top:2px;user-select:none}
+.pt .tx{flex:1;min-width:0}
+.pt .tx b{display:block;font-size:13.5px;font-weight:650;margin-bottom:2px}
+.pt .tx span{display:block;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.pt .tools{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.pt .rm{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink-3);font-size:12px;cursor:pointer;display:grid;place-items:center;line-height:1}
+.pt .rm:hover{color:var(--stop);border-color:var(--stop)}
+
+/* Goals */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:0 10px 7px 0;border-bottom:1px solid var(--line)}
+th.r,td.r{text-align:right;padding-right:0}
+td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line-soft);font-size:13px;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.goalnm{font-weight:600}
+.goalnm small{display:block;font-weight:400;font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.state{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);white-space:nowrap}
+.state i{width:8px;height:8px;border-radius:50%;display:block;flex-shrink:0}
+.state.ok i{background:var(--ok)}
+.state.behind i{background:var(--warn)}
+.state.none i{background:var(--ink-3);opacity:.5}
+.state.none{color:var(--ink-3)}
+
+/* Brand kit */
+.kit{display:grid;grid-template-columns:190px minmax(0,1fr);gap:16px}
+.logotile{border:1px solid var(--line);border-radius:10px;background:var(--panel-2);padding:14px;
+  display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center}
+.mark{width:74px;height:74px;border-radius:20px;background:var(--brand-deep);color:oklch(1 0 0);
+  display:grid;place-items:center;font:650 26px/1 var(--sans);letter-spacing:-.03em}
+.logotile .fn{font-size:11.5px;color:var(--ink-3);font-family:var(--mono);word-break:break-all}
+.sw-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px}
+.sw-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 9px;background:var(--panel-2)}
+.sw-chip{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);flex-shrink:0}
+.sw-tx{flex:1;min-width:0}
+.sw-tx b{display:block;font-size:12.5px;font-weight:650}
+.sw-tx span{display:block;font-size:11px;color:var(--ink-3);line-height:1.35}
+.sw-row input{width:100%;font-family:var(--mono);font-size:11px;margin-top:4px}
+.typebox{border:1px solid var(--line);border-radius:10px;padding:14px 15px;background:var(--panel-2);margin-top:12px}
+.typebox .aa{font-size:44px;font-weight:650;letter-spacing:-.03em;line-height:1;margin-bottom:9px}
+.typebox .t1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 5px}
+.typebox .t2{font-size:14px;color:var(--ink-2);margin:0 0 5px;line-height:1.6;max-width:62ch}
+.typebox .t3{font-size:11.5px;color:var(--ink-3);margin:0}
+.typebox .digits{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:14px;color:var(--ink-2);margin-top:8px}
+
+/* Tone sliders */
+.tones{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px 22px;margin-bottom:13px}
+.tone .lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-3);margin-bottom:3px}
+.tone .lab b{color:var(--ink);font-weight:600}
+.tone input[type=range]{width:100%;accent-color:var(--brand);margin:0}
+.egs{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:12px}
+.eg{border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:10px;padding:11px 12px;background:var(--panel-2)}
+.eg.no{border-left-color:var(--care)}
+.eg .h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:650;color:var(--ok);margin-bottom:6px}
+.eg.no .h{color:var(--care-deep)}
+.eg p{margin:0;font-size:13px;line-height:1.55;color:var(--ink-2)}
+.eg .flag{margin-top:8px;font-size:11.5px;color:var(--care-deep);display:flex;gap:6px;align-items:flex-start}
+
+/* Words */
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:1180px){.two,.egs{grid-template-columns:1fr}.flds{grid-template-columns:1fr}}
+.wordcol h4{font-size:12.5px;font-weight:650;margin:0 0 3px}
+.wordcol .lead{font-size:12px;color:var(--ink-3);margin:0 0 10px;line-height:1.45}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:5px 6px 5px 10px;border-radius:99px;
+  border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2)}
+.chip .x{width:15px;height:15px;border-radius:50%;border:0;background:none;color:var(--ink-3);font-size:12px;
+  cursor:pointer;display:grid;place-items:center;line-height:1;padding:0}
+.chip .x:hover{background:var(--line);color:var(--stop)}
+.addchip{font:inherit;font-size:12.5px;border:1px dashed var(--line);background:none;color:var(--ink);
+  border-radius:99px;padding:5px 11px;min-width:150px;outline:none}
+.addchip:focus{border-style:solid;border-color:var(--brand);background:var(--panel)}
+.addchip::placeholder{color:var(--ink-3)}
+
+/* The regulated list. It looks different because it IS different. */
+.lawbox{border:1px solid var(--care-line);border-radius:11px;background:var(--care-wash);padding:12px 13px;margin-bottom:12px}
+.lawbox .hd{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+.lawbox .hd b{font-size:12.5px;font-weight:650;color:var(--care-deep)}
+.lawbox .hd .pill{margin-left:auto;font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:650;
+  background:var(--care);color:oklch(1 0 0);border-radius:5px;padding:3px 7px}
+.lawbox .lead{font-size:12px;color:var(--care-deep);margin:0 0 11px;line-height:1.5;opacity:.95}
+.rule{border-top:1px solid var(--care-line);padding:9px 0}
+.rule:last-of-type{padding-bottom:2px}
+.rule .r1{display:flex;align-items:center;gap:8px}
+.rule .r1 b{font-size:13px;font-weight:650;color:var(--ink);min-width:0}
+.rule .why{margin:4px 0 0 20px;font-size:12px;color:var(--ink-2);line-height:1.5}
+.rule .why em{font-style:normal;color:var(--care-deep);font-weight:600}
+.rule .why button{background:none;border:0;padding:0;color:var(--care-deep);font-size:12px;cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;font-weight:600}
+.lock{position:relative;width:11px;height:9px;border-radius:2px;background:var(--care);display:inline-block;flex-shrink:0;margin-top:5px}
+.lock:before{content:"";position:absolute;left:2.2px;top:-5px;width:6.6px;height:6px;
+  border:1.6px solid var(--care);border-bottom:0;border-radius:4px 4px 0 0}
+.lawfoot{border-top:1px solid var(--care-line);margin-top:4px;padding-top:10px;font-size:11.5px;color:var(--care-deep);line-height:1.5}
+
+/* Topics */
+.topics{display:flex;flex-direction:column;gap:1px}
+.topic{display:flex;align-items:center;gap:11px;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.topic .nm{flex:1;min-width:0;font-size:13px}
+.topic .barwrap{width:160px;height:7px;border-radius:99px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden;flex-shrink:0}
+.topic .bar{height:100%;background:var(--brand)}
+.topic .rm{width:22px;height:22px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink-3);font-size:12px;cursor:pointer;display:grid;place-items:center;line-height:1;flex-shrink:0}
+.topic .rm:hover{color:var(--stop);border-color:var(--stop)}
+.total{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:12.5px;color:var(--ink-2)}
+.total b{font-variant-numeric:tabular-nums}
+.total .ok{color:var(--ok);font-weight:650}
+.total .off{color:var(--warn);font-weight:650}
+
+/* Honest save bar — pinned to the bottom of the page, not the rail. */
+.savebar{position:sticky;bottom:0;margin:6px -26px 0;padding:11px 26px;background:var(--panel);
+  border-top:1px solid var(--line);display:flex;align-items:center;gap:11px;font-size:12.5px;color:var(--ink-3);z-index:5}
+.savebar .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0}
+body.dirty .savebar .dot{background:var(--warn)}
+.savebar .acts{margin-left:auto;display:flex;gap:8px}
+body:not(.dirty) .savebar .acts{display:none}
+body.dirty .savebar .clean{display:none}
+
+/* ── RIGHT: the Director lives here, always. ──────────────
+   Same shape on every screen. It does not go away when you navigate;
+   it follows you and stays current to whatever is on screen. */
+.right{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.rtabs{display:flex;align-items:center;gap:2px;padding:0 10px;height:50px;border-bottom:1px solid var(--line)}
+.rtab{display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:8px;font-size:12.5px;color:var(--ink-3);cursor:pointer;white-space:nowrap;border:0;background:none}
+.rtab.on{color:var(--brand-deep);font-weight:650;background:var(--brand-wash)}
+.rtabs .ctl{margin-left:auto;display:flex;gap:6px;align-items:center}
+.railbtn{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-3);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:7px;padding:4px 8px;cursor:pointer}
+.railbtn:hover{color:var(--ink);border-color:var(--ink-3)}
+.rbody{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.dmsg{display:flex;gap:9px}
+.dmsg .av{width:22px;height:22px;border-radius:6px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 9px/1 var(--sans);flex-shrink:0}
+.dmsg .bd{font-size:13px;color:var(--ink-2);min-width:0}
+.dmsg .bd p{margin:0 0 8px}.dmsg .bd p:last-child{margin:0}
+.dmsg .bd b{color:var(--ink)}
+.dmsg.me{flex-direction:row-reverse}
+.dmsg.me .av{background:var(--ink-3)}
+.dmsg.me .bd{background:var(--brand-wash);border-radius:10px;padding:8px 11px;color:var(--ink)}
+.ideas{margin-top:2px}
+.ideas .h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650;margin-bottom:7px}
+.ideas a{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;color:var(--ink-2);
+  font-size:13px;cursor:pointer;text-decoration:none}
+.ideas a:hover{background:var(--panel-2)}
+.ideas a .ic{color:var(--ink-3);font-size:12px;width:14px;text-align:center;flex-shrink:0}
+.ask{border-top:1px solid var(--line);padding:11px 12px 12px;background:var(--panel)}
+.askbox{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:9px 11px;
+  display:flex;align-items:flex-end;gap:9px}
+.askbox .ph{flex:1;color:var(--ink-3);font-size:13px;min-height:34px;outline:none}
+.askbox .ph:focus{color:var(--ink)}
+.askbox .go{width:27px;height:27px;border-radius:7px;border:0;background:var(--brand-deep);
+  color:oklch(1 0 0);font-size:13px;cursor:pointer;flex-shrink:0}
+.askfoot{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:11px;color:var(--ink-3)}
+.askfoot .pill{border:1px solid var(--line);border-radius:6px;padding:2px 6px;background:var(--panel-2)}
+.askfoot .live{display:flex;align-items:center;gap:5px;margin-left:auto}
+.askfoot .live i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:block;font-style:normal}
+.chk{display:flex;gap:9px;border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:9px;
+  padding:10px 12px;font-size:12.5px;color:var(--ink-2);background:var(--panel-2)}
+.chk.w{border-left-color:var(--warn)}
+.chk.c{border-left-color:var(--care)}
+.chk b{color:var(--ink)}
+
+/* Reopen control when the rail is hidden. */
+.reopen{position:fixed;right:18px;bottom:18px;display:none;align-items:center;gap:8px;
+  background:var(--brand-deep);color:oklch(1 0 0);border:0;border-radius:99px;padding:10px 16px;
+  font-size:12.5px;font-weight:650;cursor:pointer;box-shadow:var(--shadow);z-index:20}
+body.railoff .reopen{display:flex}
+
+/* ── SIDEBAR NORMALISER ──────────────────────────────────────────────────
+   Six screens were authored in parallel and the sidebar drifted: different
+   widths, different paddings, one screen used `.subs` instead of `.sub`, and
+   two grew extra rows. Everything the sidebar needs is pinned here and scoped
+   to `.side`, so nothing in the centre column moves. Colours are custom
+   properties, so each file's dark-mode block still overrides them. */
+:root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
+@media (prefers-color-scheme:dark){
+  :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+}
+
+.side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+      display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.side .biz{padding:13px 13px 12px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.side .bizsel{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+      border:1px solid var(--line);background:var(--panel);text-align:left;cursor:pointer}
+.side .bizsel .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .bizsel .nm{flex:1;min-width:0;text-align:left}
+.side .bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.25;
+      white-space:normal;overflow:visible;text-overflow:clip;color:var(--ink)}
+.side .bizsel .nm span{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.side .bizsel .chev{font-size:11px;flex-shrink:0;color:var(--ink-3)}
+
+.side .caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+      width:100%;text-align:left;cursor:pointer;background:var(--care-wash);
+      border:1px solid var(--nrs-care-line)}
+.side .caretog .sw{width:28px;height:16px;border-radius:99px;flex-shrink:0;display:block;
+      position:relative;background:var(--care)}
+.side .caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+      border-radius:50%;background:var(--nrs-knob)}
+.side .caretog .tx{font-size:11.5px;font-weight:600;line-height:1.35;color:var(--care)}
+
+.side .cta{margin:12px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;
+      border-radius:10px;padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer}
+.side nav{padding:0 8px 6px;display:block}
+
+.side .top{display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:7px 9px;
+      border-radius:8px;font-size:13.5px;font-weight:560;margin-top:2px;text-decoration:none;
+      text-align:left;color:var(--ink);cursor:pointer;background:none}
+.side .top:hover{background:var(--panel-2)}
+.side .top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.side .top .ic{width:16px;text-align:center;font-size:13px;flex-shrink:0;color:var(--ink-3)}
+.side .top.on .ic{color:var(--brand-deep)}
+.side .top .cnt{margin-left:auto;font-size:10px;font-weight:650;padding:2px 5px;border-radius:5px;
+      background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+
+/* align-items:stretch matters: one file centred its sub-items, which in a
+   column flex container staircases every row toward the middle. */
+.side .sub{margin:1px 0 5px 34px;padding:0;display:flex;flex-direction:column;
+      align-items:stretch;gap:1px;text-align:left}
+.side .sub a{font-size:12.5px;padding:4px 8px;border-radius:6px;text-decoration:none;display:flex;
+      align-items:flex-start;justify-content:flex-start;gap:7px;line-height:1.4;text-align:left;
+      color:var(--ink-2);cursor:pointer;background:none;font-weight:400}
+.side .sub a:hover{background:var(--panel-2);color:var(--ink)}
+/* One file wrote `.sub:before` — on the list, not the item — which dropped a
+   stray dot at the top of every group. The bullet belongs to the row. */
+.side .sub::before,.side .sub::after{content:none;display:none}
+.side .sub a::before{content:"";width:3px;height:3px;margin-top:7px;border-radius:50%;
+      background:var(--ink-3);opacity:.55;flex-shrink:0}
+.side .sub a.care{color:var(--care)}
+.side .sub a.care::before{background:var(--care);opacity:.85}
+.side .sub .glbl{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:650;
+      padding:6px 8px 2px;display:block;color:var(--ink-3);text-align:left}
+.side .grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
+      padding:14px 9px 5px;color:var(--ink-3);text-align:left}
+.side .me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;
+      align-items:center;gap:9px}
+.side .me .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .me span{font-size:13px;color:var(--ink-2)}
+
+/* ── DIRECTOR RAIL: the collapse control must stay visible ────────────────
+   It is the only way back once the rail is hidden, so it never shrinks and
+   never sits past the panel edge. The four tabs give up the space instead. */
+.right{overflow-x:hidden}
+.right .rtabs{display:flex;align-items:center;gap:1px;padding:0 8px;height:50px;min-width:0}
+.right .rtab{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      font-size:11.5px;padding:5px 7px}
+.right .ctl{margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.rtabs .ctl button.hide,.right .ctl .hide,.right .hide{width:auto;height:auto;display:inline-flex;
+      align-items:center;gap:5px;white-space:nowrap;font-size:11.5px;font-weight:600;padding:5px 9px;
+      border-radius:7px;cursor:pointer;flex-shrink:0;border:1px solid var(--line);
+      background:var(--panel-2);color:var(--ink-2)}
+.rtabs .ctl button.hide:hover,.right .hide:hover{background:var(--panel);color:var(--ink)}
+</style>
+</head>
+<body class="care">
+
+<!-- ═══ SIDEBAR — identical on every screen ═══ -->
+<aside class="side">
+  <div class="biz">
+    <button class="bizsel">
+      <span class="logo">DW</span>
+      <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
+      <span class="chev">&#9662;</span>
+    </button>
+    <button class="caretog on">
+      <span class="sw"></span>
+      <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
+    </button>
+  </div>
+
+  <button class="cta">&#43;&nbsp; Create post</button>
+
+  <nav>
+    <a class="top"><span class="ic">&#9636;</span> Dashboard</a>
+
+    <a class="top on"><span class="ic">&#9635;</span> Business analysis</a>
+    <div class="sub">
+      <a>What the business is</a><a>Who buys from you</a>
+      <a>What makes you different</a><a>Goals &amp; targets</a>
+    </div>
+
+    <a class="top"><span class="ic">&#10022;</span> Branding &amp; voice</a>
+    <div class="sub">
+      <a>Logo, colours, fonts</a><a>How you sound</a>
+      <a>Words to use &amp; avoid</a><a>What you talk about</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9741;</span> Connections</a>
+    <div class="sub">
+      <a>Social accounts</a><a>Your website</a><a>Canva</a>
+      <a>Google</a><a>Code &amp; hosting</a><a>Email</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9880;</span> Competitors</a>
+    <div class="sub">
+      <a>Who they are</a><a>What they post</a>
+      <a>What they rank for</a><a>Where you are behind</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9906;</span> Google searchability</a>
+    <div class="sub">
+      <a>What you rank for</a><a>What people search</a>
+      <a>Your Google listing</a><a>Local &amp; maps</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9673;</span> AI searchability</a>
+    <div class="sub">
+      <a>Can AI find you</a><a>How AI describes you</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9737;</span> Website</a>
+    <div class="sub">
+      <a>Speed on phone &amp; desktop</a><a>Pages</a>
+      <a>Structure &amp; sitemap</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9998;</span> Blogging <span class="cnt">4</span></a>
+    <div class="sub">
+      <a>Your posts</a><a>What to write next</a>
+      <a>Search terms</a><a>Images</a>
+      <a class="care">Checked before you publish</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9634;</span> Social media</a>
+    <div class="sub">
+      <span class="glbl">Content</span>
+      <a>Posts</a><a>Calendar</a><a>Media library</a><a>Templates</a>
+      <span class="glbl">Setup</span>
+      <a>Social accounts</a><a>Posting schedule</a>
+      <span class="glbl">Results</span>
+      <a>Analytics</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9650;</span> Advertising</a>
+    <div class="sub">
+      <a>Campaigns</a><a>What you are spending</a>
+      <a>What it is returning</a><a>Audiences</a>
+      <a class="care">Ad rules for health</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9993;</span> Engagement <span class="cnt">7</span></a>
+    <div class="sub">
+      <a>Comments</a><a>Messages</a><a>Mentions</a><a>Reviews</a>
+    </div>
+
+    <div class="grp">This business</div>
+    <a class="top"><span class="ic">&#9881;</span> Settings</a>
+    <div class="sub">
+      <a>People &amp; access</a><a>What it costs</a>
+      <a class="care">Compliance record</a>
+    </div>
+  </nav>
+
+  <div class="me"><span class="av">JB</span><span>Justin Black</span></div>
+</aside>
+
+<!-- ═══ CENTRE ═══ -->
+<main class="main">
+  <h1>About your business</h1>
+  <p class="sub-h">This is what the Director knows about Downscale, and what everything it writes is based on.
+    You set it up once &mdash; but nothing here is locked in. Change any of it, any time, and every department
+    picks the change up on the next piece of work.</p>
+
+  <div class="jump">
+    <a href="#analysis">Business analysis</a>
+    <a href="#branding">Branding &amp; voice</a>
+    <span class="hint"><span class="pen">&#9998;</span> Click any text to change it</span>
+  </div>
+
+  <!-- ─────────── SECTION 1 ─────────── -->
+  <div class="sechd" id="analysis">
+    <h2><span class="num">1</span> Business analysis</h2>
+    <p class="why">Who you are and what you are trying to achieve.</p>
+    <button class="btn ai" data-ai="the whole business analysis">&#10022; Help me improve this section</button>
+  </div>
+
+  <!-- What the business is -->
+  <div class="card">
+    <div class="chd">
+      <h3>What the business is</h3>
+      <span class="note">Used at the top of nearly everything written about you</span>
+      <div class="acts">
+        <button class="btn" data-focus="#bizdesc">&#9998; Edit</button>
+        <button class="btn ai" data-ai="what the business is">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <p class="body-txt ed blk" id="bizdesc" contenteditable="true"><b>Downscale is a telehealth weight-loss clinic.</b>
+      We look after adults anywhere in Australia by phone and video &mdash; a first consultation, blood tests through a
+      collection centre near them, scripts sent to the pharmacy they already use, and a review every four weeks.
+      Care is led by endorsed nurse practitioners, with a doctor available for anything outside their scope.
+      We are not a program, a challenge or a meal-replacement service, and we say so early, because most people who
+      find us have already been sold one of those and it ended when the payments did.</p>
+
+    <div class="flds" style="margin-top:12px">
+      <div class="fld"><span class="k">Type of business</span><span class="v"><span class="ed" contenteditable="true">Health service &mdash; telehealth clinic</span></span><button class="pen">&#9998;</button></div>
+      <div class="fld"><span class="k">Where you work</span><span class="v"><span class="ed" contenteditable="true">All of Australia, by phone and video</span></span><button class="pen">&#9998;</button></div>
+      <div class="fld"><span class="k">Who gives the care</span><span class="v"><span class="ed" contenteditable="true">Nurse practitioners endorsed with AHPRA</span></span><button class="pen">&#9998;</button></div>
+      <div class="fld"><span class="k">Open since</span><span class="v"><span class="ed" contenteditable="true">March 2023</span></span><button class="pen">&#9998;</button></div>
+      <div class="fld"><span class="k">How people pay</span><span class="v"><span class="ed" contenteditable="true">Monthly by card. No lock-in, no upfront block.</span></span><button class="pen">&#9998;</button></div>
+      <div class="fld"><span class="k">Registered as</span><span class="v"><span class="ed" contenteditable="true">Black Health Intelligence Pty Ltd</span></span><button class="pen">&#9998;</button></div>
+      <div class="fld"><span class="k">Rules you sit under</span><span class="v"><span class="ed" contenteditable="true">AHPRA advertising rules and the TGA advertising code</span></span><button class="pen">&#9998;</button></div>
+      <div class="fld"><span class="k">What you are not</span><span class="v"><span class="ed" contenteditable="true">A diet program, a gym, a shake or a challenge</span></span><button class="pen">&#9998;</button></div>
+    </div>
+
+    <div class="cfoot">
+      <span>Last changed 4 August 2026, by you</span>
+      <span class="r"><button>See what changed</button><button>Undo my last change</button></span>
+    </div>
+  </div>
+
+  <!-- Who buys from you -->
+  <div class="card">
+    <div class="chd">
+      <h3>Who buys from you</h3>
+      <span class="note">Three groups. Every post is written for one of them, never for &ldquo;everyone&rdquo;.</span>
+      <div class="acts">
+        <button class="btn solid" id="addwho">&#43; Add a group</button>
+        <button class="btn ai" data-ai="who buys from you">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <div class="grid3" id="wholist">
+      <div class="who">
+        <div class="top"><b class="ed" contenteditable="true">The restarter</b><button class="pen">&#9998;</button></div>
+        <dl>
+          <dt>Who</dt><dd class="ed" contenteditable="true">Women 38&ndash;55, outer suburbs and regional Queensland and New South Wales. Working, often shift work, usually with kids at home.</dd>
+          <dt>What they want</dt><dd class="ed" contenteditable="true">Something that survives a 12-hour shift and a school pick-up. To not start again in January.</dd>
+          <dt>What stops them</dt><dd class="ed" contenteditable="true">Being weighed in front of someone. Being sold a shake. Feeling judged for asking.</dd>
+          <dt>Where they find you</dt><dd class="ed" contenteditable="true">Facebook, and a friend who is already a patient.</dd>
+        </dl>
+        <button class="rm">Remove this group</button>
+      </div>
+
+      <div class="who">
+        <div class="top"><b class="ed" contenteditable="true">Tried everything</b><button class="pen">&#9998;</button></div>
+        <dl>
+          <dt>Who</dt><dd class="ed" contenteditable="true">45&ndash;65, men and women, have done at least three programs and can name all of them.</dd>
+          <dt>What they want</dt><dd class="ed" contenteditable="true">A clinician, not a coach. Someone who will look at the whole picture including thyroid, sleep and medication.</dd>
+          <dt>What stops them</dt><dd class="ed" contenteditable="true">Assuming this is the same thing with a new name. Quietly expecting to fail again.</dd>
+          <dt>Where they find you</dt><dd class="ed" contenteditable="true">Google, searching &ldquo;weight loss clinic&rdquo; plus their town. Sometimes their GP mentions us.</dd>
+        </dl>
+        <button class="rm">Remove this group</button>
+      </div>
+
+      <div class="who">
+        <div class="top"><b class="ed" contenteditable="true">After the health scare</b><button class="pen">&#9998;</button></div>
+        <dl>
+          <dt>Who</dt><dd class="ed" contenteditable="true">50&ndash;68. Recently told about blood pressure, pre-diabetes or sleep apnoea and told to do something about their weight.</dd>
+          <dt>What they want</dt><dd class="ed" contenteditable="true">To be taken seriously and to start this month, not next year.</dd>
+          <dt>What stops them</dt><dd class="ed" contenteditable="true">Cost, and whether a video appointment counts as proper care.</dd>
+          <dt>Where they find you</dt><dd class="ed" contenteditable="true">Google, often searched by their partner or their daughter.</dd>
+        </dl>
+        <button class="rm">Remove this group</button>
+      </div>
+    </div>
+
+    <div class="cfoot">
+      <span>Last changed 21 July 2026, by you</span>
+      <span class="r"><button>Reorder groups</button><button>See what changed</button></span>
+    </div>
+  </div>
+
+  <!-- What makes you different -->
+  <div class="card">
+    <div class="chd">
+      <h3>What makes you different</h3>
+      <span class="note">Drag to reorder &mdash; the top one gets used most</span>
+      <div class="acts">
+        <button class="btn solid" id="addpt">&#43; Add a point</button>
+        <button class="btn ai" data-ai="what makes you different">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <div class="pts" id="ptlist">
+      <div class="pt">
+        <span class="drag" title="Drag to reorder">&#8942;&#8942;</span>
+        <span class="tx">
+          <b class="ed" contenteditable="true">A nurse practitioner writes your plan</b>
+          <span class="ed" contenteditable="true">Not a coach, not a call centre, not a chatbot. The person who assesses you is the person who prescribes and reviews.</span>
+        </span>
+        <span class="tools"><button class="pen">&#9998;</button><button class="rm">&times;</button></span>
+      </div>
+      <div class="pt">
+        <span class="drag">&#8942;&#8942;</span>
+        <span class="tx">
+          <b class="ed" contenteditable="true">You never have to drive anywhere</b>
+          <span class="ed" contenteditable="true">Appointments by phone or video, pathology at a collection centre near you, scripts to the pharmacy you already use.</span>
+        </span>
+        <span class="tools"><button class="pen">&#9998;</button><button class="rm">&times;</button></span>
+      </div>
+      <div class="pt">
+        <span class="drag">&#8942;&#8942;</span>
+        <span class="tx">
+          <b class="ed" contenteditable="true">The same clinician every time</b>
+          <span class="ed" contenteditable="true">You are not re-explaining your history to whoever is next in the queue. It is the same person at every review.</span>
+        </span>
+        <span class="tools"><button class="pen">&#9998;</button><button class="rm">&times;</button></span>
+      </div>
+      <div class="pt">
+        <span class="drag">&#8942;&#8942;</span>
+        <span class="tx">
+          <b class="ed" contenteditable="true">We say when something is not for you</b>
+          <span class="ed" contenteditable="true">Not everyone is suitable, and we tell people that at the first appointment rather than after they have paid for three months.</span>
+        </span>
+        <span class="tools"><button class="pen">&#9998;</button><button class="rm">&times;</button></span>
+      </div>
+      <div class="pt">
+        <span class="drag">&#8942;&#8942;</span>
+        <span class="tx">
+          <b class="ed" contenteditable="true">Monthly, and you can stop</b>
+          <span class="ed" contenteditable="true">No contract, no block payment, no exit fee. If it is not working you say so and it stops.</span>
+        </span>
+        <span class="tools"><button class="pen">&#9998;</button><button class="rm">&times;</button></span>
+      </div>
+    </div>
+
+    <div class="chk c care-only" style="margin-top:12px">
+      <span class="lock" style="margin-top:4px"></span>
+      <span><b>These are checked before they are used.</b> A point that compares you to another clinic, or that claims to be
+        the best or the leading anything, cannot be published for a health business. All five above passed on 12 August.</span>
+    </div>
+
+    <div class="cfoot">
+      <span>Last changed 4 August 2026, by you</span>
+      <span class="r"><button>See what changed</button></span>
+    </div>
+  </div>
+
+  <!-- Goals & targets -->
+  <div class="card">
+    <div class="chd">
+      <h3>Goals &amp; targets</h3>
+      <span class="note">Type over any number. Nothing is filled in for you.</span>
+      <div class="acts">
+        <button class="btn solid" id="addgoal">&#43; Add a goal</button>
+        <button class="btn ai" data-ai="goals and targets">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Goal</th><th class="r">Target</th><th class="r">Right now</th><th>By when</th><th>How it is going</th><th></th></tr>
+      </thead>
+      <tbody id="goals">
+        <tr>
+          <td class="goalnm"><span class="ed" contenteditable="true">New enquiries a month</span><small class="ed" contenteditable="true">Phone, web form and Instagram messages together</small></td>
+          <td class="r"><input class="ed num" value="120"></td>
+          <td class="r"><input class="ed num" value="94"></td>
+          <td><span class="ed" contenteditable="true">Dec 2026</span></td>
+          <td><span class="state behind"><i></i> Behind by 26</span></td>
+          <td class="r"><button class="pen">&#9998;</button></td>
+        </tr>
+        <tr>
+          <td class="goalnm"><span class="ed" contenteditable="true">Enquiries who book a first appointment</span><small class="ed" contenteditable="true">Measured as a percentage of enquiries</small></td>
+          <td class="r"><input class="ed num" value="45%"></td>
+          <td class="r"><input class="ed num" value="38%"></td>
+          <td><span class="ed" contenteditable="true">Dec 2026</span></td>
+          <td><span class="state behind"><i></i> Behind by 7 points</span></td>
+          <td class="r"><button class="pen">&#9998;</button></td>
+        </tr>
+        <tr>
+          <td class="goalnm"><span class="ed" contenteditable="true">Patients still with us at six months</span><small class="ed" contenteditable="true">The number that actually matters to the business</small></td>
+          <td class="r"><input class="ed num" value="60%"></td>
+          <td class="r"><input class="ed num" value="64%"></td>
+          <td><span class="ed" contenteditable="true">Ongoing</span></td>
+          <td><span class="state ok"><i></i> Ahead by 4 points</span></td>
+          <td class="r"><button class="pen">&#9998;</button></td>
+        </tr>
+        <tr>
+          <td class="goalnm"><span class="ed" contenteditable="true">Blog posts published a month</span><small class="ed" contenteditable="true">Four are drafted and waiting for your check</small></td>
+          <td class="r"><input class="ed num" value="4"></td>
+          <td class="r"><input class="ed num" value="2"></td>
+          <td><span class="ed" contenteditable="true">Every month</span></td>
+          <td><span class="state behind"><i></i> Behind by 2</span></td>
+          <td class="r"><button class="pen">&#9998;</button></td>
+        </tr>
+        <tr>
+          <td class="goalnm"><span class="ed" contenteditable="true">Instagram followers</span><small class="ed" contenteditable="true">downscaleweightloss</small></td>
+          <td class="r"><input class="ed num" value="5,000"></td>
+          <td class="r"><input class="ed num" value="3,410"></td>
+          <td><span class="ed" contenteditable="true">Dec 2026</span></td>
+          <td><span class="state ok"><i></i> On track</span></td>
+          <td class="r"><button class="pen">&#9998;</button></td>
+        </tr>
+        <tr>
+          <td class="goalnm"><span class="ed" contenteditable="true">What it costs to get one new patient</span><small class="ed" contenteditable="true">Needs your ad spend connected before it can be worked out</small></td>
+          <td class="r"><input class="ed num" placeholder="&mdash;" value=""></td>
+          <td class="r"><input class="ed num" placeholder="&mdash;" value=""></td>
+          <td><span class="ed" contenteditable="true">&mdash;</span></td>
+          <td><span class="state none"><i></i> Not measured yet</span></td>
+          <td class="r"><button class="pen">&#9998;</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="cfoot">
+      <span>Numbers on the right were last read from your accounts on 16 August. The targets are yours.</span>
+      <span class="r"><button>Change how often this updates</button></span>
+    </div>
+  </div>
+
+  <!-- ─────────── SECTION 2 ─────────── -->
+  <div class="sechd" id="branding">
+    <h2><span class="num">2</span> Branding &amp; voice</h2>
+    <p class="why">How everything looks and how it sounds when it is written.</p>
+    <button class="btn ai" data-ai="the whole branding and voice section">&#10022; Help me improve this section</button>
+  </div>
+
+  <!-- Logo, colours, fonts -->
+  <div class="card">
+    <div class="chd">
+      <h3>Logo, colours and fonts</h3>
+      <span class="note">Change a colour here and the whole app, and everything designed for you, follows it</span>
+      <div class="acts">
+        <button class="btn">&#8593; Replace logo</button>
+        <button class="btn solid" id="addcolour">&#43; Add a colour</button>
+        <button class="btn ai" data-ai="the logo, colours and fonts">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <div class="kit">
+      <div class="logotile">
+        <span class="mark">DW</span>
+        <span class="fn">downscale-mark-teal.svg</span>
+        <button class="btn" style="width:100%;justify-content:center">&#9998; Change</button>
+        <span style="font-size:11px;color:var(--ink-3);line-height:1.4">Square version, for profile pictures.
+          A wide version is stored too.</span>
+      </div>
+
+      <div>
+        <div class="sw-list" id="swlist">
+          <div class="sw-row">
+            <span class="sw-chip" style="background:oklch(0.55 0.10 205)"></span>
+            <span class="sw-tx"><b class="ed" contenteditable="true">Clinical teal</b><span class="ed" contenteditable="true">Buttons, links, anything you click</span>
+              <input class="ed" data-swatch value="oklch(0.55 0.10 205)"></span>
+          </div>
+          <div class="sw-row">
+            <span class="sw-chip" style="background:oklch(0.34 0.07 205)"></span>
+            <span class="sw-tx"><b class="ed" contenteditable="true">Deep teal</b><span class="ed" contenteditable="true">Headings and the logo mark</span>
+              <input class="ed" data-swatch value="oklch(0.34 0.07 205)"></span>
+          </div>
+          <div class="sw-row">
+            <span class="sw-chip" style="background:oklch(0.968 0.022 205)"></span>
+            <span class="sw-tx"><b class="ed" contenteditable="true">Teal wash</b><span class="ed" contenteditable="true">Panels and quiet highlights</span>
+              <input class="ed" data-swatch value="oklch(0.968 0.022 205)"></span>
+          </div>
+          <div class="sw-row">
+            <span class="sw-chip" style="background:oklch(0.20 0.014 240)"></span>
+            <span class="sw-tx"><b class="ed" contenteditable="true">Ink</b><span class="ed" contenteditable="true">Body text. Never pure black.</span>
+              <input class="ed" data-swatch value="oklch(0.20 0.014 240)"></span>
+          </div>
+          <div class="sw-row">
+            <span class="sw-chip" style="background:oklch(0.86 0.05 75)"></span>
+            <span class="sw-tx"><b class="ed" contenteditable="true">Warm sand</b><span class="ed" contenteditable="true">The one warm accent. Used sparingly.</span>
+              <input class="ed" data-swatch value="oklch(0.86 0.05 75)"></span>
+          </div>
+          <div class="sw-row">
+            <span class="sw-chip" style="background:oklch(0.55 0.16 25)"></span>
+            <span class="sw-tx"><b class="ed" contenteditable="true">Care red</b><span class="ed" contenteditable="true">Only for health-rule flags. Never decoration.</span>
+              <input class="ed" data-swatch value="oklch(0.55 0.16 25)"></span>
+          </div>
+        </div>
+
+        <div class="typebox">
+          <div class="aa">Aa</div>
+          <p class="t1 ed blk" contenteditable="true">Headings &mdash; semibold, tucked in tight</p>
+          <p class="t2 ed blk" contenteditable="true">Body text sits at 15px with generous line spacing, because a lot of our readers
+            are reading on a phone in poor light. Sentences stay short. One idea per paragraph.</p>
+          <p class="t3 ed blk" contenteditable="true">Small print &mdash; disclaimers, dates, the things that must be there and must be readable.</p>
+          <div class="digits">0 1 2 3 4 5 6 7 8 9 &middot; $89/month &middot; 4-weekly review</div>
+        </div>
+
+        <div class="flds" style="margin-top:12px">
+          <div class="fld"><span class="k">Headings</span><span class="v"><span class="ed" contenteditable="true">System sans, semibold, tight letter spacing</span></span><button class="pen">&#9998;</button></div>
+          <div class="fld"><span class="k">Body</span><span class="v"><span class="ed" contenteditable="true">System sans, regular, 15px, roomy lines</span></span><button class="pen">&#9998;</button></div>
+          <div class="fld"><span class="k">Numbers</span><span class="v"><span class="ed" contenteditable="true">Even-width figures, so prices line up</span></span><button class="pen">&#9998;</button></div>
+          <div class="fld"><span class="k">Never</span><span class="v"><span class="ed" contenteditable="true">Script fonts, all-caps headlines, downloaded fonts</span></span><button class="pen">&#9998;</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cfoot">
+      <span>Last changed 12 June 2026, by you. Also stored in Canva.</span>
+      <span class="r"><button>Download the brand kit</button><button>See what changed</button></span>
+    </div>
+  </div>
+
+  <!-- How you sound -->
+  <div class="card">
+    <div class="chd">
+      <h3>How you sound</h3>
+      <span class="note">Drag a slider, or write over the sentence &mdash; both change what gets written</span>
+      <div class="acts">
+        <button class="btn" data-focus="#voiceline">&#9998; Edit the sentence</button>
+        <button class="btn ai" data-ai="how you sound">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <p class="body-txt ed blk" id="voiceline" contenteditable="true" style="margin-bottom:14px">
+      <b>Like a clinician who has time.</b> Calm, plain, never chirpy. We give the reason before the instruction.
+      We do not promise a number, and we never talk about someone&rsquo;s body the way a magazine would.</p>
+
+    <div class="tones">
+      <div class="tone">
+        <div class="lab"><b>Warm</b><span>Formal</span></div>
+        <input type="range" min="0" max="100" value="28">
+      </div>
+      <div class="tone">
+        <div class="lab"><b>Plain</b><span>Technical</span></div>
+        <input type="range" min="0" max="100" value="22">
+      </div>
+      <div class="tone">
+        <div class="lab"><b>Calm</b><span>Energetic</span></div>
+        <input type="range" min="0" max="100" value="18">
+      </div>
+      <div class="tone">
+        <div class="lab"><b>Careful</b><span>Bold</span></div>
+        <input type="range" min="0" max="100" value="30">
+      </div>
+    </div>
+
+    <div class="egs">
+      <div class="eg">
+        <div class="h">Sounds like us</div>
+        <p class="ed blk" contenteditable="true">Most people lose weight in steps, not a straight line. If the scales sit still for a
+          fortnight, that is normal, and it is not a reason to change anything yet. Bring it to your next review and
+          we will look at it together.</p>
+      </div>
+      <div class="eg no">
+        <div class="h">Not us</div>
+        <p class="ed blk" contenteditable="true">Ready to CRUSH your goals? Our clients are dropping kilos fast &mdash; book your free
+          consult before spots run out!</p>
+        <div class="flag care-only"><span class="lock"></span><span>Two health-rule breaches as well as the wrong tone:
+          it promises a result, and &ldquo;before spots run out&rdquo; is a time-limited push to use a health service.</span></div>
+      </div>
+    </div>
+
+    <div class="cfoot">
+      <span>Last changed 21 July 2026, by you</span>
+      <span class="r"><button>Add another example</button><button>See what changed</button></span>
+    </div>
+  </div>
+
+  <!-- Words -->
+  <div class="card">
+    <div class="chd">
+      <h3>Words to use, and words to avoid</h3>
+      <span class="note">Checked on everything before it reaches you</span>
+      <div class="acts">
+        <button class="btn solid" data-focus="#adduse">&#43; Add a word</button>
+        <button class="btn ai" data-ai="the words to use and avoid">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <div class="two">
+      <!-- USE -->
+      <div class="wordcol">
+        <h4>Words to use</h4>
+        <p class="lead">Your preference. Add or remove anything &mdash; these are style, not law.</p>
+        <div class="chips" data-chips>
+          <span class="chip">clinician<button class="x">&times;</button></span>
+          <span class="chip">nurse practitioner<button class="x">&times;</button></span>
+          <span class="chip">appointment<button class="x">&times;</button></span>
+          <span class="chip">review<button class="x">&times;</button></span>
+          <span class="chip">your plan<button class="x">&times;</button></span>
+          <span class="chip">eligible<button class="x">&times;</button></span>
+          <span class="chip">suitable for you<button class="x">&times;</button></span>
+          <span class="chip">side effects<button class="x">&times;</button></span>
+          <span class="chip">we will check<button class="x">&times;</button></span>
+          <span class="chip">steady<button class="x">&times;</button></span>
+          <span class="chip">at your own pace<button class="x">&times;</button></span>
+          <span class="chip">your GP<button class="x">&times;</button></span>
+          <span class="chip">living with obesity<button class="x">&times;</button></span>
+          <input class="addchip" id="adduse" placeholder="Add a word&hellip;">
+        </div>
+
+        <h4 style="margin-top:18px">Words you would rather avoid</h4>
+        <p class="lead">Also your preference. Remove any of these whenever you like.</p>
+        <div class="chips" data-chips>
+          <span class="chip">journey<button class="x">&times;</button></span>
+          <span class="chip">guys<button class="x">&times;</button></span>
+          <span class="chip">shed the kilos<button class="x">&times;</button></span>
+          <span class="chip">bikini body<button class="x">&times;</button></span>
+          <span class="chip">cheat day<button class="x">&times;</button></span>
+          <span class="chip">guilt-free<button class="x">&times;</button></span>
+          <span class="chip">just<button class="x">&times;</button></span>
+          <span class="chip">simply<button class="x">&times;</button></span>
+          <span class="chip">obese<button class="x">&times;</button></span>
+          <span class="chip">fat<button class="x">&times;</button></span>
+          <input class="addchip" placeholder="Add a word&hellip;">
+        </div>
+      </div>
+
+      <!-- AVOID — REGULATED -->
+      <div class="wordcol care-only">
+        <div class="lawbox">
+          <div class="hd">
+            <span class="lock"></span>
+            <b>Words you are not allowed to use</b>
+            <span class="pill">Set by law</span>
+          </div>
+          <p class="lead">These are not a style choice. They come from the AHPRA advertising rules and the TGA
+            advertising code, which apply to you because Downscale is a registered health service. Breaking them
+            carries fines of up to $60,000 per offence, so they cannot be deleted from this page.
+            If one is wrong or you need an exception, ask for a review and a person will look at it.</p>
+
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>Ozempic &middot; Wegovy &middot; Saxenda &middot; Mounjaro</b></div>
+            <p class="why">Brand names of prescription-only medicines. Naming them to the public is an offence, even
+              in a comment reply. <em>Say instead:</em> &ldquo;prescription treatment&rdquo;, or &ldquo;medication your
+              clinician may consider&rdquo;.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>semaglutide &middot; tirzepatide &middot; liraglutide</b></div>
+            <p class="why">The ingredient names of the same medicines. The rule follows the medicine, not the spelling.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>the jab &middot; the pen &middot; the weight loss injection</b></div>
+            <p class="why">Nicknames still point at a prescription-only medicine, so they are treated the same way.
+              This one catches people out most often.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>guaranteed &middot; guaranteed results</b></div>
+            <p class="why">Creates an expectation of benefit that cannot be promised for a health service.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>cure &middot; miracle &middot; transformation</b></div>
+            <p class="why">Same rule, and it also describes an outcome no clinician can commit to in advance.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>safe &middot; no side effects &middot; risk-free</b></div>
+            <p class="why">Understates risk. Misleading under both sets of rules, and it is the sort of line a
+              complaint gets built on.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>any &ldquo;lose X kg in Y weeks&rdquo; claim</b></div>
+            <p class="why">A specific outcome promise. Still not allowed even when a real patient did exactly that.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>best &middot; #1 &middot; leading &middot; Australia&rsquo;s top</b></div>
+            <p class="why">Comparative and superlative claims about a health service are not permitted.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>before-and-after photos &middot; patient results in their own words</b></div>
+            <p class="why">Testimonials about clinical care are prohibited. This covers reviews you share or repost,
+              not only the ones you write.</p>
+          </div>
+          <div class="rule">
+            <div class="r1"><span class="lock"></span><b>only 5 spots left &middot; offer ends Friday</b></div>
+            <p class="why">A time-limited push to use a health service. Ordinary marketing everywhere else,
+              not allowed here.</p>
+          </div>
+
+          <p class="lawfoot">Last checked against the rules on 12 August 2026. Everything written for Downscale is run
+            past this list before it reaches you &mdash; you will see it flagged in the post, not after it goes out.
+            <button style="background:none;border:0;padding:0;color:var(--care-deep);font-size:11.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-weight:600">Ask for a review of this list</button></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="cfoot">
+      <span>Your own lists were last changed 4 August 2026. The legal list is maintained for you.</span>
+      <span class="r"><button>See what changed</button></span>
+    </div>
+  </div>
+
+  <!-- What you talk about -->
+  <div class="card">
+    <div class="chd">
+      <h3>What you talk about</h3>
+      <span class="note">Roughly how your posts and articles get shared out</span>
+      <div class="acts">
+        <button class="btn solid" id="addtopic">&#43; Add a topic</button>
+        <button class="btn ai" data-ai="what you talk about">&#10022; Help me improve this</button>
+      </div>
+    </div>
+
+    <div class="topics" id="topics">
+      <div class="topic">
+        <span class="nm ed" contenteditable="true">How treatment actually works</span>
+        <span class="barwrap"><span class="bar" style="width:25%"></span></span>
+        <input class="ed num" data-share value="25"><span style="font-size:12px;color:var(--ink-3)">%</span>
+        <button class="pen">&#9998;</button><button class="rm">&times;</button>
+      </div>
+      <div class="topic">
+        <span class="nm ed" contenteditable="true">Living with it day to day</span>
+        <span class="barwrap"><span class="bar" style="width:20%"></span></span>
+        <input class="ed num" data-share value="20"><span style="font-size:12px;color:var(--ink-3)">%</span>
+        <button class="pen">&#9998;</button><button class="rm">&times;</button>
+      </div>
+      <div class="topic">
+        <span class="nm ed" contenteditable="true">Myths and mixed messages</span>
+        <span class="barwrap"><span class="bar" style="width:15%"></span></span>
+        <input class="ed num" data-share value="15"><span style="font-size:12px;color:var(--ink-3)">%</span>
+        <button class="pen">&#9998;</button><button class="rm">&times;</button>
+      </div>
+      <div class="topic">
+        <span class="nm ed" contenteditable="true">Meet the clinicians</span>
+        <span class="barwrap"><span class="bar" style="width:15%"></span></span>
+        <input class="ed num" data-share value="15"><span style="font-size:12px;color:var(--ink-3)">%</span>
+        <button class="pen">&#9998;</button><button class="rm">&times;</button>
+      </div>
+      <div class="topic">
+        <span class="nm ed" contenteditable="true">Questions patients ask</span>
+        <span class="barwrap"><span class="bar" style="width:15%"></span></span>
+        <input class="ed num" data-share value="15"><span style="font-size:12px;color:var(--ink-3)">%</span>
+        <button class="pen">&#9998;</button><button class="rm">&times;</button>
+      </div>
+      <div class="topic">
+        <span class="nm ed" contenteditable="true">Clinic news and how to get in</span>
+        <span class="barwrap"><span class="bar" style="width:10%"></span></span>
+        <input class="ed num" data-share value="10"><span style="font-size:12px;color:var(--ink-3)">%</span>
+        <button class="pen">&#9998;</button><button class="rm">&times;</button>
+      </div>
+    </div>
+
+    <div class="total"><span>Adds up to</span> <b id="topictotal">100</b><span>%</span> <span id="totalflag" class="ok">&mdash; that works</span></div>
+
+    <div class="cfoot">
+      <span>Last changed 21 July 2026, by you</span>
+      <span class="r"><button>See what changed</button></span>
+    </div>
+  </div>
+
+  <div style="height:8px"></div>
+
+  <!-- Honest save state -->
+  <div class="savebar">
+    <span class="dot"></span>
+    <span class="clean">Everything on this page is saved. Last change 4 August 2026, 4:12pm.</span>
+    <span id="dirtytxt" style="display:none">You have changes that are not saved yet.</span>
+    <span class="acts">
+      <button class="btn" id="discard">Discard</button>
+      <button class="btn solid" id="save">Save changes</button>
+    </span>
+  </div>
+</main>
+
+<!-- ═══ RIGHT — the Director, on every screen ═══ -->
+<aside class="right">
+  <div class="rtabs">
+    <button class="rtab on">&#10022; Director</button>
+    <button class="rtab">&#128065; Preview</button>
+    <button class="rtab">&#9993; Activity</button>
+    <button class="rtab">&#9650; Analytics</button>
+      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+    </div>
+
+  <div class="rbody">
+    <div class="dmsg">
+      <span class="av">ND</span>
+      <div class="bd">
+        <p>This page is where everything else starts. Two things I would look at, whenever you have a minute:</p>
+        <p><b>Who buys from you</b> hasn&rsquo;t changed since July, but the last 40 enquiries skew older than
+          any of the three groups you have written down.</p>
+        <p><b>Enquiries who book</b> is sitting at 38% against a target of 45%. That is usually a wording problem
+          on the way in, not an advertising problem.</p>
+      </div>
+    </div>
+
+    <div class="ideas">
+      <div class="h">Suggested</div>
+      <a><span class="ic">&#9678;</span> Redo &ldquo;who buys from you&rdquo; from the last 40 enquiries</a>
+      <a><span class="ic">&#10022;</span> Tighten &ldquo;what makes you different&rdquo;</a>
+      <a><span class="ic">&#9998;</span> Read my voice back to me in a sample post</a>
+      <a><span class="ic">&#9650;</span> Why is only 38% booking?</a>
+      <a><span class="ic">&#9880;</span> How do three nearby clinics describe themselves?</a>
+      <a><span class="ic">&#9878;</span> Check this whole page against the health rules</a>
+    </div>
+
+    <div class="chk c care-only">
+      <span class="lock" style="margin-top:4px"></span>
+      <span><b>Health rules are on.</b> Ten locked entries under &ldquo;words to avoid&rdquo;. I check every draft
+        against them before you ever see it.</span>
+    </div>
+    <div class="chk"><span>&#10003;</span><span><b>Nothing here is published.</b> This page is your own record.
+      Changing it only changes what gets written from now on.</span></div>
+    <div class="chk w"><span>&#9711;</span><span><b>One goal has no numbers.</b> Cost per new patient needs your
+      ad account connected first &mdash; I have left it blank rather than guessing.</span></div>
+  </div>
+
+  <div class="ask">
+    <div class="askbox">
+      <div class="ph" contenteditable="true" data-ph="Ask NRS about Downscale&hellip;">Ask NRS about Downscale&hellip;</div>
+      <button class="go">&#8593;</button>
+    </div>
+    <div class="askfoot">
+      <span class="pill">Director</span>
+      <span>sees this screen</span>
+      <span class="live"><i></i> 14 departments ready</span>
+    </div>
+  </div>
+</aside>
+
+<button class="reopen" id="showrail">&#10022; Director</button>
+
+<script>
+(function(){
+  var body=document.body;
+
+  /* Rail — collapsible, and the control is visible either way. */
+  document.getElementById('hiderail').onclick=function(){body.classList.add('railoff')};
+  document.getElementById('showrail').onclick=function(){body.classList.remove('railoff')};
+
+  /* Healthcare switch. Turning it off hides the health-only sections but the page
+     says plainly that the law has not moved. */
+  document.getElementById('caretog').onclick=function(){
+    var on=body.classList.toggle('care');
+    this.setAttribute('aria-pressed',on?'true':'false');
+  };
+
+  /* Right-rail tabs */
+  document.querySelectorAll('.rtab').forEach(function(t){
+    t.onclick=function(){
+      document.querySelectorAll('.rtab').forEach(function(x){x.classList.remove('on')});
+      t.classList.add('on');
+    };
+  });
+
+  /* Anything unsaved says so. Never show saved when it isn't. */
+  function dirty(){
+    if(body.classList.contains('dirty'))return;
+    body.classList.add('dirty');
+    document.getElementById('dirtytxt').style.display='';
+  }
+  document.addEventListener('input',dirty);
+  document.getElementById('save').onclick=function(){
+    body.classList.remove('dirty');
+    document.getElementById('dirtytxt').style.display='none';
+    document.querySelector('.savebar .clean').textContent='Saved just now. Every department uses this from the next piece of work.';
+  };
+  document.getElementById('discard').onclick=function(){location.reload()};
+
+  /* Pencils focus the nearest editable thing — the affordance does what it looks like. */
+  document.addEventListener('click',function(e){
+    var p=e.target.closest('.pen');if(!p)return;
+    var row=p.closest('.fld,.who,.pt,.topic,tr,.card');
+    var t=row&&row.querySelector('[contenteditable],input');
+    if(t){t.focus();
+      if(t.isContentEditable){var r=document.createRange();r.selectNodeContents(t);
+        var s=getSelection();s.removeAllRanges();s.addRange(r);}
+      else t.select();}
+  });
+  document.querySelectorAll('[data-focus]').forEach(function(b){
+    b.onclick=function(){var t=document.querySelector(b.dataset.focus);if(t){t.focus();t.scrollIntoView({block:'center',behavior:'smooth'})}};
+  });
+
+  /* Remove buttons on the things you own. Nothing removes a locked rule. */
+  document.addEventListener('click',function(e){
+    var x=e.target.closest('.chip .x');
+    if(x){x.closest('.chip').remove();dirty();return;}
+    var rm=e.target.closest('.rm');
+    if(rm){var host=rm.closest('.who,.pt,.topic');if(host){host.remove();dirty();total();}}
+  });
+
+  /* Add a word by typing it. No separate dialog. */
+  document.querySelectorAll('.addchip').forEach(function(inp){
+    inp.addEventListener('keydown',function(e){
+      if(e.key!=='Enter'||!inp.value.trim())return;
+      e.preventDefault();
+      var c=document.createElement('span');c.className='chip';
+      c.textContent=inp.value.trim();
+      var b=document.createElement('button');b.className='x';b.innerHTML='&times;';
+      c.appendChild(b);inp.parentNode.insertBefore(c,inp);inp.value='';dirty();
+    });
+  });
+
+  /* Colour fields are live. Type a new oklch and you see it immediately. */
+  document.querySelectorAll('[data-swatch]').forEach(function(inp){
+    inp.addEventListener('input',function(){
+      var v=inp.value.trim(),chip=inp.closest('.sw-row').querySelector('.sw-chip');
+      if(window.CSS&&CSS.supports&&CSS.supports('color',v)){chip.style.background=v;
+        if(inp.closest('.sw-row')===document.querySelector('.sw-row'))
+          document.documentElement.style.setProperty('--brand',v);}
+    });
+  });
+
+  /* Topic shares — the total is honest about not adding up. */
+  function total(){
+    var n=0;
+    document.querySelectorAll('[data-share]').forEach(function(i){
+      var v=parseFloat(i.value)||0;n+=v;
+      var bar=i.closest('.topic').querySelector('.bar');
+      bar.style.width=Math.max(0,Math.min(100,v))+'%';
+    });
+    n=Math.round(n*10)/10;
+    document.getElementById('topictotal').textContent=n;
+    var f=document.getElementById('totalflag');
+    if(n===100){f.className='ok';f.textContent='— that works';}
+    else{f.className='off';f.textContent=n<100?'— '+(100-n)+'% is unspoken for':'— '+(n-100)+'% over';}
+  }
+  document.querySelectorAll('[data-share]').forEach(function(i){i.addEventListener('input',total)});
+  total();
+
+  /* Add rows */
+  document.getElementById('addtopic').onclick=function(){
+    var d=document.createElement('div');d.className='topic';
+    d.innerHTML='<span class="nm ed" contenteditable="true">New topic</span>'+
+      '<span class="barwrap"><span class="bar" style="width:0%"></span></span>'+
+      '<input class="ed num" data-share value="0"><span style="font-size:12px;color:var(--ink-3)">%</span>'+
+      '<button class="pen">&#9998;</button><button class="rm">&times;</button>';
+    document.getElementById('topics').appendChild(d);
+    d.querySelector('[data-share]').addEventListener('input',total);
+    d.querySelector('.nm').focus();dirty();total();
+  };
+  document.getElementById('addpt').onclick=function(){
+    var d=document.createElement('div');d.className='pt';
+    d.innerHTML='<span class="drag">&#8942;&#8942;</span><span class="tx">'+
+      '<b class="ed" contenteditable="true">A new point</b>'+
+      '<span class="ed" contenteditable="true">Say it the way you would say it to a patient.</span></span>'+
+      '<span class="tools"><button class="pen">&#9998;</button><button class="rm">&times;</button></span>';
+    document.getElementById('ptlist').appendChild(d);d.querySelector('b').focus();dirty();
+  };
+  document.getElementById('addwho').onclick=function(){
+    var d=document.createElement('div');d.className='who';
+    d.innerHTML='<div class="top"><b class="ed" contenteditable="true">New group</b><button class="pen">&#9998;</button></div>'+
+      '<dl><dt>Who</dt><dd class="ed" contenteditable="true">Age, where they live, what they do.</dd>'+
+      '<dt>What they want</dt><dd class="ed" contenteditable="true">In their words, not yours.</dd>'+
+      '<dt>What stops them</dt><dd class="ed" contenteditable="true">The thing they never say out loud.</dd>'+
+      '<dt>Where they find you</dt><dd class="ed" contenteditable="true">Search, Facebook, a friend.</dd></dl>'+
+      '<button class="rm">Remove this group</button>';
+    document.getElementById('wholist').appendChild(d);d.querySelector('b').focus();dirty();
+  };
+  document.getElementById('addgoal').onclick=function(){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td class="goalnm"><span class="ed" contenteditable="true">New goal</span>'+
+      '<small class="ed" contenteditable="true">What it means, in plain words</small></td>'+
+      '<td class="r"><input class="ed num" placeholder="&mdash;"></td>'+
+      '<td class="r"><input class="ed num" placeholder="&mdash;"></td>'+
+      '<td><span class="ed" contenteditable="true">&mdash;</span></td>'+
+      '<td><span class="state none"><i></i> Not measured yet</span></td>'+
+      '<td class="r"><button class="pen">&#9998;</button></td>';
+    document.getElementById('goals').appendChild(tr);tr.querySelector('.ed').focus();dirty();
+  };
+  document.getElementById('addcolour').onclick=function(){
+    var d=document.createElement('div');d.className='sw-row';
+    d.innerHTML='<span class="sw-chip" style="background:oklch(0.80 0.03 205)"></span>'+
+      '<span class="sw-tx"><b class="ed" contenteditable="true">New colour</b>'+
+      '<span class="ed" contenteditable="true">Where it gets used</span>'+
+      '<input class="ed" data-swatch value="oklch(0.80 0.03 205)"></span>';
+    document.getElementById('swlist').appendChild(d);
+    d.querySelector('[data-swatch]').addEventListener('input',function(){
+      if(CSS.supports('color',this.value))d.querySelector('.sw-chip').style.background=this.value;});
+    d.querySelector('b').focus();dirty();
+  };
+
+  /* The AI offer never replaces the manual control — it drops a request into the rail. */
+  document.querySelectorAll('[data-ai]').forEach(function(b){
+    b.onclick=function(){
+      body.classList.remove('railoff');
+      var box=document.querySelector('.askbox .ph');
+      box.textContent='Have a look at '+b.dataset.ai+' and tell me what you would change.';
+      box.focus();
+      box.scrollIntoView({block:'nearest'});
+    };
+  });
+
+  /* Placeholder behaviour on the Director input */
+  var ph=document.querySelector('.askbox .ph');
+  ph.addEventListener('focus',function(){if(ph.textContent===ph.dataset.ph)ph.textContent=''});
+  ph.addEventListener('blur',function(){if(!ph.textContent.trim())ph.textContent=ph.dataset.ph});
+})();
+</script>
+</body>
+</html>

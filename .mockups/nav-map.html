@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NRS — navigation, everything expanded</title>
+<style>
+:root{
+  --h:240;
+  --bg:oklch(0.985 0.002 var(--h));
+  --panel:oklch(1 0 0);
+  --panel-2:oklch(0.972 0.004 var(--h));
+  --line:oklch(0.912 0.007 var(--h));
+  --line-soft:oklch(0.948 0.005 var(--h));
+  --ink:oklch(0.20 0.014 var(--h));
+  --ink-2:oklch(0.45 0.012 var(--h));
+  --ink-3:oklch(0.615 0.011 var(--h));
+  --brand:oklch(0.52 0.10 205);
+  --brand-deep:oklch(0.32 0.075 205);
+  --brand-wash:oklch(0.964 0.026 205);
+  --care:oklch(0.50 0.13 25);
+  --care-wash:oklch(0.966 0.030 25);
+  --new:oklch(0.48 0.12 150);
+  --new-wash:oklch(0.962 0.035 150);
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --shadow:0 1px 2px oklch(0.2 0.02 var(--h)/.05),0 8px 24px -16px oklch(0.2 0.02 var(--h)/.26);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:oklch(0.175 0.010 var(--h));--panel:oklch(0.215 0.012 var(--h));
+    --panel-2:oklch(0.245 0.013 var(--h));--line:oklch(0.315 0.015 var(--h));
+    --line-soft:oklch(0.272 0.013 var(--h));--ink:oklch(0.960 0.005 var(--h));
+    --ink-2:oklch(0.79 0.011 var(--h));--ink-3:oklch(0.64 0.013 var(--h));
+    --brand:oklch(0.74 0.11 205);--brand-deep:oklch(0.87 0.08 205);--brand-wash:oklch(0.272 0.038 205);
+    --care:oklch(0.76 0.13 25);--care-wash:oklch(0.285 0.045 25);
+    --new:oklch(0.72 0.13 150);--new-wash:oklch(0.265 0.045 150);
+    --shadow:0 1px 2px oklch(0 0 0/.5),0 10px 30px -18px oklch(0 0 0/.75);
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 22px 70px}
+h1{font-size:22px;font-weight:650;letter-spacing:-.02em;margin:0 0 4px}
+.lede{color:var(--ink-2);margin:0 0 8px;max-width:66ch}
+.key{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 26px;font-size:12px;color:var(--ink-3)}
+.key span{display:flex;align-items:center;gap:6px}
+.key i{width:9px;height:9px;border-radius:3px;display:block;font-style:normal}
+.k-new{background:var(--new)}.k-mix{background:var(--ink-3)}.k-care{background:var(--care)}
+
+.cols{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:900px){.cols{grid-template-columns:1fr}}
+
+/* Sidebar */
+.side{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  overflow:hidden;box-shadow:var(--shadow);position:sticky;top:24px}
+.bizhead{padding:13px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.bizsel{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel);text-align:left}
+.bizsel .lg{width:26px;height:26px;border-radius:7px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans);flex-shrink:0}
+.bizsel .nm b{display:block;font-size:13px;font-weight:600}
+.bizsel .nm span{display:block;font-size:11px;color:var(--ink-3)}
+.bizsel .cv{margin-left:auto;color:var(--ink-3);font-size:11px}
+.caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+  background:var(--care-wash);border:1px solid oklch(0 0 0/.05)}
+.caretog .sw{width:28px;height:16px;border-radius:99px;background:var(--care);position:relative;flex-shrink:0}
+.caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+  border-radius:50%;background:oklch(1 0 0)}
+.caretog .tx{font-size:11.5px;color:var(--care);font-weight:600;line-height:1.35}
+
+.cta{margin:12px;padding:10px;border-radius:10px;background:var(--brand-deep);color:oklch(1 0 0);
+  text-align:center;font-size:13px;font-weight:650}
+nav{padding:0 9px 12px}
+.top{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;
+  font-size:13.5px;color:var(--ink);font-weight:560;margin-top:2px}
+.top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.top .ic{width:16px;text-align:center;font-size:13px;color:var(--ink-3);flex-shrink:0}
+.top .cnt{margin-left:auto;font-size:10px;font-weight:650;padding:2px 5px;border-radius:5px;
+  background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+.top .dot{margin-left:auto;width:7px;height:7px;border-radius:2px;display:block}
+.sub{margin:1px 0 5px 34px;display:flex;flex-direction:column;gap:1px}
+.sub a{font-size:12.5px;color:var(--ink-2);padding:4px 8px;border-radius:6px;text-decoration:none;display:flex;align-items:center;gap:7px}
+.sub a::before{content:"";width:3px;height:3px;border-radius:50%;background:var(--ink-3);opacity:.5;flex-shrink:0}
+.sub a.care{color:var(--care)}
+.grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:13px 9px 5px}
+
+/* Notes column */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:15px 17px;margin-bottom:13px;box-shadow:var(--shadow)}
+.card h2{font-size:14px;font-weight:650;margin:0 0 4px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.card h2 .b{font-size:10px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;
+  padding:2px 6px;border-radius:5px}
+.b-new{background:var(--new-wash);color:var(--new)}
+.b-care{background:var(--care-wash);color:var(--care)}
+.b-q{background:oklch(0.96 0.05 75);color:oklch(0.42 0.11 60)}
+@media (prefers-color-scheme:dark){.b-q{background:oklch(0.30 0.06 70);color:oklch(0.86 0.11 80)}}
+.card p{margin:0 0 8px;color:var(--ink-2);font-size:13.5px}
+.card p:last-child{margin:0}
+.card ul{margin:6px 0 0;padding-left:18px;color:var(--ink-2);font-size:13.5px}
+.card li{margin-bottom:4px}
+.card b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>NRS navigation &mdash; everything expanded</h1>
+  <p class="lede">Your list, with the sub-sections filled in. Cut anything that does not earn its
+     place. Nothing gets built until this is right.</p>
+
+  <div class="key">
+    <span><i class="k-mix"></i> Mixpost already has it</span>
+    <span><i class="k-new"></i> New in NRS</span>
+    <span><i class="k-care"></i> Only when healthcare mode is on</span>
+  </div>
+
+  <div class="cols">
+    <aside class="side">
+      <div class="bizhead">
+        <button class="bizsel">
+          <span class="lg">DW</span>
+          <span class="nm"><b>Downscale</b><span>3 accounts</span></span>
+          <span class="cv">&#9662;</span>
+        </button>
+        <div class="caretog">
+          <span class="sw"></span>
+          <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
+        </div>
+      </div>
+
+      <div class="cta">&#43; Create post</div>
+
+      <nav>
+        <div class="top on"><span class="ic">&#9636;</span> Dashboard</div>
+
+        <div class="top"><span class="ic">&#9635;</span> Business analysis</div>
+        <div class="sub">
+          <a>What the business is</a><a>Who buys from you</a>
+          <a>What makes you different</a><a>Goals &amp; targets</a>
+        </div>
+
+        <div class="top"><span class="ic">&#10022;</span> Branding &amp; voice</div>
+        <div class="sub">
+          <a>Logo, colours, fonts</a><a>How you sound</a>
+          <a>Words to use &amp; avoid</a><a>What you talk about</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9741;</span> Connections</div>
+        <div class="sub">
+          <a>Social accounts</a><a>Your website</a><a>Canva</a>
+          <a>Google</a><a>Code &amp; hosting</a><a>Email</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9880;</span> Competitors</div>
+        <div class="sub">
+          <a>Who they are</a><a>What they post</a>
+          <a>What they rank for</a><a>Where you are behind</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9906;</span> Google</div>
+        <div class="sub">
+          <a>What you rank for</a><a>What people search</a>
+          <a>Your Google listing</a><a>Local &amp; maps</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9673;</span> AI</div>
+        <div class="sub">
+          <a>Can AI find you</a><a>How AI describes you</a><a>What to fix</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9737;</span> Website</div>
+        <div class="sub">
+          <a>Speed on phone &amp; desktop</a><a>Pages</a>
+          <a>Structure &amp; sitemap</a><a>What to fix</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9998;</span> Blogging <span class="cnt">4</span></div>
+        <div class="sub">
+          <a>Your posts</a><a>What to write next</a>
+          <a>Search terms</a><a>Images</a>
+          <a class="care">Checked before you publish</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9634;</span> Social media</div>
+        <div class="sub" style="margin-bottom:2px">
+          <a style="font-weight:650;color:var(--ink-3);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase">Content</a>
+        </div>
+        <div class="sub" style="margin-top:0">
+          <a>Posts</a><a>Calendar</a><a>Media library</a><a>Templates</a>
+        </div>
+        <div class="sub" style="margin-bottom:2px">
+          <a style="font-weight:650;color:var(--ink-3);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase">Setup</a>
+        </div>
+        <div class="sub" style="margin-top:0">
+          <a>Social accounts</a><a>Posting schedule</a>
+        </div>
+        <div class="sub" style="margin-bottom:2px">
+          <a style="font-weight:650;color:var(--ink-3);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase">Results</a>
+        </div>
+        <div class="sub" style="margin-top:0">
+          <a>Analytics</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9650;</span> Advertising</div>
+        <div class="sub">
+          <a>Campaigns</a><a>What you are spending</a>
+          <a>What it is returning</a><a>Audiences</a>
+          <a class="care">Ad rules for health</a>
+        </div>
+
+        <div class="top"><span class="ic">&#9993;</span> Engagement <span class="cnt">7</span></div>
+        <div class="sub">
+          <a>Comments</a><a>Messages</a><a>Mentions</a><a>Reviews</a>
+        </div>
+
+        <div class="grp">This business</div>
+        <div class="top"><span class="ic">&#9881;</span> Settings</div>
+        <div class="sub">
+          <a>People &amp; access</a><a>What it costs</a>
+          <a class="care">Compliance record</a>
+        </div>
+      </nav>
+    </aside>
+
+    <div>
+      <div class="card">
+        <h2>The healthcare switch <span class="b b-care">sets the guardrails</span></h2>
+        <p>One toggle per business, at the top where the business is chosen. Flick it on and the
+           rules follow the business everywhere &mdash; the owner never has to remember.</p>
+        <ul>
+          <li>Every post, blog and ad is <b>checked against AHPRA and TGA before it can go out</b>,
+              and a check that cannot run blocks rather than passes.</li>
+          <li>A <b>compliance record</b> appears under Settings &mdash; the dated evidence, which is
+              what you would hand a regulator.</li>
+          <li>Wording changes throughout: no outcome claims, no testimonials, no before-and-after.</li>
+          <li>Advertising gains a health-specific section, because the ad rules differ.</li>
+        </ul>
+        <p>Off, and none of that clutter appears. Scent Sell should never see an AHPRA warning.</p>
+      </div>
+
+      <div class="card">
+        <h2>Most people will have one business <span class="b b-new">design for that</span></h2>
+        <p>You have fourteen; almost every subscriber will have one. So the business selector is
+           <b>quiet when there is only one</b> &mdash; it just shows the name and the healthcare
+           switch. It becomes a real switcher only when there is something to switch between.</p>
+        <p>Designing the fourteen-business case as the default would make the product feel wrong to
+           the person paying for it.</p>
+      </div>
+
+      <div class="card">
+        <h2>Connections is the one to get visually right <span class="b b-new">new</span></h2>
+        <p>It is where the product either feels connected or feels broken, and it is the screen a
+           new subscriber hits first. Big obvious tiles per service, each showing plainly whether it
+           is connected, what NRS can do once it is, and one button to connect it.</p>
+        <p>An account that has <b>stopped working</b> is the loudest thing on the screen, because a
+           channel that silently cannot publish is the most expensive failure here.</p>
+      </div>
+
+      <div class="card">
+        <h2>Four calls I need from you <span class="b b-q">decide</span></h2>
+        <ul>
+          <li><b>Analytics, Media library and Calendar</b> &mdash; you said these sit under Social
+              media. But media and analytics also serve Blogging and Advertising. Keep them nested
+              under Social, or lift them to the top so everything can reach them?</li>
+          <li><b>Google and AI</b> &mdash; separate items, or two halves of one &ldquo;getting
+              found&rdquo; section alongside Website? They answer the same question.</li>
+          <li><b>Business analysis vs Branding &amp; voice</b> &mdash; both are &ldquo;who you
+              are&rdquo; and both are set up once then rarely touched. One section or two?</li>
+          <li><b>Twelve top-level items</b> is a lot for a busy owner. Worth grouping into three or
+              four headings, or do you want them flat and always visible?</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

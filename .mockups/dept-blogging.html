@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NRS — Blogging · Downscale Weight Loss</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   Tokens — lifted from nrs-mixpost-shape.html so every screen is the
+   same product. Only the three brand variables change per business.
+   Downscale: clinical teal, hue 205. Healthcare mode is ON, so the
+   care tokens (hue 25) are live too.
+   oklch only. Never color-mix in oklch — it goes pink.
+   ═════════════════════════════════════════════════════════════ */
+:root{
+  --h:240;
+  --bg:oklch(0.985 0.002 var(--h));
+  --panel:oklch(1 0 0);
+  --panel-2:oklch(0.975 0.004 var(--h));
+  --line:oklch(0.915 0.007 var(--h));
+  --line-soft:oklch(0.950 0.005 var(--h));
+  --ink:oklch(0.20 0.014 var(--h));
+  --ink-2:oklch(0.46 0.012 var(--h));
+  --ink-3:oklch(0.615 0.011 var(--h));
+  /* Business accent. One variable — switching business retints the product. */
+  --brand:oklch(0.545 0.115 205);
+  --brand-deep:oklch(0.33 0.080 205);
+  --brand-wash:oklch(0.966 0.026 205);
+  --care:oklch(0.52 0.150 25);
+  --care-wash:oklch(0.965 0.028 25);
+  --ok:oklch(0.50 0.12 155);
+  --ok-wash:oklch(0.962 0.032 155);
+  --warn:oklch(0.58 0.12 70);
+  --warn-wash:oklch(0.966 0.040 80);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --shadow:0 1px 2px oklch(0.2 0.02 var(--h)/.05),0 8px 24px -16px oklch(0.2 0.02 var(--h)/.28);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:oklch(0.175 0.010 var(--h));
+    --panel:oklch(0.215 0.012 var(--h));
+    --panel-2:oklch(0.245 0.013 var(--h));
+    --line:oklch(0.315 0.015 var(--h));
+    --line-soft:oklch(0.275 0.013 var(--h));
+    --ink:oklch(0.960 0.005 var(--h));
+    --ink-2:oklch(0.795 0.011 var(--h));
+    --ink-3:oklch(0.640 0.013 var(--h));
+    --brand:oklch(0.74 0.11 205);
+    --brand-deep:oklch(0.87 0.08 205);
+    --brand-wash:oklch(0.272 0.038 205);
+    --care:oklch(0.76 0.13 25);
+    --care-wash:oklch(0.285 0.045 25);
+    --ok:oklch(0.74 0.13 155);
+    --ok-wash:oklch(0.263 0.042 155);
+    --warn:oklch(0.80 0.12 80);
+    --warn-wash:oklch(0.285 0.045 75);
+    --shadow:0 1px 2px oklch(0 0 0/.5),0 10px 30px -18px oklch(0 0 0/.75);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  line-height:1.5;-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-columns:236px minmax(0,1fr) 380px;height:100vh;overflow:hidden;
+}
+body.railout{grid-template-columns:236px minmax(0,1fr) 380px}
+button{font-family:inherit}
+
+/* ── SIDEBAR — identical on every screen ─────────────────── */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+.biz{padding:14px 14px 12px;border-bottom:1px solid var(--line-soft)}
+.bizsel{
+  display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel-2);cursor:pointer;text-align:left;
+}
+.bizsel .logo{width:26px;height:26px;border-radius:7px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans);flex-shrink:0}
+.bizsel .nm{flex:1;min-width:0}
+.bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bizsel .nm span{display:block;font-size:11px;color:var(--ink-3)}
+.bizsel .chev{color:var(--ink-3);font-size:11px}
+/* Healthcare toggle. On = warm red, and the [care] items appear below. */
+.caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+  background:var(--care-wash);border:1px solid oklch(0.5 0.13 25/.14);width:100%;text-align:left;cursor:pointer}
+.caretog .sw{width:28px;height:16px;border-radius:99px;background:var(--care);position:relative;flex-shrink:0}
+.caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+  border-radius:50%;background:oklch(1 0 0)}
+.caretog .tx{font-size:11.5px;color:var(--care);font-weight:600;line-height:1.35}
+
+.cta{margin:14px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--brand-deep);color:oklch(1 0 0);border:0;border-radius:10px;
+  padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer;box-shadow:var(--shadow)}
+
+nav{padding:0 10px 16px}
+.top{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;margin-top:3px;
+  color:var(--ink);font-size:13.5px;font-weight:560;cursor:pointer;text-decoration:none}
+.top:hover{background:var(--panel-2)}
+.top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.top .ic{width:17px;text-align:center;font-size:14px;color:var(--ink-3);flex-shrink:0}
+.top.on .ic{color:var(--brand-deep)}
+.top .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .cnt{font-size:10px;font-weight:650;padding:2px 6px;border-radius:5px;
+  background:var(--warn-wash);color:oklch(0.44 0.11 62);border:1px solid transparent}
+@media (prefers-color-scheme:dark){.top .cnt{color:oklch(0.88 0.11 82)}}
+.sub{margin:1px 0 6px 36px;display:flex;flex-direction:column;gap:1px}
+.sub a{font-size:12.5px;color:var(--ink-2);padding:3px 8px;border-radius:6px;text-decoration:none;
+  display:flex;align-items:center;gap:7px;cursor:pointer}
+.sub a:hover{background:var(--panel-2);color:var(--ink)}
+.sub a::before{content:"";width:3px;height:3px;border-radius:50%;background:var(--ink-3);opacity:.55;flex-shrink:0}
+.sub a.care{color:var(--care)}
+.sub a.here{color:var(--brand-deep);font-weight:600}
+.sublbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;margin:7px 0 2px 36px}
+/* Set up once, but never locked. Justin: "may need altering and improving easily." */
+.revisit{margin:1px 0 7px 36px;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;
+  padding:4px 9px;border-radius:7px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink-2);cursor:pointer;font-weight:560}
+.revisit:hover{background:var(--panel);color:var(--ink)}
+.grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:15px 9px 4px}
+.me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;align-items:center;gap:9px}
+.me .av{width:26px;height:26px;border-radius:50%;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans)}
+.me span{font-size:13px;color:var(--ink-2)}
+
+/* ── CENTRE ──────────────────────────────────────────────── */
+.main{overflow-y:auto;padding:22px 26px 48px;min-width:0}
+h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
+.lede{color:var(--ink-3);font-size:13px;margin:0}
+
+.hrow{display:flex;align-items:flex-start;gap:16px;margin-bottom:14px}
+.hrow .sp{flex:1;min-width:0}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:9px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);font-size:13px;font-weight:600;padding:8px 13px;cursor:pointer;
+  text-decoration:none;white-space:nowrap}
+.btn:hover{background:var(--panel-2)}
+.btn.big{padding:11px 17px;font-size:13.5px}
+.btn.pri{background:var(--brand-deep);border-color:transparent;color:oklch(1 0 0);box-shadow:var(--shadow)}
+.btn.pri:hover{background:var(--brand)}
+.btn.quiet{background:none;border-color:transparent;color:var(--ink-2);font-weight:560}
+.btn.quiet:hover{background:var(--panel-2)}
+.btn.care{border-color:oklch(0.5 0.13 25/.35);color:var(--care)}
+
+/* The constraint, said once, in plain words, where it cannot be missed. */
+.own{display:flex;gap:11px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);
+  border-left:3px solid var(--brand);border-radius:11px;padding:11px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.own .ic{font-size:14px;color:var(--brand-deep);line-height:1.35}
+.own p{margin:0;font-size:13px;color:var(--ink-2)}
+.own p b{color:var(--ink)}
+.own .site{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+
+/* Filters — plain word + dot, so a state is never a colour alone. */
+.filters{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:11px}
+.f{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:99px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink-2);font-size:12.5px;cursor:pointer}
+.f:hover{background:var(--panel-2)}
+.f.on{background:var(--brand-wash);border-color:transparent;color:var(--brand-deep);font-weight:650}
+.f i{width:8px;height:8px;border-radius:50%;display:block;font-style:normal;flex-shrink:0}
+.f .k{font-variant-numeric:tabular-nums;color:var(--ink-3);font-size:11.5px}
+.f.on .k{color:var(--brand-deep)}
+.d-idea{background:var(--ink-3)}
+.d-writing{background:var(--warn)}
+.d-ready{background:var(--brand)}
+.d-fix{background:var(--care)}
+.d-live{background:var(--ok)}
+.f.all i{background:linear-gradient(135deg,var(--ink-3),var(--brand))}
+
+/* Post rows */
+.list{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.row{border-bottom:1px solid var(--line-soft)}
+.row:last-child{border-bottom:0}
+.rhead{display:flex;align-items:flex-start;gap:12px;padding:13px 15px;cursor:pointer}
+.rhead:hover{background:var(--panel-2)}
+.row.open .rhead{background:var(--panel-2)}
+.rdot{width:9px;height:9px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.rmid{flex:1;min-width:0}
+.rtitle{font-size:14px;font-weight:600;letter-spacing:-.01em;margin:0 0 3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.state{font-size:11px;font-weight:650;letter-spacing:.02em;padding:2px 7px;border-radius:6px;background:var(--panel-2);
+  color:var(--ink-3);border:1px solid var(--line)}
+.state.ready{background:var(--brand-wash);color:var(--brand-deep);border-color:transparent}
+.state.fix{background:var(--care-wash);color:var(--care);border-color:transparent}
+.state.live{background:var(--ok-wash);color:var(--ok);border-color:transparent}
+.state.writing{background:var(--warn-wash);color:oklch(0.44 0.11 62);border-color:transparent}
+@media (prefers-color-scheme:dark){.state.writing{color:oklch(0.88 0.11 82)}}
+.rmeta{font-size:12.5px;color:var(--ink-3);display:flex;gap:6px;flex-wrap:wrap;align-items:baseline}
+.rmeta .term{color:var(--ink-2);font-weight:560}
+.rmeta .vol{font-variant-numeric:tabular-nums}
+.rmeta .sep{opacity:.5}
+.rmeta .nosearch{font-style:italic}
+.rright{display:flex;align-items:center;gap:9px;flex-shrink:0;padding-top:1px}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:4px 9px;border-radius:99px;
+  border:1px solid var(--line);background:var(--panel-2);color:var(--ink-3);white-space:nowrap}
+.chk.pass{color:var(--ok);border-color:oklch(0.5 0.12 155/.3);background:var(--ok-wash)}
+.chk.fail{color:var(--care);border-color:oklch(0.5 0.13 25/.3);background:var(--care-wash)}
+@media (prefers-color-scheme:dark){
+  .chk.pass{background:var(--ok-wash)}
+  .chk.fail{background:var(--care-wash)}
+}
+.caret{color:var(--ink-3);font-size:11px;width:14px;text-align:center}
+
+/* Hand-over drawer */
+.hand{display:none;padding:2px 15px 17px 36px;background:var(--panel-2);border-top:1px solid var(--line-soft)}
+.row.open .hand{display:block}
+.hlbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650;margin:14px 0 8px}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
+@media (max-width:1180px){.steps{grid-template-columns:1fr}}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 13px;display:flex;flex-direction:column;gap:8px}
+.step .no{width:20px;height:20px;border-radius:6px;background:var(--brand-wash);color:var(--brand-deep);
+  display:grid;place-items:center;font:650 11px/1 var(--sans)}
+.step b{font-size:13px;font-weight:650;letter-spacing:-.01em}
+.step p{margin:0;font-size:12.5px;color:var(--ink-3)}
+.step .acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:auto;padding-top:2px}
+.thumbs{display:flex;gap:6px}
+.thumbs span{width:44px;height:44px;border-radius:7px;border:1px solid var(--line);display:block}
+.t1{background:linear-gradient(140deg,oklch(0.88 0.05 205),oklch(0.94 0.03 165))}
+.t2{background:linear-gradient(140deg,oklch(0.90 0.04 95),oklch(0.95 0.02 205))}
+.t3{background:linear-gradient(140deg,oklch(0.87 0.05 25),oklch(0.94 0.03 60))}
+
+/* The compliance check, shown the same way a social post shows it */
+.care-card{margin-top:13px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--ok);
+  border-radius:11px;padding:12px 14px}
+.care-card.held{border-left-color:var(--care)}
+.care-card .ch{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.care-card .ch b{font-size:13px;font-weight:650}
+.care-card .ch .badge{font-size:10.5px;font-weight:650;letter-spacing:.03em;padding:2px 7px;border-radius:6px;
+  background:var(--ok-wash);color:var(--ok)}
+.care-card.held .ch .badge{background:var(--care-wash);color:var(--care)}
+.care-card .ch .when{margin-left:auto;font-size:11.5px;color:var(--ink-3)}
+.rules{display:grid;grid-template-columns:1fr 1fr;gap:2px 18px;margin:0;padding:0;list-style:none}
+@media (max-width:1080px){.rules{grid-template-columns:1fr}}
+.rules li{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink-2);padding:3px 0}
+.rules li .m{color:var(--ok);font-size:12px;line-height:1.5}
+.rules li.no .m{color:var(--care)}
+.rules li.no{color:var(--ink)}
+.care-note{margin:10px 0 0;font-size:12.5px;color:var(--ink-2);background:var(--care-wash);border-radius:9px;padding:10px 12px}
+.care-note b{color:var(--care)}
+.care-note q{font-style:italic}
+.foot-note{margin:10px 0 0;font-size:12px;color:var(--ink-3)}
+
+/* Secondary: what to write next */
+.next{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.next .nh{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.next .nh b{font-size:13px;font-weight:650}
+.next .nh span{font-size:12px;color:var(--ink-3)}
+.next .nh .x{margin-left:auto}
+.idea{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line-soft)}
+.idea:last-child{border-bottom:0}
+.idea .im{flex:1;min-width:0}
+.idea .it{font-size:13.5px;font-weight:560;margin:0 0 2px}
+.idea .iw{font-size:12.5px;color:var(--ink-3);margin:0}
+.idea .iw .term{color:var(--ink-2);font-weight:560}
+.idea .acts{display:flex;gap:7px;flex-shrink:0}
+
+/* ── EDITOR — the manual path. Type. That is all. ────────── */
+#editor{display:none}
+body.writing #list{display:none}
+body.writing #editor{display:block}
+.ebar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.ebar .sp{flex:1}
+.ecols{display:grid;grid-template-columns:minmax(0,1fr) 264px;gap:14px;align-items:start}
+@media (max-width:1240px){.ecols{grid-template-columns:1fr}}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+.etools{display:flex;align-items:center;gap:2px;padding:8px 11px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.etools .b{min-width:30px;height:30px;padding:0 8px;border-radius:7px;display:grid;place-items:center;color:var(--ink-3);
+  font-size:13px;cursor:pointer;border:0;background:none}
+.etools .b:hover{background:var(--panel);color:var(--ink-2)}
+.etools .b.i{font-style:italic;font-family:Georgia,serif}
+.etools .b.bd{font-weight:750}
+.etools .saved{margin-left:auto;font-size:11.5px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.etools .saved i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:block;font-style:normal}
+.etitle{font-size:24px;font-weight:650;letter-spacing:-.02em;padding:20px 22px 4px;outline:none;line-height:1.25}
+.ebody{padding:6px 22px 34px;min-height:340px;font-size:15px;line-height:1.7;color:var(--ink-2);outline:none}
+[contenteditable]:empty::before{content:attr(data-ph);color:var(--ink-3);pointer-events:none}
+.ebody p{margin:0 0 14px}
+.ecard{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:13px 14px;margin-bottom:12px}
+.ecard h3{font-size:12px;font-weight:650;letter-spacing:.03em;margin:0 0 9px;color:var(--ink)}
+.ecard p{margin:0;font-size:12.5px;color:var(--ink-3)}
+.field{width:100%;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);padding:8px 10px;
+  font-size:13px;color:var(--ink);font-family:inherit}
+.field::placeholder{color:var(--ink-3)}
+.vol-line{font-size:12px;color:var(--ink-3);margin-top:7px;font-variant-numeric:tabular-nums}
+.ecard .acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+/* Quiet, but still plainly a button — a helper you can ignore, not a line of text. */
+.ecard .acts .btn.quiet{border-color:var(--line);background:var(--panel-2)}
+.ecard .acts .btn.quiet:hover{background:var(--panel);color:var(--ink)}
+.notyet{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--ink-2);
+  background:var(--panel-2);border-radius:9px;padding:10px 11px;margin-top:9px}
+.notyet .m{color:var(--ink-3)}
+.ownsmall{font-size:12px;color:var(--ink-3);margin-top:9px;border-top:1px solid var(--line-soft);padding-top:9px}
+
+/* ── RIGHT: the Director lives here, always. ─────────────── */
+.right{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+body.railout .rfull{display:none}
+.rmini{display:none;flex-direction:column;align-items:center;gap:14px;padding:13px 0;height:100%}
+body.railout .rmini{display:flex}
+.rmini .op{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink-2);cursor:pointer;font-size:12px;display:grid;place-items:center}
+.rmini .vert{writing-mode:vertical-rl;font-size:11.5px;letter-spacing:.10em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:650}
+.rmini .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);margin-top:auto;margin-bottom:4px}
+.rfull{display:flex;flex-direction:column;min-height:0;height:100%}
+.rtabs{display:flex;align-items:center;gap:2px;padding:0 10px;height:50px;border-bottom:1px solid var(--line)}
+.rtab{display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:8px;font-size:12.5px;color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.rtab.on{color:var(--brand-deep);font-weight:650;background:var(--brand-wash)}
+.rtabs .ctl{margin-left:auto;display:flex;gap:4px}
+.rtabs .ctl button{width:26px;height:26px;border-radius:7px;border:0;background:none;color:var(--ink-3);
+  font-size:13px;cursor:pointer;display:grid;place-items:center}
+.rtabs .ctl button:hover{background:var(--panel-2);color:var(--ink-2)}
+.rbody{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.dmsg{display:flex;gap:9px}
+.dmsg .av{width:22px;height:22px;border-radius:6px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 9px/1 var(--sans);flex-shrink:0}
+.dmsg .bd{font-size:13px;color:var(--ink-2);min-width:0}
+.dmsg .bd p{margin:0 0 8px}.dmsg .bd p:last-child{margin:0}
+.dmsg .bd b{color:var(--ink)}
+.dmsg.me{flex-direction:row-reverse}
+.dmsg.me .av{background:var(--ink-3)}
+.dmsg.me .bd{background:var(--brand-wash);border-radius:10px;padding:8px 11px;color:var(--ink)}
+.ideas{margin-top:2px}
+.ideas .h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650;margin-bottom:7px}
+.ideas a{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;color:var(--ink-2);
+  font-size:13px;cursor:pointer;text-decoration:none}
+.ideas a:hover{background:var(--panel-2)}
+.ideas a .ic{color:var(--ink-3);font-size:12px;width:14px;text-align:center;flex-shrink:0}
+.rchk{display:flex;gap:9px;border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:9px;
+  padding:10px 12px;font-size:12.5px;color:var(--ink-2);background:var(--panel-2)}
+.rchk.w{border-left-color:var(--care)}
+.rchk b{color:var(--ink)}
+.ask{border-top:1px solid var(--line);padding:11px 12px 12px;background:var(--panel)}
+.askbox{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:9px 11px;
+  display:flex;align-items:flex-end;gap:9px}
+.askbox .ph{flex:1;color:var(--ink-3);font-size:13px;min-height:34px;outline:none}
+.askbox .go{width:27px;height:27px;border-radius:7px;border:0;background:var(--brand-deep);
+  color:oklch(1 0 0);font-size:13px;cursor:pointer;flex-shrink:0}
+.askfoot{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:11px;color:var(--ink-3)}
+.askfoot .pill{border:1px solid var(--line);border-radius:6px;padding:2px 6px;background:var(--panel-2)}
+.askfoot .live{display:flex;align-items:center;gap:5px;margin-left:auto}
+.askfoot .live i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:block;font-style:normal}
+
+/* ── SIDEBAR NORMALISER ──────────────────────────────────────────────────
+   Six screens were authored in parallel and the sidebar drifted: different
+   widths, different paddings, one screen used `.subs` instead of `.sub`, and
+   two grew extra rows. Everything the sidebar needs is pinned here and scoped
+   to `.side`, so nothing in the centre column moves. Colours are custom
+   properties, so each file's dark-mode block still overrides them. */
+:root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
+@media (prefers-color-scheme:dark){
+  :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+}
+
+.side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+      display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.side .biz{padding:13px 13px 12px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.side .bizsel{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+      border:1px solid var(--line);background:var(--panel);text-align:left;cursor:pointer}
+.side .bizsel .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .bizsel .nm{flex:1;min-width:0;text-align:left}
+.side .bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.25;
+      white-space:normal;overflow:visible;text-overflow:clip;color:var(--ink)}
+.side .bizsel .nm span{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.side .bizsel .chev{font-size:11px;flex-shrink:0;color:var(--ink-3)}
+
+.side .caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+      width:100%;text-align:left;cursor:pointer;background:var(--care-wash);
+      border:1px solid var(--nrs-care-line)}
+.side .caretog .sw{width:28px;height:16px;border-radius:99px;flex-shrink:0;display:block;
+      position:relative;background:var(--care)}
+.side .caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+      border-radius:50%;background:var(--nrs-knob)}
+.side .caretog .tx{font-size:11.5px;font-weight:600;line-height:1.35;color:var(--care)}
+
+.side .cta{margin:12px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;
+      border-radius:10px;padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer}
+.side nav{padding:0 8px 6px;display:block}
+
+.side .top{display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:7px 9px;
+      border-radius:8px;font-size:13.5px;font-weight:560;margin-top:2px;text-decoration:none;
+      text-align:left;color:var(--ink);cursor:pointer;background:none}
+.side .top:hover{background:var(--panel-2)}
+.side .top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.side .top .ic{width:16px;text-align:center;font-size:13px;flex-shrink:0;color:var(--ink-3)}
+.side .top.on .ic{color:var(--brand-deep)}
+.side .top .cnt{margin-left:auto;font-size:10px;font-weight:650;padding:2px 5px;border-radius:5px;
+      background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+
+/* align-items:stretch matters: one file centred its sub-items, which in a
+   column flex container staircases every row toward the middle. */
+.side .sub{margin:1px 0 5px 34px;padding:0;display:flex;flex-direction:column;
+      align-items:stretch;gap:1px;text-align:left}
+.side .sub a{font-size:12.5px;padding:4px 8px;border-radius:6px;text-decoration:none;display:flex;
+      align-items:flex-start;justify-content:flex-start;gap:7px;line-height:1.4;text-align:left;
+      color:var(--ink-2);cursor:pointer;background:none;font-weight:400}
+.side .sub a:hover{background:var(--panel-2);color:var(--ink)}
+/* One file wrote `.sub:before` — on the list, not the item — which dropped a
+   stray dot at the top of every group. The bullet belongs to the row. */
+.side .sub::before,.side .sub::after{content:none;display:none}
+.side .sub a::before{content:"";width:3px;height:3px;margin-top:7px;border-radius:50%;
+      background:var(--ink-3);opacity:.55;flex-shrink:0}
+.side .sub a.care{color:var(--care)}
+.side .sub a.care::before{background:var(--care);opacity:.85}
+.side .sub .glbl{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:650;
+      padding:6px 8px 2px;display:block;color:var(--ink-3);text-align:left}
+.side .grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
+      padding:14px 9px 5px;color:var(--ink-3);text-align:left}
+.side .me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;
+      align-items:center;gap:9px}
+.side .me .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .me span{font-size:13px;color:var(--ink-2)}
+
+/* ── DIRECTOR RAIL: the collapse control must stay visible ────────────────
+   It is the only way back once the rail is hidden, so it never shrinks and
+   never sits past the panel edge. The four tabs give up the space instead. */
+.right{overflow-x:hidden}
+.right .rtabs{display:flex;align-items:center;gap:1px;padding:0 8px;height:50px;min-width:0}
+.right .rtab{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      font-size:11.5px;padding:5px 7px}
+.right .ctl{margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.rtabs .ctl button.hide,.right .ctl .hide,.right .hide{width:auto;height:auto;display:inline-flex;
+      align-items:center;gap:5px;white-space:nowrap;font-size:11.5px;font-weight:600;padding:5px 9px;
+      border-radius:7px;cursor:pointer;flex-shrink:0;border:1px solid var(--line);
+      background:var(--panel-2);color:var(--ink-2)}
+.rtabs .ctl button.hide:hover,.right .hide:hover{background:var(--panel);color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR — identical on every screen ═══ -->
+<aside class="side">
+  <div class="biz">
+    <button class="bizsel">
+      <span class="logo">DW</span>
+      <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
+      <span class="chev">&#9662;</span>
+    </button>
+    <button class="caretog on">
+      <span class="sw"></span>
+      <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
+    </button>
+  </div>
+
+  <button class="cta">&#43;&nbsp; Create post</button>
+
+  <nav>
+    <a class="top"><span class="ic">&#9636;</span> Dashboard</a>
+
+    <a class="top"><span class="ic">&#9635;</span> Business analysis</a>
+    <div class="sub">
+      <a>What the business is</a><a>Who buys from you</a>
+      <a>What makes you different</a><a>Goals &amp; targets</a>
+    </div>
+
+    <a class="top"><span class="ic">&#10022;</span> Branding &amp; voice</a>
+    <div class="sub">
+      <a>Logo, colours, fonts</a><a>How you sound</a>
+      <a>Words to use &amp; avoid</a><a>What you talk about</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9741;</span> Connections</a>
+    <div class="sub">
+      <a>Social accounts</a><a>Your website</a><a>Canva</a>
+      <a>Google</a><a>Code &amp; hosting</a><a>Email</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9880;</span> Competitors</a>
+    <div class="sub">
+      <a>Who they are</a><a>What they post</a>
+      <a>What they rank for</a><a>Where you are behind</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9906;</span> Google searchability</a>
+    <div class="sub">
+      <a>What you rank for</a><a>What people search</a>
+      <a>Your Google listing</a><a>Local &amp; maps</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9673;</span> AI searchability</a>
+    <div class="sub">
+      <a>Can AI find you</a><a>How AI describes you</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9737;</span> Website</a>
+    <div class="sub">
+      <a>Speed on phone &amp; desktop</a><a>Pages</a>
+      <a>Structure &amp; sitemap</a><a>What to fix</a>
+    </div>
+
+    <a class="top on"><span class="ic">&#9998;</span> Blogging <span class="cnt">4</span></a>
+    <div class="sub">
+      <a>Your posts</a><a>What to write next</a>
+      <a>Search terms</a><a>Images</a>
+      <a class="care">Checked before you publish</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9634;</span> Social media</a>
+    <div class="sub">
+      <span class="glbl">Content</span>
+      <a>Posts</a><a>Calendar</a><a>Media library</a><a>Templates</a>
+      <span class="glbl">Setup</span>
+      <a>Social accounts</a><a>Posting schedule</a>
+      <span class="glbl">Results</span>
+      <a>Analytics</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9650;</span> Advertising</a>
+    <div class="sub">
+      <a>Campaigns</a><a>What you are spending</a>
+      <a>What it is returning</a><a>Audiences</a>
+      <a class="care">Ad rules for health</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9993;</span> Engagement <span class="cnt">7</span></a>
+    <div class="sub">
+      <a>Comments</a><a>Messages</a><a>Mentions</a><a>Reviews</a>
+    </div>
+
+    <div class="grp">This business</div>
+    <a class="top"><span class="ic">&#9881;</span> Settings</a>
+    <div class="sub">
+      <a>People &amp; access</a><a>What it costs</a>
+      <a class="care">Compliance record</a>
+    </div>
+  </nav>
+
+  <div class="me"><span class="av">JB</span><span>Justin Black</span></div>
+</aside>
+
+<!-- ═══ CENTRE ═══ -->
+<main class="main">
+
+  <!-- ── LIST VIEW ─────────────────────────────────────── -->
+  <section id="list">
+    <div class="hrow">
+      <div class="sp">
+        <h1>Blogging</h1>
+        <p class="lede">Fourteen posts. <b style="color:var(--ink)">Four are waiting on you</b> &mdash; three ready to copy across, one needs a change.</p>
+      </div>
+      <button class="btn pri big" onclick="openWriter('')">&#9998;&nbsp; Write a blog post</button>
+    </div>
+
+    <!-- The hard line, in the owner's words. Said once, at the top. -->
+    <div class="own">
+      <span class="ic">&#9737;</span>
+      <p><b>Your blog is yours.</b> It lives on <span class="site">downscale.com.au</span>, and nothing here
+         reaches it by itself. We write, check and prepare the images &mdash; then you paste the finished post
+         onto your own site and tell us it is up.</p>
+    </div>
+
+    <div class="filters">
+      <button class="f on all" data-filter="all"><i></i> Everything <span class="k">14</span></button>
+      <button class="f" data-filter="ready"><i class="d-ready"></i> Ready to copy across <span class="k">3</span></button>
+      <button class="f" data-filter="fix"><i class="d-fix"></i> Needs a change <span class="k">1</span></button>
+      <button class="f" data-filter="writing"><i class="d-writing"></i> Being written <span class="k">2</span></button>
+      <button class="f" data-filter="idea"><i class="d-idea"></i> Ideas <span class="k">5</span></button>
+      <button class="f" data-filter="live"><i class="d-live"></i> On your site <span class="k">3</span></button>
+    </div>
+
+    <div class="list">
+
+      <!-- READY 1 — open by default so the hand-over is the first thing you see -->
+      <article class="row open" data-state="ready">
+        <div class="rhead" onclick="rowtoggle(this)">
+          <span class="rdot d-ready"></span>
+          <div class="rmid">
+            <h2 class="rtitle">What a weight loss consultation actually involves
+              <span class="state ready">Ready to copy across</span></h2>
+            <p class="rmeta">
+              <span class="term">&ldquo;weight loss clinic australia&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 2,400 searches a month</span>
+              <span class="sep">&middot;</span> 1,180 words <span class="sep">&middot;</span> 3 images ready
+              <span class="sep">&middot;</span> written 14 Aug
+            </p>
+          </div>
+          <div class="rright">
+            <span class="chk pass">&#10003; Checked 16 Aug</span>
+            <span class="caret">&#9662;</span>
+          </div>
+        </div>
+
+        <div class="hand">
+          <div class="hlbl">Hand it over &mdash; three things, all done by you</div>
+          <div class="steps">
+            <div class="step">
+              <span class="no">1</span>
+              <b>Copy the text across</b>
+              <p>Paste it into a new page on your site. Keep the heading as it is &mdash; it is the part
+                 people search for.</p>
+              <div class="acts">
+                <button class="btn">&#9744; Copy the text</button>
+                <button class="btn quiet">Open it</button>
+              </div>
+            </div>
+            <div class="step">
+              <span class="no">2</span>
+              <b>Take the three images</b>
+              <p>Sized for a web page, with the words Google reads already written for each one.</p>
+              <div class="thumbs"><span class="t1"></span><span class="t2"></span><span class="t3"></span></div>
+              <div class="acts">
+                <button class="btn">&#8595; Download all three</button>
+              </div>
+            </div>
+            <div class="step">
+              <span class="no">3</span>
+              <b>Get it into your sitemap</b>
+              <p>Your sitemap is the list of pages you hand Google. Most sites add a new page on their own
+                 within a day. We read yours each morning and will tell you if this one is missing.</p>
+              <div class="acts">
+                <button class="btn">Check my site now</button>
+                <button class="btn quiet">How do I do this?</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="care-card">
+            <div class="ch">
+              <b>Checked before you publish</b>
+              <span class="badge">AHPRA &amp; TGA &mdash; passed</span>
+              <span class="when">16 Aug, 4:12pm &middot; kept in your compliance record</span>
+            </div>
+            <ul class="rules">
+              <li><span class="m">&#10003;</span> No promise about results</li>
+              <li><span class="m">&#10003;</span> No patient stories or testimonials</li>
+              <li><span class="m">&#10003;</span> No before-and-after photos</li>
+              <li><span class="m">&#10003;</span> No prescription medicine named</li>
+              <li><span class="m">&#10003;</span> Says who wrote it and their qualification</li>
+              <li><span class="m">&#10003;</span> No wording that pressures someone to book</li>
+            </ul>
+            <p class="foot-note">Same check a social post gets. It runs again if you edit the words, and a check
+               that cannot run holds the post rather than letting it through.</p>
+          </div>
+
+          <p class="foot-note" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn">&#10003; I&rsquo;ve put this on my site</button>
+            <span>Tell us once it is up and we will start watching how it does. Nothing marks itself.</span>
+          </p>
+        </div>
+      </article>
+
+      <!-- READY 2 -->
+      <article class="row" data-state="ready">
+        <div class="rhead" onclick="rowtoggle(this)">
+          <span class="rdot d-ready"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Telehealth appointments: how they work and who they suit
+              <span class="state ready">Ready to copy across</span></h2>
+            <p class="rmeta">
+              <span class="term">&ldquo;telehealth weight loss australia&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 880 searches a month</span>
+              <span class="sep">&middot;</span> 940 words <span class="sep">&middot;</span> 2 images ready
+              <span class="sep">&middot;</span> written 15 Aug
+            </p>
+          </div>
+          <div class="rright">
+            <span class="chk pass">&#10003; Checked 16 Aug</span>
+            <span class="caret">&#9662;</span>
+          </div>
+        </div>
+        <div class="hand">
+          <div class="hlbl">Hand it over</div>
+          <div class="steps">
+            <div class="step"><span class="no">1</span><b>Copy the text across</b>
+              <p>Paste it into a new page on your site.</p>
+              <div class="acts"><button class="btn">&#9744; Copy the text</button><button class="btn quiet">Open it</button></div></div>
+            <div class="step"><span class="no">2</span><b>Take the two images</b>
+              <p>Web-sized, with the words Google reads written for each.</p>
+              <div class="thumbs"><span class="t2"></span><span class="t1"></span></div>
+              <div class="acts"><button class="btn">&#8595; Download both</button></div></div>
+            <div class="step"><span class="no">3</span><b>Get it into your sitemap</b>
+              <p>We read your site each morning and will tell you if it is missing.</p>
+              <div class="acts"><button class="btn">Check my site now</button><button class="btn quiet">How do I do this?</button></div></div>
+          </div>
+          <div class="care-card">
+            <div class="ch"><b>Checked before you publish</b>
+              <span class="badge">AHPRA &amp; TGA &mdash; passed</span>
+              <span class="when">16 Aug, 4:12pm &middot; kept in your compliance record</span></div>
+            <ul class="rules">
+              <li><span class="m">&#10003;</span> No promise about results</li>
+              <li><span class="m">&#10003;</span> No patient stories or testimonials</li>
+              <li><span class="m">&#10003;</span> No before-and-after photos</li>
+              <li><span class="m">&#10003;</span> No prescription medicine named</li>
+              <li><span class="m">&#10003;</span> Says who wrote it and their qualification</li>
+              <li><span class="m">&#10003;</span> No wording that pressures someone to book</li>
+            </ul>
+          </div>
+          <p class="foot-note" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn">&#10003; I&rsquo;ve put this on my site</button>
+            <span>Nothing marks itself.</span>
+          </p>
+        </div>
+      </article>
+
+      <!-- READY 3 -->
+      <article class="row" data-state="ready">
+        <div class="rhead" onclick="rowtoggle(this)">
+          <span class="rdot d-ready"></span>
+          <div class="rmid">
+            <h2 class="rtitle">What a nurse practitioner can do for you
+              <span class="state ready">Ready to copy across</span></h2>
+            <p class="rmeta">
+              <span class="term">&ldquo;nurse practitioner australia&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 1,300 searches a month</span>
+              <span class="sep">&middot;</span> 1,020 words <span class="sep">&middot;</span> 4 images ready
+              <span class="sep">&middot;</span> written 13 Aug
+            </p>
+          </div>
+          <div class="rright">
+            <span class="chk pass">&#10003; Checked 15 Aug</span>
+            <span class="caret">&#9662;</span>
+          </div>
+        </div>
+        <div class="hand">
+          <div class="hlbl">Hand it over</div>
+          <div class="steps">
+            <div class="step"><span class="no">1</span><b>Copy the text across</b>
+              <p>Paste it into a new page on your site.</p>
+              <div class="acts"><button class="btn">&#9744; Copy the text</button><button class="btn quiet">Open it</button></div></div>
+            <div class="step"><span class="no">2</span><b>Take the four images</b>
+              <p>Web-sized, with the words Google reads written for each.</p>
+              <div class="thumbs"><span class="t3"></span><span class="t1"></span><span class="t2"></span></div>
+              <div class="acts"><button class="btn">&#8595; Download all four</button></div></div>
+            <div class="step"><span class="no">3</span><b>Get it into your sitemap</b>
+              <p>We read your site each morning and will tell you if it is missing.</p>
+              <div class="acts"><button class="btn">Check my site now</button><button class="btn quiet">How do I do this?</button></div></div>
+          </div>
+          <div class="care-card">
+            <div class="ch"><b>Checked before you publish</b>
+              <span class="badge">AHPRA &amp; TGA &mdash; passed</span>
+              <span class="when">15 Aug, 9:40am &middot; kept in your compliance record</span></div>
+            <ul class="rules">
+              <li><span class="m">&#10003;</span> No promise about results</li>
+              <li><span class="m">&#10003;</span> No patient stories or testimonials</li>
+              <li><span class="m">&#10003;</span> No before-and-after photos</li>
+              <li><span class="m">&#10003;</span> No prescription medicine named</li>
+              <li><span class="m">&#10003;</span> Says who wrote it and their qualification</li>
+              <li><span class="m">&#10003;</span> No wording that pressures someone to book</li>
+            </ul>
+          </div>
+          <p class="foot-note" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn">&#10003; I&rsquo;ve put this on my site</button>
+            <span>Nothing marks itself.</span>
+          </p>
+        </div>
+      </article>
+
+      <!-- NEEDS A CHANGE — held, and honest about why -->
+      <article class="row" data-state="fix">
+        <div class="rhead" onclick="rowtoggle(this)">
+          <span class="rdot d-fix"></span>
+          <div class="rmid">
+            <h2 class="rtitle">How appetite changes during treatment
+              <span class="state fix">Needs a change</span></h2>
+            <p class="rmeta">
+              <span class="term">&ldquo;appetite suppressant australia&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 1,900 searches a month</span>
+              <span class="sep">&middot;</span> 1,340 words <span class="sep">&middot;</span> 2 images ready
+              <span class="sep">&middot;</span> written 16 Aug
+            </p>
+          </div>
+          <div class="rright">
+            <span class="chk fail">&#10007; Held by the check</span>
+            <span class="caret">&#9662;</span>
+          </div>
+        </div>
+        <div class="hand">
+          <div class="care-card held">
+            <div class="ch">
+              <b>Checked before you publish</b>
+              <span class="badge">AHPRA &amp; TGA &mdash; held</span>
+              <span class="when">16 Aug, 4:14pm &middot; kept in your compliance record</span>
+            </div>
+            <ul class="rules">
+              <li><span class="m">&#10003;</span> No promise about results</li>
+              <li><span class="m">&#10003;</span> No patient stories or testimonials</li>
+              <li><span class="m">&#10003;</span> No before-and-after photos</li>
+              <li class="no"><span class="m">&#10007;</span> Names a prescription medicine &mdash; four times</li>
+              <li><span class="m">&#10003;</span> Says who wrote it and their qualification</li>
+              <li><span class="m">&#10003;</span> No wording that pressures someone to book</li>
+            </ul>
+            <p class="care-note"><b>What is wrong.</b> The heading and three sentences name a prescription-only
+              medicine. In Australia nobody may advertise one to the public &mdash; a clinic, a chemist or a
+              writer. It is the line that carries a fine of up to $60,000 an offence, so we hold the post
+              rather than let it through.<br><br>
+              <b>What to do.</b> Write about appetite and treatment in general and leave the medicine unnamed.
+              People searching this are asking how it feels, not which brand it is.</p>
+            <div class="acts" style="display:flex;gap:7px;flex-wrap:wrap;margin-top:11px">
+              <button class="btn care" onclick="openWriter('How appetite changes during treatment')">Open it and fix the wording</button>
+              <button class="btn quiet">Show me the four sentences</button>
+              <button class="btn quiet">Ask the Director to reword them</button>
+            </div>
+          </div>
+          <p class="foot-note">It cannot be marked ready until this passes. Nothing about this post has gone
+             anywhere &mdash; it has only ever been here.</p>
+        </div>
+      </article>
+
+      <!-- BEING WRITTEN -->
+      <article class="row" data-state="writing">
+        <div class="rhead" onclick="openWriter('Understanding BMI, and what it misses')">
+          <span class="rdot d-writing"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Understanding BMI, and what it misses
+              <span class="state writing">Being written</span></h2>
+            <p class="rmeta">
+              <span class="term">&ldquo;bmi calculator australia&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 6,600 searches a month</span>
+              <span class="sep">&middot;</span> 620 words so far <span class="sep">&middot;</span> no images yet
+              <span class="sep">&middot;</span> you last typed 16 Aug
+            </p>
+          </div>
+          <div class="rright">
+            <span class="chk">Not checked yet</span>
+            <button class="btn">Keep writing</button>
+          </div>
+        </div>
+      </article>
+
+      <article class="row" data-state="writing">
+        <div class="rhead" onclick="openWriter('What to ask at your first appointment')">
+          <span class="rdot d-writing"></span>
+          <div class="rmid">
+            <h2 class="rtitle">What to ask at your first appointment
+              <span class="state writing">Being written</span></h2>
+            <p class="rmeta">
+              <span class="term">&ldquo;weight loss doctor near me&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 1,900 searches a month</span>
+              <span class="sep">&middot;</span> 210 words so far <span class="sep">&middot;</span> no images yet
+              <span class="sep">&middot;</span> you last typed 11 Aug
+            </p>
+          </div>
+          <div class="rright">
+            <span class="chk">Not checked yet</span>
+            <button class="btn">Keep writing</button>
+          </div>
+        </div>
+      </article>
+
+      <!-- IDEAS -->
+      <article class="row" data-state="idea">
+        <div class="rhead" onclick="openWriter('What weight management costs in Australia')">
+          <span class="rdot d-idea"></span>
+          <div class="rmid">
+            <h2 class="rtitle">What weight management costs in Australia <span class="state">Idea</span></h2>
+            <p class="rmeta"><span class="term">&ldquo;weight loss program cost&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 720 searches a month</span>
+              <span class="sep">&middot;</span> nothing written yet</p>
+          </div>
+          <div class="rright"><button class="btn">Start writing</button></div>
+        </div>
+      </article>
+
+      <article class="row" data-state="idea">
+        <div class="rhead" onclick="openWriter('Menopause and weight change')">
+          <span class="rdot d-idea"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Menopause and weight change <span class="state">Idea</span></h2>
+            <p class="rmeta"><span class="term">&ldquo;menopause weight gain australia&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 1,100 searches a month</span>
+              <span class="sep">&middot;</span> nothing written yet</p>
+          </div>
+          <div class="rright"><button class="btn">Start writing</button></div>
+        </div>
+      </article>
+
+      <article class="row" data-state="idea">
+        <div class="rhead" onclick="openWriter('Why weight comes back, and what helps it not to')">
+          <span class="rdot d-idea"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Why weight comes back, and what helps it not to <span class="state">Idea</span></h2>
+            <p class="rmeta"><span class="term">&ldquo;why do i regain weight&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 590 searches a month</span>
+              <span class="sep">&middot;</span> nothing written yet</p>
+          </div>
+          <div class="rright"><button class="btn">Start writing</button></div>
+        </div>
+      </article>
+
+      <article class="row" data-state="idea">
+        <div class="rhead" onclick="openWriter('Shift work, sleep and weight')">
+          <span class="rdot d-idea"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Shift work, sleep and weight <span class="state">Idea</span></h2>
+            <p class="rmeta"><span class="term">&ldquo;shift work weight gain&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 390 searches a month</span>
+              <span class="sep">&middot;</span> nothing written yet</p>
+          </div>
+          <div class="rright"><button class="btn">Start writing</button></div>
+        </div>
+      </article>
+
+      <article class="row" data-state="idea">
+        <div class="rhead" onclick="openWriter('Getting care when you live a long way from a clinic')">
+          <span class="rdot d-idea"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Getting care when you live a long way from a clinic <span class="state">Idea</span></h2>
+            <p class="rmeta"><span class="term">&ldquo;weight loss clinic regional nsw&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 210 searches a month</span>
+              <span class="sep">&middot;</span> nothing written yet</p>
+          </div>
+          <div class="rright"><button class="btn">Start writing</button></div>
+        </div>
+      </article>
+
+      <!-- ON THEIR SITE -->
+      <article class="row" data-state="live">
+        <div class="rhead" onclick="rowtoggle(this)">
+          <span class="rdot d-live"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Starting the conversation with your GP <span class="state live">On your site</span></h2>
+            <p class="rmeta"><span class="term">&ldquo;talk to gp about weight&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 480 searches a month</span>
+              <span class="sep">&middot;</span> you put it up 2 Aug
+              <span class="sep">&middot;</span> in your sitemap
+              <span class="sep">&middot;</span> Google has it</p>
+          </div>
+          <div class="rright">
+            <span class="chk pass">&#10003; Checked 31 Jul</span>
+            <span class="caret">&#9662;</span>
+          </div>
+        </div>
+        <div class="hand">
+          <div class="hlbl">How it is doing</div>
+          <div class="steps">
+            <div class="step"><span class="no">&#9906;</span><b>Where it sits on Google</b>
+              <p>Position 14 for &ldquo;talk to gp about weight&rdquo;, up from 22 a fortnight ago.
+                 Page two &mdash; it has not been found by many people yet.</p>
+              <div class="acts"><button class="btn quiet">See the search terms</button></div></div>
+            <div class="step"><span class="no">&#9737;</span><b>Visits from search</b>
+              <p>31 people in the last 30 days. Read for 2m 10s on average, which is a good sign for a
+                 page this length.</p>
+              <div class="acts"><button class="btn quiet">See the numbers</button></div></div>
+            <div class="step"><span class="no">&#10003;</span><b>Still on your site</b>
+              <p>Read at 7:02am today. The page loads, the images load, and it is listed in your sitemap.</p>
+              <div class="acts"><button class="btn quiet">Open the page</button></div></div>
+          </div>
+          <p class="foot-note">We read your site to tell you this. We do not change anything on it.</p>
+        </div>
+      </article>
+
+      <article class="row" data-state="live">
+        <div class="rhead" onclick="rowtoggle(this)">
+          <span class="rdot d-live"></span>
+          <div class="rmid">
+            <h2 class="rtitle">How our program is put together <span class="state live">On your site</span></h2>
+            <p class="rmeta"><span class="term">&ldquo;weight management program australia&rdquo;</span>
+              <span class="sep">&middot;</span> <span class="vol">about 890 searches a month</span>
+              <span class="sep">&middot;</span> you put it up 21 Jul
+              <span class="sep">&middot;</span> in your sitemap
+              <span class="sep">&middot;</span> Google has it</p>
+          </div>
+          <div class="rright">
+            <span class="chk pass">&#10003; Checked 19 Jul</span>
+            <span class="caret">&#9662;</span>
+          </div>
+        </div>
+        <div class="hand">
+          <div class="hlbl">How it is doing</div>
+          <div class="steps">
+            <div class="step"><span class="no">&#9906;</span><b>Where it sits on Google</b>
+              <p>Position 8 for &ldquo;weight management program australia&rdquo;. Bottom of page one.</p>
+              <div class="acts"><button class="btn quiet">See the search terms</button></div></div>
+            <div class="step"><span class="no">&#9737;</span><b>Visits from search</b>
+              <p>112 people in the last 30 days &mdash; your best performing post.</p>
+              <div class="acts"><button class="btn quiet">See the numbers</button></div></div>
+            <div class="step"><span class="no">&#10003;</span><b>Still on your site</b>
+              <p>Read at 7:02am today. Everything loads.</p>
+              <div class="acts"><button class="btn quiet">Open the page</button></div></div>
+          </div>
+          <p class="foot-note">We read your site to tell you this. We do not change anything on it.</p>
+        </div>
+      </article>
+
+      <article class="row" data-state="live">
+        <div class="rhead" onclick="rowtoggle(this)">
+          <span class="rdot d-live"></span>
+          <div class="rmid">
+            <h2 class="rtitle">Meet the team <span class="state live">On your site</span></h2>
+            <p class="rmeta"><span class="nosearch">no search term set</span>
+              <span class="sep">&middot;</span> you put it up 9 Jul
+              <span class="sep">&middot;</span> in your sitemap
+              <span class="sep">&middot;</span> <b style="color:var(--warn);font-weight:600">Google has not picked it up yet</b></p>
+          </div>
+          <div class="rright">
+            <span class="chk pass">&#10003; Checked 8 Jul</span>
+            <span class="caret">&#9662;</span>
+          </div>
+        </div>
+        <div class="hand">
+          <div class="hlbl">How it is doing</div>
+          <div class="steps">
+            <div class="step"><span class="no">&#9906;</span><b>Where it sits on Google</b>
+              <p>Nowhere yet. Google has seen your sitemap but has not added this page. Five weeks is longer
+                 than usual, and the most common cause is that no other page on your site links to it.</p>
+              <div class="acts"><button class="btn quiet">What would fix it?</button></div></div>
+            <div class="step"><span class="no">&#9737;</span><b>Visits from search</b>
+              <p>None. It cannot get any until Google adds it.</p></div>
+            <div class="step"><span class="no">&#10003;</span><b>Still on your site</b>
+              <p>Read at 7:02am today. The page is there and loads fine.</p>
+              <div class="acts"><button class="btn quiet">Open the page</button></div></div>
+          </div>
+          <p class="foot-note">No search term was ever set for this one, so there is nothing to measure it against.</p>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- Secondary. Quieter than the list, and after it. -->
+    <div class="next">
+      <div class="nh">
+        <b>What to write next</b>
+        <span>Suggestions only &mdash; ignore them and write whatever you like. The button at the top is always there.</span>
+        <button class="btn quiet x" title="Hide these">&#10005;</button>
+      </div>
+      <div class="idea">
+        <div class="im">
+          <p class="it">Bulk billing and weight management: what Medicare covers</p>
+          <p class="iw"><span class="term">&ldquo;is weight loss covered by medicare&rdquo;</span> &middot; about 1,600 searches a month
+             &middot; nobody in your field has written it plainly</p>
+        </div>
+        <div class="acts"><button class="btn" onclick="openWriter('Bulk billing and weight management: what Medicare covers')">Start writing</button><button class="btn quiet">Not for us</button></div>
+      </div>
+      <div class="idea">
+        <div class="im">
+          <p class="it">What happens at a three-month review</p>
+          <p class="iw"><span class="term">&ldquo;weight loss review appointment&rdquo;</span> &middot; about 260 searches a month
+             &middot; people ask this in your messages every week</p>
+        </div>
+        <div class="acts"><button class="btn" onclick="openWriter('What happens at a three-month review')">Start writing</button><button class="btn quiet">Not for us</button></div>
+      </div>
+      <div class="idea">
+        <div class="im">
+          <p class="it">Weight and blood pressure: why we check both</p>
+          <p class="iw"><span class="term">&ldquo;weight and blood pressure&rdquo;</span> &middot; about 3,100 searches a month
+             &middot; two competitors rank for it, neither well</p>
+        </div>
+        <div class="acts"><button class="btn" onclick="openWriter('Weight and blood pressure: why we check both')">Start writing</button><button class="btn quiet">Not for us</button></div>
+      </div>
+      <p class="foot-note" style="padding:11px 15px 13px;margin:0;border-top:1px solid var(--line-soft)">
+        Search numbers are rough monthly figures for Australia and move about. Use them to choose between two
+        ideas, not as a promise.</p>
+    </div>
+  </section>
+
+  <!-- ── EDITOR VIEW — the primary button lands here ──────── -->
+  <section id="editor">
+    <div class="ebar">
+      <button class="btn quiet" onclick="closeWriter()">&#8592;&nbsp; All posts</button>
+      <div class="sp"></div>
+      <button class="btn">Save and close</button>
+      <button class="btn pri">Mark ready to copy across</button>
+    </div>
+
+    <div class="ecols">
+      <div class="sheet">
+        <div class="etools">
+          <button class="b bd" title="Bold">B</button>
+          <button class="b i" title="Italic">I</button>
+          <button class="b" title="Heading">H</button>
+          <button class="b" title="List">&#8801;</button>
+          <button class="b" title="Link">&#128279;</button>
+          <button class="b" title="Add an image">&#9723;</button>
+          <span class="saved"><i></i> Saved here at 4:22pm &mdash; not on your website</span>
+        </div>
+        <div class="etitle" id="etitle" contenteditable="true" spellcheck="true"
+             data-ph="Give it a title"></div>
+        <div class="ebody" contenteditable="true" spellcheck="true"
+             data-ph="Start writing. Nothing here goes anywhere until you copy it across yourself."></div>
+      </div>
+
+      <div>
+        <div class="ecard">
+          <h3>What people would search for</h3>
+          <input class="field" placeholder="e.g. weight loss clinic australia">
+          <p class="vol-line">Type a term and we will tell you roughly how many people search it each month.</p>
+        </div>
+
+        <div class="ecard">
+          <h3>Images</h3>
+          <p>None yet. Add your own, or pick from your media library.</p>
+          <div class="acts">
+            <button class="btn">Add an image</button>
+            <button class="btn quiet">Media library</button>
+          </div>
+        </div>
+
+        <div class="ecard">
+          <h3>Checked before you publish</h3>
+          <div class="notyet">
+            <span class="m">&#9711;</span>
+            <span><b style="color:var(--ink)">Not checked yet.</b> The AHPRA and TGA check runs when you mark
+              this ready, and again if you change the words afterwards.</span>
+          </div>
+          <div class="acts"><button class="btn">Run the check now</button></div>
+        </div>
+
+        <div class="ecard">
+          <h3>The Director can help</h3>
+          <p>Only if you want it. Everything here works without it.</p>
+          <div class="acts">
+            <button class="btn quiet">Draft a first version</button>
+            <button class="btn quiet">Tighten what I wrote</button>
+            <button class="btn quiet">Suggest headings</button>
+          </div>
+          <p class="ownsmall">Whatever comes out, it still lands here for you to read, check and copy across
+            yourself. We never touch downscale.com.au.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ═══ RIGHT: the Director lives here, always ═══ -->
+<aside class="right">
+  <!-- Collapsed strip -->
+  <div class="rmini">
+    <button class="op" title="Open the Director" onclick="rail()">&#10094;</button>
+    <span class="vert">Director</span>
+    <span class="dot"></span>
+  </div>
+
+  <div class="rfull">
+    <div class="rtabs">
+      <span class="rtab on">&#10022; Director</span>
+      <span class="rtab">&#128065; Preview</span>
+      <span class="rtab">&#9993; Activity</span>
+      <span class="rtab">&#9650; Analytics</span>
+      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+      </div>
+
+    <div class="rbody">
+      <div class="dmsg">
+        <span class="av">ND</span>
+        <div class="bd">
+          <p>Four blog posts are waiting on you. <b>Three are checked and ready</b> &mdash; the consultation
+             one targets your biggest term, about 2,400 searches a month.</p>
+          <p><b>&ldquo;How appetite changes during treatment&rdquo; is held.</b> It names a prescription
+             medicine four times, which nobody may advertise to the public here. I can rewrite those
+             sentences without the name if you like.</p>
+        </div>
+      </div>
+
+      <div class="dmsg">
+        <span class="av">ND</span>
+        <div class="bd">
+          <p>To be clear about what I can and cannot do: I write, check and prepare images.
+             <b>I cannot put anything on downscale.com.au</b> &mdash; that stays with you.</p>
+        </div>
+      </div>
+
+      <div class="ideas">
+        <div class="h">Suggested</div>
+        <a><span class="ic">&#9998;</span> Reword the appetite post without the medicine</a>
+        <a><span class="ic">&#9744;</span> Get the three ready posts copy-ready</a>
+        <a><span class="ic">&#9906;</span> Why hasn&rsquo;t Google picked up &ldquo;Meet the team&rdquo;?</a>
+        <a><span class="ic">&#9635;</span> Find search terms we could realistically win</a>
+        <a><span class="ic">&#9880;</span> What are other clinics writing about?</a>
+        <a><span class="ic">&#9878;</span> Show me this month&rsquo;s compliance record</a>
+      </div>
+
+      <div class="rchk"><span>&#10003;</span><span><b>Three checks passed.</b> Dated and kept in your
+        compliance record, which is what you would hand a regulator.</span></div>
+      <div class="rchk w"><span>&#9711;</span><span><b>Nothing has been published.</b> Three posts are ready
+        for you to copy across. Until you paste them in, they exist only here.</span></div>
+    </div>
+
+    <div class="ask">
+      <div class="askbox">
+        <div class="ph" contenteditable="true" data-ph="Ask NRS about Downscale&hellip;"></div>
+        <button class="go">&#8593;</button>
+      </div>
+      <div class="askfoot">
+        <span class="pill">Director</span>
+        <span>sees this screen</span>
+        <span class="live"><i></i> 14 departments ready</span>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<script>
+/* Filters — plain show/hide. The list is the screen; nothing here needs the rail. */
+document.querySelectorAll('.f').forEach(function(b){
+  b.addEventListener('click',function(){
+    document.querySelectorAll('.f').forEach(function(o){o.classList.remove('on')});
+    b.classList.add('on');
+    var f=b.dataset.filter;
+    document.querySelectorAll('.row').forEach(function(r){
+      r.style.display=(f==='all'||r.dataset.state===f)?'':'none';
+    });
+  });
+});
+
+/* A row opens to show the hand-over. Buttons inside it do not re-toggle it. */
+function rowtoggle(el){ el.closest('.row').classList.toggle('open'); }
+document.querySelectorAll('.hand button').forEach(function(b){
+  b.addEventListener('click',function(e){ e.stopPropagation(); });
+});
+
+/* The primary path: write. Optionally carries a title in. */
+function openWriter(title){
+  document.body.classList.add('writing');
+  var t=document.getElementById('etitle');
+  t.textContent=title||'';
+  document.querySelector('.main').scrollTop=0;
+  t.focus();
+}
+function closeWriter(){ document.body.classList.remove('writing'); }
+
+/* Collapse the Director. The screen must still be whole without it. */
+function rail(){ document.body.classList.toggle('railout'); }
+</script>
+</body>
+</html>

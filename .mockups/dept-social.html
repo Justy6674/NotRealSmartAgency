@@ -1,0 +1,1368 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NRS — Social media department (Downscale)</title>
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   TOKENS — carried unchanged from nrs-mixpost-shape.html so every
+   screen is visibly the same product. Only --brand/--brand-deep/
+   --brand-wash change per business. Downscale = hue 205, clinical teal.
+   oklch only. NEVER color-mix in oklch — it goes pink.
+   ══════════════════════════════════════════════════════════════════ */
+:root{
+  --h:240;
+  --bg:oklch(0.985 0.002 var(--h));
+  --panel:oklch(1 0 0);
+  --panel-2:oklch(0.975 0.004 var(--h));
+  --line:oklch(0.915 0.007 var(--h));
+  --line-soft:oklch(0.950 0.005 var(--h));
+  --ink:oklch(0.20 0.014 var(--h));
+  --ink-2:oklch(0.46 0.012 var(--h));
+  --ink-3:oklch(0.615 0.011 var(--h));
+  /* Business accent. One variable — switching business retints the product. */
+  --brand:oklch(0.545 0.115 205);
+  --brand-deep:oklch(0.33 0.080 205);
+  --brand-wash:oklch(0.966 0.026 205);
+  /* Healthcare mode. Warm red, hue 25. Only ever appears when the toggle is on. */
+  --care:oklch(0.52 0.150 25);
+  --care-wash:oklch(0.965 0.028 25);
+  --ok:oklch(0.55 0.13 155);
+  --ok-wash:oklch(0.962 0.032 155);
+  --warn:oklch(0.63 0.13 75);
+  --warn-wash:oklch(0.964 0.052 80);
+  --stop:oklch(0.55 0.17 27);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --shadow:0 1px 2px oklch(0.2 0.02 var(--h)/.05),0 8px 24px -16px oklch(0.2 0.02 var(--h)/.28);
+  /* Post states. A plain circle, never a pill — honest states need their own colour each. */
+  --st-draft:oklch(0.62 0.012 var(--h));
+  --st-sending:oklch(0.72 0.15 70);
+  --st-sched:oklch(0.62 0.10 220);
+  --st-pub:oklch(0.58 0.14 152);
+  --st-fail:oklch(0.58 0.17 27);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:oklch(0.175 0.010 var(--h));
+    --panel:oklch(0.215 0.012 var(--h));
+    --panel-2:oklch(0.245 0.013 var(--h));
+    --line:oklch(0.315 0.015 var(--h));
+    --line-soft:oklch(0.275 0.013 var(--h));
+    --ink:oklch(0.960 0.005 var(--h));
+    --ink-2:oklch(0.795 0.011 var(--h));
+    --ink-3:oklch(0.640 0.013 var(--h));
+    --brand:oklch(0.74 0.11 205);
+    --brand-deep:oklch(0.87 0.08 205);
+    --brand-wash:oklch(0.272 0.038 205);
+    --care:oklch(0.77 0.13 25);
+    --care-wash:oklch(0.285 0.045 25);
+    --ok:oklch(0.74 0.13 155);
+    --ok-wash:oklch(0.268 0.040 155);
+    --warn:oklch(0.80 0.13 78);
+    --warn-wash:oklch(0.288 0.045 75);
+    --shadow:0 1px 2px oklch(0 0 0/.5),0 10px 30px -18px oklch(0 0 0/.75);
+    --st-draft:oklch(0.66 0.012 var(--h));
+    --st-sending:oklch(0.80 0.14 72);
+    --st-sched:oklch(0.74 0.11 220);
+    --st-pub:oklch(0.74 0.14 152);
+    --st-fail:oklch(0.70 0.16 27);
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;
+  line-height:1.5;-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-columns:236px minmax(0,1fr) 380px;height:100vh;overflow:hidden;
+}
+body.railshut{grid-template-columns:236px minmax(0,1fr) 380px}
+button{font-family:inherit}
+
+/* ══════════════════════════════════════════════════════════════════
+   SIDEBAR — identical on every screen. Flat, always expanded.
+   ══════════════════════════════════════════════════════════════════ */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+
+.biz{padding:13px 13px 12px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.bizsel{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left}
+.bizsel .logo{width:26px;height:26px;border-radius:7px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans);flex-shrink:0}
+.bizsel .nm{flex:1;min-width:0}
+.bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bizsel .nm span{display:block;font-size:11px;color:var(--ink-3)}
+.bizsel .chev{color:var(--ink-3);font-size:11px}
+
+/* Healthcare toggle. Warm red when on, and it is on for Downscale. */
+.caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+  background:var(--care-wash);border:1px solid var(--care-wash);cursor:pointer;width:100%;text-align:left}
+.caretog .sw{width:28px;height:16px;border-radius:99px;background:var(--care);position:relative;flex-shrink:0}
+.caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:oklch(1 0 0)}
+.caretog .tx{font-size:11.5px;color:var(--care);font-weight:600;line-height:1.35}
+
+.cta{margin:12px 13px;display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 26px);
+  background:var(--brand-deep);color:oklch(1 0 0);border:0;border-radius:10px;
+  padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer;box-shadow:var(--shadow)}
+
+nav{padding:0 9px 16px}
+.top{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;
+  font-size:13.5px;color:var(--ink);font-weight:560;margin-top:2px;cursor:pointer;text-decoration:none}
+.top:hover{background:var(--panel-2)}
+.top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.top .ic{width:16px;text-align:center;font-size:13px;color:var(--ink-3);flex-shrink:0}
+.top.on .ic{color:var(--brand-deep)}
+.top .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .cnt{font-size:10px;font-weight:650;padding:2px 6px;border-radius:5px;
+  background:var(--warn-wash);color:oklch(0.42 0.11 60);border:1px solid var(--warn-wash)}
+@media (prefers-color-scheme:dark){.top .cnt{color:oklch(0.88 0.11 82)}}
+/* Set-up-once sections still need an obvious way back in. */
+.subs a.act{color:var(--brand-deep);font-weight:600}
+.subs a.act::before{background:var(--brand-deep);opacity:1;border-radius:1px;width:5px;height:1.5px}
+
+.subs{margin:1px 0 6px 34px;display:flex;flex-direction:column;gap:1px}
+.subs a{font-size:12.5px;color:var(--ink-3);padding:3.5px 8px;border-radius:6px;text-decoration:none;
+  display:flex;align-items:center;gap:7px;cursor:pointer}
+.subs a:hover{background:var(--panel-2);color:var(--ink-2)}
+.subs a::before{content:"";width:3px;height:3px;border-radius:50%;background:var(--ink-3);opacity:.55;flex-shrink:0}
+.subs a.on{color:var(--brand-deep);font-weight:600;background:var(--brand-wash)}
+.subs a.on::before{background:var(--brand-deep);opacity:1}
+.subs a.care{color:var(--care)}
+.subs a.care::before{background:var(--care);opacity:.8}
+.subs .lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:7px 8px 2px}
+.grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:15px 9px 4px}
+.me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;align-items:center;gap:9px}
+.me .av{width:26px;height:26px;border-radius:50%;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 10px/1 var(--sans)}
+.me span{font-size:13px;color:var(--ink-2)}
+
+/* ══════════════════════════════════════════════════════════════════
+   CENTRE — the department. Header + inner tabs are fixed; the panel
+   scrolls; the action bar is pinned so it is never hunted for.
+   ══════════════════════════════════════════════════════════════════ */
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.dhead{padding:20px 26px 0;flex-shrink:0}
+.dtitle{display:flex;align-items:flex-end;gap:12px}
+h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0}
+.psub{color:var(--ink-3);font-size:13px;margin:3px 0 0}
+.dtitle .carepill{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+  color:var(--care);background:var(--care-wash);border-radius:8px;padding:5px 9px}
+
+/* Inner tabs — this is what makes it a department and not a form. */
+.itabs{display:flex;align-items:center;gap:2px;margin-top:14px;border-bottom:1px solid var(--line);overflow-x:auto}
+.itab{display:flex;align-items:center;gap:7px;padding:9px 12px 10px;border:0;background:none;cursor:pointer;
+  font-size:13.5px;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.itab:hover{color:var(--ink);background:var(--panel-2);border-radius:8px 8px 0 0}
+.itab.on{color:var(--brand-deep);font-weight:650;border-bottom-color:var(--brand)}
+.itab .b{font-size:10px;font-weight:650;padding:1px 5px;border-radius:5px;background:var(--panel-2);
+  color:var(--ink-3);border:1px solid var(--line)}
+.itab.on .b{background:var(--brand-wash);color:var(--brand-deep);border-color:var(--brand-wash)}
+
+.pane{flex:1;overflow-y:auto;padding:18px 26px 26px;min-height:0;display:none}
+.pane.on{display:block}
+
+/* Shared furniture */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.ch{display:flex;align-items:center;gap:9px;padding:11px 15px;border-bottom:1px solid var(--line-soft)}
+.ch b{font-size:12.5px;font-weight:650}
+.ch .r{margin-left:auto;display:flex;align-items:center;gap:10px}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:650}
+.btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);
+  color:var(--ink);border-radius:8px;padding:7px 12px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--brand);color:var(--brand-deep)}
+.btn.pri{background:var(--brand-deep);color:oklch(1 0 0);border-color:transparent}
+.btn.pri:hover{color:oklch(1 0 0);background:var(--brand)}
+.btn.acc{background:var(--warn-wash);color:oklch(0.40 0.11 60);border-color:var(--warn-wash);font-weight:650}
+@media (prefers-color-scheme:dark){.btn.acc{color:oklch(0.92 0.10 82)}}
+.btn.acc:hover{color:oklch(0.34 0.11 55);border-color:var(--warn)}
+.btn.sm{padding:5px 9px;font-size:11.5px}
+.btn.gh{border-color:transparent;background:none;color:var(--ink-2)}
+.btn.gh:hover{background:var(--panel-2);color:var(--ink)}
+.link{background:none;border:0;color:var(--brand-deep);font-size:12.5px;font-weight:600;cursor:pointer;padding:0}
+.fld{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 11px;
+  font-size:13px;color:var(--ink);font-family:inherit}
+.fld::placeholder{color:var(--ink-3)}
+.muted{color:var(--ink-3);font-size:12.5px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0}
+.d-draft{background:var(--st-draft)}.d-sending{background:var(--st-sending)}
+.d-sched{background:var(--st-sched)}.d-pub{background:var(--st-pub)}.d-fail{background:var(--st-fail)}
+
+/* Account ticker — explicit tick boxes, never guess-what-is-on */
+.accbar{padding:13px 15px;margin-bottom:13px}
+.accbar .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;margin-bottom:11px;display:flex;align-items:center;gap:8px}
+.accbar .lbl em{font-style:normal;color:var(--brand-deep);background:var(--brand-wash);
+  padding:2px 6px;border-radius:5px;font-size:10px;letter-spacing:.04em}
+.selall{margin-left:auto;display:flex;gap:12px;align-items:center}
+.selall .n{font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums;letter-spacing:0;text-transform:none}
+.accs{display:flex;gap:9px;flex-wrap:wrap}
+.acc{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 9px;border-radius:10px;cursor:pointer;
+  border:1px solid var(--line);background:var(--panel-2);text-align:left}
+.acc:hover{border-color:var(--brand)}
+.acc.sel{border-color:var(--brand);background:var(--brand-wash)}
+.acc .tick{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--line);background:var(--panel);
+  display:grid;place-items:center;font-size:11px;color:transparent;flex-shrink:0}
+.acc.sel .tick{background:var(--brand-deep);border-color:transparent;color:oklch(1 0 0)}
+.acc .ring{width:32px;height:32px;border-radius:50%;position:relative;display:grid;place-items:center;
+  background:var(--panel);border:1px solid var(--line);font:600 10.5px/1 var(--sans);color:var(--ink-2);flex-shrink:0}
+.acc .plat{position:absolute;right:-3px;bottom:-3px;width:16px;height:16px;border-radius:50%;
+  display:grid;place-items:center;font-size:8px;color:oklch(1 0 0);border:2px solid var(--panel)}
+.acc .who{min-width:0}
+.acc .who b{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+.acc.sel .who b{color:var(--ink)}
+.acc .who span{display:block;font-size:10.5px;color:var(--ink-3)}
+.fb{background:oklch(0.48 0.19 265)}.ig{background:oklch(0.55 0.21 15)}
+.tt{background:oklch(0.25 0.02 var(--h))}.yt{background:oklch(0.53 0.22 27)}
+
+/* Media strip on the composer */
+.mstrip{display:flex;align-items:center;gap:12px;padding:12px 15px;margin-bottom:13px}
+.mstrip .thumb{width:54px;height:68px;border-radius:8px;border:1px solid var(--line);flex-shrink:0;
+  background:linear-gradient(150deg,var(--brand-wash),var(--panel-2));display:grid;place-items:center;
+  font-size:10px;color:var(--ink-3)}
+.mstrip .meta{min-width:0;flex:1}
+.mstrip .meta b{font-size:12.5px;display:block}
+.mstrip .meta span{font-size:11.5px;color:var(--ink-3)}
+
+/* Editor */
+.editor{overflow:hidden}
+.editor .area{padding:15px 16px;min-height:132px;font-size:14.5px;color:var(--ink);outline:none;line-height:1.55}
+.editor .area:focus{background:var(--panel)}
+.editor .bar{display:flex;align-items:center;gap:3px;padding:8px 11px;border-top:1px solid var(--line-soft);background:var(--panel-2)}
+.tbtn{width:31px;height:31px;border-radius:8px;border:0;background:none;display:grid;place-items:center;
+  color:var(--ink-3);font-size:14px;cursor:pointer}
+.tbtn:hover{background:var(--panel);color:var(--ink-2)}
+.tbtn.ai{width:auto;padding:0 11px;gap:6px;display:inline-flex;align-items:center;font-size:12px;font-weight:600}
+.tbtn.ai:hover{color:var(--brand-deep)}
+.counts{margin-left:auto;display:flex;gap:12px;font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;padding-right:4px}
+.counts span[hidden]{display:none}
+
+/* Previews under the composer. The rail keeps its own Preview tab for the screen. */
+.pvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;padding:13px 15px}
+.pv{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--panel-2)}
+.pv[hidden]{display:none}
+.pv .ph{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line-soft)}
+.pv .ph .a{width:26px;height:26px;border-radius:50%;background:var(--brand);position:relative;flex-shrink:0}
+.pv .ph .a i{position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;border-radius:50%;
+  display:grid;place-items:center;font-size:7px;color:oklch(1 0 0);border:2px solid var(--panel-2);font-style:normal}
+.pv .ph b{font-size:12px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv .ph .h{margin-left:auto;font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+.pv .img{background:linear-gradient(140deg,var(--brand-wash),var(--panel-2));display:grid;place-items:center;
+  color:var(--ink-3);font-size:11.5px}
+.pv .cap{padding:10px 11px;font-size:12px;color:var(--ink-2);line-height:1.5}
+.pv .cap b{color:var(--ink)}
+.pv .acts{display:flex;gap:14px;padding:8px 11px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--ink-3)}
+
+/* Compliance — visible because Downscale is a healthcare business */
+.care{border:1px solid var(--line);border-left:3px solid var(--care);border-radius:11px;
+  background:var(--care-wash);padding:12px 14px;margin-top:13px}
+.care .hd{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:650;color:var(--care)}
+.care .hd .r{margin-left:auto;font-size:11px;font-weight:600}
+.care ul{list-style:none;margin:9px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:4px 16px}
+.care li{font-size:12.5px;color:var(--ink-2);display:flex;gap:7px;align-items:flex-start}
+.care li i{color:var(--ok);font-style:normal;flex-shrink:0}
+.care p{margin:9px 0 0;font-size:12px;color:var(--ink-2);line-height:1.5}
+.care p b{color:var(--ink)}
+
+/* Pinned action bar. The health check sits ON it, not below the fold —
+   the rule and the button that would break it belong in the same glance. */
+.actbar{flex-shrink:0;border-top:1px solid var(--line);background:var(--panel)}
+.actgate{display:flex;align-items:center;gap:9px;padding:8px 26px;background:var(--care-wash);
+  border-bottom:1px solid var(--line-soft);font-size:12px;color:var(--ink-2)}
+.actgate .ico{color:var(--care);flex-shrink:0}
+.actgate b{color:var(--care);font-weight:650}
+.actgate .r{margin-left:auto;flex-shrink:0}
+.actrow{display:flex;align-items:center;gap:14px;padding:11px 26px}
+.actrow .state{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3);
+  min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.actrow .state b{color:var(--ink-2);font-weight:600}
+.actrow .grp2{display:flex;align-items:center;gap:9px;flex-shrink:0}
+.actrow .btn{padding:9px 14px;font-size:13px;flex-shrink:0}
+
+/* ── Posts list ───────────────────────────────────────────── */
+.toolrow{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.toolrow .sp{margin-left:auto}
+.filters{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.filters button{border:0;background:none;padding:7px 11px;font-size:12.5px;color:var(--ink-2);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+.filters button.on{color:var(--brand-deep);font-weight:650;border-bottom-color:var(--brand)}
+.filters button:hover{color:var(--ink)}
+table{width:100%;border-collapse:collapse}
+thead th{text-align:left;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:650;padding:10px 14px;border-bottom:1px solid var(--line)}
+tbody td{padding:12px 14px;border-bottom:1px solid var(--line-soft);font-size:13px;vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--panel-2)}
+.cb{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--line);background:var(--panel);
+  display:grid;place-items:center;font-size:11px;color:transparent;cursor:pointer;flex-shrink:0}
+.cb.on{background:var(--brand-deep);border-color:transparent;color:oklch(1 0 0)}
+.stat{display:flex;align-items:center;gap:8px;font-size:13px}
+.stat + .when{font-size:11.5px;color:var(--ink-3);margin:3px 0 0 17px}
+.tmb{width:52px;height:52px;border-radius:7px;border:1px solid var(--line);
+  background:linear-gradient(150deg,var(--brand-wash),var(--panel-2));display:grid;place-items:center;
+  font-size:9.5px;color:var(--ink-3)}
+.mini{display:flex}
+.mini .m{width:26px;height:26px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line);
+  display:grid;place-items:center;font:600 9px/1 var(--sans);color:var(--ink-2);position:relative;margin-right:-6px}
+.mini .m i{position:absolute;right:-2px;bottom:-2px;width:12px;height:12px;border-radius:50%;
+  display:grid;place-items:center;font-size:6px;color:oklch(1 0 0);border:1.5px solid var(--panel);font-style:normal}
+.mini .more{margin-left:12px;font-size:11px;color:var(--ink-3);align-self:center}
+.chipL{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--panel-2);
+  border:1px solid var(--line);color:var(--ink-3)}
+.rowacts{display:flex;gap:4px;justify-content:flex-end}
+.pager{display:flex;gap:4px;align-items:center;margin-top:14px;font-size:12.5px;color:var(--ink-3)}
+.pager b{color:var(--brand-deep)}
+.bulk{position:sticky;bottom:0;margin-top:14px;display:none;align-items:center;gap:14px;
+  background:var(--brand-deep);color:oklch(1 0 0);border-radius:10px;padding:11px 15px;box-shadow:var(--shadow)}
+.bulk.on{display:flex}
+.bulk button{border:1px solid oklch(1 0 0/.35);background:none;color:oklch(1 0 0);border-radius:7px;
+  padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer}
+.bulk .n{font-size:12.5px}
+.bulk .del{margin-left:auto;border-color:transparent;color:oklch(0.86 0.10 25)}
+
+/* ── Calendar ─────────────────────────────────────────────── */
+.cal{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+.calhead{display:grid;grid-template-columns:repeat(7,1fr);background:var(--panel-2);border-bottom:1px solid var(--line)}
+.calhead div{padding:8px 6px;font-size:11.5px;font-weight:650;text-align:center;color:var(--ink-2)}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr)}
+.cell{min-height:112px;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
+  padding:6px;overflow:hidden}
+.cell:nth-child(7n){border-right:0}
+.cell.past{background:repeating-linear-gradient(135deg,var(--panel-2) 0 6px,var(--panel) 6px 12px)}
+.cell .num{font-size:11.5px;color:var(--ink-2);text-align:center;margin-bottom:5px}
+.cell.past .num,.cell.out .num{color:var(--ink-3)}
+.cell.today .num{background:var(--brand-deep);color:oklch(1 0 0);width:21px;height:21px;border-radius:50%;
+  display:grid;place-items:center;margin:0 auto 5px;font-weight:650}
+/* Fixed-height cells clip rather than growing — a busy day should look busy.
+   The state line always survives; the copy is what gets cut. */
+.ev{border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:5px;background:var(--panel);
+  padding:4px 6px;margin-bottom:4px;font-size:10.5px;line-height:1.35;color:var(--ink-2);cursor:pointer;
+  max-height:48px;overflow:hidden}
+.ev:hover{border-color:var(--brand)}
+.ev b{display:block;font-size:10px;color:var(--ink-3);font-weight:600;margin-bottom:1px}
+.ev.pub{border-left-color:var(--st-pub)}
+.ev.send{border-left-color:var(--st-sending)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--ink-3)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend .hatch{width:14px;height:11px;border-radius:3px;border:1px solid var(--line);
+  background:repeating-linear-gradient(135deg,var(--panel-2) 0 4px,var(--panel) 4px 8px)}
+
+/* ── Media library ────────────────────────────────────────── */
+.drop{display:flex;align-items:center;gap:10px;padding:14px 15px;margin-bottom:14px;font-size:13px;color:var(--ink-2)}
+.drop .r{margin-left:auto}
+/* Masonry, not square crops — the ragged column is what makes a library
+   read as your own footage rather than stock. */
+.masonry{columns:4;column-gap:12px}
+@media (max-width:1360px){.masonry{columns:3}}
+@media (max-width:1060px){.masonry{columns:2}}
+.tile{break-inside:avoid;margin-bottom:12px;border:1px solid var(--line);border-radius:11px;overflow:hidden;
+  background:var(--panel);cursor:pointer}
+.tile:hover{border-color:var(--brand)}
+.tile.sel{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand)}
+.tile .im{position:relative;background:linear-gradient(150deg,var(--brand-wash),var(--panel-2));
+  display:grid;place-items:center;color:var(--ink-3);font-size:11px}
+.tile .pick{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:var(--panel);
+  border:1.5px solid var(--line);display:grid;place-items:center;font-size:11px;color:transparent}
+.tile.sel .pick{background:var(--brand-deep);border-color:transparent;color:oklch(1 0 0)}
+.tile .vid{position:absolute;top:8px;left:8px;background:oklch(0.25 0.02 var(--h)/.8);color:oklch(1 0 0);
+  border-radius:5px;padding:2px 6px;font-size:9.5px}
+.tile .fn{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;font-size:12px;color:var(--ink-2)}
+.tile .fn span{flex:1;min-width:0;word-break:break-word}
+.tile .fn i{color:var(--ink-3);font-style:normal;cursor:pointer}
+
+/* ── Templates ────────────────────────────────────────────── */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.tpl{padding:14px 15px;display:flex;flex-direction:column;gap:8px}
+.tpl b{font-size:13px}
+.tpl p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.tpl .ft{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:4px}
+.tpl .ft .btn{margin-left:auto}
+
+/* ── Posting schedule ─────────────────────────────────────── */
+.addtime{padding:14px 15px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:13px}
+.tin{width:54px;text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:9px}
+@media (max-width:1240px){.days{grid-template-columns:repeat(4,1fr)}}
+.day{border:1px solid var(--line);border-radius:10px;padding:11px 9px;text-align:center;background:var(--panel)}
+.day.off{background:var(--panel-2)}
+.day b{font-size:12px;display:block;margin-bottom:7px}
+.sw{width:34px;height:19px;border-radius:99px;border:1px solid var(--line);background:var(--panel-2);
+  position:relative;margin:0 auto 9px;cursor:pointer;display:block}
+.sw::after{content:"";position:absolute;left:2px;top:1.5px;width:14px;height:14px;border-radius:50%;
+  background:var(--ink-3)}
+.sw.on{border-color:var(--brand)}
+.sw.on::after{left:auto;right:2px;background:var(--brand-deep)}
+.day .t{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;padding:2px 0}
+.day .none{font-size:11.5px;color:var(--ink-3)}
+
+/* ── Analytics ────────────────────────────────────────────── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:12px}
+.stat3{padding:14px 15px}
+.stat3 .t{font-size:12.5px;font-weight:650;margin-bottom:6px}
+.stat3 .v{font-size:27px;font-weight:700;color:var(--brand-deep);letter-spacing:-.02em;
+  display:flex;align-items:baseline;gap:9px}
+.stat3 .v em{font-style:normal;font-size:12.5px;font-weight:650;color:var(--ok)}
+.stat3 .v em.flat{color:var(--ink-3)}
+.stat3 .n{font-size:11.5px;color:var(--ink-3);margin-top:4px}
+.two{display:grid;grid-template-columns:1.15fr 1fr;gap:12px;margin-bottom:12px}
+@media (max-width:1120px){.two{grid-template-columns:1fr}}
+.lead{display:flex;align-items:center;gap:10px;padding:6px 15px;font-size:12.5px}
+.lead .rk{width:16px;color:var(--ink-3);font-size:11.5px}
+.lead .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lead .v{font-weight:650;font-variant-numeric:tabular-nums}
+.lead .dl{width:56px;text-align:right;font-size:11.5px;color:var(--ok);font-variant-numeric:tabular-nums}
+.lead .dl.flat{color:var(--ink-3)}
+.gauge{display:flex;align-items:center;gap:14px;padding:14px 15px}
+.gauge .lbl{font-size:12.5px;color:var(--ink-2)}
+.gauge .lbl b{display:block;font-size:12.5px;color:var(--ink);margin-bottom:2px}
+
+/* ══════════════════════════════════════════════════════════════════
+   RIGHT — the Director. On every screen, always. Collapsible, and the
+   collapse control is visible. Nothing here is required to use the
+   department: collapse it and the screen is still whole.
+   ══════════════════════════════════════════════════════════════════ */
+.right{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+body.railshut .right{display:none}
+.rshut{display:none;background:var(--panel);border-left:1px solid var(--line);
+  flex-direction:column;align-items:center;padding:12px 0;gap:14px}
+body.railshut .rshut{display:flex}
+.rshut .op{width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);
+  color:var(--ink-2);cursor:pointer;display:grid;place-items:center;font-size:13px}
+.rshut .op:hover{border-color:var(--brand);color:var(--brand-deep)}
+.rshut .vert{writing-mode:vertical-rl;font-size:11.5px;color:var(--ink-3);letter-spacing:.06em}
+.rshut .d{width:22px;height:22px;border-radius:6px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 9px/1 var(--sans)}
+
+.rtabs{display:flex;align-items:center;gap:2px;padding:0 8px;height:50px;border-bottom:1px solid var(--line)}
+.rtab{display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:8px;font-size:12.5px;
+  color:var(--ink-3);cursor:pointer;white-space:nowrap;border:0;background:none}
+.rtab:hover{background:var(--panel-2);color:var(--ink-2)}
+.rtab.on{color:var(--brand-deep);font-weight:650;background:var(--brand-wash)}
+.rtabs .ctl{margin-left:auto;display:flex;gap:2px}
+.rtabs .ctl button{width:26px;height:26px;border-radius:7px;border:0;background:none;color:var(--ink-3);
+  cursor:pointer;font-size:13px}
+.rtabs .ctl button:hover{background:var(--panel-2);color:var(--ink-2)}
+.rbody{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.dmsg{display:flex;gap:9px}
+.dmsg .av{width:22px;height:22px;border-radius:6px;background:var(--brand);color:oklch(1 0 0);
+  display:grid;place-items:center;font:600 9px/1 var(--sans);flex-shrink:0}
+.dmsg .bd{font-size:13px;color:var(--ink-2);min-width:0}
+.dmsg .bd p{margin:0 0 8px}.dmsg .bd p:last-child{margin:0}
+.dmsg .bd b{color:var(--ink)}
+.dmsg.mine{flex-direction:row-reverse}
+.dmsg.mine .av{background:var(--ink-3)}
+.dmsg.mine .bd{background:var(--brand-wash);border-radius:10px;padding:8px 11px;color:var(--ink)}
+.prop{border:1px solid var(--line);border-radius:10px;background:var(--panel-2);padding:10px 11px}
+.prop .t{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-2)}
+.prop .t b{color:var(--ink)}
+.prop .t .x{margin-left:auto;border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:12px;padding:0 2px}
+.prop .row{display:flex;gap:7px;margin-top:9px}
+.ideas{margin-top:2px}
+.ideas .h{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:650;margin-bottom:7px}
+.ideas a{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;color:var(--ink-2);
+  font-size:13px;cursor:pointer;text-decoration:none}
+.ideas a:hover{background:var(--panel-2)}
+.ideas a .ic{color:var(--ink-3);font-size:12px;width:14px;text-align:center;flex-shrink:0}
+.chk{display:flex;gap:9px;border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:9px;
+  padding:10px 12px;font-size:12.5px;color:var(--ink-2);background:var(--panel-2)}
+.chk.w{border-left-color:var(--warn)}
+.chk.c{border-left-color:var(--care)}
+.chk b{color:var(--ink)}
+.ask{border-top:1px solid var(--line);padding:11px 12px 12px;background:var(--panel)}
+.askbox{border:1px solid var(--line);border-radius:11px;background:var(--panel-2);padding:9px 11px;
+  display:flex;align-items:flex-end;gap:9px}
+.askbox .ph{flex:1;color:var(--ink-3);font-size:13px;min-height:34px}
+.askbox .go{width:27px;height:27px;border-radius:7px;border:0;background:var(--brand-deep);
+  color:oklch(1 0 0);font-size:13px;cursor:pointer;flex-shrink:0}
+.askfoot{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:11px;color:var(--ink-3)}
+.askfoot .pill{border:1px solid var(--line);border-radius:6px;padding:2px 6px;background:var(--panel-2)}
+.askfoot .live{display:flex;align-items:center;gap:5px;margin-left:auto}
+.askfoot .live i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:block;font-style:normal}
+
+/* ── SIDEBAR NORMALISER ──────────────────────────────────────────────────
+   Six screens were authored in parallel and the sidebar drifted: different
+   widths, different paddings, one screen used `.subs` instead of `.sub`, and
+   two grew extra rows. Everything the sidebar needs is pinned here and scoped
+   to `.side`, so nothing in the centre column moves. Colours are custom
+   properties, so each file's dark-mode block still overrides them. */
+:root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
+@media (prefers-color-scheme:dark){
+  :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+}
+
+.side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
+      display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden}
+.side .biz{padding:13px 13px 12px;border-bottom:1px solid var(--line-soft);background:var(--panel-2)}
+.side .bizsel{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border-radius:10px;
+      border:1px solid var(--line);background:var(--panel);text-align:left;cursor:pointer}
+.side .bizsel .logo{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .bizsel .nm{flex:1;min-width:0;text-align:left}
+.side .bizsel .nm b{display:block;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.25;
+      white-space:normal;overflow:visible;text-overflow:clip;color:var(--ink)}
+.side .bizsel .nm span{display:block;font-size:11px;color:var(--ink-3);font-weight:400}
+.side .bizsel .chev{font-size:11px;flex-shrink:0;color:var(--ink-3)}
+
+.side .caretog{display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 9px;border-radius:9px;
+      width:100%;text-align:left;cursor:pointer;background:var(--care-wash);
+      border:1px solid var(--nrs-care-line)}
+.side .caretog .sw{width:28px;height:16px;border-radius:99px;flex-shrink:0;display:block;
+      position:relative;background:var(--care)}
+.side .caretog .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;
+      border-radius:50%;background:var(--nrs-knob)}
+.side .caretog .tx{font-size:11.5px;font-weight:600;line-height:1.35;color:var(--care)}
+
+.side .cta{margin:12px;display:flex;align-items:center;justify-content:center;gap:8px;border:0;
+      border-radius:10px;padding:11px 14px;font-size:13px;font-weight:650;letter-spacing:.02em;cursor:pointer}
+.side nav{padding:0 8px 6px;display:block}
+
+.side .top{display:flex;align-items:center;justify-content:flex-start;gap:9px;padding:7px 9px;
+      border-radius:8px;font-size:13.5px;font-weight:560;margin-top:2px;text-decoration:none;
+      text-align:left;color:var(--ink);cursor:pointer;background:none}
+.side .top:hover{background:var(--panel-2)}
+.side .top.on{background:var(--brand-wash);color:var(--brand-deep);font-weight:650}
+.side .top .ic{width:16px;text-align:center;font-size:13px;flex-shrink:0;color:var(--ink-3)}
+.side .top.on .ic{color:var(--brand-deep)}
+.side .top .cnt{margin-left:auto;font-size:10px;font-weight:650;padding:2px 5px;border-radius:5px;
+      background:var(--panel-2);color:var(--ink-3);border:1px solid var(--line)}
+
+/* align-items:stretch matters: one file centred its sub-items, which in a
+   column flex container staircases every row toward the middle. */
+.side .sub{margin:1px 0 5px 34px;padding:0;display:flex;flex-direction:column;
+      align-items:stretch;gap:1px;text-align:left}
+.side .sub a{font-size:12.5px;padding:4px 8px;border-radius:6px;text-decoration:none;display:flex;
+      align-items:flex-start;justify-content:flex-start;gap:7px;line-height:1.4;text-align:left;
+      color:var(--ink-2);cursor:pointer;background:none;font-weight:400}
+.side .sub a:hover{background:var(--panel-2);color:var(--ink)}
+/* One file wrote `.sub:before` — on the list, not the item — which dropped a
+   stray dot at the top of every group. The bullet belongs to the row. */
+.side .sub::before,.side .sub::after{content:none;display:none}
+.side .sub a::before{content:"";width:3px;height:3px;margin-top:7px;border-radius:50%;
+      background:var(--ink-3);opacity:.55;flex-shrink:0}
+.side .sub a.care{color:var(--care)}
+.side .sub a.care::before{background:var(--care);opacity:.85}
+.side .sub .glbl{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:650;
+      padding:6px 8px 2px;display:block;color:var(--ink-3);text-align:left}
+.side .grp{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;font-weight:650;
+      padding:14px 9px 5px;color:var(--ink-3);text-align:left}
+.side .me{margin-top:auto;border-top:1px solid var(--line-soft);padding:12px 16px;display:flex;
+      align-items:center;gap:9px}
+.side .me .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+      font:600 10px/1 var(--sans);flex-shrink:0}
+.side .me span{font-size:13px;color:var(--ink-2)}
+
+/* ── DIRECTOR RAIL: the collapse control must stay visible ────────────────
+   It is the only way back once the rail is hidden, so it never shrinks and
+   never sits past the panel edge. The four tabs give up the space instead. */
+.right{overflow-x:hidden}
+.right .rtabs{display:flex;align-items:center;gap:1px;padding:0 8px;height:50px;min-width:0}
+.right .rtab{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      font-size:11.5px;padding:5px 7px}
+.right .ctl{margin-left:auto;display:flex;align-items:center;gap:4px;flex-shrink:0}
+.rtabs .ctl button.hide,.right .ctl .hide,.right .hide{width:auto;height:auto;display:inline-flex;
+      align-items:center;gap:5px;white-space:nowrap;font-size:11.5px;font-weight:600;padding:5px 9px;
+      border-radius:7px;cursor:pointer;flex-shrink:0;border:1px solid var(--line);
+      background:var(--panel-2);color:var(--ink-2)}
+.rtabs .ctl button.hide:hover,.right .hide:hover{background:var(--panel);color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ SIDEBAR — identical on every screen ═══════════════ -->
+<aside class="side">
+  <div class="biz">
+    <button class="bizsel">
+      <span class="logo">DW</span>
+      <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
+      <span class="chev">&#9662;</span>
+    </button>
+    <button class="caretog on">
+      <span class="sw"></span>
+      <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
+    </button>
+  </div>
+
+  <button class="cta">&#43;&nbsp; Create post</button>
+
+  <nav>
+    <a class="top"><span class="ic">&#9636;</span> Dashboard</a>
+
+    <a class="top"><span class="ic">&#9635;</span> Business analysis</a>
+    <div class="sub">
+      <a>What the business is</a><a>Who buys from you</a>
+      <a>What makes you different</a><a>Goals &amp; targets</a>
+    </div>
+
+    <a class="top"><span class="ic">&#10022;</span> Branding &amp; voice</a>
+    <div class="sub">
+      <a>Logo, colours, fonts</a><a>How you sound</a>
+      <a>Words to use &amp; avoid</a><a>What you talk about</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9741;</span> Connections</a>
+    <div class="sub">
+      <a>Social accounts</a><a>Your website</a><a>Canva</a>
+      <a>Google</a><a>Code &amp; hosting</a><a>Email</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9880;</span> Competitors</a>
+    <div class="sub">
+      <a>Who they are</a><a>What they post</a>
+      <a>What they rank for</a><a>Where you are behind</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9906;</span> Google searchability</a>
+    <div class="sub">
+      <a>What you rank for</a><a>What people search</a>
+      <a>Your Google listing</a><a>Local &amp; maps</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9673;</span> AI searchability</a>
+    <div class="sub">
+      <a>Can AI find you</a><a>How AI describes you</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9737;</span> Website</a>
+    <div class="sub">
+      <a>Speed on phone &amp; desktop</a><a>Pages</a>
+      <a>Structure &amp; sitemap</a><a>What to fix</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9998;</span> Blogging <span class="cnt">4</span></a>
+    <div class="sub">
+      <a>Your posts</a><a>What to write next</a>
+      <a>Search terms</a><a>Images</a>
+      <a class="care">Checked before you publish</a>
+    </div>
+
+    <a class="top on"><span class="ic">&#9634;</span> Social media</a>
+    <div class="sub">
+      <span class="glbl">Content</span>
+      <a>Posts</a><a>Calendar</a><a>Media library</a><a>Templates</a>
+      <span class="glbl">Setup</span>
+      <a>Social accounts</a><a>Posting schedule</a>
+      <span class="glbl">Results</span>
+      <a>Analytics</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9650;</span> Advertising</a>
+    <div class="sub">
+      <a>Campaigns</a><a>What you are spending</a>
+      <a>What it is returning</a><a>Audiences</a>
+      <a class="care">Ad rules for health</a>
+    </div>
+
+    <a class="top"><span class="ic">&#9993;</span> Engagement <span class="cnt">7</span></a>
+    <div class="sub">
+      <a>Comments</a><a>Messages</a><a>Mentions</a><a>Reviews</a>
+    </div>
+
+    <div class="grp">This business</div>
+    <a class="top"><span class="ic">&#9881;</span> Settings</a>
+    <div class="sub">
+      <a>People &amp; access</a><a>What it costs</a>
+      <a class="care">Compliance record</a>
+    </div>
+  </nav>
+
+  <div class="me"><span class="av">JB</span><span>Justin Black</span></div>
+</aside>
+
+<!-- ═══════════════ CENTRE — the Social media department ═══════════════ -->
+<main class="main">
+  <div class="dhead">
+    <div class="dtitle">
+      <div>
+        <h1>Social media</h1>
+        <p class="psub">Everything you post, in one place. Write it, see it, decide when it goes.</p>
+      </div>
+      <span class="carepill">&#9878; Health rules on &mdash; every post is checked first</span>
+    </div>
+
+    <!-- Inner tabs. This is a department you work inside, not a single form. -->
+    <div class="itabs">
+      <button class="itab on" data-tab="compose">&#9998; Compose</button>
+      <button class="itab" data-tab="posts">&#9634; Posts <span class="b">12</span></button>
+      <button class="itab" data-tab="calendar">&#9635; Calendar</button>
+      <button class="itab" data-tab="media">&#9723; Media library <span class="b">148</span></button>
+      <button class="itab" data-tab="templates">&#9744; Templates <span class="b">6</span></button>
+      <button class="itab" data-tab="schedule">&#9202; Schedule</button>
+      <button class="itab" data-tab="analytics">&#9650; Analytics</button>
+    </div>
+  </div>
+
+  <!-- ─────────── COMPOSE ─────────── -->
+  <section class="pane on" id="p-compose">
+
+    <div class="card accbar">
+      <div class="lbl">
+        Post to <em>Downscale only</em>
+        <span class="selall">
+          <button class="link" id="tickAll">Tick all</button>
+          <button class="link" id="tickNone">None</button>
+          <span class="n" id="tickCount">2 of 3 ticked</span>
+        </span>
+      </div>
+      <div class="accs">
+        <button class="acc sel" data-acc="fb" data-limit="63206">
+          <span class="tick">&#10003;</span>
+          <span class="ring">DW<span class="plat fb">f</span></span>
+          <span class="who"><b>DownscaleClinic</b><span>Facebook page</span></span>
+        </button>
+        <button class="acc sel" data-acc="ig" data-limit="2200">
+          <span class="tick">&#10003;</span>
+          <span class="ring">DW<span class="plat ig">&#9673;</span></span>
+          <span class="who"><b>downscaleweightloss</b><span>Instagram</span></span>
+        </button>
+        <button class="acc" data-acc="yt" data-limit="5000">
+          <span class="tick">&#10003;</span>
+          <span class="ring">DW<span class="plat yt">&#9658;</span></span>
+          <span class="who"><b>DownscaleAU</b><span>YouTube</span></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card mstrip">
+      <span class="thumb">4:5</span>
+      <span class="meta">
+        <b>consult-what-happens.jpg</b>
+        <span>Photo &middot; 1080 &times; 1350 &middot; fits Facebook and Instagram &middot; added by you</span>
+      </span>
+      <button class="btn sm">Replace</button>
+      <button class="btn sm">Choose from media library</button>
+      <button class="btn sm gh">Remove</button>
+    </div>
+
+    <div class="card editor">
+      <div class="area" contenteditable="true" spellcheck="false" id="area">A first consult with our nurse practitioner runs about 20 minutes and costs $45. We go through your health history, what you have already tried, and whether treatment is appropriate for you. You leave knowing what the next step is, and what it costs. Book at downscale.com.au</div>
+      <div class="bar">
+        <button class="tbtn" title="Emoji">&#9786;</button>
+        <button class="tbtn" title="Add a photo or video">&#9723;</button>
+        <button class="tbtn" title="Hashtags you use">&#35;</button>
+        <button class="tbtn" title="Fill-in-the-blanks (your name, price, link)">(x)</button>
+        <button class="tbtn" title="Start from a template">&#9744;</button>
+        <button class="tbtn ai" title="Optional. You never have to use it.">&#10022; Ask the Director</button>
+        <span class="counts">
+          <span id="c-fb">Facebook 62,931 left</span>
+          <span id="c-ig">Instagram 1,925 left</span>
+          <span id="c-yt" hidden>YouTube 4,725 left</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Previews live in the main column. The rail keeps its own Preview tab
+         for the whole screen, so there is never a second competing preview. -->
+    <div class="card" style="margin-top:13px">
+      <div class="ch">
+        <b>How it will look</b>
+        <span class="muted" id="pvCount">2 accounts ticked</span>
+        <span class="r"><button class="btn sm gh">Write a different version per account</button></span>
+      </div>
+      <div class="pvgrid">
+        <div class="pv" id="pv-fb">
+          <div class="ph"><span class="a"><i class="fb">f</i></span><b>Downscale Weight Loss Clinic</b><span class="h">Facebook</span></div>
+          <div class="img" style="aspect-ratio:1/1">1:1 &middot; cropped from your 4:5 photo</div>
+          <div class="cap">A first consult with our nurse practitioner runs about 20 minutes and costs $45. We go through your health history, what you have already tried, and whether treatment is appropriate for you.</div>
+          <div class="acts"><span>Like</span><span>Comment</span><span>Share</span></div>
+        </div>
+        <div class="pv" id="pv-ig">
+          <div class="ph"><span class="a"><i class="ig">&#9673;</i></span><b>downscaleweightloss</b><span class="h">Instagram</span></div>
+          <div class="img" style="aspect-ratio:4/5">4:5 &middot; full photo, nothing cropped</div>
+          <div class="cap"><b>downscaleweightloss</b> A first consult with our nurse practitioner runs about 20 minutes and costs $45&hellip;</div>
+          <div class="acts"><span>Like</span><span>Comment</span><span>Send</span><span>Save</span></div>
+        </div>
+        <div class="pv" id="pv-yt" hidden>
+          <div class="ph"><span class="a"><i class="yt">&#9658;</i></span><b>DownscaleAU</b><span class="h">YouTube community post</span></div>
+          <div class="img" style="aspect-ratio:16/9">16:9 &middot; your photo will be letterboxed</div>
+          <div class="cap">A first consult with our nurse practitioner runs about 20 minutes and costs $45&hellip;</div>
+          <div class="acts"><span>Like</span><span>Dislike</span><span>Comment</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Healthcare guardrail. Visible because this business is a health business. -->
+    <div class="care">
+      <div class="hd">
+        &#9878; Checked before it goes out
+        <span class="r">Passed 2:14 pm, Mon 17 Aug</span>
+      </div>
+      <ul>
+        <li><i>&#10003;</i> No promise about how much someone will lose</li>
+        <li><i>&#10003;</i> No patient story or testimonial</li>
+        <li><i>&#10003;</i> No before-and-after photo</li>
+        <li><i>&#10003;</i> No prescription medicine named or pictured</li>
+      </ul>
+      <p>Saved to your compliance record with today&rsquo;s date, so you have the evidence if you are
+         ever asked for it. Your photo was checked too &mdash; a before-and-after image fails even when
+         the words are fine.</p>
+    </div>
+  </section>
+
+  <!-- ─────────── POSTS ─────────── -->
+  <section class="pane" id="p-posts">
+    <div class="toolrow">
+      <input class="fld" style="width:270px" placeholder="Search your posts">
+      <button class="btn">&#9662; Filter</button>
+      <span class="sp"></span>
+      <span class="muted" id="selCount">Nothing selected</span>
+      <button class="btn pri" data-tab="compose">&#43; Write a post</button>
+    </div>
+
+    <div class="filters">
+      <button class="on">All <span class="muted">12</span></button>
+      <button>Drafts <span class="muted">2</span></button>
+      <button>Sending <span class="muted">1</span></button>
+      <button>Waiting to go out <span class="muted">3</span></button>
+      <button>Gone out <span class="muted">5</span></button>
+      <button>Did not go out <span class="muted">1</span></button>
+      <button>Deleted</button>
+    </div>
+
+    <div class="card" style="overflow:hidden">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34px"></th>
+            <th style="width:172px">State</th>
+            <th>What it says</th>
+            <th style="width:74px">Photo</th>
+            <th style="width:120px">Goes to</th>
+            <th style="width:86px"></th>
+          </tr>
+        </thead>
+        <tbody id="postRows">
+          <tr>
+            <td><span class="cb">&#10003;</span></td>
+            <td>
+              <div class="stat"><span class="dot d-draft"></span> Draft</div>
+              <div class="when">Not going anywhere yet</div>
+            </td>
+            <td>A first consult with our nurse practitioner runs about 20 minutes and costs $45. We go through your health history&hellip;</td>
+            <td><span class="tmb">4:5</span></td>
+            <td><span class="mini"><span class="m">DW<i class="fb">f</i></span><span class="m">DW<i class="ig">&#9673;</i></span></span></td>
+            <td><div class="rowacts"><button class="btn sm gh">Open</button><button class="btn sm gh">Copy</button></div></td>
+          </tr>
+          <tr>
+            <td><span class="cb">&#10003;</span></td>
+            <td>
+              <div class="stat"><span class="dot d-sending"></span> Sending</div>
+              <div class="when">Started 2:09 pm &mdash; not out yet</div>
+            </td>
+            <td>Three questions worth asking any weight-loss clinic before you book. Number two is about who you actually see.</td>
+            <td><span class="tmb">1:1</span></td>
+            <td><span class="mini"><span class="m">DW<i class="fb">f</i></span></span></td>
+            <td><div class="rowacts"><button class="btn sm gh">Open</button></div></td>
+          </tr>
+          <tr>
+            <td><span class="cb">&#10003;</span></td>
+            <td>
+              <div class="stat"><span class="dot d-sched"></span> Waiting to go out</div>
+              <div class="when">Tue 18 Aug, 8:00 am</div>
+            </td>
+            <td>What actually happens in a telehealth appointment, start to finish. No waiting room, same clinician each time.</td>
+            <td><span class="tmb">4:5</span></td>
+            <td><span class="mini"><span class="m">DW<i class="fb">f</i></span><span class="m">DW<i class="ig">&#9673;</i></span></span></td>
+            <td><div class="rowacts"><button class="btn sm gh">Open</button><button class="btn sm gh">Copy</button></div></td>
+          </tr>
+          <tr>
+            <td><span class="cb">&#10003;</span></td>
+            <td>
+              <div class="stat"><span class="dot d-sched"></span> Waiting to go out</div>
+              <div class="when">Thu 20 Aug, 12:30 pm</div>
+            </td>
+            <td>Meet the team &mdash; our nurse practitioners are the people you actually speak to, every appointment.</td>
+            <td><span class="tmb">1:1</span></td>
+            <td><span class="mini"><span class="m">DW<i class="ig">&#9673;</i></span></span></td>
+            <td><div class="rowacts"><button class="btn sm gh">Open</button><button class="btn sm gh">Copy</button></div></td>
+          </tr>
+          <tr>
+            <td><span class="cb">&#10003;</span></td>
+            <td>
+              <div class="stat"><span class="dot d-fail"></span> Did not go out</div>
+              <div class="when">Fri 14 Aug, 8:00 am &mdash; YouTube needs reconnecting</div>
+            </td>
+            <td>A short walk-through of your first month, week by week.</td>
+            <td><span class="tmb">16:9</span></td>
+            <td><span class="mini"><span class="m">DW<i class="yt">&#9658;</i></span></span></td>
+            <td><div class="rowacts"><button class="btn sm">Fix</button></div></td>
+          </tr>
+          <tr>
+            <td><span class="cb">&#10003;</span></td>
+            <td>
+              <div class="stat"><span class="dot d-pub"></span> Gone out</div>
+              <div class="when">Wed 12 Aug, 8:00 am</div>
+            </td>
+            <td>Bulk-billing, gap fees and what $45 actually covers. Plain numbers, no fine print.</td>
+            <td><span class="tmb">4:5</span></td>
+            <td><span class="mini"><span class="m">DW<i class="fb">f</i></span><span class="m">DW<i class="ig">&#9673;</i></span></span></td>
+            <td><div class="rowacts"><button class="btn sm gh">Open</button><button class="btn sm gh">Copy</button></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager"><b>1</b><span>&nbsp;2&nbsp;&nbsp;&rsaquo;</span></div>
+
+    <div class="bulk" id="bulkBar">
+      <button id="bulkX">&#10005;</button>
+      <span class="n" id="bulkN">1 selected</span>
+      <button>Write a post from these</button>
+      <button>Add a label</button>
+      <button class="del">Delete</button>
+    </div>
+  </section>
+
+  <!-- ─────────── CALENDAR ─────────── -->
+  <section class="pane" id="p-calendar">
+    <div class="toolrow">
+      <button class="btn">Today</button>
+      <button class="btn gh">&#8249;</button>
+      <button class="btn gh">&#8250;</button>
+      <b style="font-size:15px">August 2026</b>
+      <span class="sp"></span>
+      <button class="btn">Month &#9662;</button>
+      <input class="fld" style="width:210px" placeholder="Search your posts">
+      <button class="btn pri" data-tab="compose">&#43; Write a post</button>
+    </div>
+
+    <div class="cal">
+      <div class="calhead"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div>
+      <div class="calgrid">
+        <div class="cell past out"><div class="num">27</div></div>
+        <div class="cell past out"><div class="num">28</div></div>
+        <div class="cell past out"><div class="num">29</div></div>
+        <div class="cell past out"><div class="num">30</div></div>
+        <div class="cell past out"><div class="num">31</div></div>
+        <div class="cell past"><div class="num">1</div></div>
+        <div class="cell past"><div class="num">2</div></div>
+
+        <div class="cell past"><div class="num">3</div><div class="ev pub"><b>8:00 am &middot; gone out</b>Why we ask about your whole history, not just your weight</div></div>
+        <div class="cell past"><div class="num">4</div></div>
+        <div class="cell past"><div class="num">5</div><div class="ev pub"><b>12:30 pm &middot; gone out</b>Telehealth from a farm 400 km from a clinic</div></div>
+        <div class="cell past"><div class="num">6</div></div>
+        <div class="cell past"><div class="num">7</div><div class="ev pub"><b>8:00 am &middot; gone out</b>What a nurse practitioner can do</div></div>
+        <div class="cell past"><div class="num">8</div></div>
+        <div class="cell past"><div class="num">9</div></div>
+
+        <div class="cell past"><div class="num">10</div><div class="ev pub"><b>8:00 am &middot; gone out</b>Booking, rebooking and cancelling &mdash; all self-serve</div></div>
+        <div class="cell past"><div class="num">11</div></div>
+        <div class="cell past"><div class="num">12</div><div class="ev pub"><b>8:00 am &middot; gone out</b>Bulk-billing, gap fees and what $45 covers</div></div>
+        <div class="cell past"><div class="num">13</div></div>
+        <div class="cell past"><div class="num">14</div><div class="ev" style="border-left-color:var(--st-fail)"><b>8:00 am &middot; did not go out</b>First month, week by week &mdash; YouTube needs reconnecting</div></div>
+        <div class="cell past"><div class="num">15</div></div>
+        <div class="cell past"><div class="num">16</div></div>
+
+        <div class="cell today"><div class="num">17</div><div class="ev send"><b>2:09 pm &middot; sending</b>Three questions worth asking any weight-loss clinic</div></div>
+        <div class="cell"><div class="num">18</div><div class="ev"><b>8:00 am &middot; waiting</b>What actually happens in a telehealth appointment</div></div>
+        <div class="cell"><div class="num">19</div></div>
+        <div class="cell"><div class="num">20</div><div class="ev"><b>12:30 pm &middot; waiting</b>Meet the team &mdash; who you actually speak to</div></div>
+        <div class="cell"><div class="num">21</div><div class="ev"><b>8:00 am &middot; waiting</b>The first consult, in plain numbers</div></div>
+        <div class="cell"><div class="num">22</div></div>
+        <div class="cell"><div class="num">23</div></div>
+
+        <div class="cell"><div class="num">24</div></div>
+        <div class="cell"><div class="num">25</div></div>
+        <div class="cell"><div class="num">26</div></div>
+        <div class="cell"><div class="num">27</div></div>
+        <div class="cell"><div class="num">28</div></div>
+        <div class="cell"><div class="num">29</div></div>
+        <div class="cell"><div class="num">30</div></div>
+
+        <div class="cell"><div class="num">31</div></div>
+        <div class="cell out"><div class="num">1</div></div>
+        <div class="cell out"><div class="num">2</div></div>
+        <div class="cell out"><div class="num">3</div></div>
+        <div class="cell out"><div class="num">4</div></div>
+        <div class="cell out"><div class="num">5</div></div>
+        <div class="cell out"><div class="num">6</div></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="hatch"></span> Striped days have already passed &mdash; that window is closed</span>
+      <span><span class="dot d-sched"></span> Waiting to go out</span>
+      <span><span class="dot d-sending"></span> Sending now</span>
+      <span><span class="dot d-pub"></span> Gone out</span>
+      <span><span class="dot d-fail"></span> Did not go out</span>
+    </div>
+  </section>
+
+  <!-- ─────────── MEDIA LIBRARY ─────────── -->
+  <section class="pane" id="p-media">
+    <div class="toolrow">
+      <div class="filters" style="margin:0;border:0">
+        <button class="on">Your files <span class="muted">148</span></button>
+        <button>Made in Canva</button>
+        <button>Free photos</button>
+      </div>
+      <span class="sp"></span>
+      <input class="fld" style="width:230px" placeholder="Search your files">
+      <span class="muted" id="mediaSel">Nothing selected</span>
+    </div>
+
+    <div class="card drop">
+      <span style="font-size:17px;color:var(--ink-3)">&#8679;</span>
+      <span>Drag files here, or <button class="link">browse your computer</button>. Photos and videos only.</span>
+      <span class="r"><button class="btn sm">Add from a link</button></span>
+    </div>
+
+    <div class="masonry" id="masonry">
+      <div class="tile"><div class="im" style="aspect-ratio:4/5"><span class="pick">&#10003;</span>4:5</div><div class="fn"><span>consult-what-happens.jpg</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:9/16"><span class="pick">&#10003;</span><span class="vid">&#9658; 0:38</span>9:16</div><div class="fn"><span>nurse-practitioner-explains-telehealth.mp4</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:1/1"><span class="pick">&#10003;</span>1:1</div><div class="fn"><span>clinic-team-portrait-august.jpg</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:16/9"><span class="pick">&#10003;</span>16:9</div><div class="fn"><span>how-the-first-month-works.png</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:4/5"><span class="pick">&#10003;</span>4:5</div><div class="fn"><span>what-45-dollars-covers.png</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:9/16"><span class="pick">&#10003;</span><span class="vid">&#9658; 1:12</span>9:16</div><div class="fn"><span>booking-walkthrough-screen-recording.mp4</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:1/1"><span class="pick">&#10003;</span>1:1</div><div class="fn"><span>three-questions-before-you-book.jpg</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:3/4"><span class="pick">&#10003;</span>3:4</div><div class="fn"><span>rural-patient-telehealth-still.jpg</span><i>&#8942;</i></div></div>
+      <div class="tile"><div class="im" style="aspect-ratio:16/9"><span class="pick">&#10003;</span>16:9</div><div class="fn"><span>downscale-logo-on-teal.png</span><i>&#8942;</i></div></div>
+    </div>
+
+    <div class="bulk" id="mediaBulk">
+      <button id="mediaX">&#10005;</button>
+      <span class="n" id="mediaN">1 selected</span>
+      <button data-tab="compose">Write a post from this</button>
+      <button>Download</button>
+      <button class="del">Delete</button>
+    </div>
+  </section>
+
+  <!-- ─────────── TEMPLATES ─────────── -->
+  <section class="pane" id="p-templates">
+    <div class="toolrow">
+      <span class="muted">Your own wording, saved so you never start from a blank page. Six saved.</span>
+      <span class="sp"></span>
+      <button class="btn pri">&#43; Save a new template</button>
+    </div>
+
+    <div class="tgrid">
+      <div class="card tpl">
+        <b>What a consult covers</b>
+        <p>Opens with the price and the length, then the three things you go through. Ends with the booking link.</p>
+        <div class="ft"><span class="chipL">Facebook</span><span class="chipL">Instagram</span><button class="btn sm">Use this</button></div>
+      </div>
+      <div class="card tpl">
+        <b>A question patients ask</b>
+        <p>One real question, a plain answer, no promise attached. Your most-read shape.</p>
+        <div class="ft"><span class="chipL">All accounts</span><button class="btn sm">Use this</button></div>
+      </div>
+      <div class="card tpl">
+        <b>Meet a clinician</b>
+        <p>Name, what they do, how long they have been doing it, and what an appointment with them is like.</p>
+        <div class="ft"><span class="chipL">Instagram</span><button class="btn sm">Use this</button></div>
+      </div>
+      <div class="card tpl">
+        <b>Myth and what is actually true</b>
+        <p>Two short paragraphs. Health-safe wording built in &mdash; it never states an outcome.</p>
+        <div class="ft"><span class="chipL">Facebook</span><span class="chipL">Instagram</span><button class="btn sm">Use this</button></div>
+      </div>
+      <div class="card tpl">
+        <b>Blog teaser</b>
+        <p>Two lines from a blog post plus the link. Pulls the first paragraph in for you.</p>
+        <div class="ft"><span class="chipL">All accounts</span><button class="btn sm">Use this</button></div>
+      </div>
+      <div class="card tpl">
+        <b>Clinic notice</b>
+        <p>Hours, closures, a new service. Short, factual, no marketing language.</p>
+        <div class="ft"><span class="chipL">Facebook</span><button class="btn sm">Use this</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── POSTING SCHEDULE ─────────── -->
+  <section class="pane" id="p-schedule">
+    <p class="psub" style="margin:0 0 14px">Your posting schedule tells us when to send your posts out. Times are
+       Australia/Brisbane. Nothing changes until you press Save.</p>
+
+    <div class="card addtime">
+      <b style="font-size:12.5px">Add a posting time</b>
+      <select class="fld"><option>Every day</option><option>Weekdays only</option><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select>
+      <span class="muted">at</span>
+      <input class="fld tin" value="06"><span class="muted">:</span><input class="fld tin" value="30">
+      <button class="btn pri">Add this time</button>
+      <span class="muted" style="margin-left:auto">Australia/Brisbane &middot; your clinic&rsquo;s time</span>
+    </div>
+
+    <div class="card" style="padding:15px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px">
+        <b style="font-size:12.5px">Your posting times</b>
+        <span class="muted">Turn a day off and nothing goes out that day.</span>
+        <span style="margin-left:auto"><button class="btn sm gh">Clear every time</button></span>
+      </div>
+
+      <div class="days">
+        <div class="day"><b>Monday</b><span class="sw on"></span><div class="t">8:00 am</div><div class="t">12:30 pm</div></div>
+        <div class="day"><b>Tuesday</b><span class="sw on"></span><div class="t">8:00 am</div></div>
+        <div class="day"><b>Wednesday</b><span class="sw on"></span><div class="t">8:00 am</div><div class="t">5:30 pm</div></div>
+        <div class="day"><b>Thursday</b><span class="sw on"></span><div class="t">12:30 pm</div></div>
+        <div class="day"><b>Friday</b><span class="sw on"></span><div class="t">8:00 am</div><div class="t">12:30 pm</div></div>
+        <div class="day off"><b>Saturday</b><span class="sw"></span><div class="none">Off</div></div>
+        <div class="day off"><b>Sunday</b><span class="sw"></span><div class="none">Off</div></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-top:15px">
+        <button class="btn pri">Save these times</button>
+        <span class="muted">Next free time: <b style="color:var(--ink-2)">Tuesday 18 August, 8:00 am</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── ANALYTICS ─────────── -->
+  <section class="pane" id="p-analytics">
+    <div class="toolrow">
+      <span class="eyebrow">Summary</span>
+      <span class="sp"></span>
+      <button class="btn">All 3 accounts &#9662;</button>
+      <button class="btn">This month &middot; 1 &ndash; 17 Aug 2026 &#9662;</button>
+    </div>
+
+    <div class="stats">
+      <div class="card stat3">
+        <div class="t">People following you</div>
+        <div class="v">4,182</div>
+        <div class="n">Across Facebook, Instagram and YouTube</div>
+      </div>
+      <div class="card stat3">
+        <div class="t">New followers this month</div>
+        <div class="v">186 <em>&#8599; +4.7%</em></div>
+        <div class="n">Compared with 1 &ndash; 17 July</div>
+      </div>
+      <div class="card stat3">
+        <div class="t">Posts that went out</div>
+        <div class="v">9 <em>&#8599; +2</em></div>
+        <div class="n">5 posts, sent to 9 accounts. 1 more did not go out.</div>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="card" style="padding:15px;display:flex;flex-direction:column">
+        <b style="font-size:12.5px">Following, day by day</b>
+        <svg viewBox="0 0 640 196" style="width:100%;flex:1;min-height:184px;margin-top:10px" role="img" aria-label="People following you rising from 3,996 on 1 August to 4,182 on 17 August">
+          <g stroke="var(--line)" stroke-width="1">
+            <line x1="44" y1="16" x2="628" y2="16"/><line x1="44" y1="53" x2="628" y2="53"/>
+            <line x1="44" y1="90" x2="628" y2="90"/><line x1="44" y1="127" x2="628" y2="127"/>
+            <line x1="44" y1="164" x2="628" y2="164"/>
+          </g>
+          <g fill="var(--ink-3)" font-size="10" font-family="ui-sans-serif,system-ui">
+            <text x="2" y="19">4,200</text><text x="2" y="56">4,150</text>
+            <text x="2" y="93">4,100</text><text x="2" y="130">4,050</text><text x="2" y="167">4,000</text>
+            <text x="44" y="187">1 Aug</text><text x="294" y="187" text-anchor="middle">8 Aug</text>
+            <text x="510" y="187" text-anchor="middle">14 Aug</text><text x="628" y="187" text-anchor="end">17 Aug</text>
+          </g>
+          <polyline fill="none" stroke="var(--brand)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"
+            points="42,167 78,161 114,153 150,148 186,139 222,134 258,125 294,120 330,111 366,101 402,95 438,84 474,75 510,68 546,55 582,42 618,29"/>
+        </svg>
+      </div>
+
+      <div class="card" style="padding:15px">
+        <b style="font-size:12.5px">Which account is carrying it</b>
+        <div style="margin-top:11px">
+          <div class="lead"><span class="rk">1</span><span class="nm">DownscaleClinic &middot; Facebook</span><span class="v">2,410</span><span class="dl">&#8599; +3.1%</span></div>
+          <div class="lead"><span class="rk">2</span><span class="nm">downscaleweightloss &middot; Instagram</span><span class="v">1,731</span><span class="dl">&#8599; +7.4%</span></div>
+          <div class="lead"><span class="rk">3</span><span class="nm">DownscaleAU &middot; YouTube</span><span class="v">41</span><span class="dl flat">&#8594; 0%</span></div>
+        </div>
+        <div style="border-top:1px solid var(--line-soft);margin:11px 0 0;padding-top:11px">
+          <div class="lead"><span class="rk"></span><span class="nm muted">Share of your following</span></div>
+          <div class="lead"><span class="rk"></span><span class="nm">Facebook</span><span class="v">57.6%</span><span class="dl"></span></div>
+          <div class="lead"><span class="rk"></span><span class="nm">Instagram</span><span class="v">41.4%</span><span class="dl"></span></div>
+          <div class="lead"><span class="rk"></span><span class="nm">YouTube</span><span class="v">1.0%</span><span class="dl"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="card stat3">
+        <div class="t">Busiest account</div>
+        <div class="v" style="font-size:19px">downscaleweightloss</div>
+        <div class="n">5 posts this month &middot; Instagram</div>
+      </div>
+      <div class="card stat3">
+        <div class="t">Quietest account</div>
+        <div class="v" style="font-size:19px">DownscaleAU</div>
+        <div class="n">0 posts this month &middot; YouTube needs reconnecting</div>
+      </div>
+      <div class="card gauge">
+        <svg width="62" height="62" viewBox="0 0 62 62" role="img" aria-label="You posted on 5 of the last 17 days, 29 per cent">
+          <circle cx="31" cy="31" r="26" fill="none" stroke="var(--line)" stroke-width="7"/>
+          <circle cx="31" cy="31" r="26" fill="none" stroke="var(--warn)" stroke-width="7" stroke-linecap="round"
+            stroke-dasharray="47 164" transform="rotate(-90 31 31)"/>
+          <text x="31" y="35" text-anchor="middle" font-size="14" font-weight="700" fill="var(--warn)"
+            font-family="ui-sans-serif,system-ui">29%</text>
+        </svg>
+        <span class="lbl"><b>How often you turned up</b>You posted on 5 of the last 17 days.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pinned action bar. Every one of these is a button you press. -->
+  <div class="actbar" id="actbar">
+    <div class="actgate">
+      <span class="ico">&#9878;</span>
+      <span><b>Checked against AHPRA and TGA before it can go out.</b>
+        This wording passed at 2:14 pm. Change the words or the photo and it is checked again &mdash;
+        nothing goes out on a check that has not passed.</span>
+      <span class="r"><button class="link">See what was checked</button></span>
+    </div>
+    <div class="actrow">
+      <span class="state">
+        <span class="dot d-draft"></span><b>Draft</b><span>&middot;</span>
+        <span>Saved 2:14 pm. Nothing has gone out.</span>
+      </span>
+      <span class="grp2">
+        <button class="btn">Save draft</button>
+        <button class="btn" title="The next open time in your posting schedule: Tue 18 Aug, 8:00 am">Add to next free time</button>
+        <button class="btn">Choose a time</button>
+        <button class="btn pri">Post now</button>
+      </span>
+    </div>
+  </div>
+</main>
+
+<!-- ═══════════════ RIGHT — the Director, on every screen ═══════════════ -->
+<aside class="right" id="rail">
+  <div class="rtabs">
+    <button class="rtab on">&#10022; Director</button>
+    <button class="rtab">&#128065; Preview</button>
+    <button class="rtab">&#9993; Activity</button>
+    <button class="rtab">&#9650; Analytics</button>
+      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+    </div>
+
+  <div class="rbody">
+    <div class="dmsg">
+      <span class="av">ND</span>
+      <div class="bd">
+        <p>Your consult post reads well and it passed the health check on this wording.</p>
+        <p>One thing: <b>YouTube stopped working on 14 August</b> and a post did not go out. It is
+           unticked below, so nothing you write today will reach it until it is reconnected.</p>
+      </div>
+    </div>
+
+    <div class="prop">
+      <div class="t">
+        <span>&#10022;</span>
+        <span><b>Want a shorter Instagram version?</b> Same facts, first line does the work, link in bio.</span>
+        <button class="x" title="Dismiss">&#10005;</button>
+      </div>
+      <div class="row">
+        <button class="btn sm">Show me one</button>
+        <button class="btn sm gh">No thanks</button>
+      </div>
+    </div>
+
+    <div class="ideas">
+      <div class="h">Suggested</div>
+      <a><span class="ic">&#9741;</span> Reconnect YouTube for me</a>
+      <a><span class="ic">&#9998;</span> Draft next week from my blog posts</a>
+      <a><span class="ic">&#9635;</span> Fill Wednesday and Friday</a>
+      <a><span class="ic">&#9723;</span> Show clips I have never used</a>
+      <a><span class="ic">&#9880;</span> What did other clinics post this week?</a>
+      <a><span class="ic">&#9878;</span> Explain what the health check looked for</a>
+    </div>
+
+    <div class="chk c"><span>&#9878;</span><span><b>Health check passed 2:14 pm.</b> Saved to your compliance record, dated today.</span></div>
+    <div class="chk w"><span>&#9711;</span><span><b>Nothing has gone out.</b> This is a draft. You choose when, and you can ignore everything I have suggested.</span></div>
+  </div>
+
+  <div class="ask">
+    <div class="askbox">
+      <div class="ph">Ask NRS about Downscale&hellip;</div>
+      <button class="go">&#8593;</button>
+    </div>
+    <div class="askfoot">
+      <span class="pill">Director</span>
+      <span>sees this screen</span>
+      <span class="live"><i></i> 14 departments ready</span>
+    </div>
+  </div>
+</aside>
+
+<!-- Collapsed rail. Visible control to bring it back. -->
+<aside class="rshut">
+  <button class="op" id="open" title="Open the Director">&#10561;</button>
+  <span class="d">ND</span>
+  <span class="vert">Director</span>
+</aside>
+
+<script>
+/* Every interaction here is a manual one. Nothing on this screen waits on the
+   Director, and collapsing the rail removes nothing. */
+(function(){
+  var $=function(s,r){return (r||document).querySelector(s)};
+  var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+
+  /* Rail collapse */
+  function rail(shut){ document.body.classList.toggle('railshut', shut); }
+  $('#shut').onclick=function(){rail(true)};
+  $('#open').onclick=function(){rail(false)};
+
+  /* Inner department tabs */
+  function go(name){
+    $$('.itab').forEach(function(t){t.classList.toggle('on',t.dataset.tab===name)});
+    $$('.pane').forEach(function(p){p.classList.toggle('on',p.id==='p-'+name)});
+    $('#actbar').style.display = name==='compose' ? 'block' : 'none';
+    var live=$('#p-'+name); if(live) live.scrollTop=0;
+  }
+  $$('.itab').forEach(function(t){t.onclick=function(){go(t.dataset.tab)}});
+  $$('[data-tab]').forEach(function(b){ if(!b.classList.contains('itab')) b.onclick=function(){go(b.dataset.tab)} });
+  $$('.subs [data-go]').forEach(function(a){a.onclick=function(){
+    $$('.subs a').forEach(function(x){x.classList.remove('on')}); a.classList.add('on');
+    go(a.dataset.go==='posts'?'posts':a.dataset.go);
+  }});
+
+  /* Account tick boxes — explicit, and the count is always stated */
+  var LIMIT={fb:63206,ig:2200,yt:5000}, NAME={fb:'Facebook',ig:'Instagram',yt:'YouTube'};
+  function sync(){
+    var on=$$('.acc.sel').map(function(a){return a.dataset.acc});
+    var len=$('#area').innerText.replace(/\s+$/,'').length;
+    $('#tickCount').textContent=on.length+' of 3 ticked';
+    $('#pvCount').textContent=on.length===0?'Nothing ticked yet':(on.length+(on.length===1?' account ticked':' accounts ticked'));
+    ['fb','ig','yt'].forEach(function(k){
+      var live=on.indexOf(k)>-1;
+      $('#pv-'+k).hidden=!live;
+      var c=$('#c-'+k); c.hidden=!live;
+      c.textContent=NAME[k]+' '+(LIMIT[k]-len).toLocaleString('en-AU')+' left';
+    });
+  }
+  $$('.acc').forEach(function(a){a.onclick=function(){a.classList.toggle('sel');sync()}});
+  $('#tickAll').onclick=function(){$$('.acc').forEach(function(a){a.classList.add('sel')});sync()};
+  $('#tickNone').onclick=function(){$$('.acc').forEach(function(a){a.classList.remove('sel')});sync()};
+  $('#area').addEventListener('input',sync);
+  sync();
+
+  /* Posts list selection */
+  function selBar(boxes,bar,n,label){
+    var c=boxes.filter(function(b){return b.classList.contains('on')}).length;
+    bar.classList.toggle('on',c>0);
+    n.textContent=c+' selected';
+    label.textContent=c>0?c+' selected':'Nothing selected';
+  }
+  var pb=$$('#postRows .cb');
+  pb.forEach(function(b){b.onclick=function(){b.classList.toggle('on');selBar(pb,$('#bulkBar'),$('#bulkN'),$('#selCount'))}});
+  $('#bulkX').onclick=function(){pb.forEach(function(b){b.classList.remove('on')});selBar(pb,$('#bulkBar'),$('#bulkN'),$('#selCount'))};
+
+  /* Media selection */
+  var tiles=$$('#masonry .tile');
+  function mediaSync(){
+    var c=tiles.filter(function(t){return t.classList.contains('sel')}).length;
+    $('#mediaBulk').classList.toggle('on',c>0);
+    $('#mediaN').textContent=c+' selected';
+    $('#mediaSel').textContent=c>0?c+' selected':'Nothing selected';
+  }
+  tiles.forEach(function(t){t.onclick=function(){t.classList.toggle('sel');mediaSync()}});
+  $('#mediaX').onclick=function(){tiles.forEach(function(t){t.classList.remove('sel')});mediaSync()};
+
+  /* Posting schedule day switches (scoped — the healthcare pill is not one of these) */
+  $$('.day .sw').forEach(function(s){s.onclick=function(){
+    s.classList.toggle('on'); s.parentNode.classList.toggle('off',!s.classList.contains('on'));
+  }});
+
+  /* Dismissable proposals — the Director never blocks */
+  $$('.prop .x, .prop .gh').forEach(function(b){b.onclick=function(){b.closest('.prop').remove()}});
+})();
+</script>
+</body>
+</html>

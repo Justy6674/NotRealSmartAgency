@@ -608,3 +608,108 @@ a failure as "you broke a rule", not "fix the assertion":
 
 Before claiming a feature is done: `npm test`, `npm run lint`, `npm run build` all pass,
 then `graphify update .`.
+
+---
+
+## The interface architecture (settled 2026-08-17)
+
+Five prior attempts were rejected. What follows is what Justin approved, and the reasoning, so
+it is not re-litigated by the next person to open a design file. Reference screens live in
+`.mockups/dept-*.html`.
+
+### The shape
+
+```
+ ┌──────────────┬───────────────────────────────────┬──────────────────┐
+ │  SIDEBAR     │            THE WORK               │  DIRECTOR RAIL   │
+ │  236px       │                                   │  380px           │
+ │              │  Social media is a DEPARTMENT     │  tabs            │
+ │ [business ▾] │  with inner tabs:                 │  conversation    │
+ │ [health ⏻ ]  │  Compose · Posts · Calendar ·     │  suggested       │
+ │              │  Media · Templates · Schedule ·   │  ───────────     │
+ │ + Create post│  Analytics                        │  input (pinned)  │
+ │              │                                   │                  │
+ │ 12 sections, │  Every primary action here is a   │  collapsible     │
+ │ flat, always │  MANUAL control.                  │                  │
+ │ expanded     │                                   │                  │
+ └──────────────┴───────────────────────────────────┴──────────────────┘
+```
+
+### The rules, and why each exists
+
+**1. The human drives. The AI is optional.**
+Every screen must be complete and fully usable with the Director rail collapsed. Every primary
+action is a manual control a person clicks. AI proposals are secondary, quieter, dismissable, and
+never the only way to start anything.
+
+*Why:* Justin — "stop assuming agent is in control, HUMANS WILL DRIVE MUCH OF THIS IF THEY CHOOSE."
+A product that only works when you talk to it has excluded every subscriber who wants the tooling
+and none of the conversation. The test when reviewing any screen: collapse the rail — is it still
+whole?
+
+**2. The Director rail is on every screen, and it is persistent.**
+Right side, full height, tabs (Director | Preview | Activity | Analytics), conversation, a
+suggested list, and an input **pinned to the bottom**. It follows the owner between screens and
+stays current to what is on screen.
+
+*Why:* this is the pattern Vercel's Agent panel and Supabase's assistant use, and it is what
+Justin asked for twice after two designs put the AI in the centre instead. A blank chat box as
+the front door is the failure mode being avoided — a busy owner does not know what to ask.
+
+**3. The business selector is the tenant scope, and it retints everything.**
+Selecting a business filters accounts, counts, posts and media to it, and the whole UI retints
+from three custom properties — `--brand`, `--brand-deep`, `--brand-wash`. One variable set, not
+per-component theming.
+
+*Why:* the daily friction in Mixpost is ~20 accounts from 14 brands in one row. **Design for the
+common case: almost every subscriber has ONE business**, so with one business the selector reads
+as a quiet label, not a switcher. Justin has fourteen; that is the exception, not the default.
+
+**4. Healthcare mode is a per-business switch that sets the guardrails.**
+On: every post, blog and ad is checked against AHPRA/TGA before it can go out, a compliance record
+appears under Settings, wording changes throughout, and Advertising gains a health section. Off:
+none of that appears at all.
+
+*Why:* the rules follow the business so the owner never has to remember them, and an unregulated
+project (Scent Sell) is never shown an AHPRA warning it does not need. Note the "words to avoid"
+list is doing **regulatory** work on a health business, not stylistic work — it cannot be edited
+as freely as ordinary brand preferences.
+
+**5. The sidebar is flat and always expanded — twelve sections with sub-items visible.**
+Dashboard · Business analysis · Branding & voice · Connections · Competitors · Google
+searchability · AI searchability · Website · Blogging · Social media · Advertising · Engagement,
+then Settings under a THIS BUSINESS heading.
+
+*Why:* Justin, on seeing it — "in this format is super easy for me to follow." It is more ink than
+a collapsing tree, and that trade was made deliberately. Google searchability (found via Google)
+and AI searchability (found and described correctly by ChatGPT, Claude, Perplexity, Gemini) are
+**separate sections**, at his instruction.
+
+**6. Create post opens the Social media department, not a modal.**
+That department is the whole posting experience, with its own inner tabs.
+
+*Why:* Justin — "the create Post needs to actually open Social Media Department, and then that's
+the whole Mixpost." Mixpost's navigational clarity is the thing being adopted; NRS adds the
+agency functions around it.
+
+**7. Analytics, Media library and Calendar are nested under Social media.**
+Blogging reaches the media library for images, and Advertising reaches analytics, without either
+becoming a second copy.
+
+**8. Blogging never publishes to the subscriber's website.**
+NRS drafts, checks and hands over text and images, and helps get a post into their sitemap. It
+does not publish.
+
+*Why:* Justin — "It's their blog." For a health business, publishing to their site on their behalf
+is a legal exposure, not a convenience. No control may imply otherwise.
+
+**9. Unfinished states stay visible and honest.**
+"Google searchability — not set up" and "Nothing has gone out yet" are deliberate. A design pass
+will want to tidy them away because they look unresolved; they are the difference between this
+product and one that lies.
+
+### What has no backend yet
+
+Google searchability and AI searchability are designs for something unbuilt — no Search Console,
+no AI-visibility checking. Blogging is partial. The screens are honest about this; the code must
+stay honest about it too.
