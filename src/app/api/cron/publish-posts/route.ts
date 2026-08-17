@@ -2,19 +2,16 @@ export const maxDuration = 300
 
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import {
-  fetchMixpostAccounts,
-  uploadMediaFromUrl,
-  createMixpostPost,
-  resolveAccountIdsForPlatform,
-  type MixpostVersion,
-  fetchMixpostPost,
-} from '@/lib/mixpost/client'
-import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
+import { fetchMixpostPost } from '@/lib/mixpost/client'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
-import { fetchZernioAccounts, createZernioPost, type ZernioAccount } from '@/lib/zernio/client'
-
-
+import { publishToPlatform } from '@/lib/publishers/dispatcher'
+import {
+  fetchZernioAccounts,
+  fetchZernioPostStatus,
+  zernioPostState,
+  type ZernioAccount,
+} from '@/lib/zernio/client'
+import type { PublishMedia, PublishResult, PublisherPlatform } from '@/lib/publishers/types'
 
 /**
  * Raised when the publisher could not be reached at all — not when it rejected
@@ -35,6 +32,99 @@ function mixpostPostState(status: unknown): 'published' | 'failed' | null {
   if (status === 'published' || status === 2) return 'published'
   if (status === 'failed' || status === 3) return 'failed'
   return null
+}
+
+/**
+ * The platforms the one door can actually reach.
+ *
+ * This route used to hand `post.platform` to Mixpost as a bare string, and
+ * `resolveAccountIdsForPlatform` falls back to `[platform]` for anything it
+ * does not recognise — so an unknown value did not fail here, it quietly
+ * matched no accounts and failed later with a message about Mixpost. Narrowing
+ * it at the edge means an unsupported platform is refused in words the owner
+ * can act on, before any account lookup happens.
+ *
+ * Checked against live data on 2026-08-17: all 158 rows in `scheduled_posts`
+ * use one of these six, so nothing currently scheduled is excluded.
+ */
+const DISPATCHABLE_PLATFORMS: readonly PublisherPlatform[] = [
+  'facebook',
+  'instagram',
+  'linkedin',
+  'tiktok',
+  'twitter',
+  'youtube',
+]
+
+function asPublisherPlatform(value: unknown): PublisherPlatform | null {
+  return typeof value === 'string' &&
+    (DISPATCHABLE_PLATFORMS as readonly string[]).includes(value)
+    ? (value as PublisherPlatform)
+    : null
+}
+
+/**
+ * Decide image vs video without trusting the file extension alone.
+ *
+ * `getMediaType` in the Zernio client tests `url.toLowerCase().endsWith('.mp4')`.
+ * A Supabase *signed* URL ends `?token=…`, so every `endsWith` misses and a
+ * video is typed as an image — which then fails the platform's image rules for
+ * reasons that read as nothing to do with the real cause. The stored mime type
+ * is authoritative when we have it; the extension is only the fallback, and the
+ * query string is stripped before it is read.
+ */
+function mediaKind(url: string, fileType: string | null): 'image' | 'video' {
+  if (fileType?.startsWith('video/')) return 'video'
+  if (fileType?.startsWith('image/')) return 'image'
+  const path = (url.split('?')[0] ?? '').split('#')[0]?.toLowerCase() ?? ''
+  return /\.(mp4|mov|webm|m4v|avi|mkv)$/.test(path) ? 'video' : 'image'
+}
+
+interface MediaRow {
+  file_url: string
+  file_type?: string | null
+  file_size_bytes?: number | null
+  duration_seconds?: number | null
+}
+
+function toPublishMedia(row: MediaRow): PublishMedia {
+  const kind = mediaKind(row.file_url, row.file_type ?? null)
+  return {
+    url: row.file_url,
+    type: kind,
+    // The stored mime type when the row has one. The generic stand-in is only
+    // ever reached by the legacy `image_url` column, which carries no metadata
+    // at all — it is a placeholder, not a measurement, and nothing downstream
+    // may treat it as one.
+    mime_type: row.file_type ?? (kind === 'video' ? 'video/mp4' : 'image/jpeg'),
+    ...(typeof row.file_size_bytes === 'number' ? { size_bytes: row.file_size_bytes } : {}),
+    ...(typeof row.duration_seconds === 'number' ? { duration_seconds: row.duration_seconds } : {}),
+  }
+}
+
+/**
+ * The dispatcher never got the content, as opposed to refusing it.
+ *
+ * `publishToPlatform` reports both as `{ ok: false, error }`, so without this
+ * every outage would be read as a rejection and the row written off. That is
+ * the exact fault the requeue below was written to stop: a restart, a DNS
+ * change or a network blip permanently discarded real scheduled content and
+ * nothing ever picked it up again.
+ *
+ * These strings are the dispatcher's own transport failures — a Mixpost
+ * account list that could not be fetched, and a rate limit it intends to serve
+ * later. Matching on prose is not how this should work; it is what the current
+ * `PublishResult` allows. When that type grows a `retryable` flag, read the
+ * flag and delete this list. Do NOT widen it in the meantime: "no account
+ * connected for instagram" is a configuration answer, not an outage, and
+ * requeueing it would loop every five minutes without ever telling the owner.
+ */
+const PUBLISHER_UNREACHABLE = ['No Mixpost accounts connected', 'Rate limit exceeded'] as const
+
+function publisherWasUnreachable(result: PublishResult): boolean {
+  if (result.retry_after_ms) return true
+  const error = result.error ?? ''
+  return PUBLISHER_UNREACHABLE.some((fragment) => error.includes(fragment))
 }
 
 export async function GET(request: Request) {
@@ -65,8 +155,43 @@ export async function GET(request: Request) {
   for (const post of inFlight ?? []) {
     const externalId = post.external_post_id as string | null
 
-    // Only a post uuid can be looked up; legacy numeric ids cannot.
-    if (externalId && /^[0-9a-f-]{36}$/i.test(externalId)) {
+    /*
+     * Ask the publisher that actually sent it.
+     *
+     * This guard was `/^[0-9a-f-]{36}$/` alone — a Mixpost UUID. A Zernio id is
+     * a 24-character Mongo ObjectId, so every Zernio post failed the test, was
+     * never looked up, and dropped through to being written off below as "Never
+     * reached the publisher". A post live on Facebook read as a failure in NRS,
+     * and the obvious response — send it again — puts it on the page twice.
+     *
+     * The row does not record which publisher sent it, so the id shape decides.
+     * That is not elegant, but it is exact: the two formats cannot collide.
+     */
+    const isMixpostId = !!externalId && /^[0-9a-f-]{36}$/i.test(externalId)
+    const isZernioId = !!externalId && /^[0-9a-f]{24}$/i.test(externalId)
+
+    if (externalId && isZernioId) {
+      const state = zernioPostState(await fetchZernioPostStatus(externalId))
+      if (state === 'published') {
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'published', published_at: new Date().toISOString(), error: null })
+          .eq('id', post.id)
+        continue
+      }
+      if (state === 'failed') {
+        await supabase
+          .from('scheduled_posts')
+          .update({ status: 'failed', error: 'The publisher reported this post as failed.' })
+          .eq('id', post.id)
+        continue
+      }
+      // Unknown, still running, or Zernio unreachable. It has an id, so it did
+      // reach a publisher — asking again next tick beats inventing a verdict.
+      continue
+    }
+
+    if (externalId && isMixpostId) {
       const remote = await fetchMixpostPost(externalId)
       const state = remote ? mixpostPostState(remote.status) : null
       if (state === 'published') {
@@ -88,7 +213,17 @@ export async function GET(request: Request) {
       if (remote) continue
     }
 
-    // No usable id after twenty minutes means it never reached the publisher.
+    /*
+     * Only a post with NO id at all is written off.
+     *
+     * This previously caught anything the guard above did not recognise, so an
+     * id in an unexpected shape — every Zernio id, and any future publisher's —
+     * was reported to the owner as never sent. "We could not identify this" and
+     * "this did not go out" are different facts, and merging them fails in the
+     * direction that causes duplicate posts on a live account.
+     */
+    if (externalId) continue
+
     const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString()
     if ((post.updated_at as string) < twentyMinutesAgo) {
       await supabase
@@ -101,7 +236,7 @@ export async function GET(request: Request) {
   // Find posts due for publishing
   const { data: duePosts, error } = await supabase
     .from('scheduled_posts')
-    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(file_url, file_name)')
+    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(file_url, file_name, file_type, file_size_bytes, duration_seconds)')
     .eq('status', 'scheduled')
     .lte('scheduled_at', new Date().toISOString())
     .limit(20)
@@ -110,52 +245,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ published: 0, message: 'No posts due' })
   }
 
-  // Pre-fetch Mixpost accounts once for all posts
-  const mixpostUrl = process.env.MIXPOST_API_URL
-  const mixpostToken = process.env.MIXPOST_API_TOKEN
-  const useMixpost = Boolean(mixpostUrl && mixpostToken)
-
-  let brandAccountMap: Map<string, import('@/lib/mixpost/client').MixpostAccount[]> | null = null
-
-  if (useMixpost) {
-    const allAccounts = await fetchMixpostAccounts()
-    if (allAccounts) {
-      // Build brand stubs from the posts' brands for mapping
-      const brandStubs = duePosts
-        .filter(p => p.brands)
-        .map(p => ({
-          id: (p.brands as Record<string, unknown>).id as string,
-          name: (p.brands as Record<string, unknown>).name as string,
-          slug: (p.brands as Record<string, unknown>).slug as string,
-          social_urls: ((p.brands as Record<string, unknown>).social_urls as Record<string, string>) ?? {},
-        }))
-
-      // De-duplicate by brand ID
-      const uniqueBrands = Array.from(
-        new Map(brandStubs.map(b => [b.id, b])).values()
-      )
-
-      brandAccountMap = mapAccountsToBrandsRaw(allAccounts, uniqueBrands)
-    }
-  }
-
-  // Pre-fetch Zernio accounts for all profiles associated with these posts
-  let zernioAccountMap: Map<string, ZernioAccount[]> = new Map();
-  if (process.env.ZERNIO_API_KEY) {
-    const allZernioAccounts = await fetchZernioAccounts();
-    if (allZernioAccounts && allZernioAccounts.length > 0) {
-      duePosts.forEach(p => {
-        const brand = p.brands as Record<string, unknown> | null;
-        if (brand) {
-          const socialUrls = (brand.social_urls as Record<string, string>) ?? {};
-          const profileId = socialUrls.zernio_profile_id;
-          if (profileId) {
-            const accs = allZernioAccounts.filter(a => a.profileId === profileId);
-            zernioAccountMap.set(brand.id as string, accs);
-          }
-        }
-      });
-    }
+  // List the team's Zernio accounts once and hand the list over.
+  //
+  // This is a batch optimisation, not a decision. The route used to key these
+  // by `social_urls.zernio_profile_id` itself and prefer Zernio whenever a
+  // match existed — a private rule that /api/scheduled-posts/publish-now did
+  // not share, which is how one row published to the Zernio account under
+  // "Schedule" and the Mixpost account under "Publish now". The rule now lives
+  // once, in selectPublisherBackend. All this does is save one API call per
+  // post; omitting it would be correct, only slower.
+  let zernioAccounts: readonly ZernioAccount[] | undefined
+  try {
+    zernioAccounts = await fetchZernioAccounts()
+  } catch (err) {
+    // A publisher we may not even be using must not take the tick down. The
+    // dispatcher falls back on its own when the list is missing.
+    console.error(
+      '[cron/publish-posts] could not list Zernio accounts:',
+      err instanceof Error ? err.message : String(err),
+    )
   }
 
   let published = 0
@@ -195,6 +303,12 @@ export async function GET(request: Request) {
       }
 
       // Build post signature suffix
+      //
+      // It is handed to the dispatcher as its own field rather than spliced
+      // into the caption here. Three paths each appended it differently, or
+      // not at all, so the same stored row published with the brand's sign-off
+      // down one route and without it down another. One field, appended in one
+      // place, is the only arrangement where they cannot disagree.
       const sig = (post.brands as Record<string, unknown>)?.post_signature as
         | { enabled?: boolean; text?: string; format?: string; mention?: string; hashtag?: string }
         | undefined
@@ -205,183 +319,112 @@ export async function GET(request: Request) {
         else if (sig.text) signatureSuffix = `\n\n${sig.text}`
       }
 
-      let externalPostId: string | null = null
+      const platform = asPublisherPlatform(post.platform)
+      if (!platform) {
+        throw new Error(
+          `"${String(post.platform)}" is not a platform this account can post to. Connect it first, or change the platform on this post.`,
+        )
+      }
 
-      const brandId = post.brand_id as string
-      const zernioAccs = zernioAccountMap.get(brandId) || []
-      const zernioAccount = zernioAccs.find(a => a.platform === post.platform)
+      // Gather media, in the order the owner arranged it.
+      //
+      // The carousel branch previously mapped the rows in whatever order
+      // PostgREST returned them from `.in()`, which is not the order of the
+      // id array — a carousel is an ordered thing and the slides could come
+      // out shuffled. Re-keying by id and walking the original array fixes
+      // that without changing which items are included.
+      const mediaRows: MediaRow[] = []
 
-      // Gather media URLs from media_items (shared across publishers)
-      const mediaUrls: string[] = []
-      
-      // Carousel support: media_item_ids array
       const mediaItemIds = (post as Record<string, unknown>).media_item_ids as string[] | undefined
       if (mediaItemIds?.length) {
-        const { data: mediaItems } = await supabase
+        const { data: carousel } = await supabase
           .from('media_items')
-          .select('file_url')
+          .select('id, file_url, file_type, file_size_bytes, duration_seconds')
           .in('id', mediaItemIds)
-        mediaUrls.push(...(mediaItems ?? []).map((m: { file_url: string }) => m.file_url))
+        const byId = new Map(
+          (carousel ?? []).map((m: MediaRow & { id: string }) => [m.id, m]),
+        )
+        for (const id of mediaItemIds) {
+          const row = byId.get(id)
+          if (row?.file_url) mediaRows.push(row)
+        }
       }
 
       // Single media fallback (joined relation)
-      if (mediaUrls.length === 0 && post.media_items?.file_url) {
-        mediaUrls.push(post.media_items.file_url as string)
+      if (mediaRows.length === 0 && post.media_items?.file_url) {
+        mediaRows.push(post.media_items as MediaRow)
       }
 
       // image_url fallback (from publish_to_social or generate_image)
-      if (mediaUrls.length === 0 && (post as Record<string, unknown>).image_url) {
-        mediaUrls.push((post as Record<string, unknown>).image_url as string)
+      if (mediaRows.length === 0 && (post as Record<string, unknown>).image_url) {
+        mediaRows.push({ file_url: (post as Record<string, unknown>).image_url as string })
       }
 
-      if (zernioAccount) {
-        // ── Primary SaaS Path: Zernio ──
-        
-        // 2. Build caption
-        let caption = post.caption as string
-        const hashtags = post.hashtags as string[] | null
-        if (hashtags?.length) {
-          caption += '\n\n' + hashtags.map((h: string) => `#${h}`).join(' ')
-        }
-        caption += signatureSuffix
-
-        // 3. Post
-        const result = await createZernioPost({
-          content: caption,
-          accounts: [{ platform: post.platform, accountId: zernioAccount.id }],
-          mediaUrls: mediaUrls,
-          publishNow: true
-        })
-        
-        externalPostId = result._id || result.id || null;
-      } else if (useMixpost && brandAccountMap) {
-        // ── Publish via Mixpost (self-hosted, free) ──
-
-        // 1. Resolve Mixpost account IDs for this brand + platform
-        const brandAccounts = brandAccountMap.get(brandId) ?? []
-        const accountIds = resolveAccountIdsForPlatform(post.platform, brandAccounts)
-
-        if (accountIds.length === 0) {
-          throw new Error(
-            `No Mixpost account found for platform "${post.platform}" on brand "${(post.brands as Record<string, unknown>)?.name ?? brandId}". Connect this platform in Mixpost first.`
-          )
-        }
-
-        // 3. Upload media to Mixpost
-        const mixpostMediaIds: number[] = []
-        for (const url of mediaUrls) {
-          const result = await uploadMediaFromUrl(url)
-          if (result) mixpostMediaIds.push(result.id)
-        }
-
-        // 4. Build caption with hashtags + signature
-        let caption = post.caption as string
-        const hashtags = post.hashtags as string[] | null
-        if (hashtags?.length) {
-          caption += '\n\n' + hashtags.map((h: string) => `#${h}`).join(' ')
-        }
-        caption += signatureSuffix
-
-        // 5. Build platform-specific options
-        const platformOptions: Record<string, unknown> = {}
-        const postType = (post as Record<string, unknown>).post_type as string | undefined
-
-        if (post.platform === 'instagram') {
-          platformOptions.type = postType === 'reel' ? 'reel' : 'post'
-        }
-        if (post.platform === 'tiktok') {
-          platformOptions.privacy_level = 'PUBLIC_TO_EVERYONE'
-          if (postType === 'carousel') platformOptions.auto_add_music = true
-        }
-        if (post.platform === 'linkedin') {
-          platformOptions.visibility = 'PUBLIC'
-        }
-        if (post.platform === 'youtube') {
-          platformOptions.privacy_status = 'public'
-          // AI-generated content disclosure
-          platformOptions.contains_synthetic_media = true
-        }
-
-        // 6. Build version (original version targets all selected accounts)
-        const version: MixpostVersion = {
-          account_id: 0,
-          is_original: true,
-          content: [{
-            body: caption,
-            media: mixpostMediaIds,
-            url: null,
-            video_thumbs: [],
-          }],
-          options: Object.keys(platformOptions).length > 0 ? platformOptions : undefined,
-        }
-
-        // 7. Create post in Mixpost
-        const result = await createMixpostPost({
-          accounts: accountIds,
-          versions: [version],
-          schedule_now: true,
-        })
-
-        if (!result) {
-          throw new Error('Failed to create Mixpost post — API returned no result')
-        }
-
-        externalPostId = result.id
-      } else if (!useMixpost) {
-        // ── Fallback: Ayrshare ──
-        const { data: integration } = await supabase
-          .from('user_integrations')
-          .select('cached_data')
-          .eq('user_id', post.user_id)
-          .eq('provider', 'ayrshare')
-          .single()
-
-        const apiKey =
-          (integration?.cached_data?.api_key as string) ||
-          process.env.AYRSHARE_API_KEY ||
-          null
-
-        if (!apiKey) {
-          throw new Error(
-            'No publishing service configured. Set MIXPOST_API_URL + MIXPOST_API_TOKEN or an Ayrshare API key.'
-          )
-        }
-
-        const mediaUrl = post.media_items?.file_url as string | undefined
-
-        const ayrshareRes = await fetch('https://app.ayrshare.com/api/post', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
+      // ── The one door ──────────────────────────────────────────────────
+      //
+      // Everything below the gate used to be an inline `if (zernioAccount) …
+      // else if (useMixpost) … else ayrshare` fork, which is why this route
+      // and /api/scheduled-posts/publish-now could send the same row to two
+      // different services. Backend choice, account matching, caption
+      // assembly and media handling now belong to publishToPlatform.
+      //
+      // `attempt` is 1 and must stay 1: the dispatcher skips the regulatory
+      // review on attempts above 1, on the understanding that a retry is
+      // re-sending content that already passed. Content arriving from this
+      // loop has not.
+      const result = await publishToPlatform(
+        {
+          scheduled_post_id: post.id as string,
+          brand_id: post.brand_id as string,
+          platform,
+          caption: String(post.caption ?? ''),
+          media: mediaRows.map(toPublishMedia),
+          hashtags: (post.hashtags as string[] | null) ?? undefined,
+          signature: signatureSuffix === '' ? undefined : signatureSuffix,
+          // post_type decides Instagram reel-vs-feed, TikTok's carousel music
+          // and YouTube's synthetic-media disclosure. It travels with the
+          // request so the dispatcher can apply them in one place; a publisher
+          // that ignores it drops the AI disclosure on a regulated brand.
+          metadata: {
+            source: 'cron/publish-posts',
+            post_type: (post as Record<string, unknown>).post_type ?? null,
           },
-          body: JSON.stringify({
-            post: (post.caption as string) + signatureSuffix,
-            platforms: [post.platform === 'twitter' ? 'twitter' : post.platform],
-            ...(mediaUrl ? { mediaUrls: [mediaUrl] } : {}),
-            ...(post.hashtags ? { hashtags: post.hashtags } : {}),
-          }),
-        })
+        },
+        1,
+        { zernioAccounts },
+      )
 
-        const result = await ayrshareRes.json()
-
-        if (!ayrshareRes.ok) {
-          throw new Error(result.message ?? `Ayrshare error ${ayrshareRes.status}`)
+      if (!result.ok) {
+        if (publisherWasUnreachable(result)) {
+          throw new PublisherUnreachableError(
+            result.error ?? 'Could not reach the publisher.',
+          )
         }
-
-        externalPostId = result.id ?? result.postId ?? null
-      } else {
-        // Mixpost configured but accounts fetch failed — retry next cron tick
-        throw new PublisherUnreachableError('Could not reach the publisher to list accounts.')
+        throw new Error(result.error ?? 'The publisher did not accept this post.')
       }
 
-      // Mark as publishing — webhook will confirm final 'published' status
+      // Relay what the publisher actually said.
+      //
+      // `ok` only means the send was accepted. Only `confirmed` means the
+      // platform said it is live — Zernio returns that synchronously, Mixpost
+      // never does and is reconciled by the in-flight sweep above. Writing
+      // 'published' on `ok` alone would repeat the fault create-draft.ts was
+      // written to prevent: pending is not done.
       await supabase
         .from('scheduled_posts')
-        .update({
-          status: 'publishing',
-          external_post_id: externalPostId,
-        })
+        .update(
+          result.confirmed
+            ? {
+                status: 'published',
+                published_at: new Date().toISOString(),
+                external_post_id: result.external_post_id ?? null,
+                error: null,
+              }
+            : {
+                status: 'publishing',
+                external_post_id: result.external_post_id ?? null,
+              },
+        )
         .eq('id', post.id)
 
       published++

@@ -5,7 +5,7 @@ import { PlatformMockupPreview } from '.'
 import { cn } from '@/lib/utils'
 import type { PostPlatform } from '@/types/database'
 import type { PostVersions } from '@/lib/post-versions'
-import { getVersionForPlatform } from '@/lib/post-versions'
+import { resolvePublishCaption } from '@/lib/post-versions'
 
 interface MultiPlatformPreviewProps {
   platforms: PostPlatform[]
@@ -135,17 +135,24 @@ export function MultiPlatformPreview({
         visiblePlatforms.length === 1 && 'justify-center'
       )}>
         {visiblePlatforms.map(platform => {
-          const version = versions
-            ? getVersionForPlatform(versions, platform, masterCaption, masterHashtags)
-            : { caption: masterCaption, hashtags: masterHashtags }
+          // One call decides both the words and the badge, because they were
+          // two separate opinions and they disagreed. The mockup asked for the
+          // version; the badge read `versions[platform].isCustomised` straight
+          // off the object. Emptying a platform caption leaves that flag true
+          // with nothing behind it, so the phone drew the master copy with
+          // "customised" printed underneath — the one label an owner trusts to
+          // mean "this platform says something different" appearing over the
+          // case where it doesn't. Whatever resolvePublishCaption hands the
+          // publisher is what gets drawn and what gets labelled.
+          const publish = resolvePublishCaption(versions, platform, masterCaption, masterHashtags)
 
           return (
             <div key={platform} className="flex flex-col items-center gap-1.5 flex-shrink-0">
               <div style={{ transform: 'scale(0.78)', transformOrigin: 'top center' }}>
                 <PlatformMockupPreview
                   platform={platform}
-                  caption={version.caption}
-                  hashtags={version.hashtags}
+                  caption={publish.caption}
+                  hashtags={publish.hashtags}
                   mediaUrl={mediaUrl}
                   mediaUrls={mediaUrls}
                   brandName={brandName}
@@ -154,7 +161,7 @@ export function MultiPlatformPreview({
               </div>
               <span className="text-[9px] font-medium text-muted-foreground">
                 {PLATFORM_LABELS[platform] ?? platform}
-                {versions?.[platform]?.isCustomised && (
+                {publish.isCustomised && (
                   <span className="ml-1 text-[oklch(0.55_0.15_250)]">customised</span>
                 )}
               </span>

@@ -73,8 +73,10 @@ export async function GET(request: Request) {
     )
   }
 
-  // Clear the state cookie
-  cookieStore.delete('meta_oauth_state')
+  // Clear the state cookie. The path has to be repeated: /api/oauth/meta/initiate
+  // sets it at '/api/oauth/meta/callback', and a bare delete(name) expires a
+  // different cookie at '/', leaving this one replayable until it lapses.
+  cookieStore.delete({ name: 'meta_oauth_state', path: '/api/oauth/meta/callback' })
 
   /*
    * Establish WHO is connecting, and that the project is theirs.

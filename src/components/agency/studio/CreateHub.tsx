@@ -9,7 +9,6 @@ import { useStrategyContext } from '@/hooks/useStrategyContext'
 import { StrategyBrief } from './StrategyBrief'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { CarouselBuilder } from './carousel/CarouselBuilder'
-import { PostComposerRoom } from './post/PostComposerRoom'
 import type { BrandTheme } from './carousel/types'
 
 interface CardDef {
@@ -18,7 +17,6 @@ interface CardDef {
   title: string
   description: string
   href?: string // Navigate to separate page
-  action?: string // 'postComposer' | 'carousel' — opens inline
   buildMessage?: (brand: string, context: string) => string
 }
 
@@ -43,7 +41,13 @@ const ROOM_CARDS: CardDef[] = [
     colour: 'bg-blue-500/15 text-blue-400',
     title: 'Write a Post',
     description: 'AI writes it, you edit, or both. Live platform previews.',
-    action: 'postComposer',
+    // Was `action: 'postComposer'`, which mounted a second composer inline here.
+    // That composer (PostComposerRoom) has been deleted — two composers meant a
+    // compliance rule or platform limit had to be written twice to take effect,
+    // and it silently drifted. Navigating is the fix, not re-mounting: the card
+    // now lands on the one surviving composer, the same place /agency/studio/post
+    // redirects to, so every entry point reaches identical validation.
+    href: '/agency/studio/create',
   },
   {
     icon: Target,
@@ -75,7 +79,6 @@ export function CreateHub() {
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
   const [showCarouselBuilder, setShowCarouselBuilder] = useState(false)
-  const [showPostComposer, setShowPostComposer] = useState(false)
 
   const brandName = data.brand?.name
   const agentContext = strategyContext?.agentContext ?? ''
@@ -101,24 +104,6 @@ export function CreateHub() {
             Select a brand from the sidebar to start creating content.
           </p>
         </div>
-      </div>
-    )
-  }
-
-  // Post Composer mode
-  if (showPostComposer && activeBrandId) {
-    return (
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex items-center gap-3 px-6 pt-4 pb-2">
-          <button
-            onClick={() => setShowPostComposer(false)}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium bg-muted hover:bg-muted/80 transition-colors"
-          >
-            &larr; Back to Create
-          </button>
-          <h2 className="text-sm font-semibold">Post Creator — {brandName}</h2>
-        </div>
-        <PostComposerRoom />
       </div>
     )
   }
@@ -182,13 +167,11 @@ export function CreateHub() {
 
         {ROOM_CARDS.map(card => {
           const Icon = card.icon
-          const hasAction = !!card.action && hasBrand
           const isNavigable = !!card.href && hasBrand
           const isChat = !!card.buildMessage
 
           const handleClick = () => {
-            if (card.action === 'postComposer') setShowPostComposer(true)
-            else if (card.href) window.location.href = card.href
+            if (card.href) window.location.href = card.href
             else if (card.buildMessage && hasBrand) sendToDirector(card.buildMessage(brandName!, agentContext))
           }
 
@@ -201,7 +184,7 @@ export function CreateHub() {
               className={cn(cardClasses, !hasBrand && disabledClasses)}
             >
               {isChat && <MessageSquare className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />}
-              {(hasAction || isNavigable) && <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />}
+              {isNavigable && <ExternalLink className="absolute top-3 right-3 h-3.5 w-3.5 text-muted-foreground/40" />}
               <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', card.colour)}>
                 <Icon className="h-5 w-5" />
               </div>

@@ -268,3 +268,56 @@ export async function setZernioCampaignStatus(
   }
   return await res.json();
 }
+
+/**
+ * Ask Zernio what became of a post we sent.
+ *
+ * The publish cron marks a row `publishing`, then a sweep reconciles it. That
+ * sweep only ever asked Mixpost, behind a `/^[0-9a-f-]{36}$/` guard that matches
+ * a UUID. A Zernio id is a 24-character Mongo ObjectId, so it failed the guard,
+ * was never looked up, and fell through to being written off as "Never reached
+ * the publisher — no post was created" twenty minutes later.
+ *
+ * So a post that published perfectly to Facebook read as a failure in NRS, and
+ * the obvious next move — publish it again — puts it on the page twice.
+ *
+ * Returns the raw status string, or null when Zernio has no answer. Null means
+ * "unknown", never "failed": deciding a post failed because we could not confirm
+ * it is the fault this exists to remove.
+ */
+export async function fetchZernioPostStatus(postId: string): Promise<string | null> {
+  try {
+    if (!process.env.ZERNIO_API_KEY) return null;
+    const zernio = new Zernio({ apiKey: process.env.ZERNIO_API_KEY });
+    const res = (await zernio.posts.getPost({ postId } as never)) as unknown;
+
+    // Responses nest as { data: { post: {...} } } on some endpoints and
+    // { data: {...} } on others, and the SDK is young enough that this varies.
+    const node = res as Record<string, unknown> | null;
+    const data = (node?.data ?? node) as Record<string, unknown> | null;
+    const post = (data?.post ?? data) as Record<string, unknown> | null;
+    const status = post?.status;
+    return typeof status === 'string' && status.trim() ? status.trim() : null;
+  } catch (err) {
+    console.error('[zernio] could not read post status:', messageOf(err));
+    return null;
+  }
+}
+
+/**
+ * Map a Zernio status onto the only two verdicts worth acting on.
+ *
+ * The exact enum is NOT confirmed against a live post — nothing has published
+ * through Zernio yet, so there was no real value to observe, only the docs'
+ * `?status=failed` filter. Every value not clearly terminal therefore returns
+ * null and the sweep asks again next tick. An unrecognised status must never
+ * become a verdict; that is precisely how the Mixpost-only sweep invented
+ * failures.
+ */
+export function zernioPostState(status: string | null): 'published' | 'failed' | null {
+  if (!status) return null;
+  const s = status.toLowerCase();
+  if (s === 'published' || s === 'posted' || s === 'complete' || s === 'completed') return 'published';
+  if (s === 'failed' || s === 'error' || s === 'rejected') return 'failed';
+  return null;
+}

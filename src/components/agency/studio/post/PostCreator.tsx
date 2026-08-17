@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb, Image as ImageGenIcon } from 'lucide-react'
+import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb, Image as ImageGenIcon, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -23,7 +23,8 @@ import { ContentTypeSection, type ContentType } from './ContentTypeSection'
 import { PlatformSection } from './PlatformSection'
 import { RichCaptionEditor } from './RichCaptionEditor'
 import { PostContentValidator } from './PostContentValidator'
-import type { PlatformKey } from '@/lib/mixpost/ui-tokens'
+import { PLATFORM_CHAR_LIMITS, PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
+import { isCaptionWithinAllLimits } from '@/hooks/usePostCharacterLimit'
 import { PlatformVersionEditor } from './PlatformVersionEditor'
 import { HashtagSection } from './HashtagSection'
 import { PostTemplatePicker } from '../templates/PostTemplatePicker'
@@ -31,7 +32,7 @@ import { ComplianceSection } from './ComplianceSection'
 import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
 import { MediaSelector } from './MediaSelector'
 
-import { createVersionsFromMaster, customisePlatform, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
+import { createVersionsFromMaster, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
 import type { PostPlatform, PostType } from '@/types/database'
 
 // ── Content type → Post type mapping ──────────────────────────────────────────
@@ -43,6 +44,34 @@ const CONTENT_TO_POST_TYPE: Record<ContentType, PostType> = {
   story: 'single',
   ad: 'single',
 }
+
+/**
+ * The body a platform actually receives — deliberately keystroke-for-keystroke
+ * the same assembly as buildCaption in src/lib/publishers/dispatcher.ts, down
+ * to trimming blanks out and refusing to give a tag a second '#'. A composer
+ * that measures a different string from the one the publisher sends is back to
+ * telling the owner something that isn't true, just about length this time.
+ *
+ * The limit applies to this whole string, not to the caption on its own.
+ * Measuring the caption alone waves through a 2,190-character Instagram post
+ * carrying ten hashtags, and Instagram rejects it hours later while the owner
+ * is asleep. The rings under the editor still count the caption alone, which
+ * is why the Save warning says out loud that the hashtags are in the number —
+ * a dead button beside a green ring is its own kind of lie.
+ *
+ * The brand sign-off the publisher appends after this is NOT counted: the
+ * composer never loads brands.post_signature, and inventing a length for it
+ * would be worse than admitting the count is the body without it.
+ */
+function composePublishBody(caption: string, hashtags: string[]): string {
+  const tags = hashtags
+    .map((h) => h.trim())
+    .filter((h) => h !== '')
+    .map((h) => (h.startsWith('#') ? h : `#${h}`))
+  return tags.length === 0 ? caption : `${caption}\n\n${tags.join(' ')}`
+}
+
+const formatCount = (n: number) => n.toLocaleString('en-AU')
 
 // ── Media item shape (from /api/media) ────────────────────────────────────────
 // Imported from MediaSelector so the picker, the slot card, and the Creator
@@ -334,34 +363,108 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     setSelectedMediaIds(prev => prev.filter(i => i !== id))
   }
 
+  // ── Can this actually be published? ───────────────────────────────────────
+  // isCaptionWithinAllLimits describes itself as the "can I publish" gate and
+  // until now had no callers at all — Save asked only whether a platform was
+  // ticked and the box wasn't empty. A caption X would refuse outright went
+  // into the Review queue looking healthy and only failed at the publisher,
+  // hours later, with nobody watching.
+  //
+  // Measured per platform, not once for all of them, for two reasons. Each
+  // platform may now be publishing different words. And google_business has no
+  // entry in PLATFORM_CHAR_LIMITS: handed to isCaptionWithinAllLimits it
+  // compares the length against `undefined`, which is false for every caption
+  // ever written, so Save would have switched off permanently and the owner
+  // would have had no idea why. Platforms with no published limit are left
+  // alone rather than blocked on a number nobody has.
+  const overLimitPlatforms = selectedPlatforms.flatMap((platform) => {
+    if (!(platform in PLATFORM_CHAR_LIMITS)) return []
+    const key = platform as PlatformKey
+    const publish = resolvePublishCaption(versions, platform, caption, hashtags)
+    const body = composePublishBody(publish.caption, publish.hashtags)
+    if (isCaptionWithinAllLimits(body, [key])) return []
+    const limit = PLATFORM_CHAR_LIMITS[key]
+    // Same grapheme approximation usePostCharacterLimit counts with, so the
+    // overage quoted here can never contradict the ring above it.
+    return [{ label: PLATFORM_LABELS[key], limit, over: Array.from(body).length - limit }]
+  })
+
+  // Plain language, named platform, real number. "Validation failed" tells the
+  // owner nothing he can act on; "Instagram takes 2,200 characters and this
+  // post is 140 over" tells him exactly how much to cut.
+  const overLimitMessage = overLimitPlatforms.length === 0 ? null : (() => {
+    const each = overLimitPlatforms.map(
+      (p) => `${p.label} takes ${formatCount(p.limit)} characters and this post is ${formatCount(p.over)} over`,
+    )
+    // Semicolons, not "and" — each clause already contains an "and", so
+    // joining them with another one produced a sentence nobody could parse.
+    const joined = each.join('; ')
+    const hashtagNote = hashtags.length > 0
+      ? ' That count includes your hashtags — they get added onto the end of the post when it goes out.'
+      : ''
+    return `Too long to publish. ${joined}. Shorten the caption, or untick ${overLimitPlatforms.length === 1 ? overLimitPlatforms[0].label : 'those platforms'}.${hashtagNote}`
+  })()
+
+  const hasOverLimit = overLimitPlatforms.length > 0
+
   // ── Save / Schedule / Publish ──────────────────────────────────────────────
   const handleSave = useCallback(async (mode: 'draft' | 'schedule' | 'now', scheduledAt?: string) => {
     if (!activeBrandId || !caption.trim()) return
+    // Belt and braces. The button is disabled below, but a save handler is the
+    // last place that should trust its caller.
+    if (hasOverLimit) return
     setSaving(true)
 
     try {
       if (mode === 'now') {
         const platformNames = selectedPlatforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')
-        sendToDirector(`Review and publish this post to ${platformNames}:\n\n${caption}\n\n${hashtags.map(h => `#${h}`).join(' ')}\n\nCheck compliance and brand voice, then publish when ready.`)
+        // The Director is asked to publish the words on screen, per platform.
+        // It used to be handed the master caption and a platform list, so a
+        // platform the owner had rewritten was reviewed and published from the
+        // copy he had already replaced — and the reply came back saying it was
+        // done, which it was, with the wrong text.
+        const anyCustomised = selectedPlatforms.some(
+          (platform) => resolvePublishCaption(versions, platform, caption, hashtags).isCustomised,
+        )
+        if (!anyCustomised) {
+          sendToDirector(`Review and publish this post to ${platformNames}:\n\n${caption}\n\n${hashtags.map(h => `#${h}`).join(' ')}\n\nCheck compliance and brand voice, then publish when ready.`)
+          return
+        }
+        const perPlatform = selectedPlatforms.map((platform) => {
+          const publish = resolvePublishCaption(versions, platform, caption, hashtags)
+          const label = platform.charAt(0).toUpperCase() + platform.slice(1)
+          return `--- ${label} ---\n${composePublishBody(publish.caption, publish.hashtags)}`
+        })
+        sendToDirector(`Review and publish this post to ${platformNames}. Each platform below has its own wording — publish exactly what is written under that platform's heading and do not merge them or reuse one for another.\n\n${perPlatform.join('\n\n')}\n\nCheck compliance and brand voice on every version, then publish when ready.`)
         return
       }
 
       if (editMode && editDraftId) {
-        // Edit mode: PATCH existing draft
+        // Edit mode: PATCH existing draft. The row is one platform's row, so
+        // it gets that platform's words — the same resolution the preview drew.
+        const editPlatform = selectedPlatforms[0]
+        const editPublish = editPlatform
+          ? resolvePublishCaption(versions, editPlatform, caption, hashtags)
+          : { caption, hashtags, isCustomised: false }
         await fetch('/api/scheduled-posts', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: editDraftId,
-            caption,
-            hashtags: hashtags.map(h => `#${h}`),
+            caption: editPublish.caption,
+            hashtags: editPublish.hashtags.map(h => h.replace(/^#/, '')),
             status: mode === 'draft' ? 'draft' : 'scheduled',
             scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
             post_type: postType,
             media_item_ids: selectedMediaIds,
             content_type: strategyContext?.suggestedContentType ?? undefined,
             content_pillar: strategyContext?.suggestedPillar ?? undefined,
-            ...(reviewStamp && reviewStamp.reviewed_caption === caption
+            // Compared against the words this row is publishing, not against
+            // the master. The compliance check runs on the master caption, so
+            // a platform the owner rewrote afterwards was never reviewed —
+            // stamping it reviewed is how unchecked AHPRA/TGA copy reaches a
+            // live account carrying a tick.
+            ...(reviewStamp && reviewStamp.reviewed_caption === editPublish.caption
               ? { metadata: reviewStamp }
               : {}),
           }),
@@ -376,14 +479,27 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
 
       // New post mode: POST per platform
       for (const platform of selectedPlatforms) {
+        // scheduled_posts is already one row per platform, so the row's own
+        // caption IS the variant — no migration, no new column, nothing
+        // downstream needs to know versions exist. Sending the master here was
+        // the whole fault: the editor wrote the LinkedIn version, the preview
+        // drew the LinkedIn version, and LinkedIn received the master.
+        const publish = resolvePublishCaption(versions, platform, caption, hashtags)
         await fetch('/api/scheduled-posts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             brandId: activeBrandId,
             platform,
-            caption,
-            hashtags: hashtags.map(h => `#${h}`),
+            caption: publish.caption,
+            // Stored bare. publish-now/route.ts:132 puts a '#' on every tag
+            // unconditionally, so a '#' added here reached the account as
+            // '##weightloss' while the preview — which strips a leading '#'
+            // before drawing — showed '#weightloss'. The preview was right and
+            // the row was wrong. Bare is the shape the rest of the app already
+            // writes (HashtagSection, fill-calendar) and the shape
+            // dispatcher.ts:buildCaption is built to receive.
+            hashtags: publish.hashtags.map(h => h.replace(/^#/, '')),
             status: mode === 'draft' ? 'draft' : 'scheduled',
             scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
             post_type: postType,
@@ -395,8 +511,11 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
               created_by: 'You',
               // Only stamped when the review both ran and passed on this exact
               // caption — editing after a check clears it, so the stamp can
-              // never outlive the words it was about.
-              ...(reviewStamp && reviewStamp.reviewed_caption === caption ? reviewStamp : {}),
+              // never outlive the words it was about. Compared against this
+              // platform's words, not the master: ComplianceSection checks the
+              // master caption, so a platform the owner rewrote afterwards was
+              // never reviewed, and a tick on it would be a false one.
+              ...(reviewStamp && reviewStamp.reviewed_caption === publish.caption ? reviewStamp : {}),
               ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
                 ? { platform_options: platformOptions[platform] }
                 : {}),
@@ -418,7 +537,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     } finally {
       setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamp, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {
@@ -796,15 +915,30 @@ If any items have no AI description or transcription yet, name them and offer to
     </div>
   )
 
+  // CreatorActionBar exposes exactly one lever for switching Save off
+  // (`captionEmpty`), and this change does not own that file, so the
+  // over-limit case rides on it. A warning on its own is what let a caption
+  // the platform would refuse reach the Review queue looking approved, so the
+  // button genuinely has to go dead. The reason sits directly above the bar,
+  // next to the button it explains, where it can name the platform and the
+  // number instead of leaving the owner to guess which one is the problem.
   const actionBar = (
-    <CreatorActionBar
-      platforms={selectedPlatforms}
-      captionEmpty={!caption.trim()}
-      compliancePassed={compliancePassed}
-      saving={saving}
-      onSave={handleSave}
-      editMode={editMode}
-    />
+    <div className="space-y-2">
+      {overLimitMessage && (
+        <div className="flex items-start gap-2 rounded-lg border border-[oklch(0.55_0.2_25/0.3)] bg-[oklch(0.55_0.2_25/0.08)] px-3 py-2 text-[11px] text-[oklch(0.55_0.2_25)]">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span>{overLimitMessage}</span>
+        </div>
+      )}
+      <CreatorActionBar
+        platforms={selectedPlatforms}
+        captionEmpty={!caption.trim() || hasOverLimit}
+        compliancePassed={compliancePassed}
+        saving={saving}
+        onSave={handleSave}
+        editMode={editMode}
+      />
+    </div>
   )
 
   return (

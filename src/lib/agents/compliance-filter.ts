@@ -17,6 +17,35 @@ import {
   getGatewayRouteProviderOptions,
   resolveAgentModelRoute,
 } from '@/lib/ai/model-routing'
+import { userSafeError } from '@/lib/errors/user-safe'
+
+/**
+ * Whether the review actually had the current Australian rules in front of it.
+ *
+ * FAULT (15–17 Aug 2026). Abe AI, which serves the AHPRA/TGA corpus, returned
+ * HTTP 500 on every call for two days: it had switched retrieval to RPCs whose
+ * migration was never applied to its production database. This file caught
+ * that, pushed a sentence into `warnings`, and carried on reviewing regulated
+ * health copy against nothing but the model's own training — with
+ * `regulatoryCitations: []` and a `regulatoryCorpusVersion` of null, which no
+ * caller reads. Every caller either logged the warning to the console or
+ * dropped it. So for two days every review for the four regulated projects ran
+ * ungrounded and came back in a shape indistinguishable from a healthy one.
+ *
+ * Blocking four brands because an upstream service is down is the wrong trade.
+ * Being unable to TELL is worse than either outcome. So the state is recorded
+ * as a field rather than a warning, because the warning is precisely the thing
+ * that got dropped.
+ *
+ * - `not_required` — the project advertises nothing regulated; no rules apply.
+ * - `grounded`     — current corpus text reached the reviewing model, and what
+ *                    it read is on the record (version + citations).
+ * - `partial`      — the rules reached the model, but the record of which ones,
+ *                    which edition, or how they were labelled is incomplete.
+ * - `ungrounded`   — no legislative text reached the model at all. The verdict
+ *                    is the model's general knowledge, and nothing more.
+ */
+export type RegulatoryGrounding = 'not_required' | 'grounded' | 'partial' | 'ungrounded'
 
 export interface GuardianResult {
   isValid: boolean
@@ -41,6 +70,22 @@ export interface GuardianResult {
     section: string | null
   }>
   regulatoryCorpusVersion: string | null
+  /**
+   * Whether the current rules were actually in front of the reviewer.
+   *
+   * Required, not optional: a result that never stated its own grounding is the
+   * exact shape that hid the outage. Anything other than `grounded` or
+   * `not_required` means the verdict is worth less than it looks, and a
+   * regulated project should not treat it as a sign-off.
+   */
+  regulatoryGrounding: RegulatoryGrounding
+  /**
+   * The same fact in a sentence that can be read aloud to the owner, or null
+   * when grounding is full. Also pushed into `warnings`, and duplicated here on
+   * purpose: `warnings` is a list callers log and forget, and this one is not a
+   * risk found IN the content, it is a statement about the review itself.
+   */
+  regulatoryGroundingNote: string | null
   /**
    * What the review cost, present only when it actually ran. Every other model
    * call in NRS is attributed; this one was invisible, so the cost of checking
@@ -70,6 +115,11 @@ export async function runComplianceFilter(
     brandVoiceIssues: [],
     regulatoryCitations: [],
     regulatoryCorpusVersion: null,
+    // Initialised to the honest answer for a review that has not read anything
+    // yet, matching `checkCompleted: false` above. Every path below states it
+    // explicitly; an unset value must never be able to read as grounded.
+    regulatoryGrounding: 'ungrounded',
+    regulatoryGroundingNote: null,
   }
 
   // ── Fast local checks (no LLM call needed) ────────────────────────────────
@@ -123,13 +173,28 @@ export async function runComplianceFilter(
     // by definition. Leaving the flag false here would block unregulated brands
     // for a review they never needed.
     result.checkCompleted = true
+    // Distinct from `ungrounded` on purpose. A fragrance caption is not missing
+    // its legislation; there is none to miss, and reporting it as ungrounded
+    // would make the signal meaningless by firing on most of the work.
+    result.regulatoryGrounding = 'not_required'
     return result
   }
+
+  // The owner's own regulators, so these are the words to use — not "corpus",
+  // "Abe AI" or "the grounding call", none of which mean anything to him.
+  const regime = [flags.ahpra ? 'AHPRA' : null, flags.tga ? 'TGA' : null].filter(Boolean).join(' and ')
 
   // Abe AI is the current legislative source of truth. Only a generic rules
   // question is sent upstream; the marketing content itself never crosses the
   // NRS/Abe boundary, keeping patient or customer text inside NRS.
   let regulatoryContext = ''
+  /** Set when no legislative text reached the model, phrased to be read aloud. */
+  let ungroundedBecause: string | null = null
+  /** Set when the rules DID reach the model but the record of them is thin. */
+  const recordGaps: string[] = []
+  /** Abe AI's own note, kept out of the owner's list unless nothing supersedes it. */
+  let corpusWarning: string | null = null
+
   try {
     const corpus = await searchAbeRegulatoryCorpus(
       `Australian healthcare advertising rules for ${flags.ahpra ? 'AHPRA-regulated services' : ''}${flags.ahpra && flags.tga ? ' and ' : ''}${flags.tga ? 'TGA-regulated therapeutic goods' : ''}. Focus on prohibited claims, testimonials, before-and-after material, required evidence and public advertising restrictions.`,
@@ -144,9 +209,72 @@ export async function runComplianceFilter(
     }))
     result.regulatoryCorpusVersion = corpus.corpusVersion
     regulatoryContext = buildAbeRegulatoryContext(corpus)
-    if (corpus.warning) result.warnings.push(corpus.warning)
+    corpusWarning = corpus.warning ?? null
+
+    if (!regulatoryContext) {
+      // Grounding is decided by what actually reached the model, never by the
+      // status word. buildAbeRegulatoryContext() is the only thing that puts
+      // rules into the prompt, so an empty string here means the review is
+      // ungrounded however healthy the HTTP call looked.
+      //
+      // `no_grounding` is the quiet one, and it is the failure mode Abe AI's
+      // own fix moves TOWARDS: a retrieval matching nothing answers HTTP 200
+      // with an empty array, so it reads as success at every layer above it.
+      // Applying its fail-closed rights migration on its own would turn today's
+      // loud 500 into exactly this. Both land here, and both are ungrounded.
+      ungroundedBecause = corpus.status === 'unconfigured'
+        ? 'this workspace is not connected to the legislation library at all'
+        : 'the legislation library answered but held no matching AHPRA or TGA material'
+    } else {
+      // The rules arrived. What is missing now is the ability to evidence WHICH
+      // rules — and these are the two fields the outputs library stores against
+      // saved work (`regulatory_citations`, `regulatory_corpus_version`), so an
+      // empty one means a saved piece can never show what it was checked
+      // against. That is a weaker result, not a failed one.
+      if (corpus.verification === 'unknown') {
+        recordGaps.push('the library did not state whether that material is verified')
+      }
+      if (!corpus.corpusVersion) {
+        recordGaps.push('the edition of the rules it read was not recorded')
+      }
+      if (corpus.citations.length === 0) {
+        recordGaps.push('the individual rules it relied on were not recorded')
+      }
+    }
   } catch (error) {
-    result.warnings.push(error instanceof Error ? error.message : 'Abe AI regulatory corpus could not be reached.')
+    // Abe AI's 500 body is genuinely worth reading — it is our own service —
+    // but it is read from the log, not aloud. This line previously pushed
+    // `error.message` straight into a warning the owner sees.
+    ungroundedBecause = userSafeError(
+      'compliance.corpus',
+      error,
+      'the legislation library could not be reached',
+    )
+  }
+
+  if (corpusWarning) console.warn(`[compliance.corpus] ${corpusWarning}`)
+
+  if (ungroundedBecause) {
+    result.regulatoryGrounding = 'ungrounded'
+    result.regulatoryGroundingNote =
+      `This ${regime} check ran WITHOUT the current Australian advertising rules — ${ungroundedBecause}. ` +
+      'It fell back on what the reviewing model already knew, which can be out of date and cannot be evidenced. ' +
+      'Treat it as a first opinion rather than a compliance sign-off: have a person read anything making a health claim before it goes out.'
+  } else if (recordGaps.length > 0) {
+    result.regulatoryGrounding = 'partial'
+    result.regulatoryGroundingNote =
+      `This ${regime} check did read the current Australian advertising rules, but ${recordGaps.join(', and ')}. ` +
+      'The finding itself stands; the paper trail behind it does not, so do not rely on it as evidence of what was checked.'
+  } else {
+    result.regulatoryGrounding = 'grounded'
+  }
+
+  if (result.regulatoryGroundingNote) {
+    result.warnings.push(result.regulatoryGroundingNote)
+  } else if (corpusWarning) {
+    // Only reachable on an otherwise fully grounded review, where the note is
+    // null and this would otherwise reach nobody but the log.
+    result.warnings.push(corpusWarning)
   }
 
   let systemPrompt = `You are a strict Healthcare Compliance Reviewer and Brand Guardian in Australia.

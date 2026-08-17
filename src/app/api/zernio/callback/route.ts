@@ -178,7 +178,12 @@ export async function GET(request: Request) {
 async function takeHandshake(): Promise<Handshake | null> {
   const cookieStore = await cookies()
   const raw = cookieStore.get(HANDSHAKE_COOKIE)?.value
-  cookieStore.delete(HANDSHAKE_COOKIE)
+
+  // The path MUST be repeated. A bare delete(name) expires a cookie at path '/',
+  // which is a different cookie from the one /api/zernio/connect set at
+  // '/api/zernio/callback' — the handshake would survive its own use and stay
+  // replayable for the full ten minutes.
+  cookieStore.delete({ name: HANDSHAKE_COOKIE, path: '/api/zernio/callback' })
 
   if (!raw) return null
 
