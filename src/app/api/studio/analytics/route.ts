@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   // Verify the user actually owns the brand (RLS will also enforce this).
   const { data: brand, error: brandErr } = await supabase
     .from('brands')
-    .select('id')
+    .select('id, social_urls')
     .eq('id', brandId)
     .maybeSingle()
 
@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
       platform: platformParam as PlatformKey,
       from,
       to,
+      socialUrls: brand.social_urls,
     })
     return NextResponse.json(metrics)
   } catch (err) {

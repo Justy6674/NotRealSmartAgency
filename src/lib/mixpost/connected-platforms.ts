@@ -7,42 +7,38 @@
  * post silently never appears or the whole draft fails on the one account that
  * does not exist.
  *
- * The answer comes from Mixpost, which is the only thing that knows. A list
- * kept anywhere else drifts the moment an account is added or revoked.
+ * A linked brand is answered from its own publisher accounts (filtered in
+ * our code). Mixpost is the fallback for every other brand, and only the
+ * confirmed ids on that brand — Mixpost's workspace list is not a brand list.
  */
 
 import { fetchMixpostAccounts } from './client'
 import { getConfirmedAccountIds, type BrandStub } from './brand-mapping'
-
-/** How a platform should be named to a person. */
-const LABELS: Record<string, string> = {
-  instagram: 'Instagram',
-  facebook_page: 'Facebook',
-  facebook: 'Facebook',
-  youtube: 'YouTube',
-  tiktok: 'TikTok',
-  linkedin: 'LinkedIn',
-  twitter: 'X',
-  mastodon: 'Mastodon',
-  pinterest: 'Pinterest',
-  threads: 'Threads',
-}
+import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
+import { fetchZernioAccounts } from '@/lib/zernio/client'
+import { ownerFacingPlatformLabel } from '@/lib/studio/social-read-source'
 
 export interface ConnectedAccount {
-  accountId: number
+  accountId: string
   provider: string
   label: string
   handle: string
 }
 
-/**
- * The project's live accounts, newest Mixpost state.
- *
- * An id on the brand that no longer matches an account is dropped rather than
- * guessed at — Mixpost reuses numbers, so a stale id is not merely dead, it is
- * a way to post one brand's content to another brand's page.
- */
 export async function connectedAccounts(brand: BrandStub): Promise<ConnectedAccount[]> {
+  const profileId = zernioProfileIdFromSocialUrls(brand.social_urls)
+  if (profileId) {
+    const accounts = await fetchZernioAccounts(profileId)
+    return accounts
+      .map((account) => ({
+        accountId: account.id,
+        provider: account.platform,
+        label: ownerFacingPlatformLabel(account.platform),
+        handle: account.displayName || account.username || account.platform,
+      }))
+      .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0))
+  }
+
   const wanted = new Set(getConfirmedAccountIds(brand))
   if (wanted.size === 0) return []
 
@@ -54,9 +50,9 @@ export async function connectedAccounts(brand: BrandStub): Promise<ConnectedAcco
     if (!wanted.has(id)) continue
     const provider = String(account.provider ?? '')
     live.push({
-      accountId: id,
+      accountId: String(id),
       provider,
-      label: LABELS[provider] ?? provider,
+      label: ownerFacingPlatformLabel(provider),
       handle: String(account.name ?? ''),
     })
   }

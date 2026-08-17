@@ -56,13 +56,24 @@ export default function StudioAnalyticsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold text-foreground">
-          Platform analytics
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Cross-platform performance for the last 28 days. Switch tabs to drill
-          into a single platform.
+      <div className="space-y-[4px]">
+        {/* 19 px page title — DESIGN.md §Typography */}
+        <h1
+          style={{
+            fontSize: '19px',
+            fontWeight: 700,
+            lineHeight: 1.3,
+            color: 'var(--brand-deep, oklch(0.33 0.08 240))',
+            fontFamily: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+          }}
+        >
+          Performance
+        </h1>
+        <p
+          className="text-[13px]"
+          style={{ color: 'oklch(0.615 0.011 240)' }}
+        >
+          Cross-channel results for the last 28 days. Click a channel to drill in.
         </p>
       </div>
 

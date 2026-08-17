@@ -2,30 +2,24 @@ import { useCallback, useEffect, useState } from 'react'
 import type { MixpostAccount } from '@/lib/mixpost/client'
 
 /**
- * Shared hook for reading + managing social accounts inside NRS Studio.
+ * Shared hook for reading the brand's connected social accounts.
  *
- * Phase 9 of the Mixpost UI port — this is the native replacement for
- * the "go to Mixpost admin to see your accounts" dependency. During
- * Phases 1-9 the source is Mixpost (via /api/mixpost/accounts).
- * After Phase 10 lands direct platform OAuth, the same hook will
- * switch to reading from social_oauth_tokens without the UI changing.
- *
- * The returned shape is intentionally framework-agnostic so both
- * Mixpost-backed and native-backed implementations can satisfy it.
+ * A brand with a publisher profile (Scent Sell, EndorseMe) is loaded only
+ * from `/api/zernio/accounts`, which is already session-scoped. Mixpost's
+ * workspace list is the fallback for every other brand, already mapped to
+ * that brand. The two must never be merged: Mixpost ignores brandId and
+ * would dump every connected page onto a linked brand.
  */
 
 export interface SocialAccount {
-  id: string          // Mixpost account id (stringified) or social_oauth_tokens.id
-  name: string        // Display name (page name, handle, etc.)
-  platform: string    // 'facebook' | 'instagram' | 'linkedin' | ...
+  id: string
+  name: string
+  platform: string
   username?: string
   image?: string
   status: 'active' | 'expired' | 'revoked' | 'unknown'
-  /** Last known refresh timestamp, if the provider exposes it */
   last_refreshed_at?: string
-  /** Platform-native id used by publishers */
   external_id?: string
-  is_zernio?: boolean
 }
 
 interface UseSocialAccountsResult {
@@ -36,11 +30,6 @@ interface UseSocialAccountsResult {
 }
 
 function normaliseMixpostAccount(raw: MixpostAccount): SocialAccount {
-  // Mixpost's MixpostAccount shape has: id, name, username, provider,
-  // media_url. Coerce to the NRS-native SocialAccount shape so the UI
-  // doesn't need to know which backend it's talking to. Provider names
-  // like 'facebook_page' / 'linkedin_page' collapse to canonical
-  // platform keys so the ui-tokens lookup works.
   const platform = (raw.provider ?? 'unknown').replace(/_(page|group)$/, '')
   return {
     id: String(raw.id),
@@ -53,11 +42,6 @@ function normaliseMixpostAccount(raw: MixpostAccount): SocialAccount {
   }
 }
 
-/**
- * useSocialAccounts — fetch + normalise the brand's connected social
- * accounts. Read-only for now. Disconnect + entity management go
- * through separate hooks layered on top.
- */
 export function useSocialAccounts(brandId: string | null): UseSocialAccountsResult {
   const [accounts, setAccounts] = useState<SocialAccount[]>([])
   const [loading, setLoading] = useState(false)
@@ -71,36 +55,35 @@ export function useSocialAccounts(brandId: string | null): UseSocialAccountsResu
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/mixpost/accounts?brandId=${brandId}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const body = await res.json()
-      // API returns { configured, accounts, brandMapping } — extract the array
-      const raw: MixpostAccount[] = Array.isArray(body) ? body : (body.accounts ?? [])
-      let mergedAccounts = raw.map(normaliseMixpostAccount)
-      
-      try {
-        const zernioRes = await fetch(`/api/zernio/accounts?brandId=${brandId}`)
-        if (zernioRes.ok) {
-          const zData = await zernioRes.json()
-          const zAccs: SocialAccount[] = (zData.accounts || []).map((za: any) => ({
-            id: `zernio_${za.id || za._id}`,
-            name: za.displayName || za.username || za.platform,
-            platform: za.platform,
-            username: za.username,
-            status: 'active',
-            external_id: za.id || za._id,
-            is_zernio: true
-          }))
-          
-          // Merge: if Zernio has the platform, drop the Mixpost one (prioritize SaaS infra)
-          mergedAccounts = mergedAccounts.filter(ma => !zAccs.some(za => za.platform === ma.platform))
-          mergedAccounts = [...mergedAccounts, ...zAccs]
-        }
-      } catch (e) {
-        console.warn('Failed to fetch Zernio accounts in useSocialAccounts:', e)
+      const zernioRes = await fetch(`/api/zernio/accounts?brandId=${brandId}`)
+      if (!zernioRes.ok) throw new Error(`HTTP ${zernioRes.status}`)
+      const zData = await zernioRes.json() as {
+        linked?: boolean
+        accounts?: Array<{
+          id?: string
+          displayName?: string
+          username?: string
+          platform?: string
+        }>
       }
 
-      setAccounts(mergedAccounts)
+      if (zData.linked) {
+        setAccounts((zData.accounts ?? []).map((za) => ({
+          id: String(za.id ?? ''),
+          name: za.displayName || za.username || za.platform || 'Account',
+          platform: za.platform || 'unknown',
+          username: za.username,
+          status: 'active' as const,
+          external_id: String(za.id ?? ''),
+        })))
+        return
+      }
+
+      const res = await fetch(`/api/mixpost/accounts?brandId=${brandId}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const body = await res.json() as { accounts?: MixpostAccount[] }
+      const raw: MixpostAccount[] = Array.isArray(body) ? body : (body.accounts ?? [])
+      setAccounts(raw.map(normaliseMixpostAccount))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'fetch failed')
       setAccounts([])

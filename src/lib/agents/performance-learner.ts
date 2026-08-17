@@ -3,6 +3,9 @@ import { memoryStore } from '@/lib/ruflo/client'
 import { getBrandNamespace, getNamespace } from '@/lib/ruflo/namespaces'
 import { fetchMixpostAccounts, fetchMixpostReports } from '@/lib/mixpost/client'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
+import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
+import { fetchZernioAnalytics } from '@/lib/zernio/client'
+import { periodToDateRange } from '@/lib/studio/social-read-source'
 import {
   loadState,
   saveState,
@@ -83,33 +86,49 @@ export async function learnFromPublishedPosts(
     return { analysed: 0, insights: [] }
   }
 
-  // 2. Fetch real engagement metrics from Mixpost
+  // 2. Fetch real engagement metrics from the brand's publisher
   const namespace = getNamespace(brandSlug, 'analytics')
   let platformMetrics: Record<string, Record<string, number>> = {}
 
   try {
-    const accounts = await fetchMixpostAccounts()
-    if (accounts) {
-      const { data: brands } = await supabase
-        .from('brands')
-        .select('id, name, slug, social_urls')
-        .eq('id', brandId)
+    const { data: brands } = await supabase
+      .from('brands')
+      .select('id, name, slug, social_urls')
+      .eq('id', brandId)
 
-      const brandMapping = mapAccountsToBrandsRaw(accounts, brands ?? [])
-      const brandAccounts = brandMapping.get(brandId) ?? []
+    const profileId = zernioProfileIdFromSocialUrls(brands?.[0]?.social_urls)
+    if (profileId && process.env.ZERNIO_API_KEY) {
+      const { fromDate, toDate } = periodToDateRange('7_days')
+      const analytics = await fetchZernioAnalytics({ profileId, fromDate, toDate })
+      for (const row of analytics?.platformBreakdown ?? []) {
+        const platform = row.platform.toLowerCase() === 'x' ? 'twitter' : row.platform.toLowerCase()
+        platformMetrics[platform] = {
+          ...(typeof row.likes === 'number' ? { likes: row.likes } : {}),
+          ...(typeof row.comments === 'number' ? { comments: row.comments } : {}),
+          ...(typeof row.reach === 'number' ? { reach: row.reach } : {}),
+          ...(typeof row.impressions === 'number' ? { impressions: row.impressions } : {}),
+          ...(typeof row.shares === 'number' ? { shares: row.shares } : {}),
+        }
+      }
+    } else {
+      const accounts = await fetchMixpostAccounts()
+      if (accounts) {
+        const brandMapping = mapAccountsToBrandsRaw(accounts, brands ?? [])
+        const brandAccounts = brandMapping.get(brandId) ?? []
 
-      for (const account of brandAccounts) {
-        const report = await fetchMixpostReports(account.id, '7_days')
-        if (report?.metrics) {
-          const platform = account.provider === 'facebook_page' ? 'facebook'
-            : account.provider === 'x' ? 'twitter'
-            : account.provider
-          platformMetrics[platform] = report.metrics
+        for (const account of brandAccounts) {
+          const report = await fetchMixpostReports(account.id, '7_days')
+          if (report?.metrics) {
+            const platform = account.provider === 'facebook_page' ? 'facebook'
+              : account.provider === 'x' ? 'twitter'
+              : account.provider
+            platformMetrics[platform] = report.metrics
+          }
         }
       }
     }
   } catch {
-    // Mixpost analytics optional — continue without if unavailable
+    // Publisher analytics optional — continue without if unavailable
   }
 
   // 3. Analyse each post

@@ -75,7 +75,7 @@ Every platform this app touches versions faster than any model's training data. 
 | **Resend** | `resend:resend`, `resend:react-email` skills. |
 | **Canva** | the `mcp__claude_ai_Canva__*` tools are the live surface; `help` describes them. |
 | **Mixpost** | Self-hosted, so the running instance is the truth: the Laravel source on the VPS at `/opt/mixpost/`, plus `~/Obsidian/Reference/nrs-mixpost-*` which were derived from it. Public Mixpost docs lag the Pro build. |
-| **Zernio** | `docs.zernio.com` and its live OpenAPI, or the generated `@zernio/node` types. The installed `zernio-api` skill is a simplified convenience, not the contract — it omits `platforms[].customContent`, and stopping at it on 2026-08-17 produced a confident wrong answer. Response shapes vary by endpoint and records carry `_id`, not `id`. |
+| **Zernio** | `docs.zernio.com` and its live OpenAPI, or the generated `@zernio/node` types. The `zernio-api` skill was archived on 2026-08-17 to `~/.claude/skills-archived-20260817/zernio-api/` (its `rules/` files are still readable there). Treat it as a simplified convenience, not the contract — it omits `platforms[].customContent`, and stopping at it on 2026-08-17 produced a confident wrong answer. Response shapes vary by endpoint and records carry `_id`, not `id`. |
 
 **Fetching method** — follow the web access ladder: official API / changelog endpoint first, then WebClaw (`mcp__webclaw__scrape`, `mcp__webclaw__research`) for extraction, then Browser Harness when a real browser is genuinely needed, then PixelRAG when layout carries the meaning (pricing tables, comparison grids). Never Playwright/Puppeteer/Firecrawl outside a project E2E suite.
 
@@ -235,16 +235,16 @@ gstack is installed globally. When a request matches one, **invoke it via the Sk
 
 | The request | Invoke |
 |---|---|
-| Vague idea, "should we build X", empty repo | `/office-hours`, then `/spec` |
-| Plan a feature | `/autoplan` (or `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`) |
-| Bug, error, "why is this broken", "it worked yesterday", a red box | `/investigate` — never debug directly |
-| "Does this work", QA a running app | `/qa` (report-only: `/qa-only`) |
-| Visual polish, spacing, hierarchy | `/design-review`; new direction → `/design-consultation` |
-| Before landing a change | `/review` |
-| Anything touching auth, PHI, billing, payments, RLS | `/cso` — not optional on this codebase |
-| Ship it | `/ship`, then `/land-and-deploy`, then `/canary` |
-| Save / resume working context | `/context-save`, `/context-restore` |
-| Weekly | `/retro`. Keep current with `/gstack-upgrade`. |
+| Vague idea, "should we build X", empty repo | `/gstack-office-hours`, then `/gstack-spec` |
+| Plan a feature | `/gstack-autoplan` (or `/gstack-plan-ceo-review`, `-eng-review`, `-design-review`) |
+| Bug, error, "why is this broken", "it worked yesterday", a red box | `/gstack-investigate` — never debug directly |
+| "Does this work", QA a running app | `/gstack-qa` (report-only: `/gstack-qa-only`) |
+| Visual polish, spacing, hierarchy | `/gstack-design-review`; new direction → `/gstack-design-consultation` |
+| Before landing a change | `/gstack-review` |
+| Anything touching auth, PHI, billing, payments, RLS | `/gstack-cso` — not optional on this codebase |
+| Ship it | `/gstack-ship`, then `/gstack-land-and-deploy`, then `/gstack-canary` |
+| Save / resume working context | `/gstack-context-save`, `/gstack-context-restore` |
+| Weekly | `/gstack-retro`. Keep current with `/gstack-upgrade`. |
 
 **Craft skills sit inside whichever gstack skill is running**, not instead of it: `test-driven-development`, `systematic-debugging`, `verification-before-completion`, `requesting-code-review`, and `impeccable` for any UI work.
 
@@ -253,3 +253,10 @@ gstack is installed globally. When a request matches one, **invoke it via the Sk
 **Safety is on demand here, never a blocking gate.** `/careful` before destructive commands, `/freeze` to lock edits to one directory, `/guard` for both, `/unfreeze` to release. Do **not** add PreToolUse hooks that block edits — that is a deliberate standing decision, not an oversight.
 
 **Ship straight to `main`.** No feature branches or PRs unless explicitly asked. Pause and confirm first for: live Supabase schema migrations, auth / RLS / billing / payments, refactors whose scope the owner has not seen, or any "hold" / "wait" / "stop".
+
+## Design System
+Always read DESIGN.md before making any visual or UI decisions.
+All font choices, colors, spacing, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
+The UI chrome always retints from the selected business (`--brand` / `--brand-deep` / `--brand-wash`). Healthcare `--care` is a separate token and never comes from the brand hue.

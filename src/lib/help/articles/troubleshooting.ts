@@ -60,7 +60,7 @@ export const troubleshootingArticles: HelpArticle[] = [
       },
       {
         heading: 'How to reconnect',
-        body: 'Social media connections are managed through Mixpost, our self-hosted publishing system. To reconnect:',
+        body: 'Social media connections are managed in Creative Studio. To reconnect:',
         steps: [
           'Go to the Creative Studio and check which account is disconnected.',
           'Click the reconnect link or ask your Director "Reconnect my Instagram."',

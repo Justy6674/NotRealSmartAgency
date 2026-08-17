@@ -64,10 +64,10 @@ function Sparkline({ points, colour }: { points: number[]; colour: string }) {
 /**
  * Big-number metric card with optional delta + sparkline.
  *
- * Used by:
- * - StudioDashboard widget row (compact variant)
- * - All 10 platform analytics report pages (default variant)
- * - AnalyticsOverview cross-platform summary
+ * Typography spec from DESIGN.md / dept-social.html:
+ * - stat value: 27px, weight 700, color var(--brand-deep)
+ * - label: 11px, uppercase, letter-spacing 0.05em, color ink-3
+ * - delta: 11px, oklch semantic colour (--ok / --warn)
  */
 export function MetricCard({
   label,
@@ -77,28 +77,36 @@ export function MetricCard({
   icon,
   compact = false,
 }: MetricCardProps) {
-  const deltaIsUp = typeof delta === 'number' && delta > 0
+  const deltaIsUp   = typeof delta === 'number' && delta > 0
   const deltaIsDown = typeof delta === 'number' && delta < 0
-  const deltaColour =
-    delta === undefined
-      ? 'text-muted-foreground'
-      : deltaIsUp
-        ? 'text-emerald-500'
-        : deltaIsDown
-          ? 'text-rose-500'
-          : 'text-muted-foreground'
+
+  // DESIGN.md semantic colours: --ok (green), --warn (amber)
+  const deltaColour = delta === undefined
+    ? 'oklch(0.615 0.011 240)'
+    : deltaIsUp
+      ? 'var(--ok, oklch(0.56 0.15 145))'
+      : deltaIsDown
+        ? 'var(--warn, oklch(0.65 0.18 25))'
+        : 'oklch(0.615 0.011 240)'
 
   const sparklineColour = deltaIsUp
-    ? 'oklch(0.65 0.18 145)'
+    ? 'var(--ok, oklch(0.56 0.15 145))'
     : deltaIsDown
-      ? 'oklch(0.65 0.20 25)'
+      ? 'var(--warn, oklch(0.65 0.18 25))'
       : 'oklch(0.55 0.05 240)'
 
   return (
     <Card size={compact ? 'sm' : 'default'}>
-      <CardContent className="flex flex-col gap-2">
+      <CardContent className="flex flex-col gap-[10px]">
+        {/* Label row */}
         <div className="flex items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span
+            className="flex items-center gap-[5px] font-[500] uppercase tracking-[0.05em]"
+            style={{
+              fontSize: '11px',
+              color: 'oklch(0.615 0.011 240)',
+            }}
+          >
             {icon}
             {label}
           </span>
@@ -106,28 +114,34 @@ export function MetricCard({
             <Sparkline points={sparkline} colour={sparklineColour} />
           )}
         </div>
+
+        {/* Value + delta row */}
         <div className="flex items-end justify-between gap-2">
+          {/* 27 px brand-deep stat value — DESIGN.md §Statistics */}
           <span
-            className={cn(
-              'font-semibold tabular-nums text-foreground',
-              compact ? 'text-2xl' : 'text-3xl'
-            )}
+            className={cn('tabular-nums', compact ? 'text-[22px]' : 'text-[27px]')}
+            style={{
+              fontWeight: 700,
+              color: 'var(--brand-deep, oklch(0.33 0.08 240))',
+              fontFamily: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+            }}
           >
             {formatValue(value)}
           </span>
+
           {delta !== undefined && (
             <span
               className={cn(
-                'flex items-center gap-0.5 text-xs font-medium tabular-nums',
-                deltaColour
+                'flex items-center gap-[3px] text-[11px] font-[500] tabular-nums',
               )}
+              style={{ color: deltaColour }}
             >
               {deltaIsUp ? (
-                <TrendingUp className="h-3 w-3" />
+                <TrendingUp className="h-[12px] w-[12px]" />
               ) : deltaIsDown ? (
-                <TrendingDown className="h-3 w-3" />
+                <TrendingDown className="h-[12px] w-[12px]" />
               ) : (
-                <Minus className="h-3 w-3" />
+                <Minus className="h-[12px] w-[12px]" />
               )}
               {Math.abs(delta).toFixed(1)}%
             </span>

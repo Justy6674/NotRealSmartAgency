@@ -52,7 +52,8 @@ export function AccountsPage() {
           <button
             type="button"
             onClick={() => setConnectOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium text-white transition-colors"
+            style={{ background: 'var(--brand-deep, var(--foreground))' }}
           >
             <Plus className="h-3 w-3" />
             Connect account

@@ -2,8 +2,12 @@
 
 export const dynamic = 'force-dynamic'
 
-import { DepartmentNotReadyForPath } from '@/components/agency/shell/DepartmentNotReady'
+import { useAgencyStore } from '@/stores/agency-store'
+import { useStudioData } from '@/hooks/useStudioData'
+import { GoogleSearchabilityDept } from '@/components/agency/google/GoogleSearchabilityDept'
 
 export default function GoogleSearchabilityPage() {
-  return <DepartmentNotReadyForPath />
+  const { activeBrandId } = useAgencyStore()
+  const { brand } = useStudioData(activeBrandId)
+  return <GoogleSearchabilityDept brand={brand ?? null} />
 }

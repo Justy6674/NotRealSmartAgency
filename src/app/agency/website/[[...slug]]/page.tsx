@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { usePathname } from 'next/navigation'
-import { DepartmentNotReadyForPath } from '@/components/agency/shell/DepartmentNotReady'
+import { WebsiteDept } from '@/components/agency/website/WebsiteDept'
 import { PagesIndex } from '@/components/agency/studio/pages/PagesIndex'
 
 export default function WebsiteDepartmentPage() {
@@ -17,5 +17,5 @@ export default function WebsiteDepartmentPage() {
     )
   }
 
-  return <DepartmentNotReadyForPath />
+  return <WebsiteDept />
 }

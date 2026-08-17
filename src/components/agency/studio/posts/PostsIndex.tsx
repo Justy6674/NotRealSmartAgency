@@ -21,13 +21,14 @@ interface StatusTab {
   label: string
 }
 
+// AU English labels — status as the owner experiences it, not as a DB enum.
 const STATUS_TABS: StatusTab[] = [
-  { key: 'all', label: 'All' },
-  { key: 'draft', label: 'Draft' },
-  { key: 'scheduled', label: 'Scheduled' },
-  { key: 'published', label: 'Published' },
-  { key: 'failed', label: 'Failed' },
-  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'all',       label: 'All' },
+  { key: 'draft',     label: 'Drafts' },
+  { key: 'scheduled', label: 'Waiting to go out' },
+  { key: 'published', label: 'Gone out' },
+  { key: 'failed',    label: 'Did not go out' },
+  { key: 'cancelled', label: 'Deleted' },
 ]
 
 function StatusTabBar({
@@ -42,7 +43,7 @@ function StatusTabBar({
   statusCounts: StatusCounts
 }) {
   return (
-    <div className="flex items-center gap-0 border-b border-border overflow-x-auto">
+    <div className="flex items-center gap-0 overflow-x-auto border-b border-border">
       {STATUS_TABS.map((tab) => {
         const count = tab.key === 'all' ? allCount : statusCounts[tab.key] ?? 0
         const isActive = activeTab === tab.key
@@ -51,32 +52,36 @@ function StatusTabBar({
         return (
           <button
             key={tab.key}
+            type="button"
             onClick={() => onTabChange(tab.key)}
-            className={[
-              'relative px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors',
-              'hover:text-foreground focus-visible:outline-none',
+            style={
               isActive
-                ? 'text-foreground'
+                ? { color: 'var(--brand-deep, var(--foreground))' }
                 : isFailed && count > 0
-                  ? 'text-red-500'
-                  : 'text-muted-foreground',
+                  ? { color: 'var(--st-fail, oklch(0.58 0.17 27))' }
+                  : undefined
+            }
+            className={[
+              'relative px-4 py-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
+              'focus-visible:outline-none',
+              isActive ? '' : isFailed && count > 0 ? '' : 'text-muted-foreground hover:text-foreground',
             ].join(' ')}
           >
-            <span className={isFailed && count > 0 ? 'text-red-500' : ''}>
-              {tab.label}
-            </span>
-            <span
-              className={[
-                'ml-1.5 text-xs tabular-nums',
-                isActive ? 'text-foreground/70' : 'text-muted-foreground/60',
-                isFailed && count > 0 ? '!text-red-500/70' : '',
-              ].join(' ')}
-            >
-              ({count})
-            </span>
-            {/* Active underline */}
+            <span>{tab.label}</span>
+            {count > 0 && (
+              <span
+                className="ml-1.5 text-xs tabular-nums opacity-70"
+                style={isActive ? { color: 'inherit' } : undefined}
+              >
+                ({count})
+              </span>
+            )}
+            {/* Active underline — uses brand token, not hard-coded foreground */}
             {isActive && (
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-foreground rounded-t" />
+              <span
+                className="absolute inset-x-0 bottom-0 h-0.5 rounded-t"
+                style={{ background: 'var(--brand, var(--foreground))' }}
+              />
             )}
           </button>
         )
@@ -169,7 +174,7 @@ export function PostsIndex() {
   const handleEdit = useCallback(
     (id: string) => {
       setPendingDraftId(id)
-      window.location.href = '/agency/studio'
+      window.location.href = `/agency/social/compose?draft=${id}`
     },
     [setPendingDraftId]
   )

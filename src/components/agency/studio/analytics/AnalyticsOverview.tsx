@@ -59,11 +59,14 @@ const initialReports: Record<PlatformKey, PlatformMetrics | null> = {
 }
 
 /**
- * Cross-platform analytics summary. Fetches all 10 platform reports in
- * parallel via the same endpoint each platform tab uses, then sums the
- * totals into a single dashboard.
+ * Cross-platform analytics summary. Fetches each platform in parallel
+ * via the studio analytics endpoint. If a brand is Zernio-linked, the
+ * same endpoint already selects the right backend. If the platform returns
+ * no data, we attempt /api/zernio/analytics as a fallback — it is
+ * session-scoped and returns null when the brand is not linked.
  *
  * Empty platforms (no connected account) are silently skipped, not errored.
+ * We never print the name of any publishing or analytics vendor to the user.
  */
 export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOverviewProps) {
   const [state, setState] = useState<OverviewState>({
@@ -82,12 +85,27 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
             const params = new URLSearchParams({ brandId, platform })
             if (from) params.set('from', from)
             if (to) params.set('to', to)
-            const res = await fetch(
-              `/api/studio/analytics?${params.toString()}`
-            )
-            if (!res.ok) return [platform, null] as const
-            const data = (await res.json()) as PlatformMetrics
-            return [platform, data] as const
+
+            // Primary endpoint (studio analytics — uses Zernio or Mixpost
+            // depending on how the brand is configured server-side)
+            const res = await fetch(`/api/studio/analytics?${params.toString()}`)
+            if (res.ok) {
+              const data = (await res.json()) as PlatformMetrics
+              if (!data.empty) return [platform, data] as const
+            }
+
+            // Fallback: direct Zernio analytics route (exists when backend
+            // agent has landed it; returns 404 otherwise — handled gracefully)
+            const zernioParams = new URLSearchParams({ brandId, platform })
+            if (from) zernioParams.set('from', from)
+            if (to) zernioParams.set('to', to)
+            const zRes = await fetch(`/api/zernio/analytics?${zernioParams.toString()}`)
+            if (zRes.ok) {
+              const zData = (await zRes.json()) as PlatformMetrics
+              return [platform, zData] as const
+            }
+
+            return [platform, null] as const
           } catch {
             return [platform, null] as const
           }
@@ -96,9 +114,7 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
 
       if (cancelled) return
 
-      const next: Record<PlatformKey, PlatformMetrics | null> = {
-        ...initialReports,
-      }
+      const next: Record<PlatformKey, PlatformMetrics | null> = { ...initialReports }
       for (const [platform, data] of results) {
         next[platform] = data
       }
@@ -147,9 +163,12 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
   if (state.loading) {
     return (
       <div className="flex items-center justify-center p-12 gap-2">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">
-          Aggregating cross-platform analytics...
+        <Loader2
+          className="h-4 w-4 animate-spin"
+          style={{ color: 'var(--brand, oklch(0.545 0.115 240))' }}
+        />
+        <p className="text-[13px]" style={{ color: 'oklch(0.615 0.011 240)' }}>
+          Pulling in your numbers…
         </p>
       </div>
     )
@@ -158,14 +177,18 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
   if (summary.connectedPlatforms === 0) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-          <Trophy className="h-6 w-6 text-muted-foreground" />
-          <p className="text-sm font-medium text-foreground">
-            No connected accounts yet
+        <CardContent className="flex flex-col items-center justify-center gap-[10px] py-12 text-center">
+          <Trophy className="h-6 w-6" style={{ color: 'oklch(0.615 0.011 240)' }} />
+          <p
+            className="text-[14px] font-[600]"
+            style={{ color: 'var(--brand-deep, oklch(0.33 0.08 240))' }}
+          >
+            No accounts connected yet
           </p>
-          <p className="text-xs text-muted-foreground max-w-md">
-            Connect a social account in Settings to start collecting analytics.
-            Once a platform is connected, its metrics appear here automatically.
+          <p className="text-[12.5px] max-w-md" style={{ color: 'oklch(0.615 0.011 240)' }}>
+            Connect a social account under Social → Accounts to start collecting
+            results. Once a channel is connected, its metrics appear here
+            automatically.
           </p>
         </CardContent>
       </Card>
@@ -214,7 +237,12 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
 
       <Card>
         <CardHeader>
-          <CardTitle>Connected platforms ({summary.connectedPlatforms})</CardTitle>
+          <CardTitle
+            className="text-[13.5px] font-[600]"
+            style={{ color: 'var(--brand-deep, oklch(0.33 0.08 240))' }}
+          >
+            Channels ({summary.connectedPlatforms} active)
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-2 grid-cols-2 md:grid-cols-5">
@@ -224,21 +252,32 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
               return (
                 <div
                   key={platform}
-                  className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2"
+                  className="flex items-center gap-2 rounded-[5px] border px-3 py-[7px]"
+                  style={{ borderColor: 'var(--border)' }}
                 >
                   <span
-                    className="h-2 w-2 rounded-full"
+                    className="h-[7px] w-[7px] rounded-full shrink-0"
                     style={{
-                      backgroundColor: connected
+                      background: connected
                         ? PLATFORM_BRAND_COLOURS[platform]
-                        : 'oklch(0.5 0 0 / 0.3)',
+                        : 'oklch(0.5 0 0 / 0.25)',
                     }}
                   />
-                  <span className="text-xs font-medium text-foreground">
+                  <span
+                    className="text-[12px] font-[500] truncate"
+                    style={{
+                      color: connected
+                        ? 'var(--foreground)'
+                        : 'oklch(0.615 0.011 240)',
+                    }}
+                  >
                     {PLATFORM_LABELS[platform]}
                   </span>
                   {connected && (
-                    <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+                    <span
+                      className="ml-auto text-[10px] tabular-nums shrink-0"
+                      style={{ color: 'oklch(0.615 0.011 240)' }}
+                    >
                       {(report.totals.engagement ?? 0).toLocaleString()}
                     </span>
                   )}
@@ -252,16 +291,21 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
       {summary.topPlatform && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-amber-500" />
-              Top platform —{' '}
-              {PLATFORM_LABELS[summary.topPlatform.platform]}
+            <CardTitle
+              className="flex items-center gap-2 text-[13.5px] font-[600]"
+              style={{ color: 'var(--brand-deep, oklch(0.33 0.08 240))' }}
+            >
+              <Trophy className="h-4 w-4" style={{ color: 'oklch(0.72 0.15 70)' }} />
+              Top channel — {PLATFORM_LABELS[summary.topPlatform.platform]}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-[12.5px]" style={{ color: 'oklch(0.615 0.011 240)' }}>
               Highest total engagement this period:{' '}
-              <span className="font-semibold text-foreground tabular-nums">
+              <span
+                className="font-[600] tabular-nums"
+                style={{ color: 'var(--brand-deep, oklch(0.33 0.08 240))' }}
+              >
                 {summary.topPlatform.engagement.toLocaleString()}
               </span>
             </p>

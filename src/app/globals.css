@@ -84,6 +84,12 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  /* ── Post-status semantic tokens (social department) ─────────── */
+  --st-draft:   oklch(0.62 0.012 240);
+  --st-sending: oklch(0.72 0.15 70);
+  --st-sched:   oklch(0.62 0.10 220);
+  --st-pub:     oklch(0.58 0.14 152);
+  --st-fail:    oklch(0.58 0.17 27);
 }
 
 .dark {
@@ -119,6 +125,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* ── Post-status semantic tokens — dark ──────────────────────── */
+  --st-draft:   oklch(0.66 0.012 240);
+  --st-sending: oklch(0.80 0.14 72);
+  --st-sched:   oklch(0.74 0.11 220);
+  --st-pub:     oklch(0.74 0.14 152);
+  --st-fail:    oklch(0.70 0.16 27);
 }
 
 @layer base {
@@ -133,3 +145,53 @@
   }
 }
 
+
+/* ── NRS Agency desk — house chrome tokens ───────────────────────────────────
+   These sit below the shadcn set. Every /agency/* screen reads them rather
+   than reaching for --primary / --background which carry shadcn's colours.
+   Defined on [data-nrs-shell] so they are local to the desk and do not
+   interfere with the marketing homepage (which has no shell attribute).
+   Light values match dept-social.html; dark values match dept-social.html
+   dark block + AgencySidebar.tsx fallbacks. Token drift resolved in DESIGN.md.
+*/
+[data-nrs-shell] {
+  --panel: oklch(1 0 0);
+  --panel-2: oklch(0.975 0.004 240);
+  --line: oklch(0.915 0.007 240);
+  --line-soft: oklch(0.950 0.005 240);
+  --ink: oklch(0.20 0.014 240);
+  --ink-2: oklch(0.46 0.012 240);
+  --ink-3: oklch(0.615 0.011 240);
+  --bg: oklch(0.985 0.002 240);
+  --ok: oklch(0.55 0.13 155);
+  --ok-wash: oklch(0.962 0.032 155);
+  --warn: oklch(0.63 0.13 75);
+  --warn-wash: oklch(0.964 0.052 80);
+  --stop: oklch(0.55 0.17 27);
+  --care: oklch(0.52 0.150 25);
+  --care-wash: oklch(0.965 0.028 25);
+  --care-line: oklch(0.89 0.050 25);
+  --care-deep: oklch(0.42 0.14 25);
+  --nrs-shadow: 0 1px 2px oklch(0.2 0.02 240 / .05), 0 8px 24px -16px oklch(0.2 0.02 240 / .28);
+}
+
+.dark [data-nrs-shell] {
+  --panel: oklch(0.215 0.012 240);
+  --panel-2: oklch(0.245 0.013 240);
+  --line: oklch(0.315 0.015 240);
+  --line-soft: oklch(0.275 0.013 240);
+  --ink: oklch(0.960 0.005 240);
+  --ink-2: oklch(0.795 0.011 240);
+  --ink-3: oklch(0.640 0.013 240);
+  --bg: oklch(0.175 0.010 240);
+  --ok: oklch(0.55 0.13 155);
+  --ok-wash: oklch(0.268 0.040 155);
+  --warn: oklch(0.80 0.13 78);
+  --warn-wash: oklch(0.288 0.045 75);
+  --stop: oklch(0.70 0.16 27);
+  --care: oklch(0.77 0.13 25);
+  --care-wash: oklch(0.285 0.045 25);
+  --care-line: oklch(0.42 0.070 25);
+  --care-deep: oklch(0.86 0.10 25);
+  --nrs-shadow: 0 1px 2px oklch(0 0 0 / .5), 0 10px 30px -18px oklch(0 0 0 / .75);
+}

@@ -3,9 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import { usePathname } from 'next/navigation'
-import { DepartmentNotReadyForPath } from '@/components/agency/shell/DepartmentNotReady'
-import { BrandKitShowcase } from '@/components/agency/studio/brand-kit/BrandKitShowcase'
 import { useAgencyStore } from '@/stores/agency-store'
+import { BrandKitShowcase } from '@/components/agency/studio/brand-kit/BrandKitShowcase'
+import { BrandingVoiceDept } from '@/components/agency/branding/BrandingVoiceDept'
 
 export default function BrandingDepartmentPage() {
   const pathname = usePathname() ?? ''
@@ -19,5 +19,18 @@ export default function BrandingDepartmentPage() {
     )
   }
 
-  return <DepartmentNotReadyForPath />
+  if (pathname === '/agency/branding/voice') {
+    return <BrandingVoiceDept view="voice" />
+  }
+
+  if (pathname === '/agency/branding/words') {
+    return <BrandingVoiceDept view="words" />
+  }
+
+  if (pathname === '/agency/branding/topics') {
+    return <BrandingVoiceDept view="topics" />
+  }
+
+  // Catch-all fallback for any future sub-routes
+  return <BrandingVoiceDept view="voice" />
 }

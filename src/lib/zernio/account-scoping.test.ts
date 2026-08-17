@@ -67,3 +67,17 @@ test('the discredited claim that Zernio filters is not restored', () => {
     'that comment was measured false — restoring it invites the ownership bug back',
   )
 })
+
+test('listPosts is filtered by our scoped account ids after normalisation', () => {
+  // listPosts({ profileId }) is the same trap as listAccounts. Isolation is
+  // the account-id set from fetchZernioAccounts, applied after normalisePost
+  // because platforms[].accountId is sometimes a populated {_id} object.
+  const filterAt = code.indexOf('post.accountIds.some')
+  const normaliseAt = code.indexOf('rawPosts.map(normalisePost)')
+  assert.ok(filterAt > -1 && normaliseAt > -1, 'expected fetchZernioPosts to normalise then filter by allowed account ids')
+  assert.ok(
+    filterAt > normaliseAt,
+    'filtering posts before normalisation compares an object to a string and silently matches nothing',
+  )
+  assert.match(code, /fetchZernioAccounts\(profileId\)/)
+})

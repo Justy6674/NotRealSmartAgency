@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, ExternalLink, Loader2 } from 'lucide-react'
+import { X, Loader2 } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import {
   PLATFORM_BRAND_COLOURS,
@@ -31,22 +31,13 @@ export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialo
   const { activeBrandId } = useAgencyStore()
   const [connecting, setConnecting] = useState<PlatformKey | null>(null)
 
-  const mixpostBase =
-    process.env.NEXT_PUBLIC_MIXPOST_WEB_URL ??
-    'https://mixpost.notrealsmart.com.au/mixpost'
-  const workspaceUuid = process.env.NEXT_PUBLIC_MIXPOST_WORKSPACE_UUID ?? ''
-  const mixpostAccountsUrl = workspaceUuid
-    ? `${mixpostBase}/${workspaceUuid}/accounts`
-    : `${mixpostBase}/accounts`
-
-  const handleZernioConnect = async (platform: PlatformKey) => {
+  const handleConnect = async (platform: PlatformKey) => {
     if (!activeBrandId) return
     try {
       setConnecting(platform)
       const res = await fetch(`/api/zernio/connect?platform=${platform}&brandId=${activeBrandId}`)
       if (!res.ok) {
-        const err = await res.json()
-        alert(`Zernio connection error: ${err.error || 'Unknown error'}`)
+        alert('That account could not be connected just now. Nothing has been changed. Try again in a moment.')
         setConnecting(null)
         return
       }
@@ -54,8 +45,8 @@ export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialo
       if (data.authUrl) {
         window.location.href = data.authUrl
       }
-    } catch (e: any) {
-      alert(`Connection error: ${e.message}`)
+    } catch {
+      alert('That account could not be connected just now. Nothing has been changed. Try again in a moment.')
       setConnecting(null)
     }
   }
@@ -76,7 +67,7 @@ export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialo
 
         <div className="px-5 py-4 space-y-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            NRS is transitioning to Zernio infrastructure for SaaS accounts. Click a platform below to authorize it directly via Zernio (Phase 1 monetization test).
+            NRS will send you to the platform to authorise the connection. You stay in control — nothing is published until you approve it.
           </p>
 
           <div className="grid grid-cols-2 gap-2">
@@ -89,7 +80,7 @@ export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialo
                 <button
                   key={p}
                   disabled={!!connecting}
-                  onClick={() => handleZernioConnect(p)}
+                  onClick={() => handleConnect(p)}
                   className="group inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground hover:shadow-sm transition-all text-left"
                   style={{ borderLeftWidth: 3, borderLeftColor: colour }}
                 >
@@ -106,7 +97,7 @@ export function ConnectAccountDialog({ onClose, onRefresh }: ConnectAccountDialo
           </div>
 
           <p className="text-[10px] text-muted-foreground pt-2">
-            Need a legacy Mixpost connection? <a href={mixpostAccountsUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Click here to open Mixpost</a>.
+            Need help connecting an account? Ask the Director.
           </p>
 
           <div className="flex gap-2 pt-2 border-t border-border">

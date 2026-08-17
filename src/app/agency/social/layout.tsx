@@ -1,14 +1,13 @@
-import { Suspense } from 'react'
+import { SocialDepartmentChrome } from '@/components/agency/social/SocialDepartmentChrome'
 
 /**
- * Social department owns its own scrolling. Compose is a full-height
- * PostCreator that must not be clipped by a parent scroller; list screens
- * scroll inside themselves.
+ * Social department shell. The chrome (header + inner tabs) lives here so
+ * every sub-page gets the same navigation strip without repeating it.
+ *
+ * Compose is full-height: the panel div in SocialDepartmentChrome uses
+ * `overflow-hidden flex-col` rather than `overflow-y-auto` when the compose
+ * tab is active, so PostCreator's pinned action bar is never clipped.
  */
 export default function SocialLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <Suspense fallback={<div className="min-h-0 flex-1" />}>{children}</Suspense>
-    </div>
-  )
+  return <SocialDepartmentChrome>{children}</SocialDepartmentChrome>
 }

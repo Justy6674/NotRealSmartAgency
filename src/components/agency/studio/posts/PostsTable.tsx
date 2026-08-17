@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   PLATFORM_BRAND_COLOURS,
-  POST_STATUS_COLOURS,
   type PlatformKey,
   type PostStatusKey,
 } from '@/lib/mixpost/ui-tokens'
@@ -31,16 +30,44 @@ interface PostsTableProps {
   loading: boolean
 }
 
-/** Single-letter abbreviation for the platform avatar circle. */
+/** Platform initials for the coloured circle badges. */
 const PLATFORM_INITIAL: Record<string, string> = {
-  instagram: 'I',
-  facebook: 'F',
-  linkedin: 'L',
+  instagram: 'IG',
+  facebook: 'FB',
+  linkedin: 'Li',
   twitter: 'X',
-  tiktok: 'T',
-  youtube: 'Y',
+  tiktok: 'TT',
+  youtube: 'YT',
 }
 
+/**
+ * Plain English status labels (AU style). Status = word + dot; never
+ * colour alone. These describe what is happening in the owner's language.
+ */
+const STATUS_LABEL: Record<string, string> = {
+  draft:      'Draft',
+  scheduled:  'Waiting to go out',
+  publishing: 'Sending',
+  published:  'Gone out',
+  failed:     'Did not go out',
+  cancelled:  'Deleted',
+}
+
+/**
+ * Each status maps to its design token so the dot colour matches the
+ * status tab strip in PostsIndex. Uses the --st-* CSS variables defined in
+ * globals.css; falls back to a neutral grey when the token isn't set.
+ */
+const STATUS_DOT_VAR: Record<string, string> = {
+  draft:      'var(--st-draft,   oklch(0.62 0.012 240))',
+  scheduled:  'var(--st-sched,   oklch(0.62 0.10 220))',
+  publishing: 'var(--st-sending, oklch(0.72 0.15 70))',
+  published:  'var(--st-pub,     oklch(0.58 0.14 152))',
+  failed:     'var(--st-fail,    oklch(0.58 0.17 27))',
+  cancelled:  'var(--st-draft,   oklch(0.62 0.012 240))',
+}
+
+/** Format a date+time in Australian locale (DD Mon YYYY, HH:MM). */
 function formatDateTime(iso: string | null): string {
   if (!iso) return '\u2014'
   const d = new Date(iso)
@@ -54,12 +81,7 @@ function formatDateTime(iso: string | null): string {
   })
 }
 
-function captionSnippet(caption: string | null, max = 80): string {
-  if (!caption) return '(no caption)'
-  const trimmed = caption.trim().replace(/\s+/g, ' ')
-  if (trimmed.length <= max) return trimmed
-  return `${trimmed.slice(0, max)}\u2026`
-}
+/* ── Thumbnail hook ──────────────────────────────────────────────────────── */
 
 interface MediaCacheEntry {
   url: string | null
@@ -106,27 +128,33 @@ function useMediaThumb(mediaId: string | null) {
   return entry
 }
 
-/* ── Status Dot ─────────────────────────────────────────────────────── */
+/* ── Status chip — word + dot ────────────────────────────────────────────── */
 
-function StatusDot({ status }: { status: string }) {
-  const colours = POST_STATUS_COLOURS[status as PostStatusKey] ?? POST_STATUS_COLOURS.draft
+function StatusChip({ status }: { status: string }) {
+  const label = STATUS_LABEL[status] ?? status
+  const dotColour = STATUS_DOT_VAR[status] ?? STATUS_DOT_VAR.draft
+
   return (
-    <span
-      className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
-      style={{ backgroundColor: colours.fg }}
-      title={status}
-    />
+    <div className="flex items-center gap-2">
+      <span
+        aria-hidden
+        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+        style={{ backgroundColor: dotColour }}
+      />
+      <span className="text-[13px] leading-tight text-foreground">{label}</span>
+    </div>
   )
 }
 
-/* ── Platform Avatar ────────────────────────────────────────────────── */
+/* ── Platform mini-cluster — stacked coloured circles ────────────────────── */
 
-function PlatformAvatar({ platform }: { platform: string }) {
-  const colour = PLATFORM_BRAND_COLOURS[platform as PlatformKey] ?? '#888888'
-  const initial = PLATFORM_INITIAL[platform] ?? platform.charAt(0).toUpperCase()
+/** Renders the platform badge for the post's single `platform` field. */
+function PlatformBadge({ platform }: { platform: string }) {
+  const colour = PLATFORM_BRAND_COLOURS[platform as PlatformKey] ?? 'oklch(0.55 0 0)'
+  const initial = PLATFORM_INITIAL[platform] ?? platform.slice(0, 2).toUpperCase()
   return (
     <span
-      className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
+      className="inline-flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
       style={{ backgroundColor: colour }}
       title={platform}
     >
@@ -135,7 +163,7 @@ function PlatformAvatar({ platform }: { platform: string }) {
   )
 }
 
-/* ── Post Row ───────────────────────────────────────────────────────── */
+/* ── Post row ────────────────────────────────────────────────────────────── */
 
 function PostRow(props: {
   post: ScheduledPost
@@ -151,25 +179,39 @@ function PostRow(props: {
   const firstMediaId = post.media_item_ids?.[0] ?? post.media_item_id ?? null
   const thumb = useMediaThumb(firstMediaId)
 
+  // The "when" line: scheduled_at if future/pending, published_at if gone out.
+  const dateLabel = post.status === 'published'
+    ? `Published ${formatDateTime(post.published_at)}`
+    : post.scheduled_at
+      ? `Scheduled ${formatDateTime(post.scheduled_at)}`
+      : null
+
+  const caption = post.caption?.trim() ?? ''
+
   return (
-    <tr className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+    <tr
+      className="group border-b border-border/40 transition-colors hover:bg-muted/25"
+    >
       {/* Checkbox */}
-      <td className="px-2 py-1.5 align-middle">
+      <td className="w-10 px-3 py-3 align-top">
         <input
           type="checkbox"
           checked={selected}
           onChange={() => onToggleSelect(post.id)}
           aria-label={`Select post ${post.id.slice(0, 8)}`}
-          className="h-3.5 w-3.5 rounded border-border accent-foreground"
+          className="mt-0.5 h-[18px] w-[18px] rounded-[5px] border-border"
+          style={{ accentColor: 'var(--brand-deep, currentColor)' }}
         />
       </td>
-      {/* Status dot */}
-      <td className="px-1.5 py-1.5 align-middle">
-        <StatusDot status={post.status} />
-      </td>
-      {/* Thumbnail */}
-      <td className="px-1.5 py-1.5 align-middle">
-        <div className="h-8 w-8 overflow-hidden rounded border border-border bg-muted flex items-center justify-center">
+
+      {/* Thumbnail — 52×52, clickable to edit */}
+      <td className="w-[68px] px-2 py-3 align-top">
+        <button
+          type="button"
+          onClick={() => onEdit(post.id)}
+          aria-label="Open post"
+          className="block h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[7px] border border-border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           {thumb?.url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -179,35 +221,48 @@ function PostRow(props: {
               loading="lazy"
             />
           ) : (
-            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="flex h-full w-full items-center justify-center">
+              <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+            </span>
           )}
-        </div>
+        </button>
       </td>
-      {/* Caption */}
-      <td className="px-1.5 py-1.5 align-middle min-w-0">
-        <p className="text-sm text-foreground line-clamp-1 max-w-md leading-tight">
-          {captionSnippet(post.caption)}
-        </p>
-        {post.hashtags?.length > 0 && (
-          <p className="mt-0.5 text-[10px] text-muted-foreground line-clamp-1 leading-tight">
-            {post.hashtags.slice(0, 4).map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' ')}
-          </p>
-        )}
+
+      {/* Caption + status + when — the primary data cell, click to edit */}
+      <td className="min-w-0 px-2 py-3 align-top">
+        <button
+          type="button"
+          onClick={() => onEdit(post.id)}
+          className="block w-full text-left focus-visible:outline-none"
+        >
+          {caption ? (
+            <p className="line-clamp-3 max-w-lg text-[13.5px] leading-[1.5] text-foreground">
+              {caption}
+            </p>
+          ) : (
+            <p className="text-[13px] italic text-muted-foreground">(no caption yet)</p>
+          )}
+          {post.hashtags?.length > 0 && (
+            <p className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-muted-foreground">
+              {post.hashtags.slice(0, 5).map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' ')}
+            </p>
+          )}
+          <div className="mt-1.5">
+            <StatusChip status={post.status} />
+          </div>
+          {dateLabel && (
+            <p className="mt-0.5 text-[11.5px] text-muted-foreground">{dateLabel}</p>
+          )}
+        </button>
       </td>
-      {/* Platform avatar */}
-      <td className="px-1.5 py-1.5 align-middle">
-        <PlatformAvatar platform={post.platform} />
+
+      {/* Platform badge */}
+      <td className="w-14 px-2 py-3 align-top">
+        <PlatformBadge platform={post.platform} />
       </td>
-      {/* Scheduled */}
-      <td className="px-1.5 py-1.5 align-middle text-xs text-muted-foreground whitespace-nowrap">
-        {formatDateTime(post.scheduled_at)}
-      </td>
-      {/* Published */}
-      <td className="px-1.5 py-1.5 align-middle text-xs text-muted-foreground whitespace-nowrap">
-        {formatDateTime(post.published_at)}
-      </td>
-      {/* Actions */}
-      <td className="px-1.5 py-1.5 align-middle text-right">
+
+      {/* Row actions */}
+      <td className="w-10 px-2 py-3 align-top text-right">
         <DropdownMenu>
           <DropdownMenuTrigger
             render={(triggerProps) => (
@@ -216,34 +271,35 @@ function PostRow(props: {
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Open row actions"
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               >
                 <MoreHorizontal />
               </Button>
             )}
           />
-          <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuItem onClick={() => onEdit(post.id)}>
-              <Pencil />
+              <Pencil className="mr-2 h-3.5 w-3.5" />
               Edit
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDuplicate(post.id)}>
-              <Copy />
+              <Copy className="mr-2 h-3.5 w-3.5" />
               Duplicate
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onReschedule(post.id)}>
-              <CalendarClock />
+              <CalendarClock className="mr-2 h-3.5 w-3.5" />
               Reschedule
             </DropdownMenuItem>
             {onAskDirector && (
               <DropdownMenuItem onClick={() => onAskDirector(post.id)}>
-                <Sparkles />
+                <Sparkles className="mr-2 h-3.5 w-3.5" />
                 Ask Director
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onClick={() => onDelete(post.id)}>
-              <Trash2 />
-              Delete
+              <Trash2 className="mr-2 h-3.5 w-3.5" />
+              Cancel post
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -252,7 +308,7 @@ function PostRow(props: {
   )
 }
 
-/* ── Posts Table ─────────────────────────────────────────────────────── */
+/* ── Posts table ─────────────────────────────────────────────────────────── */
 
 export function PostsTable(props: PostsTableProps) {
   const {
@@ -272,12 +328,12 @@ export function PostsTable(props: PostsTableProps) {
   const someSelected = posts.some((p) => selectedIds.has(p.id))
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-border bg-muted/40 text-[11px] uppercase text-muted-foreground tracking-wide">
-              <th className="px-2 py-1.5 text-left w-8">
+            <tr className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <th className="w-10 px-3 py-2.5 text-left">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -286,29 +342,27 @@ export function PostsTable(props: PostsTableProps) {
                   }}
                   onChange={() => onToggleSelectAll(posts.map((p) => p.id))}
                   aria-label="Select all rows"
-                  className="h-3.5 w-3.5 rounded border-border accent-foreground"
+                  className="h-[18px] w-[18px] rounded-[5px] border-border"
+                  style={{ accentColor: 'var(--brand-deep, currentColor)' }}
                 />
               </th>
-              <th className="px-1.5 py-1.5 text-left w-6" title="Status"></th>
-              <th className="px-1.5 py-1.5 text-left w-10">Media</th>
-              <th className="px-1.5 py-1.5 text-left">Caption</th>
-              <th className="px-1.5 py-1.5 text-left w-10">Acct</th>
-              <th className="px-1.5 py-1.5 text-left">Scheduled</th>
-              <th className="px-1.5 py-1.5 text-left">Published</th>
-              <th className="px-1.5 py-1.5 text-right w-10"></th>
+              <th className="w-[68px] px-2 py-2.5 text-left">Media</th>
+              <th className="px-2 py-2.5 text-left">Post</th>
+              <th className="w-14 px-2 py-2.5 text-left">Acct</th>
+              <th className="w-10 px-2 py-2.5 text-right" />
             </tr>
           </thead>
           <tbody>
             {loading && posts.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
-                  Loading posts...
+                <td colSpan={5} className="px-3 py-12 text-center text-[13px] text-muted-foreground">
+                  Loading posts…
                 </td>
               </tr>
             ) : posts.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
-                  No posts match the current filters.
+                <td colSpan={5} className="px-3 py-12 text-center text-[13px] text-muted-foreground">
+                  Nothing has gone out yet.
                 </td>
               </tr>
             ) : (

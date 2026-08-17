@@ -390,7 +390,7 @@ export function NrsDeskConversation({
         {hasResults && (
           <div className="mt-5 border-t pt-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Mixpost drafts</h3>
+              <h3 className="text-sm font-semibold">Drafts ready to review</h3>
               {resultLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
             </div>
             <div className="mt-3 space-y-2">
@@ -403,7 +403,7 @@ export function NrsDeskConversation({
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium">{draft.platform || 'Social'} review draft</p>
                         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{draft.caption || 'Draft created for review.'}</p>
-                        <p className="mt-2 text-[11px] text-muted-foreground">Mixpost draft: {sync}. Nothing has been published.</p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">Draft: {sync}. Nothing has been published.</p>
                       </div>
                     </div>
                     <div className="mt-3 flex justify-end gap-2">

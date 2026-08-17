@@ -12,9 +12,9 @@ const creator = readFileSync(
   'utf8',
 )
 
-test('the composer has Post now, pick a time, and Save draft as buttons she clicks', () => {
+test('the composer has Post now, choose a time, and Save draft as buttons she clicks', () => {
   assert.match(bar, /Post now/)
-  assert.match(bar, /Pick a time/)
+  assert.match(bar, /Choose a time/)
   assert.match(bar, /Save draft|Save Draft/)
 })
 

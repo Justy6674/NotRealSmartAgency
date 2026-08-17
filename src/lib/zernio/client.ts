@@ -128,33 +128,233 @@ export async function createZernioPost(params: {
   }
 }
 
+export interface ZernioDailyMetrics {
+  dailyData: Array<{
+    date?: string
+    postCount?: number
+    metrics?: Record<string, number>
+  }>
+  platformBreakdown: Array<{
+    platform: string
+    postCount?: number
+    impressions?: number
+    reach?: number
+    likes?: number
+    comments?: number
+    shares?: number
+    saves?: number
+    clicks?: number
+    views?: number
+  }>
+}
+
+const EMPTY_ANALYTICS: ZernioDailyMetrics = { dailyData: [], platformBreakdown: [] }
+
+function asMetricRecord(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value)) out[key] = value
+  }
+  return out
+}
+
+function parseDailyMetrics(raw: unknown): ZernioDailyMetrics {
+  const node = (raw ?? {}) as Record<string, unknown>
+  const data = (node.data ?? node) as Record<string, unknown>
+  const dailyRaw = Array.isArray(data.dailyData) ? data.dailyData : []
+  const breakdownRaw = Array.isArray(data.platformBreakdown) ? data.platformBreakdown : []
+
+  return {
+    dailyData: dailyRaw.map((day) => {
+      const row = (day ?? {}) as Record<string, unknown>
+      return {
+        ...(typeof row.date === 'string' ? { date: row.date } : {}),
+        ...(typeof row.postCount === 'number' ? { postCount: row.postCount } : {}),
+        metrics: asMetricRecord(row.metrics),
+      }
+    }),
+    platformBreakdown: breakdownRaw.flatMap((row) => {
+      const item = (row ?? {}) as Record<string, unknown>
+      const platform = typeof item.platform === 'string' ? item.platform : ''
+      if (!platform) return []
+      return [{
+        platform,
+        ...(typeof item.postCount === 'number' ? { postCount: item.postCount } : {}),
+        ...(typeof item.impressions === 'number' ? { impressions: item.impressions } : {}),
+        ...(typeof item.reach === 'number' ? { reach: item.reach } : {}),
+        ...(typeof item.likes === 'number' ? { likes: item.likes } : {}),
+        ...(typeof item.comments === 'number' ? { comments: item.comments } : {}),
+        ...(typeof item.shares === 'number' ? { shares: item.shares } : {}),
+        ...(typeof item.saves === 'number' ? { saves: item.saves } : {}),
+        ...(typeof item.clicks === 'number' ? { clicks: item.clicks } : {}),
+        ...(typeof item.views === 'number' ? { views: item.views } : {}),
+      }]
+    }),
+  }
+}
+
+function mergeDailyMetrics(parts: ZernioDailyMetrics[]): ZernioDailyMetrics {
+  return {
+    dailyData: parts.flatMap((part) => part.dailyData),
+    platformBreakdown: parts.flatMap((part) => part.platformBreakdown),
+  }
+}
+
+/**
+ * Daily metrics for accounts we already know belong to this brand.
+ *
+ * `profileId` on the analytics endpoint is the same trap as listAccounts: it
+ * is accepted and must not be trusted. We resolve the brand's accounts with
+ * `fetchZernioAccounts` (filter after normalise) and ask per `accountId`.
+ *
+ * Null means we could not reach the publisher. An empty payload means we
+ * reached it and this brand has nothing to show — those are not the same.
+ */
 export async function fetchZernioAnalytics(params: {
-  profileId?: string;
-  accountId?: string;
-  platform?: string;
-  fromDate?: string;
-  toDate?: string;
-}) {
+  profileId?: string
+  accountId?: string
+  platform?: string
+  fromDate?: string
+  toDate?: string
+}): Promise<ZernioDailyMetrics | null> {
   try {
-    if (!process.env.ZERNIO_API_KEY) return null;
-    const zernio = new Zernio({ apiKey: process.env.ZERNIO_API_KEY });
-    const query: Record<string, string> = {};
-    if (params.profileId) query.profileId = params.profileId;
-    if (params.accountId) query.accountId = params.accountId;
-    if (params.platform) query.platform = params.platform;
-    if (params.fromDate) query.fromDate = params.fromDate;
-    if (params.toDate) query.toDate = params.toDate;
-    
-    // Zernio's analytics surface uses a generic GET helper; fall back to REST for reliability
-    const qs = new URLSearchParams(query).toString();
-    const res = await fetch(`https://zernio.com/api/v1/analytics/daily-metrics${qs ? `?${qs}` : ''}`, {
-      headers: { 'Authorization': `Bearer ${process.env.ZERNIO_API_KEY}` }
-    });
-    if (!res.ok) throw new Error(`Zernio analytics ${res.status}: ${await res.text()}`);
-    return await res.json();
-  } catch (err: any) {
-    console.error('Failed to fetch Zernio analytics:', err.message);
-    return null;
+    if (!process.env.ZERNIO_API_KEY) return null
+
+    const accountIds: string[] = []
+    if (params.accountId) {
+      if (params.profileId) {
+        const own = await fetchZernioAccounts(params.profileId)
+        if (!own.some((account) => account.id === params.accountId)) {
+          return EMPTY_ANALYTICS
+        }
+      }
+      accountIds.push(params.accountId)
+    } else if (params.profileId) {
+      const own = await fetchZernioAccounts(params.profileId)
+      accountIds.push(...own.map((account) => account.id))
+    } else {
+      // No profile and no account is "the whole team". Isolation forbids it.
+      return EMPTY_ANALYTICS
+    }
+
+    if (accountIds.length === 0) return EMPTY_ANALYTICS
+
+    const parts = await Promise.all(accountIds.map(async (accountId) => {
+      const query: Record<string, string> = { accountId }
+      if (params.platform) query.platform = params.platform
+      if (params.fromDate) query.fromDate = params.fromDate
+      if (params.toDate) query.toDate = params.toDate
+      const qs = new URLSearchParams(query).toString()
+      const res = await fetch(`https://zernio.com/api/v1/analytics/daily-metrics?${qs}`, {
+        headers: { Authorization: `Bearer ${process.env.ZERNIO_API_KEY}` },
+      })
+      if (!res.ok) throw new Error(`publisher analytics ${res.status}`)
+      return parseDailyMetrics(await res.json())
+    }))
+
+    return mergeDailyMetrics(parts)
+  } catch (err) {
+    console.error('Failed to fetch publisher analytics:', messageOf(err))
+    return null
+  }
+}
+
+export interface ZernioPost {
+  id: string
+  status: string | null
+  content: string
+  accountIds: string[]
+  platforms: string[]
+  scheduledFor?: string
+  createdAt?: string
+}
+
+/**
+ * Account ids on a post, accepting both a string and a populated object.
+ *
+ * Same shape trap as accounts: `platforms[].accountId` is sometimes
+ * `{_id, name}` rather than a string. Guessing `id` vs `_id` is how the
+ * publish cron missed every Zernio account; both are accepted here.
+ */
+function accountIdsFromPost(raw: Record<string, unknown>): string[] {
+  const platforms = raw.platforms
+  if (!Array.isArray(platforms)) return []
+  const ids: string[] = []
+  for (const entry of platforms) {
+    if (!entry || typeof entry !== 'object') continue
+    const rec = entry as Record<string, unknown>
+    const rawId = rec.accountId
+    const id = typeof rawId === 'string'
+      ? rawId
+      : typeof rawId === 'object' && rawId
+        ? String((rawId as { _id?: unknown; id?: unknown }).id ?? (rawId as { _id?: unknown })._id ?? '')
+        : ''
+    if (id) ids.push(id)
+  }
+  return ids
+}
+
+function platformsFromPost(raw: Record<string, unknown>): string[] {
+  const platforms = raw.platforms
+  if (!Array.isArray(platforms)) return []
+  return platforms.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const platform = (entry as Record<string, unknown>).platform
+    return typeof platform === 'string' && platform ? [platform] : []
+  })
+}
+
+function normalisePost(raw: Record<string, unknown>): ZernioPost {
+  return {
+    id: String(raw.id ?? raw._id ?? ''),
+    status: typeof raw.status === 'string' && raw.status.trim() ? raw.status.trim() : null,
+    content: typeof raw.content === 'string' ? raw.content : '',
+    accountIds: accountIdsFromPost(raw),
+    platforms: platformsFromPost(raw),
+    ...(typeof raw.scheduledFor === 'string' ? { scheduledFor: raw.scheduledFor } : {}),
+    ...(typeof raw.createdAt === 'string' ? { createdAt: raw.createdAt } : {}),
+  }
+}
+
+/**
+ * Posts for one brand's accounts.
+ *
+ * `listPosts({ profileId })` is the same contract as `listAccounts`: the
+ * argument is accepted. Isolation is applied after normalisation against the
+ * account ids `fetchZernioAccounts` already scoped. A post whose accounts are
+ * not in that set is another tenant's.
+ */
+export async function fetchZernioPosts(params: {
+  profileId?: string
+  status?: 'draft' | 'scheduled' | 'published' | 'failed'
+  limit?: number
+}): Promise<ZernioPost[]> {
+  try {
+    if (!process.env.ZERNIO_API_KEY) return []
+    const profileId = params.profileId
+    if (!profileId) return []
+
+    const zernio = new Zernio({ apiKey: process.env.ZERNIO_API_KEY })
+    const res = await zernio.posts.listPosts({
+      query: {
+        profileId,
+        ...(params.status ? { status: params.status } : {}),
+        limit: params.limit ?? 50,
+      },
+    } as never)
+
+    const node = (res ?? {}) as Record<string, unknown>
+    const data = (node.data ?? node) as Record<string, unknown>
+    const rawPosts = (data.posts ?? []) as unknown as Record<string, unknown>[]
+    const normalised = rawPosts.map(normalisePost).filter((post) => post.id !== '')
+
+    const own = await fetchZernioAccounts(profileId)
+    const allowed = new Set(own.map((account) => account.id))
+    return normalised.filter((post) => post.accountIds.some((id) => allowed.has(id)))
+  } catch (err) {
+    console.error('Failed to fetch publisher posts:', messageOf(err))
+    return []
   }
 }
 

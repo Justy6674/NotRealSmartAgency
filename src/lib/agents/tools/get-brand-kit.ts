@@ -3,6 +3,9 @@ import { z } from 'zod/v3'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fetchMixpostAccounts } from '@/lib/mixpost/client'
 import { mapMixpostAccountsToBrands } from '@/lib/mixpost/brand-mapping'
+import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
+import { fetchZernioAccounts } from '@/lib/zernio/client'
+import { ownerFacingPlatformLabel } from '@/lib/studio/social-read-source'
 
 /**
  * The whole brand contract for one project, in a single read.
@@ -160,15 +163,25 @@ export function createGetBrandKitTool(
       // Where this brand can actually publish. Drafting for a project with no
       // connected account is legitimate, but pretending it will go out is not.
       try {
-        const accounts = (await fetchMixpostAccounts()) ?? []
-        const mapping = mapMixpostAccountsToBrands(accounts, [
-          { id: brand.id, name: brand.name, slug: brand.slug, social_urls: brand.social_urls ?? {} },
-        ])
-        const connected = mapping[brand.id] ?? []
+        const profileId = zernioProfileIdFromSocialUrls(brand.social_urls)
         md += `## Connected accounts\n`
-        md += connected.length
-          ? connected.map((a) => `- ${a.platform}: ${a.accountName}\n`).join('')
-          : `None connected. A draft for this project has nowhere to publish yet — say so rather than implying it will go out.\n`
+        if (profileId) {
+          const zernioAccounts = await fetchZernioAccounts(profileId)
+          md += zernioAccounts.length
+            ? zernioAccounts
+              .map((a) => `- ${ownerFacingPlatformLabel(a.platform)}: ${a.displayName || a.username || a.platform}\n`)
+              .join('')
+            : `None connected. A draft for this project has nowhere to publish yet — say so rather than implying it will go out.\n`
+        } else {
+          const accounts = (await fetchMixpostAccounts()) ?? []
+          const mapping = mapMixpostAccountsToBrands(accounts, [
+            { id: brand.id, name: brand.name, slug: brand.slug, social_urls: brand.social_urls ?? {} },
+          ])
+          const connected = mapping[brand.id] ?? []
+          md += connected.length
+            ? connected.map((a) => `- ${a.platform}: ${a.accountName}\n`).join('')
+            : `None connected. A draft for this project has nowhere to publish yet — say so rather than implying it will go out.\n`
+        }
         md += `\n`
       } catch {
         md += `## Connected accounts\nCould not reach the publisher; account list unavailable.\n\n`

@@ -109,7 +109,7 @@ export const gettingStartedArticles: HelpArticle[] = [
     subtitle: 'Link Facebook, Instagram, LinkedIn, TikTok, and YouTube',
     body: [
       {
-        body: 'To publish posts directly to your social media accounts, your agency uses a self-hosted publishing tool called Mixpost. It connects to your platforms securely so the Director can schedule and publish on your behalf.',
+        body: 'To publish posts directly to your social media accounts, your agency connects to each platform securely so the Director can schedule and publish on your behalf.',
       },
       {
         heading: 'Currently supported platforms',

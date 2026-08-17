@@ -58,14 +58,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: NOT_YOURS }, { status: 403 })
     }
 
-    // Linked to no Zernio profile, or no Zernio on this deployment at all.
+    // Linked to no publisher profile, or no publisher key on this deployment.
     // Both are real answers about a brand this person owns, not failures.
-    if (access.brand.profileId === null || !process.env.ZERNIO_API_KEY) {
-      return NextResponse.json({ accounts: [] })
+    // `linked` is the signal the UI needs: a linked brand must not fall
+    // through to Mixpost's workspace list, even when this list is empty.
+    if (access.brand.profileId === null) {
+      return NextResponse.json({ linked: false, accounts: [] })
+    }
+
+    if (!process.env.ZERNIO_API_KEY) {
+      return NextResponse.json({ linked: true, accounts: [] })
     }
 
     const accounts = await fetchZernioAccounts(access.brand.profileId)
-    return NextResponse.json({ accounts })
+    return NextResponse.json({ linked: true, accounts })
   } catch (err) {
     return NextResponse.json(
       {

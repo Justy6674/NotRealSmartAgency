@@ -198,6 +198,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
   const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
+  const [savedAt, setSavedAt] = useState<string | null>(null)
 
   const brandName = data.brand?.name ?? 'Brand'
   const postType = CONTENT_TO_POST_TYPE[contentType]
@@ -777,6 +778,8 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
 
       // Clear draft from localStorage after successful save
       if (draftKey) try { localStorage.removeItem(draftKey) } catch {}
+      // Record time of last successful save so the action bar can show it
+      setSavedAt(new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }))
       // Reset form after schedule/draft save
       setCaption('')
       setHashtags([])
@@ -1220,6 +1223,7 @@ If any items have no AI description or transcription yet, name them and offer to
         onSave={handleSave}
         editMode={editMode}
         nextSlotIso={nextSlotIso}
+        savedAt={savedAt}
       />
     </div>
   )

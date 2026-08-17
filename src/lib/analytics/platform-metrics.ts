@@ -17,6 +17,8 @@ import {
   fetchMixpostAccounts,
   type MixpostAccount,
 } from '@/lib/mixpost/client'
+import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
+import { fetchZernioAccounts, fetchZernioAnalytics } from '@/lib/zernio/client'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -83,6 +85,7 @@ export interface MetricsSourceParams {
   from: string
   /** ISO date (YYYY-MM-DD) */
   to: string
+  socialUrls?: unknown
 }
 
 export type MetricsSource = (
@@ -150,7 +153,60 @@ function safeNum(value: unknown): number | undefined {
   return undefined
 }
 
-// ── Mixpost-backed source ──────────────────────────────────────────────────
+const zernioMetricsSource: MetricsSource = async ({
+  platform,
+  from,
+  to,
+  socialUrls,
+}) => {
+  const profileId = zernioProfileIdFromSocialUrls(socialUrls)
+  if (!profileId || !process.env.ZERNIO_API_KEY) {
+    return emptyMetrics(platform, from, to)
+  }
+
+  const accounts = await fetchZernioAccounts(profileId)
+  const match = accounts.find((account) => {
+    const key = account.platform.toLowerCase().replace(/_(page|group)$/, '')
+    return key === platform || account.platform.toLowerCase() === platform
+  })
+  if (!match) return emptyMetrics(platform, from, to)
+
+  const analytics = await fetchZernioAnalytics({
+    profileId,
+    accountId: match.id,
+    platform: match.platform,
+    fromDate: from,
+    toDate: to,
+  })
+  if (!analytics) return emptyMetrics(platform, from, to)
+
+  const row = analytics.platformBreakdown.find(
+    (item) => item.platform.toLowerCase() === match.platform.toLowerCase(),
+  )
+  const totals: PlatformMetrics['totals'] = {
+    reach: row?.reach,
+    impressions: row?.impressions,
+    likes: row?.likes,
+    comments: row?.comments,
+    shares: row?.shares,
+    saves: row?.saves,
+    clicks: row?.clicks,
+    videoViews: row?.views,
+  }
+  const hasAnyTotal = Object.values(totals).some((v) => v !== undefined)
+
+  return {
+    platform,
+    from,
+    to,
+    empty: !hasAnyTotal,
+    totals,
+    timeseries: {},
+    topPosts: [],
+  }
+}
+
+// ── Mixpost-backed source (fallback for brands without a publisher profile) ─
 
 const mixpostMetricsSource: MetricsSource = async ({
   platform,
@@ -214,11 +270,14 @@ const stubMetricsSource: MetricsSource = async ({ platform, from, to }) => {
 // ── Public ─────────────────────────────────────────────────────────────────
 
 /**
- * Returns the metrics source for a given platform. Today this routes
- * everything through Mixpost; Phase 10 will add platform-specific direct
- * implementations and switch on `platform`.
+ * Returns the metrics source for a given brand. A linked brand is answered
+ * from its own publisher accounts (filtered in our code). Mixpost is the
+ * fallback for every other brand.
  */
-export function getMetricsSource(_platform: PlatformKey): MetricsSource {
+export function getMetricsSource(params: MetricsSourceParams): MetricsSource {
+  if (zernioProfileIdFromSocialUrls(params.socialUrls) && process.env.ZERNIO_API_KEY) {
+    return zernioMetricsSource
+  }
   if (process.env.NEXT_PUBLIC_MIXPOST_DISABLED === 'true') {
     return stubMetricsSource
   }
@@ -229,6 +288,6 @@ export function getMetricsSource(_platform: PlatformKey): MetricsSource {
 export async function fetchPlatformMetrics(
   params: MetricsSourceParams
 ): Promise<PlatformMetrics> {
-  const source = getMetricsSource(params.platform)
+  const source = getMetricsSource(params)
   return source(params)
 }
