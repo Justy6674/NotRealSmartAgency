@@ -48,11 +48,10 @@ landed on one account and "Publish now" landed on the other — and once a row w
 marked failed, the cron would not retry it, because it only selects
 `status='scheduled'`.
 
-**Migration status, checked 2026-08-17:** the cron
-(`/api/cron/publish-posts`) delegates to `publishToPlatform`. The two older
-callers — `/api/scheduled-posts/publish-now` and the `publish_to_social` agent
-tool — still talk to the Mixpost client directly and have not been moved behind
-the door yet. Verify before relying on it:
+**Write path, re-checked 2026-08-17:** cron, `/api/scheduled-posts/publish-now`,
+and `publish_to_social` all go through `publishToPlatform`. The remaining gap is
+**reads** — social analytics and several account lists still ask Mixpost;
+`/api/studio/overview` now asks Zernio when the brand has a profile. Verify:
 
 ```bash
 grep -rln "publishToPlatform" src

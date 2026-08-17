@@ -49,8 +49,8 @@ This file provides guidance to Claude Code (claude.ai/code) and to any other cod
 >
 > | Was claimed | Actually |
 > |---|---|
-> | "Every publishing path goes through `dispatcher.ts`" | Only the cron does. See Publishing → Migration status |
-> | `publish-now` uses "(same dispatcher)" | It calls `createMixpostPost` directly and cannot reach Zernio |
+> | "Every publishing path goes through `dispatcher.ts`" | Was only the cron at the morning check. Closed same day: cron, publish-now, and `publish_to_social` all call `publishToPlatform` (`f2d9aac`). Remaining gap is Mixpost **reads**. |
+> | `publish-now` uses "(same dispatcher)" | Was Mixpost-direct at the morning check. Now delegates to `publishToPlatform`. |
 > | `web_search` "is never handed to an agent" | It is — `chat/route.ts:468` and `worker.ts:257` |
 > | 78 slash commands | 77 |
 > | Transcription gated at "< 100MB" | The gate was deliberately deleted; do not re-add it |
@@ -309,20 +309,12 @@ Selection is per brand, from `brands.social_urls.zernio_profile_id`. Linked so f
 **Scent Sell** and **EndorseMe** (2 of 14 brand rows, checked live 2026-08-17). Every attempt
 is logged to `publisher_runs`; failures queue in `publisher_retry_queue`.
 
-#### Migration status, checked 2026-08-17 — the door is not yet the ONLY door
+#### Write path closed 2026-08-17 — remaining gap is reads
 
-An earlier version of this section claimed "every publishing path goes through it". That was
-false, and it is the most expensive kind of doc error here: it reports as closed the exact
-fault the dispatcher was built to close. Only the 5-minute cron
-(`/api/cron/publish-posts`) calls `publishToPlatform`. Two older callers still talk to the
-Mixpost client directly and therefore **cannot reach Zernio at all**:
-
-- `src/app/api/scheduled-posts/publish-now/route.ts` — imports `createMixpostPost` from
-  `@/lib/mixpost/client` and calls it directly
-- `src/lib/agents/tools/publish-to-social.ts` — the `publish_to_social` agent tool, which
-  builds its own Mixpost base URL from `MIXPOST_API_URL` / `MIXPOST_WORKSPACE_UUID` and
-  fetches accounts itself, so it never sees the confirmed `social_urls.mixpost_account_ids`
-  overrides. (`fetchMixpostAccounts` is used by `publish-now`, the other caller above.)
+An earlier version of this section claimed only the cron called `publishToPlatform`, and
+that `publish-now` and `publish_to_social` still talked to Mixpost directly. That was
+true in the morning and false by evening (`f2d9aac`). All three write paths go through
+the dispatcher. `INLINE_EQUIVALENT` is empty.
 
 Re-check it yourself rather than trusting this line:
 
@@ -330,18 +322,12 @@ Re-check it yourself rather than trusting this line:
 grep -rln "publishToPlatform" src
 ```
 
-Three files as of 2026-08-17: the cron route, `dispatcher.ts`, and
-`src/lib/agents/regulatory-invariants.test.ts`. When `publish-now/route.ts` and
-`publish-to-social.ts` appear in that list, the migration is done and this subsection can go.
-(Both still run the AHPRA/TGA check — `publish-now/route.ts:74` calls `checkPublishAllowed`
-from `publish-gate.ts`, and `publish-to-social.ts:88-115` calls `runComplianceFilter` inline
-and refuses to publish if the check did not complete. So the regulatory gate is not the thing
-that is open — the *transport choice* is.)
-
-**The live consequence while it stays open.** Scent Sell and EndorseMe are the two brands
-linked to Zernio profiles, so on their rows a *scheduled* post reaches Zernio via the cron
-while pressing *Publish now* reaches Mixpost. Same `scheduled_posts` row, two buttons, two
-destinations. README.md:51-59 states this the same way and names the same grep.
+Those three plus `dispatcher.ts` and the invariant tests must appear. **What is still
+open:** several *screens* still ask Mixpost (`fetchMixpostAccounts` in social analytics,
+account routes, the performance learner). `/api/studio/overview` now uses Zernio when
+the brand has a `zernio_profile_id` (`src/lib/studio/overview-accounts.ts`, `bd1d307`).
+Scent Sell and EndorseMe therefore publish to Zernio and the dashboard can show those
+accounts; other Mixpost-only lists will still look empty for them.
 
 **Why this does not break Build-First.** NRS keeps owning the product — brand intelligence,
 the AHPRA/TGA gate, the composer, scheduling, memory. Zernio is a *transport behind our own
@@ -349,13 +335,11 @@ interface*, swappable without touching product logic. Wiring Zernio's API shapes
 application would have sold the spine; putting it behind `dispatcher.ts` does not.
 Full reasoning: `~/Obsidian/Decisions/2026-08-17-nrs-zernio-for-subscribers-mixpost-as-fallback.md`.
 
-**THE FAULT that forced it — and it is still half-live.** The choice lived in two places
+**THE FAULT that forced it — closed on the write path.** The choice lived in two places
 that disagreed: the 5-minute cron had an inline Zernio-first fork, while
-`/api/scheduled-posts/publish-now` had no Zernio code at all. The cron half is fixed (it now
-delegates to the dispatcher); the `publish-now` half is not. A brand connected to one
-transport but not the other publishes cleanly on one button and is written back as `failed`
-on the other. Once failed, the cron will never retry it, because it only selects
-`status='scheduled'`.
+`/api/scheduled-posts/publish-now` had no Zernio code at all. Both now delegate to the
+dispatcher. A row that already failed on the old Mixpost-only button will not be retried
+by cron (`status='scheduled'` only) — those need a manual republish.
 
 #### CRITICAL AND COUNTERINTUITIVE — Zernio does NOT enforce customer isolation
 
@@ -953,9 +937,8 @@ First-time users get a conversational onboarding flow. Instead of showing missin
 /api/cron/web-vitals                 → Cron (weekly Mon): Core Web Vitals report
 /api/cron/weekly-traffic             → Cron (weekly Sun): site traffic report
 /api/media/process                   → Media processing pipeline (browser uploads)
-/api/scheduled-posts/publish-now     → Publish a scheduled row immediately. NOT yet behind the
-                                       dispatcher — calls createMixpostPost directly, so it
-                                       cannot reach Zernio. See Publishing → Migration status
+/api/scheduled-posts/publish-now     → Publish a scheduled row immediately, via publishToPlatform
+                                       (Zernio when the brand is linked). See Publishing.
 /api/zernio/{accounts,ads,analytics,connect,callback} → Zernio surface
 /api/webhooks/mixpost                → Mixpost Pro webhook receiver (9 events, HMAC SHA-256)
 /api/webhooks/zernio                 → Zernio inbox webhook (message.received, comment.received)
@@ -998,7 +981,7 @@ Upload → Transcribe → Generate → Schedule → Publish pipeline:
 - `scheduled_posts` table tracks draft → scheduled → publishing → published flow. It is **one row per platform**, so the row's own caption IS the per-platform variant
 - Cron publisher (`/api/cron/publish-posts`, every 5 min) delegates to `publishToPlatform` in `src/lib/publishers/dispatcher.ts` — Zernio → native → Mixpost. There is no Ayrshare fallback
 - Provider settings: Deepgram in Brand Settings → Video tab
-- `PublisherPlatform` (`src/lib/publishers/types.ts:9-16`) is exactly six: `facebook`, `instagram`, `linkedin`, `tiktok`, `youtube`, `twitter`. **Scheduled** posts reach them through whichever transport the dispatcher selects for that brand; **Publish now** and the `publish_to_social` tool still go straight to Mixpost — see Publishing → Migration status
+- `PublisherPlatform` (`src/lib/publishers/types.ts:9-16`) is exactly six: `facebook`, `instagram`, `linkedin`, `tiktok`, `youtube`, `twitter`. Scheduled posts, Publish now, and `publish_to_social` all go through `publishToPlatform`. Mixpost remains the fallback for brands without a Zernio profile, and several *read* screens still ask Mixpost — see Publishing.
 
 ### Department-Specific Quick Actions
 `QuickActions.tsx` shows contextual buttons per department (not generic). **15 sets of 4–6

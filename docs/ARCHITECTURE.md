@@ -206,11 +206,10 @@ whenever the brand had a Zernio account for the platform; `/api/scheduled-posts/
 had no Zernio code in it at all and always went to Mixpost. Those are two separate OAuth
 connections to two separate services, and nothing in this codebase asserts they point at
 the same Facebook Page or LinkedIn organisation. The Review panel puts both buttons on the
-same row: **"Schedule" landed on the Zernio account and "Publish now" landed on the Mixpost
-one, for the same stored row — and on the two Zernio-linked brands it still does, because
-`publish-now` has not been moved behind the door yet.** A brand connected to Zernio but not
-Mixpost published cleanly on one button and was written to the row as failed on the other —
-and once failed, the cron would never retry it, because it only selects `status='scheduled'`.
+same row. **That write-path split is closed** (`f2d9aac`): cron, Publish now, and
+`publish_to_social` all call `publishToPlatform`. A brand connected to Zernio but not
+Mixpost used to publish cleanly on one button and fail on the other — and once failed, the
+cron would never retry it, because it only selects `status='scheduled'`.
 
 Caption assembly moved into the dispatcher for the same reason: three paths joined
 hashtags differently (one without a `#` at all) and appended the brand sign-off
@@ -218,25 +217,13 @@ inconsistently, so the same row reached the public as different words depending 
 sent it. `buildCaption()` is now built once, for every backend, and it is the exact text
 handed to the gate.
 
-**Migration status as at 2026-08-17 — the fault above is half-fixed, and this is the live
-half.** The 5-minute cron delegates to `publishToPlatform`. Two older callers do not:
-
-- `/api/scheduled-posts/publish-now` imports `createMixpostPost` and calls it directly.
-- the `publish_to_social` agent tool (`src/lib/agents/tools/publish-to-social.ts`) builds
-  its own Mixpost API URL from `MIXPOST_API_URL` / `MIXPOST_WORKSPACE_UUID` and carries its
-  own account matcher.
-
-They are reviewed by different means, which is why the invariant treats them separately:
-`publish-now` calls `checkPublishAllowed`; `publish_to_social` does not, and instead runs
-`runComplianceFilter` inline — and only when `ahpra` or `tga` is set, so an unregulated project
-gets no gate call at all on that path. `regulatory-invariants.test.ts` recognises it as an
-`INLINE_EQUIVALENT` rather than a gate caller. Neither can reach
-Zernio at all. **Scent Sell and EndorseMe are the only two brands carrying a
-`social_urls.zernio_profile_id` (live check, 2026-08-17), so on those two a scheduled post
-reaches Zernio via the cron while "Publish now" on the same row reaches Mixpost.** Same row,
-two buttons, two destinations — and EndorseMe is one of the AHPRA-flagged brands, so the
-destination that a reviewed post lands on is decided by which button was pressed. That is
-the original fault still standing on one of the paths, not a design.
+**Write path closed 2026-08-17 (`f2d9aac`). Remaining gap is reads.** Cron, Publish now,
+and `publish_to_social` all call `publishToPlatform`. `INLINE_EQUIVALENT` is empty: the
+shared gate runs for every project on those paths. **Scent Sell and EndorseMe** still
+carry `social_urls.zernio_profile_id`. Their writes go to Zernio. Several *screens*
+(social analytics, Mixpost account routes, the performance learner) still ask Mixpost;
+`/api/studio/overview` now asks Zernio when the brand has a profile
+(`src/lib/studio/overview-accounts.ts`, `bd1d307`).
 
 Confirm the current callers yourself — `grep -rln "publishToPlatform" src`, or
 `graphify explain "dispatcher.ts"` — rather than trusting this paragraph.
