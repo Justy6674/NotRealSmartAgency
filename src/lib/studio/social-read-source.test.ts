@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   brandIsPublisherLinked,
+  canonicalSocialPlatform,
   ownerFacingAccounts,
   ownerFacingPlatformLabel,
 } from './social-read-source'
@@ -97,4 +98,10 @@ test('mixpost accounts route scopes by brandId and refuses linked brands', () =>
   )
   assert.match(source, /brandId/)
   assert.match(source, /mapAccountsToBrandsRaw|brandIsPublisherLinked|zernioProfileIdFromSocialUrls/)
+})
+
+test('facebook_page and FACEBOOK both become facebook for the compose picker', () => {
+  assert.equal(canonicalSocialPlatform('facebook_page'), 'facebook')
+  assert.equal(canonicalSocialPlatform('FACEBOOK'), 'facebook')
+  assert.equal(canonicalSocialPlatform('x'), 'twitter')
 })

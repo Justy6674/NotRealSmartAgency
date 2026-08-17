@@ -9,6 +9,7 @@ import { BusinessSelector } from '@/components/agency/shell/BusinessSelector'
 import { DirectorRailConnected } from '@/components/agency/shell/DirectorRailConnected'
 import { ThemeToggle } from '@/components/agency/ThemeToggle'
 import { UserMenu } from '@/components/agency/UserMenu'
+import { BrandThemeSync } from '@/components/agency/shell/BrandThemeSync'
 import type { Brand } from '@/types/database'
 
 /**
@@ -284,7 +285,7 @@ export default async function AgencyLayout({
       // the intended behaviour, not a mismatch to repair.
       suppressHydrationWarning
       className={[
-        'grid h-dvh w-full overflow-hidden bg-background',
+        'grid h-dvh w-full overflow-hidden bg-[var(--bg)]',
         // Below lg the sidebar leaves the flow (it becomes a drawer), so the
         // work gets the full width and the rail sizes itself to nothing.
         'grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)]',
@@ -293,6 +294,7 @@ export default async function AgencyLayout({
     >
       <style dangerouslySetInnerHTML={{ __html: brandThemeStyles(brands) }} />
       <script dangerouslySetInnerHTML={{ __html: TINT_SYNC }} />
+      <BrandThemeSync brands={brands} />
 
       {/*
         SIDEBAR. A column at lg and up; an off-canvas drawer below it, opened
@@ -305,7 +307,7 @@ export default async function AgencyLayout({
       <div
         id="nrs-nav"
         className={[
-          'z-50 flex w-[236px] flex-col overflow-y-auto border-r bg-card',
+          'z-50 flex w-[236px] flex-col overflow-y-auto border-r bg-[var(--panel)]',
           'fixed inset-y-0 left-0 shadow-2xl',
           '-translate-x-full transition-transform duration-200 [&:target]:translate-x-0',
           'lg:static lg:z-auto lg:translate-x-0 lg:shadow-none lg:transition-none',
@@ -381,7 +383,7 @@ export default async function AgencyLayout({
         becoming a grid item of its own.
       */}
       <div className="flex min-h-0">
-        <DirectorRailConnected brandName={primaryBrand?.name ?? null} />
+        <DirectorRailConnected brandName={primaryBrand?.name ?? null} brands={brands} />
       </div>
     </div>
   )

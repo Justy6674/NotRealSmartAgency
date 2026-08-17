@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { MixpostAccount } from '@/lib/mixpost/client'
+import { canonicalSocialPlatform } from '@/lib/studio/social-read-source'
 
 /**
  * Shared hook for reading the brand's connected social accounts.
@@ -30,11 +31,10 @@ interface UseSocialAccountsResult {
 }
 
 function normaliseMixpostAccount(raw: MixpostAccount): SocialAccount {
-  const platform = (raw.provider ?? 'unknown').replace(/_(page|group)$/, '')
   return {
     id: String(raw.id),
     name: raw.name ?? 'Unknown',
-    platform,
+    platform: canonicalSocialPlatform(raw.provider ?? 'unknown'),
     username: raw.username ?? undefined,
     image: raw.media_url ?? undefined,
     status: 'active',
@@ -71,7 +71,7 @@ export function useSocialAccounts(brandId: string | null): UseSocialAccountsResu
         setAccounts((zData.accounts ?? []).map((za) => ({
           id: String(za.id ?? ''),
           name: za.displayName || za.username || za.platform || 'Account',
-          platform: za.platform || 'unknown',
+          platform: canonicalSocialPlatform(za.platform || 'unknown'),
           username: za.username,
           status: 'active' as const,
           external_id: String(za.id ?? ''),

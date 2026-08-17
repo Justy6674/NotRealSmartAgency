@@ -19,7 +19,13 @@ import { useAgencyStore } from '@/stores/agency-store'
  * (`POST /api/chat`), one listener for every "Ask the Director" button that
  * still dispatches the old event.
  */
-export function DirectorRailConnected({ brandName }: { brandName?: string | null }) {
+export function DirectorRailConnected({
+  brandName,
+  brands = [],
+}: {
+  brandName?: string | null
+  brands?: Array<{ id: string; name: string }>
+}) {
   const {
     activeBrandId,
     activeConversationId,
@@ -226,9 +232,11 @@ export function DirectorRailConnected({ brandName }: { brandName?: string | null
     await fetch(`/api/memories?scope=brand&brandId=${activeBrandId}`, { method: 'DELETE' })
   }, [activeBrandId])
 
+  const liveBrandName = brands.find((row) => row.id === activeBrandId)?.name ?? brandName
+
   return (
     <DirectorRail
-      brandName={brandName}
+      brandName={liveBrandName}
       messages={messages}
       isLoading={isLoading}
       onSend={handleSend}

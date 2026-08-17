@@ -173,6 +173,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   // in a multi-select even when they'd only clicked Facebook.
   const [contentType, setContentType] = useState<ContentType>('post')
   const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>([])
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([])
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [caption, setCaption] = useState('')
@@ -716,16 +717,11 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
               metadata: {
                 source: 'post_creator',
                 created_by: 'You',
-                // Only stamped when the review both ran and passed on this exact
-                // caption — editing after a check drops the stamp, so it can
-                // never outlive the words it was about. Looked up by this
-                // platform's words, not the master's: the card checks each
-                // version separately now, and a stamp keyed to the master would
-                // put a tick on a version nobody reviewed.
                 ...(reviewStamps[publish.caption] ?? {}),
                 ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
                   ? { platform_options: platformOptions[platform] }
                   : {}),
+                ...(selectedAccountIds.length > 0 ? { account_ids: selectedAccountIds } : {}),
               },
             }),
           })
@@ -787,11 +783,12 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       setAiPrompt('')
       setContentType('post')
       setSelectedPlatforms([])
+      setSelectedAccountIds([])
       setPlatformOptions({})
     } finally {
       setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {
@@ -860,6 +857,9 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
           contentType={contentType}
           selected={selectedPlatforms}
           onChange={handlePlatformsChange}
+          selectedAccountIds={selectedAccountIds}
+          onAccountIdsChange={setSelectedAccountIds}
+          brandName={brandName}
         />
       </StudioCard>
 

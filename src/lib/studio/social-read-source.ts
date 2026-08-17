@@ -56,8 +56,20 @@ const PLATFORM_LABELS: Record<string, string> = {
   mastodon: 'Mastodon',
 }
 
-export function ownerFacingPlatformLabel(platform: string): string {
+/**
+ * Mixpost stores `facebook_page`; Zernio stores `facebook` or `FACEBOOK`.
+ * Compose pills key on the six publisher names, so a linked brand whose
+ * accounts arrived as `facebook_page` looked like it had none connected —
+ * every pill at 25% opacity, which on the dark desk reads as an empty row.
+ */
+export function canonicalSocialPlatform(platform: string): string {
   const key = platform.trim().toLowerCase().replace(/_(page|group)$/, '')
+  if (key === 'x') return 'twitter'
+  return key
+}
+
+export function ownerFacingPlatformLabel(platform: string): string {
+  const key = canonicalSocialPlatform(platform)
   return PLATFORM_LABELS[platform.trim().toLowerCase()]
     ?? PLATFORM_LABELS[key]
     ?? (platform.trim() ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Social')
