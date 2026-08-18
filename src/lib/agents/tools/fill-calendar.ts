@@ -285,6 +285,7 @@ export function createFillCalendarTool(
         hashtags: string[]
         content_type: string
         scheduled_at: string
+        queue_slot_id: string
       }[] = []
 
       // Split slots into batches
@@ -337,6 +338,7 @@ ${isRegulated ? '- AHPRA/TGA brand: NO testimonials, NO guaranteed results, NO b
               hashtags: generated.hashtags.map((h) => h.replace(/^#/, '')),
               content_type: generated.content_type,
               scheduled_at: slot.scheduledAt,
+              queue_slot_id: slot.slotId,
             })
           }
         } catch (err) {
@@ -361,17 +363,13 @@ ${isRegulated ? '- AHPRA/TGA brand: NO testimonials, NO guaranteed results, NO b
           caption: post.caption,
           hashtags: post.hashtags,
           scheduledAt: post.scheduled_at,
+          queueSlotId: post.queue_slot_id,
           contentType: post.content_type,
           metadata: {
             source: 'fill_calendar',
             created_by: 'Director',
             content_type: post.content_type,
             conversation_id: conversationId,
-            queue_slot_id: slots.find(
-              (slot) =>
-                slot.platform === post.platform &&
-                slot.scheduledAt === post.scheduled_at,
-            )?.slotId,
           },
         })),
       )

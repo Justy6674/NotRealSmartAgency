@@ -52,5 +52,6 @@ test('calendar has no bulk approval action and uses configured posting slots', (
 
   const fill = read('src/lib/agents/tools/fill-calendar.ts')
   assert.match(fill, /\.from\(['"]posting_schedule_slots['"]\)/)
+  assert.match(fill, /queueSlotId:\s*post\.queue_slot_id/)
   assert.doesNotMatch(fill, /AEST_OFFSET_HOURS|WEEKDAY_SLOTS|WEEKEND_SLOTS/)
 })
