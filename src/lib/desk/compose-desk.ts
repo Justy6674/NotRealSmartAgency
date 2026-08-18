@@ -125,7 +125,7 @@ export function composeDirectorSuggestions(snapshot: ComposeDeskSnapshot) {
       label: 'Write my caption',
       prompt: wrapComposeDirectorPrompt(
         snapshot,
-        `Write a caption (text only) for ${mediaName} on ${platformNames}. First tell me what you see in the media, then ask one clarifying question if needed, then draft the caption and 5–8 lowercase hashtags.`,
+        `Write a caption (text only) for ${mediaName} on ${platformNames}. First tell me what you see in the media, then ask one clarifying question if needed, then draft the caption and 3–5 lowercase suggested hashtags labelled as suggestions (not from saved groups unless you fetched them).`,
       ),
     })
     items.push({

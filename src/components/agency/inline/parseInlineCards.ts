@@ -62,6 +62,7 @@ export function parseInlineCards(text: string): InlineSegment[] {
               platform: json.platform ?? 'instagram',
               caption: json.caption ?? '',
               hashtags: json.hashtags,
+              hashtagsAreSuggested: json.hashtagsAreSuggested ?? json.hashtags_are_suggested,
               scheduledAt: json.scheduledAt ?? json.scheduled_at,
               status: json.status ?? 'draft',
               postId: json.postId ?? json.post_id ?? json.id,

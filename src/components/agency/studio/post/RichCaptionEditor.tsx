@@ -91,7 +91,7 @@ export function RichCaptionEditor({
         ...(desk
           ? {
               style:
-                'color: var(--ink); background: var(--panel); font-family: var(--font-sans), system-ui, sans-serif;',
+                'color: var(--ink); background: var(--bg); font-family: var(--font-sans), system-ui, sans-serif;',
             }
           : {}),
       },
@@ -107,13 +107,12 @@ export function RichCaptionEditor({
   })
 
   // Keep internal editor state in sync when the parent resets the caption
-  // (e.g. loading a draft or clearing the form). Only update if the
-  // incoming value actually differs from the editor's current plaintext.
+  // (e.g. loading a draft, Director "Use on post", or clearing the form).
   useEffect(() => {
     if (!editor) return
     const current = editor.getText()
     if (current !== value) {
-      editor.commands.setContent(value)
+      editor.commands.setContent(value, { emitUpdate: false })
     }
   }, [value, editor])
 
@@ -236,8 +235,28 @@ export function RichCaptionEditor({
         </div>
       </div>
 
-      {/* Editor surface */}
-      <EditorContent editor={editor} />
+      {/* Editor surface — brand paper; dark html class must not paint a black slab here */}
+      <div
+        data-caption-surface
+        className={desk ? 'rounded-[8px] border mx-4 mb-3' : undefined}
+        style={
+          desk
+            ? {
+                borderColor: 'var(--line-soft)',
+                background: 'var(--bg)',
+              }
+            : undefined
+        }
+      >
+        <EditorContent
+          editor={editor}
+          className={
+            desk
+              ? '[&_.ProseMirror]:min-h-[140px] [&_.ProseMirror]:text-[var(--ink)] [&_.ProseMirror]:bg-[var(--bg)] [&_.ProseMirror]:caret-[var(--brand-deep)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-[var(--ink-3)]'
+              : undefined
+          }
+        />
+      </div>
 
       {/* AI Spotlight command palette */}
       <AiSpotlight

@@ -75,5 +75,6 @@ export function buildDeskDirectorContext(context: DeskConversationContext): stri
     context.intent ? `Requested result: ${context.intent}` : 'Requested result: infer only from the current owner message.',
     'Use only these media IDs for this request. If the set is empty or insufficient, ask plainly instead of substituting another library item.',
     'Nothing may be published from NRS Desk. Assets, proposals and drafts require truthful durable receipts.',
+    'Hashtags: if you have not called a tool that returns real tags (saved hashtag groups, process_media platform captions, or query_outputs with measured performance), label them honestly as suggestions — e.g. "Suggested hashtags (not from your saved groups):" before the tag line. Never imply platform-science or performance data you did not fetch. TikTok: 3–5 niche tags max per benchmarks; Instagram: 3–5 relevant tags; LinkedIn: keywords in copy matter more than tags.',
   ].join('\n\n')
 }

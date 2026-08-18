@@ -7,6 +7,7 @@ import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useComposeDeskStore } from '@/stores/compose-desk-store'
 import { DIRECTOR_HASHTAG_DISCLAIMER } from '@/lib/desk/extract-caption-draft'
+import { applyCaptionPayloadToCompose } from '@/lib/desk/apply-caption-to-compose'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 
@@ -200,6 +201,10 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [showComposeUpload, setShowComposeUpload] = useState(false)
   const [showDirectorHashtagNote, setShowDirectorHashtagNote] = useState(false)
   const [showPerPlatformVersions, setShowPerPlatformVersions] = useState(false)
+  const [captionEditorKey, setCaptionEditorKey] = useState(0)
+  const captionEditorRef = useRef<HTMLDivElement>(null)
+  const composeStateRef = useRef({ selectedPlatforms, versions, caption, hashtags })
+  composeStateRef.current = { selectedPlatforms, versions, caption, hashtags }
   const pendingCaptionApply = useComposeDeskStore((s) => s.pendingCaptionApply)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
   const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
@@ -437,48 +442,26 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     if (!pendingCaptionApply || !activeBrandId || pendingCaptionApply.brandId !== activeBrandId) {
       return
     }
-    const { caption: nextCaption, hashtags: nextTags, platforms: nextPlatforms } = pendingCaptionApply
-    const draftPlatforms = nextPlatforms ?? []
-    const singlePlatform = draftPlatforms.length === 1 ? draftPlatforms[0] : undefined
 
-    setCaption(nextCaption)
-    setHashtags(nextTags)
-
-    if (
-      singlePlatform &&
-      selectedPlatforms.length > 1 &&
-      selectedPlatforms.includes(singlePlatform)
-    ) {
-      // Draft targets one platform while several are selected — override that account only.
-      setVersions((prev) => customisePlatform(prev, singlePlatform, nextCaption, nextTags))
-      setShowPerPlatformVersions(true)
-    } else if (draftPlatforms.length > 0 && selectedPlatforms.length === 0) {
-      setSelectedPlatforms(draftPlatforms)
-      setVersions(createVersionsFromMaster(draftPlatforms, nextCaption, nextTags))
-    } else if (draftPlatforms.length > 0) {
-      setVersions((prev) => {
-        const base =
-          Object.keys(prev).length > 0
-            ? updateMasterCaption(prev, nextCaption, nextTags)
-            : createVersionsFromMaster(
-                selectedPlatforms.length > 0 ? selectedPlatforms : draftPlatforms,
-                nextCaption,
-                nextTags,
-              )
-        if (singlePlatform && selectedPlatforms.includes(singlePlatform)) {
-          return customisePlatform(base, singlePlatform, nextCaption, nextTags)
-        }
-        return base
-      })
-    } else {
-      setVersions((prev) => updateMasterCaption(prev, nextCaption, nextTags))
-    }
-
-    setShowDirectorHashtagNote(
-      Boolean(pendingCaptionApply.hashtagsAreSuggested && nextTags.length > 0),
+    const applied = applyCaptionPayloadToCompose(
+      pendingCaptionApply,
+      composeStateRef.current,
     )
+
+    setCaption(applied.caption)
+    setHashtags(applied.hashtags)
+    setSelectedPlatforms(applied.selectedPlatforms)
+    setVersions(applied.versions)
+    if (applied.showPerPlatformVersions) setShowPerPlatformVersions(true)
+    setShowDirectorHashtagNote(applied.showDirectorHashtagNote)
+    setCaptionEditorKey((k) => k + 1)
     useComposeDeskStore.getState().setPendingCaptionApply(null)
-  }, [pendingCaptionApply, activeBrandId, selectedPlatforms])
+
+    requestAnimationFrame(() => {
+      captionEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      captionEditorRef.current?.querySelector<HTMLElement>('.ProseMirror')?.focus()
+    })
+  }, [pendingCaptionApply, activeBrandId])
 
   // ── AI Generation — CAPTION ONLY ──────────────────────────────────────────
   // This button lives in the Caption card and writes the caption TEXT for
@@ -968,7 +951,9 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
             )}
           </div>
 
+          <div ref={captionEditorRef} data-caption-editor>
           <RichCaptionEditor
+            key={captionEditorKey}
             desk
             value={caption}
             onChange={(text) => handleCaptionChange(text)}
@@ -976,6 +961,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
             brandName={brandName}
             platforms={selectedPlatforms}
           />
+          </div>
 
           <div
             className="flex flex-wrap items-center gap-2 border-t px-[11px] py-2"

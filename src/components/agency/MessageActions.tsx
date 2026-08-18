@@ -26,6 +26,7 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
   const { activeBrandId, activeAgentType } = useAgencyStore()
   const captionDraft = useMemo(() => extractCaptionDraftFromMessage(content), [content])
   const [states, setStates] = useState<Record<string, ActionState>>({})
+  const [addCaptionDoneLabel, setAddCaptionDoneLabel] = useState<string | null>(null)
   const [showEmailInput, setShowEmailInput] = useState(false)
   const [emailTo, setEmailTo] = useState('')
   const [emailNote, setEmailNote] = useState('')
@@ -44,7 +45,14 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
   const handleAddToCaption = () => {
     if (!activeBrandId || !captionDraft) return
     setState('addCaption', 'loading')
+    setAddCaptionDoneLabel(null)
     try {
+      const platform = captionDraft.platforms.length === 1 ? captionDraft.platforms[0] : null
+      const platformName = platform
+        ? platform.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+        : null
+      const doneLabel = platformName ? `Added to ${platformName} caption` : 'Added to caption'
+
       useComposeDeskStore.getState().setPendingCaptionApply({
         brandId: activeBrandId,
         caption: captionDraft.caption,
@@ -55,6 +63,7 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
       if (!window.location.pathname.startsWith('/agency/social')) {
         router.push('/agency/social')
       }
+      setAddCaptionDoneLabel(doneLabel)
       setState('addCaption', 'done')
     } catch {
       setState('addCaption', 'error')
@@ -249,6 +258,7 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
         {captionDraft && (
           <button
             type="button"
+            data-testid="use-on-post"
             onClick={handleAddToCaption}
             disabled={states.addCaption === 'loading'}
             className={cn(
@@ -272,7 +282,13 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
             ) : (
               <PenLine className="h-3 w-3" />
             )}
-            <span>{states.addCaption === 'done' ? 'Added' : variant === 'rail' ? 'Use on post' : 'Add to caption'}</span>
+            <span>
+              {states.addCaption === 'done'
+                ? (addCaptionDoneLabel ?? 'Added')
+                : variant === 'rail'
+                  ? 'Use on post'
+                  : 'Add to caption'}
+            </span>
           </button>
         )}
 
