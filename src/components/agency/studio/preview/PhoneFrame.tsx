@@ -8,13 +8,40 @@ interface PhoneFrameProps {
   aspect?: 'portrait' | 'square'
   /** Scale factor for the phone (default 1) */
   scale?: number
+  /**
+   * The ground the platform actually renders on, as an oklch literal.
+   *
+   * This used to be a hard-coded `oklch(0.06 0.005 240)`, from April, when the
+   * whole desk was dark. It was the substrate behind every mockup, so a mockup
+   * that left any gap — InstagramMockup set no background at all — inherited a
+   * near-black feed and showed the owner a dark-mode fiction of a post that
+   * publishes to a white one. Repainting the mockups alone would not have fixed
+   * that; the leak is here.
+   *
+   * It is a prop rather than a constant because the answer differs per network
+   * and only the mockup knows it: TikTok genuinely is black, Facebook genuinely
+   * is a pale grey. The default is white because that is what most feeds are,
+   * and because a mockup that forgets to answer should fail towards the common
+   * case rather than towards the bug this replaced.
+   */
+  screen?: string
 }
 
 /**
  * CSS-only phone bezel with dynamic island notch.
- * oklch silver/chrome palette. No images, no Three.js.
+ *
+ * The BEZEL stays dark — it is a phone, and a phone is a dark object on a desk.
+ * The SCREEN is the platform's, not ours: these are imitations of third-party
+ * products, so their colours come from those products and are never retinted
+ * from `--brand`. A Facebook preview tinted with the brand hue would be a
+ * prettier lie.
  */
-export function PhoneFrame({ children, aspect = 'square', scale = 1 }: PhoneFrameProps) {
+export function PhoneFrame({
+  children,
+  aspect = 'square',
+  scale = 1,
+  screen = 'oklch(1 0 0)',
+}: PhoneFrameProps) {
   const width = 320
   const height = aspect === 'portrait' ? 693 : 480
 
@@ -38,7 +65,7 @@ export function PhoneFrame({ children, aspect = 'square', scale = 1 }: PhoneFram
           background: 'oklch(0.18 0.005 240)',
           boxShadow: `
             0 0 0 1px oklch(0.25 0.005 240),
-            0 8px 32px oklch(0 0 0 / 0.4),
+            0 8px 32px oklch(0 0 0 / 0.28),
             inset 0 0 0 1px oklch(0.22 0.005 240)
           `,
           padding: '12px 8px 12px 8px',
@@ -59,7 +86,8 @@ export function PhoneFrame({ children, aspect = 'square', scale = 1 }: PhoneFram
           }}
         />
 
-        {/* Status bar */}
+        {/* Status bar. Sits on the bezel, above the screen, so it stays light
+            whatever ground the platform paints below it. */}
         <div
           className="flex items-center justify-between px-6"
           style={{
@@ -95,7 +123,7 @@ export function PhoneFrame({ children, aspect = 'square', scale = 1 }: PhoneFram
           style={{
             borderRadius: 28,
             height: height - 8,
-            background: 'oklch(0.06 0.005 240)',
+            background: screen,
           }}
         >
           {children}

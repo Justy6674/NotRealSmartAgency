@@ -71,14 +71,18 @@ const initialReports: Record<PlatformKey, PlatformMetrics | null> = {
 }
 
 /**
- * Cross-platform analytics summary. Fetches each platform in parallel
- * via the studio analytics endpoint. If a brand is Zernio-linked, the
- * same endpoint already selects the right backend. If the platform returns
- * no data, we attempt /api/zernio/analytics as a fallback — it is
- * session-scoped and returns null when the brand is not linked.
+ * Cross-platform summary. Every channel is read in parallel through the one
+ * studio endpoint, which already chooses the right source for this business.
  *
- * Empty platforms (no connected account) are silently skipped, not errored.
- * We never print the name of any publishing or analytics vendor to the user.
+ * ── Three answers, counted separately ──────────────────────────────────
+ * A channel can come back with figures, with a failed read, or with "nobody is
+ * gathering results for this business". The third used to be indistinguishable
+ * from the second and from a quiet month, so the summary printed "No accounts
+ * connected yet" to businesses whose accounts are connected and whose posts
+ * are published. Each is now counted on its own and the panel prints the
+ * sentence that is actually true.
+ *
+ * We never print the name of any publishing or analytics vendor to the owner.
  */
 export function AnalyticsOverview({
   brandId,
@@ -149,11 +153,19 @@ export function AnalyticsOverview({
     let topPlatform: { platform: PlatformKey; engagement: number } | null = null
     let connectedPlatforms = 0
     let unreadable = 0
+    let uncollected = 0
+    let notCollectedNote: string | null = null
 
     for (const platform of ALL_PLATFORMS) {
       const report = state.reports[platform]
       // "Could not read" is counted, never folded into "nothing happened".
       if (report?.problem) unreadable += 1
+      // Neither is "nobody is measuring this business" — it is a standing fact
+      // about the business, not a fact about the channel or the period.
+      if (report?.notCollected) {
+        uncollected += 1
+        notCollectedNote = report.notCollected
+      }
       if (!report || report.empty) continue
       connectedPlatforms += 1
       const t = report.totals
@@ -175,6 +187,8 @@ export function AnalyticsOverview({
       topPlatform,
       connectedPlatforms,
       unreadable,
+      uncollected,
+      notCollectedNote,
     }
   }, [state.reports])
 
@@ -189,6 +203,28 @@ export function AnalyticsOverview({
           Pulling in your numbers…
         </p>
       </div>
+    )
+  }
+
+  // Nobody is gathering results for this business. Said plainly, with no
+  // connect button — the accounts are already connected; the measuring is what
+  // is missing, and offering the wrong fix is worse than offering none.
+  if (summary.connectedPlatforms === 0 && summary.uncollected > 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center gap-[10px] py-12 text-center">
+          <Trophy className="h-6 w-6" style={{ color: 'oklch(0.615 0.011 240)' }} />
+          <p
+            className="text-[14px] font-[600]"
+            style={{ color: 'var(--brand-deep, oklch(0.33 0.0209 240))' }}
+          >
+            No results are being collected yet
+          </p>
+          <p className="text-[12.5px] max-w-md" style={{ color: 'oklch(0.615 0.011 240)' }}>
+            {summary.notCollectedNote}
+          </p>
+        </CardContent>
+      </Card>
     )
   }
 

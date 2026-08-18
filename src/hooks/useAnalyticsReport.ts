@@ -11,6 +11,16 @@ export interface UseAnalyticsReportParams {
   from?: string
   /** ISO YYYY-MM-DD. Optional — defaults to today on the server. */
   to?: string
+  /**
+   * One of this brand's own accounts, when the reader has picked one.
+   *
+   * The selector row above the report used to set this nowhere: it reached
+   * only a side panel, while the report itself came through this hook without
+   * it, so pressing a second account changed almost nothing on screen. It is
+   * sent to the server now, where it is checked against the brand's own
+   * accounts before it is used.
+   */
+  accountId?: string | null
   /** Skip the fetch entirely (e.g. when the platform tab isn't visible). */
   enabled?: boolean
 }
@@ -39,6 +49,7 @@ export function useAnalyticsReport({
   platform,
   from,
   to,
+  accountId = null,
   enabled = true,
 }: UseAnalyticsReportParams): UseAnalyticsReportResult {
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null)
@@ -59,6 +70,7 @@ export function useAnalyticsReport({
       const params = new URLSearchParams({ brandId, platform })
       if (from) params.set('from', from)
       if (to) params.set('to', to)
+      if (accountId) params.set('accountId', accountId)
 
       const res = await fetch(`/api/studio/analytics?${params.toString()}`)
 
@@ -92,7 +104,7 @@ export function useAnalyticsReport({
     } finally {
       setLoading(false)
     }
-  }, [brandId, platform, from, to, enabled])
+  }, [brandId, platform, from, to, accountId, enabled])
 
   useEffect(() => {
     fetchReport()

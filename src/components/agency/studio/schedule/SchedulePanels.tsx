@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Loader2, Sparkles, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import type { NextFreeTimeView } from '@/components/agency/studio/post/CreatorActionBar'
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,14 @@ export function SchedulePanels({
   onChanged: () => void
 }) {
   const [view, setView] = React.useState<DeskSchedule | null>(null)
+  /**
+   * The same answer the composer's button gives.
+   *
+   * Read from the same place on purpose: a screen that shows a week and a
+   * button that schedules against it must never be able to disagree about
+   * which time comes next.
+   */
+  const [nextFree, setNextFree] = React.useState<NextFreeTimeView | null>(null)
   const [confirming, setConfirming] = React.useState(false)
   const [clearing, setClearing] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -69,6 +78,8 @@ export function SchedulePanels({
       const res = await fetch(`/api/posting-schedule?brandId=${brandId}&desk=1&hints=1`)
       if (!res.ok) return
       setView((await res.json()) as DeskSchedule)
+      const free = await fetch(`/api/posting-schedule/next-free-time?brandId=${brandId}`)
+      if (free.ok) setNextFree((await free.json()) as NextFreeTimeView)
     } catch {
       // The grid above reports a failed read. Saying it twice helps nobody.
     }
@@ -124,7 +135,8 @@ export function SchedulePanels({
           </h2>
           <p className="mt-1 text-[12.5px] text-muted-foreground">
             Worked out from how people have actually responded to this business, in your own time
-            zone. Add one of these to your week if it is not there already.
+            zone. Add one of these to your week if it is not there already. These are times, not
+            networks: a time posts to every account you have connected.
           </p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {view.bestTimes.map((slot) => {
@@ -152,6 +164,24 @@ export function SchedulePanels({
             })}
           </ul>
         </section>
+      )}
+
+      {/* The next free time, in the same words the composer uses on its button.
+          Without it, the only way to find out what "next free time" meant was
+          to press it on a post. */}
+      {nextFree?.when && nextFree.label && (
+        <div
+          className="rounded-lg border px-3 py-2 text-[12.5px]"
+          style={{
+            borderColor: 'var(--line, var(--border))',
+            background: 'var(--card, transparent)',
+            color: 'var(--ink-2, inherit)',
+          }}
+        >
+          Your next free time is{' '}
+          <b style={{ color: 'var(--brand-deep, currentColor)' }}>{nextFree.label}</b>. That is where
+          the next post goes when you choose to add it to your next free time.
+        </div>
       )}
 
       {notice && (

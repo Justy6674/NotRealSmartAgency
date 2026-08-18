@@ -139,7 +139,9 @@ export const CONNECTABLE_PLATFORMS: ConnectablePlatform[] = [
     label: 'Telegram',
     mark: 'oklch(0.620 0.130 238)',
     flow: 'access-code',
-    note: 'You send a code from your channel',
+    // Both halves, because the first one is the one people miss: the bot has to
+    // be an administrator of the channel before a code does anything.
+    note: 'You add a bot, then send it a code',
   },
   {
     slug: 'snapchat',

@@ -77,6 +77,28 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        /**
+         * The service worker must never be served from a stale cache.
+         *
+         * A worker is the one file that can outlive a deploy: the browser keeps
+         * running the copy it already has, and if that copy came back 304 from
+         * an intermediary the site is pinned to an old one indefinitely. There
+         * is no way for the owner to notice, and no way for them to fix it.
+         * `no-cache` makes the browser revalidate every time, which is one
+         * conditional request and buys the guarantee that a deploy actually
+         * lands.
+         *
+         * `Service-Worker-Allowed: /` is belt and braces — the file already
+         * sits at the root, so its default scope is / — but it means moving it
+         * later cannot silently shrink what it covers.
+         */
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
+        ],
+      },
+      {
         source: '/(.*)',
         headers: [
           {

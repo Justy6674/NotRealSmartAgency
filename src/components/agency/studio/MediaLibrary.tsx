@@ -16,7 +16,7 @@ import { MediaDetailPanel } from './MediaDetailPanel'
 import { CanvaImportModal } from './CanvaImportModal'
 import { UploadQueuePanel } from './media/UploadQueuePanel'
 import { GifPicker, type GifSelection } from './media/GifPicker'
-import { StockPhotoPicker, type StockPhotoSelection } from './media/StockPhotoPicker'
+import { StockPhotoPicker, type StockPhotoSelection, type PhotoSource } from './media/StockPhotoPicker'
 import { CanvaDesignPicker } from './media/CanvaDesignPicker'
 import type { MediaItemWithUsage, MediaCollection } from '@/types/database'
 
@@ -97,6 +97,51 @@ export function MediaLibrary({ padded = true }: MediaLibraryProps = {}) {
   const visibleItems = missingAltOnly ? items.filter((i) => missingAltSet.has(i.id)) : items
 
   const [savingExternal, setSavingExternal] = useState(false)
+
+  /**
+   * Which of the outside media sources are actually switched on.
+   *
+   * THE FAULT THIS CLOSES: GIFs and Stock photos were on the glass from the day
+   * they were built and neither supplier was ever signed up for. The proxy was
+   * correctly locked behind the sign-in and then had no credential to spend, so
+   * the owner clicked, watched a skeleton grid, and got a sentence — every
+   * time, for both tabs. A control that cannot work must not be offered as
+   * though it can.
+   *
+   * Asked of the server, not read from `process.env` here: the credentials are
+   * server-only, so a client-side read compiles to `undefined` and stays wrong
+   * forever. `null` means not yet answered, and while it is null neither tab
+   * claims to work — unknown is treated as off, never as on.
+   *
+   * Nothing here is hard-coded to today's answer. Add the credentials and the
+   * tabs light up on the next deploy with no edit to this file.
+   */
+  const [externalSources, setExternalSources] = useState<
+    { gifs: boolean; photos: boolean; photoSources: PhotoSource[] } | null
+  >(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/media/stock/capabilities')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data || typeof data !== 'object') return
+        setExternalSources({
+          gifs: data.gifs === true,
+          photos: data.photos === true,
+          photoSources: Array.isArray(data.photoSources) ? data.photoSources : [],
+        })
+      })
+      .catch(() => {
+        // Unreachable check reads as "not switched on": the tabs stay marked
+        // rather than offering a search that would fail a second time.
+        if (!cancelled) setExternalSources({ gifs: false, photos: false, photoSources: [] })
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const gifsReady = externalSources?.gifs === true
+  const photosReady = externalSources?.photos === true
 
   const handleGifSelect = async (gif: GifSelection) => {
     if (!activeBrandId || savingExternal) return
@@ -502,11 +547,18 @@ export function MediaLibrary({ padded = true }: MediaLibraryProps = {}) {
     }
   }
 
-  const sourceTabs: { id: SourceTab; label: string; icon: typeof Images }[] = [
-    { id: 'library', label: 'Library', icon: Images },
-    { id: 'gifs', label: 'GIFs', icon: Film },
-    { id: 'stock', label: 'Stock photos', icon: ImageIcon },
-    { id: 'designs', label: 'Designs', icon: Palette },
+  /**
+   * `ready: false` marks a tab whose supplier is not switched on. It stays on
+   * the row — hiding it outright would leave the owner wondering where the GIFs
+   * went and give him nothing to decide about — but it is greyed, labelled
+   * "Not set up", and opens one plain sentence instead of a search that cannot
+   * run. Nothing spins, nothing is fetched, and no empty grid ever appears.
+   */
+  const sourceTabs: { id: SourceTab; label: string; icon: typeof Images; ready: boolean }[] = [
+    { id: 'library', label: 'Library', icon: Images, ready: true },
+    { id: 'gifs', label: 'GIFs', icon: Film, ready: gifsReady },
+    { id: 'stock', label: 'Stock photos', icon: ImageIcon, ready: photosReady },
+    { id: 'designs', label: 'Designs', icon: Palette, ready: true },
   ]
 
   return (
@@ -517,7 +569,7 @@ export function MediaLibrary({ padded = true }: MediaLibraryProps = {}) {
       {/* Source tabs + saving indicator — mockup .filters in .toolrow */}
       <div className="flex flex-wrap items-center gap-2 border-b pb-0" style={{ borderColor: 'var(--line, oklch(0.915 0.007 240))' }}>
         <div className="flex flex-wrap items-center gap-0.5">
-          {sourceTabs.map(({ id, label, icon: Icon }) => {
+          {sourceTabs.map(({ id, label, icon: Icon, ready }) => {
             const active = sourceTab === id
             return (
               <button
@@ -526,14 +578,27 @@ export function MediaLibrary({ padded = true }: MediaLibraryProps = {}) {
                 onClick={() => setSourceTab(id)}
                 className="-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-[12.5px] font-semibold transition-colors"
                 style={{
-                  borderBottomColor: active ? 'var(--brand, oklch(0.545 0.115 240))' : 'transparent',
-                  color: active
-                    ? 'var(--brand-deep, oklch(0.33 0.08 240))'
-                    : 'var(--ink-2, oklch(0.46 0.012 240))',
+                  borderBottomColor: active && ready ? 'var(--brand, oklch(0.545 0.115 240))' : 'transparent',
+                  color: !ready
+                    ? 'var(--ink-3, oklch(0.615 0.011 240))'
+                    : active
+                      ? 'var(--brand-deep, oklch(0.33 0.08 240))'
+                      : 'var(--ink-2, oklch(0.46 0.012 240))',
                 }}
               >
                 <Icon className="h-3.5 w-3.5" aria-hidden />
                 {label}
+                {ready ? null : (
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                    style={{
+                      background: 'var(--wash, oklch(0.968 0.004 240))',
+                      color: 'var(--ink-3, oklch(0.615 0.011 240))',
+                    }}
+                  >
+                    Not set up
+                  </span>
+                )}
               </button>
             )
           })}
@@ -549,14 +614,23 @@ export function MediaLibrary({ padded = true }: MediaLibraryProps = {}) {
         ) : null}
       </div>
 
-      {/* GIF Picker */}
+      {/* GIF Picker — mounted only when it can actually search. */}
       {sourceTab === 'gifs' && (
-        <GifPicker onSelect={handleGifSelect} />
+        gifsReady
+          ? <GifPicker onSelect={handleGifSelect} />
+          : <NotSetUpNotice
+              text="The GIF library is not switched on for this desk yet, so this tab cannot search. Nothing is missing from your own library — ask us to turn it on and this tab starts working."
+            />
       )}
 
-      {/* Stock Photo Picker */}
+      {/* Stock Photo Picker — same rule, and it is only ever handed the
+          suppliers that are live, so the toggle inside it has no dead half. */}
       {sourceTab === 'stock' && (
-        <StockPhotoPicker onSelect={handleStockPhotoSelect} />
+        photosReady
+          ? <StockPhotoPicker onSelect={handleStockPhotoSelect} sources={externalSources?.photoSources} />
+          : <NotSetUpNotice
+              text="The stock photo library is not switched on for this desk yet, so this tab cannot search. Your own uploads and designs are unaffected — ask us to turn it on and this tab starts working."
+            />
       )}
 
       {/* Designs — the fourth tab. Importing writes an ordinary library row,
@@ -921,5 +995,28 @@ export function MediaLibrary({ padded = true }: MediaLibraryProps = {}) {
       {/* Persistent upload progress tray (visible across the studio) */}
       <UploadQueuePanel />
     </div>
+  )
+}
+
+/**
+ * One plain sentence where a search would have gone.
+ *
+ * Deliberately not an error and not a spinner: nothing has failed and nothing
+ * is loading. The tab is simply not switched on, and the owner is told that in
+ * a sentence that names no supplier and no credential — he does not have one
+ * and cannot get one, and the person who can is us.
+ */
+function NotSetUpNotice({ text }: { text: string }) {
+  return (
+    <p
+      className="rounded-lg border px-4 py-3 text-[12.5px] leading-relaxed"
+      style={{
+        borderColor: 'var(--line, oklch(0.915 0.007 240))',
+        background: 'var(--wash, oklch(0.968 0.004 240))',
+        color: 'var(--ink-2, oklch(0.46 0.012 240))',
+      }}
+    >
+      {text}
+    </p>
   )
 }

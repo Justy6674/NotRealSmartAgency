@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type PhotoSource = 'pexels' | 'unsplash'
+export type PhotoSource = 'pexels' | 'unsplash'
 
 export interface StockPhotoSelection {
   url: string
@@ -35,10 +35,18 @@ interface PhotoResult {
 
 interface StockPhotoPickerProps {
   onSelect: (photo: StockPhotoSelection) => void
+  /**
+   * Which suppliers are actually switched on, from the server-side capability
+   * check. The toggle used to be a hard-coded pair, so with one supplier live
+   * and one not, half the toggle was a button that could only ever return a
+   * sentence. Offer what works, and nothing else.
+   */
+  sources?: PhotoSource[]
 }
 
-export function StockPhotoPicker({ onSelect }: StockPhotoPickerProps) {
-  const [source, setSource] = useState<PhotoSource>('pexels')
+export function StockPhotoPicker({ onSelect, sources = ['pexels', 'unsplash'] }: StockPhotoPickerProps) {
+  const available: PhotoSource[] = sources.length > 0 ? sources : ['pexels']
+  const [source, setSource] = useState<PhotoSource>(available[0])
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<PhotoResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -123,9 +131,10 @@ export function StockPhotoPicker({ onSelect }: StockPhotoPickerProps) {
 
   return (
     <div className="space-y-4">
-      {/* Source toggle */}
+      {/* Source toggle — only when there is a genuine choice to make. */}
+      {available.length > 1 ? (
       <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
-        {(['pexels', 'unsplash'] as const).map((src) => (
+        {available.map((src) => (
           <button
             key={src}
             type="button"
@@ -141,6 +150,7 @@ export function StockPhotoPicker({ onSelect }: StockPhotoPickerProps) {
           </button>
         ))}
       </div>
+      ) : null}
 
       {/* Search */}
       <div className="relative">

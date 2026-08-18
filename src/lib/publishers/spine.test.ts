@@ -20,19 +20,29 @@ const navCounts = readFileSync(join(root, 'src/app/api/social/nav-counts/route.t
 const shellLayout = readFileSync(join(root, 'src/app/agency/layout.tsx'), 'utf8')
 
 /**
- * The rule is unchanged: "Waiting on you" counts THIS brand's drafts and
- * failures, never a global approvals feed. Where it is counted moved in S2 —
- * the department chrome used to fetch `/api/scheduled-posts?status=draft,failed`
- * itself and badge the Posts tab with it, which put a queue number in the one
- * place the owner only sees while already inside the department. The queue is
- * now an attention badge in the sidebar, counted server-side for the brand, so
- * the assertion follows it rather than pinning a fetch that no longer exists.
+ * "Waiting on you" counts THIS brand's own rows, never a global approvals feed.
+ * Where it is counted moved in S2 — the department chrome used to fetch
+ * `/api/scheduled-posts?status=draft,failed` itself and badge the Posts tab
+ * with it, which put a queue number in the one place the owner only sees while
+ * already inside the department. The queue is an attention badge in the sidebar
+ * now, counted server-side for the brand.
+ *
+ * WHAT it counts changed on 2026-08-19, and this test changed with it. Three
+ * places were each answering "what is waiting on you" privately: the layout's
+ * first paint and the nav-counts route both said `status IN ('draft','failed')`
+ * — 68 rows for Scent Sell — while the screen behind the badge and the Posts
+ * tab beside it both showed the 17 an assistant had written and nobody had
+ * approved. Pinning `['draft', 'failed']` here was pinning the disagreement.
+ * The predicate now lives once, in `@/lib/posts/desk-status`, and what these
+ * assertions defend is that nobody restates it. The arithmetic itself is
+ * covered by `src/lib/posts/desk-status.test.ts`.
  */
-test('waiting badge uses this brand draft+failed, not global approvals', () => {
+test('waiting badge counts this brand through the shared predicate, not a global feed', () => {
   for (const source of [navCounts, shellLayout]) {
     assert.match(source, /'scheduled_posts'/)
     assert.match(source, /\.eq\('brand_id', brandId\)/)
-    assert.match(source, /\['draft', 'failed'\]/)
+    assert.match(source, /countWaitingOnYou/)
+    assert.doesNotMatch(source, /\['draft', 'failed'\]/)
     assert.doesNotMatch(source, /\/api\/approvals/)
   }
   // The chrome must not grow a second, disagreeing count of the same queue.
@@ -40,8 +50,9 @@ test('waiting badge uses this brand draft+failed, not global approvals', () => {
   assert.doesNotMatch(chrome, /scheduled-posts\?/)
 })
 
-test('ReviewRoom lists this brand draft+failed and hides vendor chrome when linked', () => {
-  assert.match(review, /status=draft,failed/)
+test('ReviewRoom shows the queue the badge promises and hides vendor chrome when linked', () => {
+  assert.match(review, /isWaitingOnYou/)
+  assert.doesNotMatch(review, /status=draft,failed/)
   assert.match(review, /hideVendorChrome/)
 })
 

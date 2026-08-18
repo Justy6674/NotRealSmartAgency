@@ -51,6 +51,14 @@ import { useStudioData } from '@/hooks/useStudioData'
  * The tab strip carries QUIET inventory counts — how much is in there. The
  * queue is an attention badge and it lives in the sidebar, where the owner can
  * see it from any screen in the product rather than only from inside this one.
+ *
+ * ── A badge must equal the screen it opens ─────────────────────────────
+ * Whatever number this strip puts on a tab is a promise about what the owner
+ * will find when he clicks it. "Posts 121" opened a list of 70, because the
+ * badge counted every `scheduled_posts` row and the list quite rightly hides
+ * the bin. The counts come from `/api/social/nav-counts`, which now derives
+ * them with the same functions the list uses (`@/lib/posts/desk-status`), so
+ * the two cannot drift apart again without a test going red.
  */
 
 /** Marks the pinned slot in the DOM so a child can portal into it. */
@@ -103,6 +111,10 @@ function SocialDepartmentChromeInner({ children }: { children: ReactNode }) {
    * Quiet inventory counts. Absent until they are known, and absent for ever if
    * they cannot be read — a tab that says "0 templates" when nobody looked is
    * worse than a tab that says nothing.
+   *
+   * `posts` is the count the list's own "All" tab shows: everything except the
+   * bin. It is derived server-side from the shared desk-status functions rather
+   * than recomputed here, so there is one answer, not two that look alike.
    */
   const [tabCounts, setTabCounts] = useState<Partial<Record<SocialTabCountId, number>>>({})
 

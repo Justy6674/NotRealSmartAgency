@@ -11,17 +11,37 @@ interface YouTubeMockupProps {
   brandAvatarUrl?: string
 }
 
+/**
+ * YouTube's real surface: white, #0f0f0f text, #606060 secondary, #f2f2f2
+ * chips, #ff0000 on the play badge.
+ *
+ * WHY THIS ONE IS LIGHT WHEN TIKTOK IS NOT. Shorts is a black, full-bleed,
+ * portrait player and should stay black — but that is not what this file draws.
+ * This is the watch page: a 16:9 thumbnail, a title, a channel row and a strip
+ * of chips, in a square frame. That surface is white unless the viewer has
+ * chosen otherwise, so painting it black to match Shorts would misdescribe the
+ * screen it actually imitates. If a Shorts frame is ever wanted it is a second
+ * component with `aspect="portrait"`, not a repaint of this one.
+ */
+const PAGE = 'oklch(1 0 0)'
+const INK = 'oklch(0.168 0 0)'
+const INK_2 = 'oklch(0.489 0 0)'
+const CHIP = 'oklch(0.961 0 0)'
+const RED = 'oklch(0.628 0.258 29)'
+const PLACEHOLDER = 'oklch(0.922 0 0)'
+const WHITE = 'oklch(1 0 0)'
+
 export function YouTubeMockup({ caption, hashtags, mediaUrl, brandName, brandAvatarUrl }: YouTubeMockupProps) {
   return (
-    <PhoneFrame>
-      <div className="flex h-full flex-col" style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: 'oklch(0.06 0 0)' }}>
+    <PhoneFrame screen={PAGE}>
+      <div className="flex h-full flex-col" style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: PAGE }}>
         {/* YT Nav */}
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-1">
-            <div className="rounded-sm" style={{ width: 20, height: 14, background: 'oklch(0.55 0.2 25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: 0, height: 0, borderLeft: '6px solid white', borderTop: '4px solid transparent', borderBottom: '4px solid transparent' }} />
+            <div className="rounded-sm" style={{ width: 20, height: 14, background: RED, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 0, height: 0, borderLeft: `6px solid ${WHITE}`, borderTop: '4px solid transparent', borderBottom: '4px solid transparent' }} />
             </div>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'oklch(0.9 0 240)', letterSpacing: '-0.02em' }}>YouTube</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: INK, letterSpacing: '-0.02em' }}>YouTube</span>
           </div>
         </div>
 
@@ -29,7 +49,7 @@ export function YouTubeMockup({ caption, hashtags, mediaUrl, brandName, brandAva
         <div
           style={{
             aspectRatio: '16/9',
-            background: mediaUrl ? `url(${mediaUrl}) center/cover` : 'oklch(0.12 0.005 240)',
+            background: mediaUrl ? `url(${mediaUrl}) center/cover` : PLACEHOLDER,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -37,17 +57,17 @@ export function YouTubeMockup({ caption, hashtags, mediaUrl, brandName, brandAva
         >
           {!mediaUrl && (
             <div className="rounded-full p-3" style={{ background: 'oklch(0 0 0 / 0.6)' }}>
-              <div style={{ width: 0, height: 0, borderLeft: '12px solid white', borderTop: '8px solid transparent', borderBottom: '8px solid transparent', marginLeft: 2 }} />
+              <div style={{ width: 0, height: 0, borderLeft: `12px solid ${WHITE}`, borderTop: '8px solid transparent', borderBottom: '8px solid transparent', marginLeft: 2 }} />
             </div>
           )}
         </div>
 
         {/* Title */}
         <div className="px-3 py-2">
-          <p style={{ fontSize: 12, fontWeight: 600, color: 'oklch(0.9 0 240)', lineHeight: 1.3 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: INK, lineHeight: 1.3 }}>
             {caption.length > 80 ? `${caption.slice(0, 80)}...` : caption}
           </p>
-          <p style={{ fontSize: 10, color: 'oklch(0.45 0 240)', marginTop: 4 }}>
+          <p style={{ fontSize: 10, color: INK_2, marginTop: 4 }}>
             0 views · Just now
           </p>
         </div>
@@ -59,10 +79,10 @@ export function YouTubeMockup({ caption, hashtags, mediaUrl, brandName, brandAva
             style={{
               width: 28,
               height: 28,
-              background: brandAvatarUrl ? `url(${brandAvatarUrl}) center/cover` : 'oklch(0.25 0.02 240)',
+              background: brandAvatarUrl ? `url(${brandAvatarUrl}) center/cover` : PLACEHOLDER,
             }}
           />
-          <span style={{ fontSize: 11, color: 'oklch(0.7 0 240)' }}>{brandName}</span>
+          <span style={{ fontSize: 11, fontWeight: 500, color: INK }}>{brandName}</span>
         </div>
 
         {/* Actions */}
@@ -73,9 +93,9 @@ export function YouTubeMockup({ caption, hashtags, mediaUrl, brandName, brandAva
             { icon: Share2, label: 'Share' },
             { icon: Download, label: 'Save' },
           ].map(({ icon: Icon, label }, i) => (
-            <div key={i} className="flex items-center gap-1 rounded-full px-2.5 py-1" style={{ background: 'oklch(0.15 0.005 240)' }}>
-              <Icon className="h-3 w-3" style={{ color: 'oklch(0.7 0 240)' }} />
-              {label && <span style={{ fontSize: 9, color: 'oklch(0.7 0 240)' }}>{label}</span>}
+            <div key={i} className="flex items-center gap-1 rounded-full px-2.5 py-1" style={{ background: CHIP }}>
+              <Icon className="h-3 w-3" style={{ color: INK }} />
+              {label && <span style={{ fontSize: 9, color: INK }}>{label}</span>}
             </div>
           ))}
         </div>

@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button'
 import { PlatformMockupPreview } from '@/components/agency/studio/preview'
 import { ownerFacingPlatformLabel } from '@/lib/studio/social-read-source'
 import { PostStatusChip } from './PostStatusDot'
+import { PlatformGlyph } from './PlatformGlyph'
+import { accountHandle } from './account-identity'
 import { LabelChip } from './PostLabelPicker'
 import type { SocialPostRow } from '@/hooks/usePostsList'
 import type { MediaItem } from '@/types/database'
@@ -233,9 +235,22 @@ export function PostPreviewModal({ post, brandName, onClose, onEdit }: PostPrevi
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   Accounts
                 </p>
-                <p className="mt-0.5 text-[12.5px] text-foreground">
-                  {post.accounts.map((account) => account.name).join(' · ')}
-                </p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {post.accounts.map((account) => (
+                    <li
+                      key={account.id}
+                      className="flex items-center gap-1.5 text-[12.5px] text-foreground"
+                    >
+                      <PlatformGlyph platform={account.platform} size={12} />
+                      <span className="truncate">{account.name}</span>
+                      {/* The handle, always. Two of this owner's accounts share
+                          the name "Scent Sell"; only this separates them. */}
+                      <span className="truncate text-muted-foreground">
+                        {accountHandle(account)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

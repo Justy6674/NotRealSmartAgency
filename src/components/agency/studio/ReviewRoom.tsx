@@ -15,6 +15,7 @@ import { ComplianceBadge } from './review/ComplianceBadge'
 import { PostActivityThread } from './review/PostActivityThread'
 import { recordReviewDecision } from '@/lib/media/review-memory'
 import { brandIsPublisherLinked } from '@/lib/studio/social-read-source'
+import { isWaitingOnYou } from '@/lib/posts/desk-status'
 import type { ScheduledPost, DraftSource, ComplianceResult, PostPlatform } from '@/types/database'
 
 // Lightweight shape — only the fields the detail pane renders.
@@ -88,10 +89,19 @@ export function ReviewRoom({ initialDraftId }: { initialDraftId?: string } = {})
     if (!activeBrandId) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft,failed`)
+      // Drafts only, then held to the ones actually waiting on a decision.
+      //
+      // This screen IS the sidebar's "Waiting on you", so it has to show the
+      // number that badge promises. It used to ask for `draft,failed` — 68 rows
+      // for Scent Sell — under a badge that offered 17 and beside a Posts tab
+      // that offered 17, because all three counted something different. The
+      // predicate now lives in one file and everyone reads it. A post that did
+      // not go out is not an approval; it keeps its own place on the Posts list
+      // under "Did not go out", where a failure reads as a failure.
+      const res = await fetch(`/api/scheduled-posts?brandId=${activeBrandId}&status=draft`)
       if (res.ok) {
         const posts = await res.json()
-        setDrafts(Array.isArray(posts) ? posts : [])
+        setDrafts(Array.isArray(posts) ? (posts as ScheduledPost[]).filter(isWaitingOnYou) : [])
       }
     } catch {
       setDrafts([])

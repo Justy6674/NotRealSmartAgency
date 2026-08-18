@@ -40,8 +40,8 @@ import { ComposeMediaUpload } from './ComposeMediaUpload'
 import { CanvaImportModal } from '../CanvaImportModal'
 
 import { createVersionsFromMaster, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
-import { earliestNextSlot } from '@/lib/posting-queue/assign-to-slot'
-import type { PostPlatform, PostType, PostingScheduleSlot } from '@/types/database'
+import type { NextFreeTimeView, QueueSlotChoice } from './CreatorActionBar'
+import type { PostPlatform, PostType } from '@/types/database'
 import type { ZernioTikTokCreatorInfo } from '@/lib/zernio/accounts'
 
 /** One of the four places a picture or video can come from. */
@@ -107,7 +107,53 @@ function composePublishBody(caption: string, hashtags: string[]): string {
   return tags.length === 0 ? caption : `${caption}\n\n${tags.join(' ')}`
 }
 
+/**
+ * The inverse of composePublishBody, for reading an account's own words back
+ * off a saved row.
+ *
+ * metadata.captions_by_account_id stores what the ACCOUNT receives — caption
+ * plus the tag block — because that is what the publisher puts on the wire.
+ * The boxes on this screen hold the caption alone; the tags live in their own
+ * card and are appended once, at save. Hydrating the stored body straight into
+ * a box would show the tags twice and, worse, save them twice on the next
+ * keystroke, growing the block every time the post was opened.
+ */
+function decomposePublishBody(body: string, hashtags: string[]): string {
+  const tags = hashtags
+    .map((h) => h.trim())
+    .filter((h) => h !== '')
+    .map((h) => (h.startsWith('#') ? h : `#${h}`))
+  if (tags.length === 0) return body
+  const suffix = `\n\n${tags.join(' ')}`
+  return body.endsWith(suffix) ? body.slice(0, -suffix.length) : body
+}
+
 const formatCount = (n: number) => n.toLocaleString('en-AU')
+
+/**
+ * Something this screen asked the Director for, and whether it has arrived.
+ *
+ * Two controls here are requests rather than actions, and both have to be: the
+ * picture and the hashtags are the Director's to decide because it is the one
+ * holding the brand look, the health rules and the spend. Everything else on
+ * this screen — Library, Upload, Canva, a saved tag group — puts its result on
+ * the post before the owner's finger leaves the mouse.
+ *
+ * Both used to hand the request over and stop. Nothing came back, nothing on
+ * the glass changed, and the owner was left retyping tags out of the chat panel
+ * or hunting the Library for a picture nobody had told him was there. A request
+ * that shows nothing back is indistinguishable from a broken button.
+ *
+ * `filledAt` is set in exactly one place — the desk-fill effect, when the
+ * Director's answer actually changed this post. It is never guessed from the
+ * fact that a message was sent, because the Director can also answer in words,
+ * and saying "added" when nothing was added is the failure this replaces.
+ */
+type DirectorRequest = { askedAt: string; filledAt: string | null }
+
+/** Brisbane time, the way the owner reads a clock. No seconds, no timezone. */
+const clockLabel = () =>
+  new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
 
 /**
  * PLATFORM_LABELS covers the ten platforms Mixpost draws chips for; the pills
@@ -253,7 +299,26 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   // account is sent its own words rather than a flattened per-platform copy.
   const [captionsByAccountId, setCaptionsByAccountId] = useState<Record<string, string>>({})
   const [showCanvaImport, setShowCanvaImport] = useState(false)
-  const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
+  /**
+   * The two things this screen asks the Director for. See `DirectorRequest`.
+   *
+   * The fourth media button and the Suggest button beside the tag box are
+   * requests, not actions — and both used to end at the chat panel. The picture
+   * stopped in the Library with nobody told, and the tags arrived as words for
+   * the owner to read off and retype under a button that reads as "fill this
+   * box". Both are now watched all the way back onto the post.
+   */
+  const [imageRequest, setImageRequest] = useState<DirectorRequest | null>(null)
+  const [hashtagRequest, setHashtagRequest] = useState<DirectorRequest | null>(null)
+  /**
+   * Read by the desk-fill effect, which must not re-run when a request changes —
+   * re-running it would apply the same fill twice.
+   */
+  const directorRequestsRef = useRef({ image: imageRequest, hashtags: hashtagRequest })
+  directorRequestsRef.current = { image: imageRequest, hashtags: hashtagRequest }
+  const [nextFree, setNextFree] = useState<NextFreeTimeView | null>(null)
+  /** Bumped after a post takes a time, so the button offers the one after it. */
+  const [nextFreeNonce, setNextFreeNonce] = useState(0)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [scheduledWhen, setScheduledWhen] = useState<string>(() => {
@@ -361,26 +426,61 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     try { localStorage.setItem(draftKey, JSON.stringify(draft)) } catch { /* storage full */ }
   }, [draftKey, contentType, caption, hashtags, aiPrompt, creatorMode])
 
+  /*
+   * The next free posting time, resolved on the server.
+   *
+   * THE FAULT: this used to pull the week's times into the browser and take the
+   * soonest occurrence. It could not see what was already scheduled, so it
+   * offered times that already had a post on them — and when there was no week
+   * set at all it produced null, which greyed the button out with no
+   * explanation. The answer now comes from one place that can see both the week
+   * and the posts on it, and says in words when it has nothing to offer.
+   */
   useEffect(() => {
     if (!activeBrandId) {
-      setNextSlotIso(null)
+      setNextFree(null)
       return
     }
     let cancelled = false
-    fetch(`/api/posting-schedule?brandId=${activeBrandId}`)
-      .then((response) => (response.ok ? response.json() : []))
-      .then((slots: PostingScheduleSlot[]) => {
-        if (cancelled || !Array.isArray(slots)) return
-        const when = earliestNextSlot(slots, new Date())
-        setNextSlotIso(when ? when.toISOString() : null)
+    setNextFree(null)
+    fetch(`/api/posting-schedule/next-free-time?brandId=${activeBrandId}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((view: NextFreeTimeView | null) => {
+        if (cancelled) return
+        setNextFree(
+          view && typeof view === 'object' && 'hasTimes' in view
+            ? view
+            : {
+                hasTimes: false,
+                when: null,
+                label: null,
+                slotId: null,
+                slotIdByPlatform: {},
+                timezone: 'Australia/Brisbane',
+                message:
+                  'Your posting times could not be read just now, so there is no next free time to offer.',
+                setTimesHref: '/agency/social/schedule',
+              },
+        )
       })
       .catch(() => {
-        if (!cancelled) setNextSlotIso(null)
+        if (cancelled) return
+        setNextFree({
+          hasTimes: false,
+          when: null,
+          label: null,
+          slotId: null,
+          slotIdByPlatform: {},
+          timezone: 'Australia/Brisbane',
+          message:
+            'Your posting times could not be read just now, so there is no next free time to offer.',
+          setTimesHref: '/agency/social/schedule',
+        })
       })
     return () => {
       cancelled = true
     }
-  }, [activeBrandId])
+  }, [activeBrandId, nextFreeNonce])
 
   /**
    * Ticked accounts, with the words each one is actually publishing.
@@ -484,6 +584,24 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   // ── Load existing draft for editing ──────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
   const [editDraftId, setEditDraftId] = useState<string | null>(null)
+  /**
+   * Set when THIS screen created the row it is now editing.
+   *
+   * A post opened from Review is somewhere else's work: pressing Update sends
+   * the owner back where he came from. A post that was just born here is still
+   * being written, so the screen stays on it — which is also the only way the
+   * Activity column ever has a post to show. It used to be handed `editDraftId`,
+   * which on a new post is null from the first keystroke to the last, so the
+   * history of the post the owner had just made was the one history he could
+   * never see.
+   */
+  const [bornHere, setBornHere] = useState(false)
+  /**
+   * Guards the run of the autosave effect that a LOAD causes, as against the
+   * runs a person's typing causes. Declared here rather than beside the effect
+   * because the save handler sets it when it adopts a newly created row.
+   */
+  const autosaveSkip = useRef(true)
 
   useEffect(() => {
     if (!draftId || !activeBrandId) return
@@ -512,6 +630,35 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
           }
           setContentType(ptMap[draft.post_type as string] ?? 'post')
         }
+
+        // The half of the round trip that was missing.
+        //
+        // The save handler wrote metadata.account_ids and
+        // metadata.captions_by_account_id, the PATCH deep-merges rather than
+        // replaces, and the publisher reads both per account — so a rewritten
+        // Instagram caption kept arriving at Instagram while this screen, which
+        // never read them back, showed the master. Reopen a draft and the
+        // owner's own words were gone from the box; edit anything and autosave
+        // wrote the row again with them still missing from state. They lived on
+        // in the database and on the wire, invisible and uneditable, which is
+        // the worst of the three places they could be.
+        const meta = (draft.metadata ?? {}) as Record<string, unknown>
+        const storedAccountIds = meta.account_ids
+        if (Array.isArray(storedAccountIds)) {
+          setSelectedAccountIds(storedAccountIds.filter((id): id is string => typeof id === 'string'))
+        }
+        const storedCaptions = meta.captions_by_account_id
+        if (storedCaptions && typeof storedCaptions === 'object' && !Array.isArray(storedCaptions)) {
+          // Undone against THIS row's tags, not the ones in state — state is
+          // being set in the same pass and React has not applied it yet.
+          const rowTags = Array.isArray(draft.hashtags) ? (draft.hashtags as string[]) : []
+          const restored: Record<string, string> = {}
+          for (const [accountId, body] of Object.entries(storedCaptions as Record<string, unknown>)) {
+            if (typeof body === 'string') restored[accountId] = decomposePublishBody(body, rowTags)
+          }
+          setCaptionsByAccountId(restored)
+        }
+
         // Clear pending state
         setPendingDraftId(null)
       })
@@ -677,6 +824,26 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       { hashtagsAreSuggested: pendingDeskActions.hashtagsAreSuggested },
     )
 
+    // ── The answer arriving, which is the half that was missing ────────────
+    //
+    // Suggest and the picture button both hand a request to the Director and
+    // have no reply handler of their own. This effect IS the reply handler:
+    // everything the Director puts on this post comes through here, so this is
+    // the only place that can honestly say the answer landed. Compared against
+    // what was on the screen a moment ago rather than against the request, so a
+    // fill that changed nothing does not get announced as a fill.
+    const before = composeStateRef.current
+    const tagsChanged =
+      applied.hashtags.length !== before.hashtags.length ||
+      applied.hashtags.some((tag, index) => tag !== before.hashtags[index])
+    if (tagsChanged && directorRequestsRef.current.hashtags && !directorRequestsRef.current.hashtags.filledAt) {
+      setHashtagRequest({ askedAt: directorRequestsRef.current.hashtags.askedAt, filledAt: clockLabel() })
+    }
+    const mediaArrived = applied.selectedMediaIds.some((id) => !before.selectedMediaIds.includes(id))
+    if (mediaArrived && directorRequestsRef.current.image && !directorRequestsRef.current.image.filledAt) {
+      setImageRequest({ askedAt: directorRequestsRef.current.image.askedAt, filledAt: clockLabel() })
+    }
+
     setCaption(applied.caption)
     setHashtags(applied.hashtags)
     setSelectedPlatforms(applied.selectedPlatforms)
@@ -759,6 +926,31 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       return synced
     })
   }
+
+  /**
+   * Ask the Director to choose the tags AND put them on the post.
+   *
+   * The wording matters more than it looks. The old prompt said "return just the
+   * hashtags", which is an instruction to type them into the chat — exactly what
+   * it got, and exactly what the owner then had to retype. Asking for them to be
+   * put on the post is what makes the Director reach for the hands it already
+   * has on this screen, and the fill comes back through the effect above.
+   *
+   * `sendToDirector` wraps this with the live desk snapshot — the business, the
+   * media on the post and the networks ticked — so the tags are chosen against
+   * the post rather than in the abstract.
+   */
+  const askDirectorForHashtags = useCallback(() => {
+    sendToDirector(
+      [
+        'Choose the hashtags for this post and put them straight onto it. Do not just write them out for me to copy.',
+        caption.trim()
+          ? `The words on the post are: ${caption.trim()}`
+          : 'There are no words on the post yet, so go on the business and the picture.',
+      ].join('\n\n'),
+    )
+    setHashtagRequest({ askedAt: clockLabel(), filledAt: null })
+  }, [caption])
 
   const handlePlatformsChange = (platforms: PostPlatform[]) => {
     setSelectedPlatforms(platforms)
@@ -942,7 +1134,19 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   )
 
   // ── Save / Schedule / Publish ──────────────────────────────────────────────
-  const handleSave = useCallback(async (mode: 'draft' | 'schedule' | 'now' | 'autosave', scheduledAt?: string) => {
+  const handleSave = useCallback(async (
+    mode: 'draft' | 'schedule' | 'now' | 'autosave',
+    scheduledAt?: string,
+    /**
+     * The weekly posting time this post is taking, when it was given one.
+     *
+     * Carried onto the row so the time has an owner: the next post is then
+     * offered the one after it instead of being handed the same minute. A time
+     * picked by hand arrives here as undefined, which is correct — it is not
+     * one of the week's times.
+     */
+    queueSlot?: QueueSlotChoice,
+  ) => {
     if (!activeBrandId || !caption.trim()) return
     // Belt and braces. The button is disabled below, but a save handler is the
     // last place that should trust its caller.
@@ -970,10 +1174,47 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       if (editMode && editDraftId) {
         // Edit mode: PATCH existing draft. The row is one platform's row, so
         // it gets that platform's words — the same resolution the preview drew.
+        //
+        // A second network ticked here has no row of its own and cannot get one
+        // from a PATCH, so it used to be dropped without a word. That was
+        // survivable while editing only started from Review; now that a new post
+        // stays open in edit mode, it is one tick away on every post the owner
+        // writes, so it is said out loud instead.
+        if (!isAutosave && selectedPlatforms.length > 1) {
+          setSaveProblem('This post belongs to one network. Untick the extra ones and save them as their own posts.')
+          return
+        }
         const editPlatform = selectedPlatforms[0]
         const editPublish = editPlatform
           ? resolvePublishCaption(versions, editPlatform, caption, hashtags)
           : { caption, hashtags, isCustomised: false }
+        // The account-by-account words, written on the way out the same way the
+        // new-post loop writes them. Without this an override typed while
+        // editing was announced as "Saved" and never left the browser.
+        const editAccountIds = editPlatform
+          ? accountIdsForPlatform(selectedAccountIds, targetAccounts, editPlatform)
+          : []
+        const editCaptions: Record<string, string> = {}
+        for (const account of selectedAccounts.filter((a) => editAccountIds.includes(a.id))) {
+          const own = captionsByAccountId[account.id]
+          if (typeof own === 'string' && own !== editPublish.caption) {
+            editCaptions[account.id] = composePublishBody(
+              own,
+              editPublish.hashtags.map((h) => h.replace(/^#/, '')),
+            )
+          }
+        }
+        const editMetadata: Record<string, unknown> = {
+          ...(reviewStamps[editPublish.caption] ?? {}),
+          // Sent whole, empty included, because the merge on the server is by
+          // key: an override the owner deleted has to be able to disappear.
+          // Only when this screen knows which accounts the row is for, though —
+          // a row made by the Director carries accounts this composer never
+          // loaded, and clearing them from here would be inventing a decision.
+          ...(editAccountIds.length > 0
+            ? { account_ids: editAccountIds, captions_by_account_id: editCaptions }
+            : {}),
+        }
         let editResponse: Response | null = null
         try {
           editResponse = await fetch('/api/scheduled-posts', {
@@ -983,20 +1224,40 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
               id: editDraftId,
               caption: editPublish.caption,
               hashtags: editPublish.hashtags.map(h => h.replace(/^#/, '')),
-              status: persistStatus,
-              scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
+              // Typing is not a decision about when a post goes out, or whether
+              // it is still a draft. Autosave therefore sends neither: it used
+              // to send status 'draft' and scheduled_at "now", so editing a word
+              // in a post scheduled for Friday quietly unscheduled it and moved
+              // it to this instant. A press still says both, because a press is
+              // the owner saying them.
+              ...(isAutosave
+                ? {}
+                : {
+                    status: persistStatus,
+                    scheduled_at: scheduledAt ?? initialScheduleDate ?? new Date().toISOString(),
+                    // Given a posting time, the row takes it; moved to a time
+                    // picked by hand, it gives the old one back rather than
+                    // holding a minute it is no longer on.
+                    ...(mode === 'schedule'
+                      ? {
+                          queue_slot_id: queueSlot
+                            ? (editPlatform
+                                ? queueSlot.slotIdByPlatform[editPlatform]
+                                : undefined) ?? queueSlot.slotId ?? null
+                            : null,
+                        }
+                      : {}),
+                  }),
               post_type: postType,
               media_item_ids: selectedMediaIds,
               content_type: strategyContext?.suggestedContentType ?? undefined,
               content_pillar: strategyContext?.suggestedPillar ?? undefined,
-              // Looked up by the words this row is publishing, so the lookup IS
-              // the check that the review was about them. A stamp keyed to the
-              // master would sit on a platform the owner rewrote afterwards,
-              // which is how unchecked AHPRA/TGA copy reaches a live account
-              // carrying a tick.
-              ...(reviewStamps[editPublish.caption]
-                ? { metadata: reviewStamps[editPublish.caption] }
-                : {}),
+              // The review stamp is looked up by the words this row is
+              // publishing, so the lookup IS the check that the review was about
+              // them. A stamp keyed to the master would sit on a platform the
+              // owner rewrote afterwards, which is how unchecked AHPRA/TGA copy
+              // reaches a live account carrying a tick.
+              ...(Object.keys(editMetadata).length > 0 ? { metadata: editMetadata } : {}),
             }),
           })
         } catch {
@@ -1024,6 +1285,9 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
           setSaveProblem('That update did not save, so the post in Review still has its old words. Your changes are still here — try Update again.')
           return
         }
+        // The time this post just took is gone from the week, so the button
+        // must stop offering it.
+        if (mode === 'schedule') setNextFreeNonce((n) => n + 1)
         if (mode === 'now') {
           const published = await fetch('/api/scheduled-posts/publish-now', {
             method: 'POST',
@@ -1035,9 +1299,16 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
             return
           }
         }
+        data.refetch()
+        if (bornHere && mode !== 'now') {
+          // This post was made here a moment ago and is still being worked on.
+          // Leaving would throw away the one thing the owner came back for —
+          // the post on the screen, and its history beside it.
+          setSavedAt(new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }))
+          return
+        }
         setEditMode(false)
         setEditDraftId(null)
-        data.refetch()
         onDone?.()
         return
       }
@@ -1101,6 +1372,14 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
               media_item_ids: selectedMediaIds,
               content_type: strategyContext?.suggestedContentType ?? undefined,
               content_pillar: strategyContext?.suggestedPillar ?? undefined,
+              // This network's own copy of the time, so each row owns the time
+              // it was given. `createDraftPost` writes it; nothing else may.
+              ...(queueSlot
+                ? {
+                    queue_slot_id:
+                      queueSlot.slotIdByPlatform[platform] ?? queueSlot.slotId ?? undefined,
+                  }
+                : {}),
               metadata: {
                 source: 'post_creator',
                 created_by: 'You',
@@ -1157,6 +1436,9 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         return
       }
 
+      // Same again for a new post: the minute it landed on is no longer free.
+      if (mode === 'schedule') setNextFreeNonce((n) => n + 1)
+
       if (mode === 'now' && createdIds.length > 0) {
         const published = await fetch('/api/scheduled-posts/publish-now', {
           method: 'POST',
@@ -1173,6 +1455,36 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       if (draftKey) try { localStorage.removeItem(draftKey) } catch {}
       // Record time of last successful save so the action bar can show it
       setSavedAt(new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }))
+
+      // ── Stay on the post that was just made ────────────────────────────
+      //
+      // The screen used to empty itself here, which meant the most common
+      // journey through this composer — write a post, save it — was the one
+      // journey where the post could not be looked at afterwards. Activity is
+      // handed `editDraftId`, and on a new post that stayed null from the first
+      // keystroke to the last, so the column that exists to show what happened
+      // to this post showed "save this post first" about a post that had just
+      // been saved, and the comment box beside it was never usable at all.
+      //
+      // Adopting the id turns the next press into an edit of the row that
+      // exists, rather than a second row saying the same thing.
+      //
+      // ONE row only. Ticking three networks writes three rows, and this screen
+      // edits one: adopting the first would point Update and every autosave at
+      // that row while the other two silently drifted out of step with what is
+      // on the screen. Publishing straight away is left out for the same kind of
+      // reason — the post has gone, there is nothing left here to edit.
+      if (createdIds.length === 1 && mode !== 'now') {
+        setEditMode(true)
+        setEditDraftId(createdIds[0]!)
+        setBornHere(true)
+        // The run of the autosave effect that this adoption itself triggers is
+        // not an edit — the row already holds exactly what is on the screen.
+        autosaveSkip.current = true
+        setAutosaveState('saved')
+        return
+      }
+
       // Reset form after schedule/draft save
       setCaption('')
       setHashtags([])
@@ -1186,8 +1498,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     } finally {
       if (!isAutosave) setSaving(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, targetAccounts, captionsByAccountId, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, selectedAccounts, targetAccounts, captionsByAccountId, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, bornHere, onDone, draftKey, platformOptions, initialScheduleDate])
 
   /**
    * 300ms debounced autosave, in place of a Save-draft button.
@@ -1222,8 +1533,6 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     postType,
     versions,
   })
-  const autosaveSkip = useRef(true)
-
   useEffect(() => {
     if (!editMode || !editDraftId || !activeBrandId) return
     if (!caption.trim()) return
@@ -1330,24 +1639,47 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
             }}
           />
           <MediaSourceButton
-            label="AI Generate"
-            active={false}
+            // Named for what pressing it does. "AI Generate" sat beside three
+            // buttons that put a picture on the post instantly and promised the
+            // same thing, which it cannot do — the picture has to be made first.
+            label={
+              imageRequest
+                ? imageRequest.filledAt
+                  ? 'Ask for another'
+                  : 'Asked the Director'
+                : 'Ask for a picture'
+            }
+            active={Boolean(imageRequest) && !imageRequest?.filledAt}
             onClick={() => {
               // The Director owns image generation — it holds the brand look,
               // the compliance rules and the spend budget. A second generator
               // wired straight into this screen would have none of them.
+              //
+              // What changed is the last line: it used to end at the Library,
+              // which left the owner to go and find the picture nobody had told
+              // him was finished. Asked to put it on the post, the Director uses
+              // the hands it already has here, and the arrival is caught by the
+              // desk-fill effect above.
               sendToDirector(
                 [
                   `Make an image for a ${contentType.replace('_', ' ')} post for ${brandName}.`,
                   caption.trim() ? `The caption is: ${caption.trim()}` : '',
-                  'Put it in the media library for this business when it is ready, and tell me when it is there.',
+                  'When it is ready, put it straight onto the post I am looking at and save it in this business’s media library as well.',
                 ]
                   .filter(Boolean)
                   .join('\n\n'),
               )
+              setImageRequest({ askedAt: clockLabel(), filledAt: null })
             }}
           />
         </div>
+        {imageRequest && (
+          <p className="mt-[8px] text-[12px] leading-[1.5]" style={{ color: 'var(--ink-3)' }}>
+            {imageRequest.filledAt
+              ? `The picture landed on this post at ${imageRequest.filledAt}. If it is not the one you wanted, take it off above and ask again.`
+              : `Asked at ${imageRequest.askedAt}. It is being made now, and it goes onto this post on its own when it is ready — nothing has been added yet. Making a picture takes longer than writing words.`}
+          </p>
+        )}
       </ComposeDeskCard>
 
       {showComposeUpload && activeBrandId && (
@@ -1477,7 +1809,11 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
           hashtags={hashtags}
           onChange={handleHashtagsChange}
           selectedPlatforms={selectedPlatforms}
-          caption={caption}
+          suggest={{
+            onAsk: askDirectorForHashtags,
+            askedAt: hashtagRequest?.askedAt ?? null,
+            filledAt: hashtagRequest?.filledAt ?? null,
+          }}
         />
       </ComposeDeskCard>
 
@@ -1555,7 +1891,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         saving={saving}
         onSave={handleSave}
         editMode={editMode}
-        nextSlotIso={nextSlotIso}
+        nextFree={nextFree}
         savedAt={savedAt}
         scheduledWhen={scheduledWhen}
         onScheduledWhenChange={setScheduledWhen}

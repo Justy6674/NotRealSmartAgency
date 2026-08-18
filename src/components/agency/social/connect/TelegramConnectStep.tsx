@@ -41,10 +41,20 @@ interface TelegramConnectStepProps {
   onRestart: () => void
 }
 
-/** Our own words, used when the platform sends none. */
+/**
+ * Our own words, and they have to be the whole instruction.
+ *
+ * The bot must be an administrator of the channel before the code does
+ * anything, and the code is sent together with the channel's @name. An earlier
+ * version said only "send it the code", which is the half that does not work —
+ * the owner would have sent it, seen nothing happen, and had no way to find out
+ * why. The route sends the same steps when the platform gives none, so these
+ * two lists must not drift apart.
+ */
 const FALLBACK_STEPS = [
-  'Open Telegram and find the bot below.',
-  'Send it the code — you can paste it straight in.',
+  'In Telegram, open your channel, then Administrators, and add the bot below as an administrator.',
+  'Open a private chat with that same bot.',
+  'Send it the code followed by your channel’s @name — for example: CODE @yourchannel.',
   'Come back here. This screen updates itself the moment it lands.',
 ]
 

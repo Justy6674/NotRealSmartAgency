@@ -163,7 +163,10 @@ export function retryAfterSeconds(header: string | null | undefined): number | n
 }
 
 interface ZernioRequestInit {
-  method?: 'GET' | 'POST' | 'DELETE'
+  // PATCH is here for one endpoint only: checking whether a Telegram access
+  // code has been used. The publisher models that poll as a PATCH even though
+  // it changes nothing on our side.
+  method?: 'GET' | 'POST' | 'DELETE' | 'PATCH'
   query?: Record<string, string | undefined>
   body?: unknown
   headers?: Record<string, string>
@@ -261,6 +264,17 @@ export interface ConnectStateClaims {
    * explanation.
    */
   organizations?: Array<{ id: string; name: string; urn?: string; vanityName?: string }>
+  /**
+   * Telegram only. The access code the owner is being asked to send.
+   *
+   * It rides in the signed continuation rather than being read off the query
+   * string, because the poll that spends it is the thing that decides which
+   * brand a channel belongs to. A code taken from a request could be another
+   * tenant's — short, human-readable, and shown on their screen — and mapping
+   * the channel it connects onto whichever brand the caller named would be the
+   * tenant-isolation hole this whole file exists to avoid.
+   */
+  telegramCode?: string
   nonce: string
   exp: number
 }
@@ -725,7 +739,14 @@ export interface ConnectedAccount {
   displayName: string | null
 }
 
-function readConnectedAccount(operation: string, payload: unknown): ConnectedAccount {
+/**
+ * Exported because the two credential flows — Bluesky and Telegram — finish on
+ * their own endpoints and get back the same account shape. One reader, so a
+ * publisher that answers `_id` on one surface and `accountId` on another cannot
+ * quietly produce an account with no id on one path and a working one on
+ * another.
+ */
+export function readConnectedAccount(operation: string, payload: unknown): ConnectedAccount {
   const account = asRecord(asRecord(payload).account)
   // Zernio returns `accountId` here and `_id` on /v1/accounts. Both are read
   // because the two surfaces have disagreed before and a publish path must not

@@ -20,10 +20,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  *     wait. Retrying immediately is what turns a busy minute into an outage.
  *
  * ── Honest emptiness ───────────────────────────────────────────────────
- * Two of fourteen businesses have their accounts connected. For the other
- * twelve the true answer is "nothing is connected yet", and that must never be
- * drawn as an axis with no line on it. Every hook here separates three states:
- * connected with figures, connected with nothing yet, and not connected at all.
+ * Two of fourteen businesses are linked to a results profile. The comment that
+ * used to sit here said the other twelve had "nothing connected yet", and the
+ * screen said it too — which was wrong, and wrong in the worst direction.
+ * Downscale has accounts connected and posts published; nobody is gathering
+ * the numbers behind them. Four states, not two, and no hook here is allowed
+ * to collapse them:
+ *
+ *   measured, with figures        → draw them
+ *   measured, genuinely quiet     → say the period was quiet
+ *   connected, nobody measuring   → say that, and never "nothing is connected"
+ *   we could not look             → say that, and offer another go
  */
 
 export type AnalyticsPeriod = '7_days' | '30_days' | '90_days'
@@ -124,15 +131,40 @@ export interface AnalyticsAccountsState {
   accounts: AnalyticsAccount[]
   /** False when this business has no publisher profile at all. */
   linked: boolean
+  /**
+   * False when nobody is gathering results for this business — which is true
+   * of twelve of the fourteen. Deliberately separate from `accounts.length`:
+   * an unmeasured business still has its accounts, and the row must show them.
+   */
+  resultsCollected: boolean
+  /** The owner-facing sentence for that, when it applies. */
+  notCollected: string | null
   loading: boolean
   problem: string | null
   billingSuspended: boolean
   refresh: () => void
 }
 
+/**
+ * The accounts behind the selector row.
+ *
+ * ── Two reads, because there are two kinds of business ─────────────────
+ * A business linked to a results profile is answered by the read that knows
+ * about health, avatars and follower counts. A business that is not linked was
+ * previously answered by that same read as "not linked", the row rendered
+ * "nothing is connected", and for Downscale — accounts connected, posts
+ * published — that was simply false. So the second read runs for exactly those
+ * businesses and returns the accounts they really have, marked as unmeasured.
+ *
+ * "Connected but nobody is measuring" and "nothing connected" are different
+ * answers with different actions, and this hook now carries both rather than
+ * collapsing them into an empty list.
+ */
 export function useAnalyticsAccounts(brandId: string | null): AnalyticsAccountsState {
   const [accounts, setAccounts] = useState<AnalyticsAccount[]>([])
   const [linked, setLinked] = useState(false)
+  const [resultsCollected, setResultsCollected] = useState(false)
+  const [notCollected, setNotCollected] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const [billingSuspended, setBilling] = useState(false)
@@ -141,6 +173,8 @@ export function useAnalyticsAccounts(brandId: string | null): AnalyticsAccountsS
     if (!brandId) {
       setAccounts([])
       setLinked(false)
+      setResultsCollected(false)
+      setNotCollected(null)
       setProblem(null)
       return
     }
@@ -150,25 +184,66 @@ export function useAnalyticsAccounts(brandId: string | null): AnalyticsAccountsS
       accounts?: AnalyticsAccount[]
       problem?: string | null
     }>(`/api/zernio/analytics?view=accounts&brandId=${encodeURIComponent(brandId)}`)
-    setLoading(false)
 
     if (!result.ok) {
+      setLoading(false)
       setAccounts([])
       setLinked(false)
+      setResultsCollected(false)
+      setNotCollected(null)
       setProblem(result.failure.problem)
       setBilling(result.failure.billingSuspended === true)
       return
     }
 
     setBilling(false)
-    setLinked(result.data.configured === true)
-    setAccounts(Array.isArray(result.data.accounts) ? result.data.accounts : [])
-    setProblem(result.data.problem ?? null)
+
+    if (result.data.configured === true) {
+      setLoading(false)
+      setLinked(true)
+      setResultsCollected(true)
+      setNotCollected(null)
+      setAccounts(Array.isArray(result.data.accounts) ? result.data.accounts : [])
+      setProblem(result.data.problem ?? null)
+      return
+    }
+
+    // Not linked to a results profile. That says nothing about whether this
+    // business has accounts, so ask the question that does.
+    const fallback = await deskFetch<{
+      accounts?: AnalyticsAccount[]
+      resultsCollected?: boolean
+      notCollected?: string | null
+      problem?: string | null
+    }>(`/api/studio/analytics/accounts?brandId=${encodeURIComponent(brandId)}`)
+    setLoading(false)
+    setLinked(false)
+    setResultsCollected(false)
+
+    if (!fallback.ok) {
+      setAccounts([])
+      setNotCollected(null)
+      setProblem(fallback.failure.problem)
+      return
+    }
+
+    setAccounts(Array.isArray(fallback.data.accounts) ? fallback.data.accounts : [])
+    setNotCollected(fallback.data.notCollected ?? null)
+    setProblem(fallback.data.problem ?? null)
   }, [brandId])
 
   useEffect(() => { void load() }, [load])
 
-  return { accounts, linked, loading, problem, billingSuspended, refresh: load }
+  return {
+    accounts,
+    linked,
+    resultsCollected,
+    notCollected,
+    loading,
+    problem,
+    billingSuspended,
+    refresh: load,
+  }
 }
 
 /* ── Sync: how current the figures are ──────────────────────────────────── */

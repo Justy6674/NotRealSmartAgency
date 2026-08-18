@@ -12,9 +12,16 @@ import {
   type PostLabel,
 } from '@/lib/posts/post-labels'
 import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
-import { fetchZernioAccounts } from '@/lib/zernio/client'
+import {
+  accountsForDeskRow,
+  connectedAccountsForBrand,
+  type BrandForAccounts,
+  type DeskConnectedAccount,
+} from '@/lib/posts/desk-post-accounts'
+import { fetchZernioAccounts, type ZernioAccount } from '@/lib/zernio/client'
 import { listZernioPosts, type ZernioPostRecord } from '@/lib/zernio/posts'
 import type { DeskPostStatus, SocialPostRow } from '@/hooks/usePostsList'
+import { deskStatusOfDeskRow } from '@/lib/posts/desk-status'
 
 // Publisher sync can take ~6 minutes per video transcode. Run on Node runtime
 // (not edge) and bump maxDuration so the request doesn't time out before the
@@ -38,46 +45,16 @@ const HISTORY_MAX_PAGES = 5
 /* ── Owner-facing status ─────────────────────────────────────────────────── */
 
 /**
- * The eight states the desk can show, derived once, here.
+ * The eight states the desk can show. The derivation itself lives in
+ * `@/lib/posts/desk-status` and is imported, never restated: the sidebar
+ * badge, the department tab strip, this route and the review screen all read
+ * the same function, which is what stops them telling four different stories
+ * about the same 121 rows. See that file for what "waiting on you" means and
+ * why `failed` is not part of it.
  *
- * `scheduled_posts.status` has six; the publisher has six of its own including
- * `partial` (some accounts took the post, some did not) which our enum has no
- * word for at all. And "waiting on you" is not a status anywhere — it is a
- * draft an assistant wrote that the owner has not yet said yes to. Deriving it
- * in one place is what stops the sidebar count, the tab count and the row badge
- * from telling three different stories.
+ * `partial` (some accounts took the post, some did not) belongs to published
+ * history alone — no row of ours can be in it — so it is decided below.
  */
-const ASSISTANT_SOURCES = new Set([
-  'ai_generate',
-  'fill_calendar',
-  'director_chat',
-  'publish_to_social',
-  'mcp_external',
-  'canva_import',
-  'team_member',
-])
-
-function deskStatusOfDeskRow(row: Record<string, unknown>): DeskPostStatus {
-  const status = String(row.status ?? 'draft')
-  if (status === 'draft') {
-    const meta = (row.metadata ?? {}) as Record<string, unknown>
-    const source = typeof meta.source === 'string' ? meta.source : 'unknown'
-    // An owner-written draft is a draft. One an assistant produced is sitting
-    // in front of the owner asking a question, and belongs in its own tab.
-    if (ASSISTANT_SOURCES.has(source) && meta.approved_at === undefined) return 'needs_approval'
-    return 'draft'
-  }
-  if (
-    status === 'scheduled' ||
-    status === 'publishing' ||
-    status === 'published' ||
-    status === 'failed' ||
-    status === 'cancelled'
-  ) {
-    return status
-  }
-  return 'draft'
-}
 
 function deskStatusOfHistory(post: ZernioPostRecord): DeskPostStatus {
   switch (post.status) {
@@ -102,12 +79,15 @@ interface AccountLookup {
   id: string
   platform: string
   name: string
+  /** The handle. Two accounts can share a display name; they cannot share this. */
+  username: string | null
 }
 
 function deskRowToSocialPost(
   row: Record<string, unknown>,
   labels: PostLabel[],
   receipts: unknown[],
+  connected: readonly DeskConnectedAccount[],
 ): SocialPostRow {
   const platform = String(row.platform ?? '')
   const mediaIds = Array.isArray(row.media_item_ids) ? (row.media_item_ids as string[]) : []
@@ -134,7 +114,10 @@ function deskRowToSocialPost(
     external_post_id: typeof row.external_post_id === 'string' ? row.external_post_id : null,
     permalinks,
     labels,
-    accounts: [],
+    // Resolved from the accounts this business has connected — see
+    // `accountsForDeskRow`. This used to be a hard-coded empty array, which is
+    // why a draft never showed the page it was going to.
+    accounts: accountsForDeskRow(row, connected),
     post_type: typeof row.post_type === 'string' ? row.post_type : null,
     error: typeof row.error === 'string' ? row.error : null,
     metadata: (row.metadata ?? {}) as Record<string, unknown>,
@@ -174,6 +157,7 @@ function historyToSocialPost(post: ZernioPostRecord, accounts: Map<string, Accou
         id: target.accountId,
         platform: target.platform,
         name: known?.name ?? target.platform,
+        ...(known?.username ? { username: known.username } : {}),
       }
     }),
     post_type: null,
@@ -193,13 +177,18 @@ interface HistoryResult {
   unavailable: string | null
 }
 
-async function readHistory(profileId: string | null): Promise<HistoryResult> {
+async function readHistory(
+  profileId: string | null,
+  /** Already listed by the caller — the desk needs the same list for its own
+   *  rows, and listing twice is a second round trip for one answer. */
+  listed: ZernioAccount[] | null,
+): Promise<HistoryResult> {
   if (!profileId) {
     return { rows: [], total: 0, truncated: false, unavailable: null }
   }
 
   try {
-    const accountList = await fetchZernioAccounts(profileId)
+    const accountList = listed ?? (await fetchZernioAccounts(profileId))
     const accounts = new Map<string, AccountLookup>(
       accountList.map((account) => [
         account.id,
@@ -207,6 +196,7 @@ async function readHistory(profileId: string | null): Promise<HistoryResult> {
           id: account.id,
           platform: account.platform,
           name: account.displayName || account.username || account.platform,
+          username: account.username ?? null,
         },
       ]),
     )
@@ -346,16 +336,30 @@ export async function GET(request: Request) {
     }
 
     let profileId: string | null = null
+    let brand: BrandForAccounts | null = null
     if (brandId) {
-      const { data: brand } = await supabase
+      const { data } = await supabase
         .from('brands')
-        .select('social_urls')
+        .select('id, name, slug, social_urls')
         .eq('id', brandId)
         .maybeSingle()
+      if (data) {
+        brand = {
+          id: String(data.id),
+          name: String(data.name ?? ''),
+          slug: String(data.slug ?? ''),
+          social_urls: data.social_urls ?? null,
+        }
+      }
       profileId = zernioProfileIdFromSocialUrls(brand?.social_urls)
     }
 
-    const history = await readHistory(profileId)
+    // Listed once and used twice: published history names the account a post
+    // went to, and every desk row needs the same list to say where it is going.
+    const zernioAccounts = profileId ? await fetchZernioAccounts(profileId) : null
+    const connected = brand ? await connectedAccountsForBrand(brand, { zernioAccounts }) : []
+
+    const history = await readHistory(profileId, zernioAccounts)
 
     // A history row that this desk also has a row for is the same post twice.
     // The desk's own row wins, because it is the one that can be edited,
@@ -371,6 +375,7 @@ export async function GET(request: Request) {
         row as Record<string, unknown>,
         labels.get(row.id as string) ?? [],
         byPost.get(row.id as string) ?? [],
+        connected,
       ),
     )
     const historyRows = history.rows.filter((row) => !known.has(row.id))
@@ -408,6 +413,14 @@ const PatchSchema = z.object({
   media_item_ids: z.array(z.string().uuid()).optional(),
   content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
   content_pillar: z.string().optional(),
+  /**
+   * The weekly posting time this post is taking.
+   *
+   * Sent when the owner presses "Add to next free time", so the row OWNS the
+   * time it was given and the next post is offered the one after it. Null
+   * clears it — a post moved to a time picked by hand no longer holds a slot.
+   */
+  queue_slot_id: z.string().uuid().nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
   /** Replaces the post's labels wholesale. Omit to leave them untouched. */
   labelIds: z.array(z.string().uuid()).optional(),
@@ -440,6 +453,7 @@ export async function PATCH(request: Request) {
   if (updates.media_item_ids !== undefined) fieldsToUpdate.media_item_ids = updates.media_item_ids
   if (updates.content_type !== undefined) fieldsToUpdate.content_type = updates.content_type
   if (updates.content_pillar !== undefined) fieldsToUpdate.content_pillar = updates.content_pillar
+  if (updates.queue_slot_id !== undefined) fieldsToUpdate.queue_slot_id = updates.queue_slot_id
 
   // Deep merge metadata (fetch current, spread, update)
   if (incomingMetadata !== undefined) {
@@ -535,6 +549,16 @@ const CreateSchema = z.object({
   post_type: z.enum(['single', 'carousel', 'reel', 'video']).optional().default('single'),
   content_type: z.enum(['entertainment', 'education', 'inspiration', 'promotional']).optional(),
   content_pillar: z.string().optional(),
+  /**
+   * The weekly posting time this post is taking, when it was given one.
+   *
+   * "Add to next free time" resolves a real time from the owner's week and
+   * sends its id here, so `scheduled_posts.queue_slot_id` is written by the
+   * canonical draft pipeline rather than left permanently null — which is what
+   * made every per-time count on the schedule read 0 and let two posts be
+   * offered the same minute.
+   */
+  queue_slot_id: z.string().uuid().optional(),
   metadata: z.record(z.unknown()).optional().default({}),
 })
 
@@ -590,7 +614,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
   }
 
-  const { brandId, platform, caption, hashtags, scheduled_at, status, media_item_id, media_item_ids, post_type, content_type, content_pillar, metadata } = parsed.data
+  const { brandId, platform, caption, hashtags, scheduled_at, status, media_item_id, media_item_ids, post_type, content_type, content_pillar, queue_slot_id, metadata } = parsed.data
 
   // Verify brand belongs to the user
   const { data: brand, error: brandError } = await supabase
@@ -620,6 +644,7 @@ export async function POST(request: Request) {
       postType: post_type,
       status,
       scheduledAt: scheduled_at,
+      ...(queue_slot_id ? { queueSlotId: queue_slot_id } : {}),
       metadata: metadata as Record<string, unknown> | undefined,
       contentType: content_type,
       contentPillar: content_pillar,

@@ -9,6 +9,16 @@ import { getComplianceRules } from '../compliance-rules'
 import { createDraftPosts } from '@/lib/posts/create-draft'
 import { loadState, selectBestArms, hasEnoughData, type BanditArm } from '@/lib/content-optimisation/bandit'
 import { nextOccurrence } from '@/lib/posting-queue/assign-to-slot'
+import {
+  bookedTimes,
+  isTaken,
+  type BookedTimes,
+  type WeeklyPostingTime,
+} from '@/lib/posting-queue/next-free-time'
+import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
+import { listZernioQueues } from '@/lib/zernio/queue'
+import { listZernioAccounts } from '@/lib/zernio/accounts'
+import { canonicalSocialPlatform } from '@/lib/studio/social-read-source'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -82,41 +92,143 @@ const PostBatchSchema = z.object({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildPostSlots(
+/** One posting time, and the networks it posts to. */
+export interface CalendarSlot {
+  scheduledAt: string
+  platform: PostPlatform
+  /** The weekly time's id, or undefined when the week has no id to give. */
+  slotId?: string
+}
+
+/**
+ * The empty times in the owner's own week, soonest first.
+ *
+ * ── The two rules ──────────────────────────────────────────────────────
+ * · Nothing invents a time. Every candidate is an occurrence of a time the
+ *   owner set, converted through each time's own zone.
+ * · A time with a post already on it is not empty. "Taken" is judged by the
+ *   INSTANT, so a time the owner filled by hand — which carries no weekly-time
+ *   id at all — is respected exactly as one the calendar filled.
+ *
+ * One time is stored as one row per connected network, so several rows share an
+ * instant. They are ONE posting occasion going to several accounts, which is
+ * why `postsPerWeek` counts distinct instants: asking for five posts a week and
+ * getting twenty because four networks are connected is not what anybody meant.
+ */
+export function buildPostSlots(
   weeks: number,
   postsPerWeek: number,
-  scheduleSlots: PostingScheduleSlot[],
-  existingDates: Set<string>,
+  scheduleSlots: Array<WeeklyPostingTime & { platform: PostPlatform }>,
+  taken: BookedTimes,
   now = new Date(),
-): { scheduledAt: string; platform: PostPlatform; slotId: string }[] {
+): CalendarSlot[] {
   const horizon = new Date(now.getTime() + weeks * 7 * 86_400_000)
-  const candidates: { scheduledAt: string; platform: PostPlatform; slotId: string }[] = []
+  const byInstant = new Map<string, CalendarSlot[]>()
 
   for (const slot of scheduleSlots) {
     let cursor = now
     while (true) {
-      const occurrence = nextOccurrence(slot, cursor)
+      const occurrence = nextOccurrence(
+        {
+          day_of_week: slot.day_of_week,
+          time: slot.time,
+          timezone: slot.timezone ?? 'Australia/Brisbane',
+        },
+        cursor,
+      )
       if (occurrence > horizon) break
-      const scheduledAt = occurrence.toISOString()
-      const key = `${slot.platform}|${scheduledAt.slice(0, 13)}`
-      if (!existingDates.has(key)) {
-        candidates.push({ scheduledAt, platform: slot.platform, slotId: slot.id })
-      }
       cursor = new Date(occurrence.getTime() + 1000)
+      if (isTaken(slot.id, occurrence, taken)) continue
+      const scheduledAt = occurrence.toISOString()
+      const existing = byInstant.get(scheduledAt) ?? []
+      // The same network twice on one instant would be two posts to one account
+      // at one minute.
+      if (existing.some((entry) => entry.platform === slot.platform)) continue
+      existing.push({
+        scheduledAt,
+        platform: slot.platform,
+        ...(slot.id ? { slotId: slot.id } : {}),
+      })
+      byInstant.set(scheduledAt, existing)
     }
   }
 
-  candidates.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+  const instants = [...byInstant.keys()].sort()
   const counts = new Map<number, number>()
-  return candidates.filter((candidate) => {
-    const week = Math.floor(
-      (new Date(candidate.scheduledAt).getTime() - now.getTime()) / (7 * 86_400_000),
-    )
+  const chosen: CalendarSlot[] = []
+  for (const instant of instants) {
+    const week = Math.floor((Date.parse(instant) - now.getTime()) / (7 * 86_400_000))
     const count = counts.get(week) ?? 0
-    if (count >= postsPerWeek) return false
+    if (count >= postsPerWeek) continue
     counts.set(week, count + 1)
-    return true
-  })
+    chosen.push(...(byInstant.get(instant) ?? []))
+  }
+  return chosen
+}
+
+/** The six networks this tool can write for. */
+const WRITEABLE_PLATFORMS: PostPlatform[] = [
+  'instagram',
+  'facebook',
+  'linkedin',
+  'twitter',
+  'tiktok',
+  'youtube',
+]
+
+/**
+ * The owner's week when it is kept with the publisher rather than in our table.
+ *
+ * A business publishing through the main connection sets its posting times on
+ * the publisher's own schedule, so `posting_schedule_slots` is empty for it and
+ * this tool would otherwise tell the owner they have no posting times minutes
+ * after they set some. The times come back with no id — the column that would
+ * carry one points at our table — so a post on one of them holds its minute
+ * rather than a named time, which `buildPostSlots` already handles.
+ *
+ * Nothing is invented here either: an unset week comes back empty.
+ */
+async function weekFromPublisher(
+  brand: Brand,
+  requested: PostPlatform[] | undefined,
+): Promise<Array<WeeklyPostingTime & { platform: PostPlatform }>> {
+  const profileId = zernioProfileIdFromSocialUrls((brand as { social_urls?: unknown }).social_urls)
+  if (!profileId) return []
+
+  try {
+    const view = await listZernioQueues({ profileId })
+    const schedule = view.schedules[0] ?? null
+    if (!schedule || schedule.slots.length === 0) return []
+
+    let platforms: PostPlatform[] = requested ?? []
+    if (platforms.length === 0) {
+      const accounts = await listZernioAccounts({ profileId, status: 'connected' })
+      platforms = [
+        ...new Set(
+          accounts
+            .map((account) => canonicalSocialPlatform(account.platform) as PostPlatform)
+            .filter((platform) => WRITEABLE_PLATFORMS.includes(platform)),
+        ),
+      ]
+    }
+    if (platforms.length === 0) return []
+
+    const timezone = schedule.timezone || 'Australia/Brisbane'
+    return schedule.slots.flatMap((slot) =>
+      platforms.map((platform) => ({
+        id: null,
+        day_of_week: slot.dayOfWeek,
+        time: slot.time,
+        timezone,
+        platform,
+      })),
+    )
+  } catch (err) {
+    // A week we cannot read is not a week that is empty. The caller says so in
+    // words rather than filling a calendar off a failed lookup.
+    console.error('[fill-calendar] posting times could not be read from the publisher:', err)
+    return []
+  }
 }
 
 function buildBrandPromptContext(brand: Brand): string {
@@ -226,36 +338,75 @@ export function createFillCalendarTool(
           .eq('brand_id', brandId),
         supabase
         .from('scheduled_posts')
-        .select('platform, scheduled_at')
+        // `queue_slot_id` is read as well as the time, because a post can hold
+        // a posting time two ways: it was given that time, or it simply sits on
+        // that minute. Reading only the hour — which this used to do — let a
+        // second post be written onto a minute that already had one.
+        .select('platform, scheduled_at, queue_slot_id, status')
         .eq('brand_id', brandId)
         .gte('scheduled_at', now.toISOString())
         .lte('scheduled_at', fourWeeksOut.toISOString())
         .not('status', 'eq', 'cancelled'),
       ])
 
-      const existingDates = new Set(
-        (existingPosts ?? []).map(
-          (post: { platform: PostPlatform; scheduled_at: string }) =>
-            `${post.platform}|${post.scheduled_at.slice(0, 13)}`,
-        ),
+      const taken = bookedTimes(
+        (existingPosts ?? []) as Array<{
+          scheduled_at: string | null
+          queue_slot_id: string | null
+          status: string | null
+        }>,
       )
 
       if (slotsError) {
         return { success: false, error: 'Could not load the posting times for this business.' }
       }
       const requested = requestedPlatforms as PostPlatform[] | undefined
-      const scheduleSlots = (configuredSlots ?? [])
-        .filter((slot: PostingScheduleSlot) => !requested || requested.includes(slot.platform)) as PostingScheduleSlot[]
+
+      /*
+       * The owner's week, from wherever they keep it.
+       *
+       * Times set on the schedule screen live in `posting_schedule_slots` and
+       * carry an id, so a post given one of them owns it. A business publishing
+       * through the main connection keeps its week with the publisher instead;
+       * those times are just as real and just as much the owner's, they simply
+       * have no id we may store, so a post on one of them holds the minute
+       * rather than the time. Either way nothing here invents a time — an
+       * empty week is answered with a sentence, never with a guess.
+       */
+      let scheduleSlots: Array<WeeklyPostingTime & { platform: PostPlatform }> = (configuredSlots ?? [])
+        .map((slot: PostingScheduleSlot) => ({
+          id: slot.id as string | null,
+          day_of_week: slot.day_of_week,
+          // Postgres hands back "09:00:00".
+          time: String(slot.time ?? '09:00').slice(0, 5),
+          timezone: slot.timezone ?? 'Australia/Brisbane',
+          platform: slot.platform,
+        }))
+        .filter((slot) => !requested || requested.includes(slot.platform))
+
       if (scheduleSlots.length === 0) {
-        return { success: false, error: 'No posting times are set for those accounts yet. Add posting times first.' }
+        scheduleSlots = await weekFromPublisher(brand as Brand, requested)
+      }
+
+      if (scheduleSlots.length === 0) {
+        return {
+          success: false,
+          error:
+            'No posting times are set for this business yet, so there is nowhere to put these posts. ' +
+            'Set the times you want to post at first — Social → Schedule.',
+        }
       }
       const targetPlatforms = [...new Set(scheduleSlots.map((slot) => slot.platform))]
 
-      // 4. Fill configured empty slots only. nextOccurrence applies each slot's
-      // IANA timezone, including Sydney daylight-saving transitions.
-      const slots = buildPostSlots(weeks, posts_per_week, scheduleSlots, existingDates, now)
+      // 4. Fill the owner's own empty times only. `nextOccurrence` applies each
+      // time's own zone — Brisbane is a fixed UTC+10 all year, a brand in a
+      // daylight-saving zone moves with it.
+      const slots = buildPostSlots(weeks, posts_per_week, scheduleSlots, taken, now)
       if (slots.length === 0) {
-        return { success: false, error: 'All available time slots already have posts scheduled. Try a later date range.' }
+        return {
+          success: false,
+          error: 'Every one of your posting times over that stretch already has a post on it. Try a longer stretch, or add another time to your week.',
+        }
       }
 
       // 5. Build prompt context
@@ -285,7 +436,8 @@ export function createFillCalendarTool(
         hashtags: string[]
         content_type: string
         scheduled_at: string
-        queue_slot_id: string
+        /** Absent when the time came from the publisher's own week. */
+        queue_slot_id?: string
       }[] = []
 
       // Split slots into batches
@@ -338,7 +490,7 @@ ${isRegulated ? '- AHPRA/TGA brand: NO testimonials, NO guaranteed results, NO b
               hashtags: generated.hashtags.map((h) => h.replace(/^#/, '')),
               content_type: generated.content_type,
               scheduled_at: slot.scheduledAt,
-              queue_slot_id: slot.slotId,
+              ...(slot.slotId ? { queue_slot_id: slot.slotId } : {}),
             })
           }
         } catch (err) {

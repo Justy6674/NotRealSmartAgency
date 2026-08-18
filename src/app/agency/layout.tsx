@@ -8,6 +8,7 @@ import { CircleHelp, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { listZernioAccounts } from '@/lib/zernio/accounts'
 import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
+import { countWaitingOnYou } from '@/lib/posts/desk-status'
 import type { NavCounts } from '@/components/agency/shell/nav-sections'
 import { AgencySidebar } from '@/components/agency/shell/AgencySidebar'
 import { BusinessSelector } from '@/components/agency/shell/BusinessSelector'
@@ -170,24 +171,40 @@ const TINT_SYNC = `
  * in localStorage and a Server Component cannot see it. `countsBrandId` travels
  * with them so a stale number is never drawn beside another business's name.
  *
- * Only the approval queue is counted here. It is one indexed query on our own
- * table, which is cheap enough to sit in a layout that re-runs on navigation.
+ * Only the approval queue is counted here, and it is counted with the SAME
+ * predicate as everywhere else — `isWaitingOnYou` in `@/lib/posts/desk-status`.
+ * This used to ask for `status IN ('draft','failed')`, which is a different
+ * question: it painted 68 for Scent Sell, then `/api/social/nav-counts`
+ * answered 17 a moment later and the badge changed under the owner's eye. A
+ * number that moves on its own is a number nobody acts on.
+ *
+ * "Waiting on you" is not a value in the status column — it is a draft an
+ * assistant wrote that has not been approved — so the rows come back and are
+ * counted here rather than by Postgres. `WAITING_ROW_CAP` bounds that: past it
+ * we do not know the answer, and the badge renders bare rather than stating a
+ * floor as if it were exact. The live business carries 121 rows.
  */
+const WAITING_ROW_CAP = 2000
+
 async function waitingCountFor(
   supabase: Awaited<ReturnType<typeof createClient>>,
   brandId: string,
 ): Promise<number | undefined> {
-  const { count, error } = await supabase
+  const { data, count, error } = await supabase
     .from('scheduled_posts')
-    .select('id', { count: 'exact', head: true })
+    .select('id, status, metadata', { count: 'exact' })
     .eq('brand_id', brandId)
-    .in('status', ['draft', 'failed'])
+    .eq('status', 'draft')
+    .limit(WAITING_ROW_CAP)
 
   if (error) {
     console.error('[agency-layout] approval queue could not be counted', error)
     return undefined
   }
-  return typeof count === 'number' ? count : undefined
+  if (!Array.isArray(data)) return undefined
+  // Truncated by the cap: we did not see every row, so we do not know.
+  if (typeof count === 'number' && count > data.length) return undefined
+  return countWaitingOnYou(data)
 }
 
 /**

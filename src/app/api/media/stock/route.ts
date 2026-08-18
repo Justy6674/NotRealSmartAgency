@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { readStockCapability } from './capability'
 
 export const runtime = 'nodejs'
 
@@ -84,8 +85,12 @@ export async function GET(request: Request) {
   const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? '24') || 24, 1), 50)
 
   if (source === 'giphy') {
-    const apiKey = process.env.GIPHY_API_KEY
-    if (!apiKey) return NextResponse.json({ error: GIF_NOT_SET_UP }, { status: 503 })
+    // The same read the desk uses to decide whether to offer the tab at all,
+    // so the two can never disagree about what is switched on.
+    if (!readStockCapability().gifs) {
+      return NextResponse.json({ error: GIF_NOT_SET_UP }, { status: 503 })
+    }
+    const apiKey = process.env.GIPHY_API_KEY as string
 
     const endpoint = q
       ? `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(q)}&limit=${limit}&rating=pg-13`
@@ -121,8 +126,10 @@ export async function GET(request: Request) {
   }
 
   if (source === 'unsplash') {
-    const apiKey = process.env.UNSPLASH_ACCESS_KEY
-    if (!apiKey) return NextResponse.json({ error: PHOTO_NOT_SET_UP }, { status: 503 })
+    if (!readStockCapability().photoSources.includes('unsplash')) {
+      return NextResponse.json({ error: PHOTO_NOT_SET_UP }, { status: 503 })
+    }
+    const apiKey = process.env.UNSPLASH_ACCESS_KEY as string
 
     const endpoint = q
       ? `https://api.unsplash.com/search/photos?query=${encodeURIComponent(q)}&per_page=${Math.min(limit, 30)}`
@@ -164,8 +171,10 @@ export async function GET(request: Request) {
     }
   }
 
-  const apiKey = process.env.PEXELS_API_KEY
-  if (!apiKey) return NextResponse.json({ error: PHOTO_NOT_SET_UP }, { status: 503 })
+  if (!readStockCapability().photoSources.includes('pexels')) {
+    return NextResponse.json({ error: PHOTO_NOT_SET_UP }, { status: 503 })
+  }
+  const apiKey = process.env.PEXELS_API_KEY as string
 
   const endpoint = q
     ? `https://api.pexels.com/v1/search?query=${encodeURIComponent(q)}&per_page=${limit}`

@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { PostPlatform } from '@/types/database'
 import { PLATFORM_BRAND_COLOURS } from '@/lib/mixpost/ui-tokens'
+import { zonedDateTimeToUtc } from '@/lib/posting-queue/assign-to-slot'
+import { describePostingTime, isInThePast } from '@/lib/posting-queue/next-free-time'
 
 /**
  * Status dot colours — per DESIGN.md locked to dept-social.html.
@@ -23,6 +26,35 @@ const BD_FALLBACK  = 'oklch(0.33 0.08 240)'
 const B_FALLBACK   = 'oklch(0.545 0.115 240)'
 const INK_FALLBACK = 'oklch(1 0 0)'
 
+const DEFAULT_TIMEZONE = 'Australia/Brisbane'
+
+/**
+ * The business's next free posting time, already resolved on the server.
+ *
+ * Resolved there and not here because the answer depends on what is already
+ * scheduled, which the browser has no list of. See
+ * `/api/posting-schedule/next-free-time`.
+ */
+export interface NextFreeTimeView {
+  /** False means no posting times are set at all — offer to go and set some. */
+  hasTimes: boolean
+  when: string | null
+  /** "Tuesday 9:00am", in the business's own time zone. */
+  label: string | null
+  slotId: string | null
+  slotIdByPlatform: Record<string, string>
+  timezone: string
+  /** What to say when there is no time to offer. */
+  message: string | null
+  setTimesHref: string
+}
+
+/** The posting time a scheduled post is taking, so its row can own it. */
+export interface QueueSlotChoice {
+  slotId: string | null
+  slotIdByPlatform: Record<string, string>
+}
+
 interface CreatorActionBarProps {
   platforms: PostPlatform[]
   /**
@@ -35,34 +67,78 @@ interface CreatorActionBarProps {
   captionEmpty: boolean
   compliancePassed: boolean | null
   saving: boolean
-  onSave: (mode: 'draft' | 'schedule' | 'now', scheduledAt?: string) => void
+  onSave: (
+    mode: 'draft' | 'schedule' | 'now',
+    scheduledAt?: string,
+    queueSlot?: QueueSlotChoice,
+  ) => void
   editMode?: boolean
-  /** Next time on this business's posting plan, or null if none is set. */
-  nextSlotIso?: string | null
-  /** Time of the last successful save, e.g. "2:14 pm" */
+  /**
+   * The next free posting time, or null while it is still being read.
+   *
+   * THE FAULT this replaced: the bar took a bare ISO string, worked out nothing
+   * about whether that time was already taken, and when there was no schedule
+   * at all it simply greyed the button out with a tooltip. A disabled button
+   * with no explanation is indistinguishable from a broken one — and it was the
+   * only route to a posting time that did not require picking a date by hand.
+   */
+  nextFree?: NextFreeTimeView | null
   savedAt?: string | null
   /** datetime-local value the Director (or calendar) already chose */
   scheduledWhen?: string
   onScheduledWhenChange?: (value: string) => void
 }
 
-function slotLabel(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return 'next free slot'
-  return date.toLocaleString('en-AU', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
+/** "Australia/Brisbane" → "Brisbane". The owner does not think in IANA. */
+function placeOf(timezone: string): string {
+  const tail = timezone.split('/').pop() ?? timezone
+  return tail.replace(/_/g, ' ')
 }
 
-function toLocalInputValue(iso: string): string {
+/**
+ * An instant, written as the wall clock the picker shows.
+ *
+ * Formatting only — the reverse trip (what the owner typed, as an instant) is
+ * `zonedDateTimeToUtc`, which is shared with the weekly-times arithmetic rather
+ * than reimplemented here.
+ */
+function toZonedInputValue(iso: string, timezone: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
+}
+
+/**
+ * What the owner typed, as a real instant in the business's time zone.
+ *
+ * 9:00 typed here means 9:00 where the business is, not 9:00 on whichever
+ * clock the laptop happens to be set to. Returns null for a half-typed value,
+ * which is what keeps the Schedule button off until there is a real time.
+ */
+function fromZonedInputValue(value: string, timezone: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value)
+  if (!match) return null
+  const [, year, month, day, hour, minute] = match
+  return zonedDateTimeToUtc(
+    Number(year),
+    Number(month),
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0,
+    timezone,
+  )
 }
 
 /**
@@ -84,13 +160,16 @@ export function CreatorActionBar({
   saving,
   onSave,
   editMode,
-  nextSlotIso,
+  nextFree,
   savedAt,
   scheduledWhen,
   onScheduledWhenChange,
 }: CreatorActionBarProps) {
+  const timezone = nextFree?.timezone || DEFAULT_TIMEZONE
   const [pickingTime, setPickingTime] = useState(() => Boolean(scheduledWhen))
-  const [when, setWhen] = useState(() => scheduledWhen || toLocalInputValue(new Date().toISOString()))
+  const [when, setWhen] = useState(() => scheduledWhen ?? '')
+  /** The time this post was just put on, so the press is answered in words. */
+  const [scheduledFor, setScheduledFor] = useState<string | null>(null)
   const disabled = saving || captionEmpty
   const blockedByHealth = compliancePassed === false
 
@@ -100,10 +179,21 @@ export function CreatorActionBar({
     setPickingTime(true)
   }, [scheduledWhen])
 
-  // No border and no panel fill here. Whatever pins this bar already draws
-  // both — the department's action-bar slot in Social, `ComposerLayout`'s foot
-  // on `/agency/studio/create` — and drawing them twice put two hairlines a
-  // pixel apart across the bottom of the composer.
+  // Opening the picker with nothing in it made the owner type a whole date from
+  // scratch. It starts on their next free posting time when they have one, so
+  // the common answer is already in the box and only needs nudging.
+  useEffect(() => {
+    if (!pickingTime || when) return
+    const seed = nextFree?.when ?? new Date(Date.now() + 3_600_000).toISOString()
+    setWhen(toZonedInputValue(seed, timezone))
+  }, [pickingTime, when, nextFree?.when, timezone])
+
+  const chosen = useMemo(() => fromZonedInputValue(when, timezone), [when, timezone])
+  const chosenIsPast = chosen ? isInThePast(chosen) : false
+
+  const nextLabel = nextFree?.label ?? null
+  const hasFreeTime = Boolean(nextFree?.when && nextLabel)
+
   return (
     <div className="shrink-0">
       {/* ── Health gate ────────────────────────────────────────────────── */}
@@ -155,9 +245,11 @@ export function CreatorActionBar({
               <span className="truncate">
                 {autosaveState === 'failed'
                   ? 'That last change is not saved yet. Your words are still here.'
-                  : savedAt
-                    ? `Saved ${savedAt}. Nothing has gone out.`
-                    : 'Nothing has gone out.'}
+                  : scheduledFor
+                    ? `Going out ${scheduledFor}. You can still change it.`
+                    : savedAt
+                      ? `Saved ${savedAt}. Nothing has gone out.`
+                      : 'Nothing has gone out.'}
               </span>
             </>
           )}
@@ -205,35 +297,79 @@ export function CreatorActionBar({
             {editMode ? 'Update draft' : 'Save draft'}
           </button>
 
-          {/* Add to next free time */}
-          <button
-            type="button"
-            onClick={() => nextSlotIso && onSave('schedule', nextSlotIso)}
-            disabled={disabled || !nextSlotIso}
-            title={
-              nextSlotIso
-                ? `Next open time: ${slotLabel(nextSlotIso)}`
-                : 'Set posting times under Social → Schedule first'
-            }
-            className={cn(
-              'inline-flex shrink-0 items-center gap-[6px]',
-              'rounded-[8px] border px-[14px] py-[9px] text-[13px] font-[500]',
-              'transition-colors duration-150',
-              'disabled:cursor-not-allowed disabled:opacity-40',
-            )}
-            style={{
-              borderColor: 'var(--line, oklch(0.915 0.007 240))',
-              background: 'var(--panel, oklch(1 0 0))',
-              color: 'var(--ink, oklch(0.20 0.014 240))',
-            }}
-          >
-            Add to next free time
-            {nextSlotIso && (
-              <span className="text-[11px] font-normal" style={{ color: 'var(--ink-3)' }}>
-                {slotLabel(nextSlotIso)}
+          {/*
+            Add to next free time.
+
+            The time is ON the button, not in a tooltip: pressing something
+            called "next free time" without being told which time that is asks
+            the owner to trust a machine about a decision they are responsible
+            for. When there is no time to offer, the button stops being a
+            scheduling button and becomes the way to go and set one — a dead
+            grey button was the old behaviour and it taught nobody anything.
+          */}
+          {hasFreeTime ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!nextFree?.when || !nextLabel) return
+                if (!window.confirm(`Schedule this post for ${nextLabel}, ${placeOf(timezone)} time?`)) return
+                onSave('schedule', nextFree.when, {
+                  slotId: nextFree.slotId,
+                  slotIdByPlatform: nextFree.slotIdByPlatform,
+                })
+                setScheduledFor(nextLabel)
+              }}
+              disabled={disabled}
+              className={cn(
+                'inline-flex shrink-0 flex-col items-start',
+                'rounded-[8px] border px-[14px] py-[6px] text-[13px] font-[500]',
+                'transition-colors duration-150',
+                'disabled:cursor-not-allowed disabled:opacity-40',
+              )}
+              style={{
+                borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                background: 'var(--panel, oklch(1 0 0))',
+                color: 'var(--ink, oklch(0.20 0.014 240))',
+              }}
+            >
+              <span>Add to next free time</span>
+              <span
+                className="text-[11px] font-[600] leading-[14px]"
+                style={{ color: `var(--brand-deep, ${BD_FALLBACK})` }}
+              >
+                {nextLabel}
               </span>
-            )}
-          </button>
+            </button>
+          ) : nextFree ? (
+            <Link
+              href={nextFree.setTimesHref}
+              className={cn(
+                'inline-flex shrink-0 items-center gap-[6px]',
+                'rounded-[8px] border px-[14px] py-[9px] text-[13px] font-[500]',
+                'transition-colors duration-150',
+              )}
+              style={{
+                borderColor: `var(--brand, ${B_FALLBACK})`,
+                background: 'var(--panel, oklch(1 0 0))',
+                color: `var(--brand-deep, ${BD_FALLBACK})`,
+              }}
+              title={nextFree.message ?? undefined}
+            >
+              {nextFree.hasTimes ? 'Add another posting time' : 'Set your posting times'}
+            </Link>
+          ) : (
+            <span
+              className="inline-flex shrink-0 items-center gap-[6px] rounded-[8px] border px-[14px] py-[9px] text-[13px] font-[500] opacity-60"
+              style={{
+                borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                background: 'var(--panel, oklch(1 0 0))',
+                color: 'var(--ink-3, oklch(0.615 0.011 240))',
+              }}
+            >
+              <Loader2 className="h-[14px] w-[14px] animate-spin" />
+              Finding your next free time…
+            </span>
+          )}
 
           {/* Choose a time — toggles the date/time picker row below */}
           <button
@@ -292,6 +428,17 @@ export function CreatorActionBar({
         </div>
       </div>
 
+      {/* Why there is no next free time, said out loud rather than left as a
+          disabled button the owner has to guess at. */}
+      {nextFree && !hasFreeTime && nextFree.message && (
+        <div
+          className="border-t px-[26px] py-[8px] text-[12px]"
+          style={{ borderColor: 'var(--line)', color: 'var(--ink-3)' }}
+        >
+          {nextFree.message}
+        </div>
+      )}
+
       {/* ── Choose-a-time expansion ─────────────────────────────────────── */}
       {pickingTime && (
         <div
@@ -318,13 +465,35 @@ export function CreatorActionBar({
               }}
             />
           </label>
+
+          {/* The time read back in the BUSINESS's zone. Typing 9:00 on a laptop
+              set to another state used to schedule an hour out with nothing on
+              screen to notice it by. */}
+          {chosen && !chosenIsPast && (
+            <span className="text-[12px]" style={{ color: 'var(--ink-3)' }}>
+              Goes out {describePostingTime(chosen, timezone)}, {placeOf(timezone)} time.
+            </span>
+          )}
+          {chosen && chosenIsPast && (
+            <span
+              className="text-[12px] font-[600]"
+              style={{ color: 'var(--st-fail, oklch(0.55 0.20 25))' }}
+            >
+              That time has already gone by in {placeOf(timezone)}. Pick a later one.
+            </span>
+          )}
+
           <button
             type="button"
-            disabled={disabled || !when}
+            disabled={disabled || !chosen || chosenIsPast}
             onClick={() => {
+              if (!chosen || chosenIsPast) return
               if (!window.confirm('Schedule this post to the ticked accounts?')) return
-              const iso = new Date(when).toISOString()
-              onSave('schedule', iso)
+              // A time picked by hand takes no posting time with it — it is not
+              // one of the week's times, so nothing owns it but the minute
+              // itself, which the next-free-time answer already respects.
+              onSave('schedule', chosen.toISOString())
+              setScheduledFor(describePostingTime(chosen, timezone))
               setPickingTime(false)
             }}
             className="rounded-[8px] px-[14px] py-[9px] text-[13px] font-[600] disabled:opacity-40"

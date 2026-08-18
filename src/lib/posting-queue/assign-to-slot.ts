@@ -146,7 +146,18 @@ function offsetAt(date: Date, timeZone: string): number {
   return representedAsUtc - Math.floor(date.getTime() / 1000) * 1000
 }
 
-function zonedDateTimeToUtc(
+/**
+ * A wall-clock time in a zone, as an instant.
+ *
+ * Exported because the composer's "Choose a time" picker needs exactly this
+ * conversion and there must not be a second implementation of it: 9:00 typed
+ * into the picker means 9:00 in the BUSINESS's zone, not in whatever zone the
+ * laptop happens to be on. Brisbane is a fixed UTC+10, so for the owner's own
+ * brands this is arithmetic he will never notice; a brand in a daylight-saving
+ * zone is right for the same reason `nextOccurrence` is, because both go
+ * through `Intl` rather than a hard-coded offset.
+ */
+export function zonedDateTimeToUtc(
   year: number,
   month: number,
   day: number,

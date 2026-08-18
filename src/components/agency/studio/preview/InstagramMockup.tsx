@@ -13,6 +13,25 @@ interface InstagramMockupProps {
   aspect?: 'portrait' | 'square'
 }
 
+/**
+ * Instagram's real surface: a white feed, near-black text (#262626), #8e8e8e
+ * secondary, and hairlines at #dbdbdb that are the only structure in the whole
+ * screen. Converted to oklch; these are Instagram's colours, never `--brand`.
+ *
+ * This file used to set NO background at all, so it was transparent and took
+ * whatever PhoneFrame painted — which was near-black. It rendered dark by
+ * omission rather than by decision, and that is the more dangerous half of the
+ * bug: nothing in this file was wrong to read, so nothing here looked wrong.
+ * The ground is now stated out loud, twice: once as the screen PhoneFrame
+ * paints, once on the column that fills it.
+ */
+const FEED = 'oklch(1 0 0)'
+const LINE = 'oklch(0.891 0 0)'
+const INK = 'oklch(0.269 0 0)'
+const INK_2 = 'oklch(0.647 0 0)'
+const PLACEHOLDER = 'oklch(0.985 0 0)'
+const BLUE = 'oklch(0.655 0.177 248)'
+
 export function InstagramMockup({
   caption,
   hashtags,
@@ -29,19 +48,19 @@ export function InstagramMockup({
     : caption
 
   return (
-    <PhoneFrame aspect={aspect}>
-      <div className="flex h-full flex-col" style={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
+    <PhoneFrame aspect={aspect} screen={FEED}>
+      <div className="flex h-full flex-col" style={{ fontFamily: '"IBM Plex Sans", sans-serif', background: FEED }}>
         {/* IG Nav bar */}
-        <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: '1px solid oklch(0.15 0.005 240)' }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="oklch(0.85 0 240)" strokeWidth="2">
+        <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${LINE}` }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={INK} strokeWidth="2">
             <rect x="2" y="2" width="20" height="20" rx="5" />
             <circle cx="12" cy="12" r="5" />
-            <circle cx="18" cy="6" r="1.5" fill="oklch(0.85 0 240)" />
+            <circle cx="18" cy="6" r="1.5" fill={INK} />
           </svg>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'oklch(0.9 0 240)', letterSpacing: '-0.01em' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: INK, letterSpacing: '-0.01em' }}>
             Instagram
           </span>
-          <Send className="h-4 w-4" style={{ color: 'oklch(0.7 0 240)' }} />
+          <Send className="h-4 w-4" style={{ color: INK }} />
         </div>
 
         {/* Post header */}
@@ -53,13 +72,13 @@ export function InstagramMockup({
               height: 28,
               background: brandAvatarUrl
                 ? `url(${brandAvatarUrl}) center/cover`
-                : 'linear-gradient(135deg, oklch(0.55 0.15 300), oklch(0.55 0.15 30))',
+                : 'linear-gradient(135deg, oklch(0.62 0.20 320), oklch(0.70 0.17 55))',
             }}
           />
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'oklch(0.9 0 240)' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: INK }}>
             {brandName.toLowerCase().replace(/\s+/g, '')}
           </span>
-          <span style={{ fontSize: 16, color: 'oklch(0.5 0 240)', marginLeft: 'auto' }}>•••</span>
+          <span style={{ fontSize: 16, color: INK, marginLeft: 'auto' }}>•••</span>
         </div>
 
         {/* Image area */}
@@ -67,16 +86,16 @@ export function InstagramMockup({
           className="flex-shrink-0 relative"
           style={{
             aspectRatio: '1/1',
-            background: displayUrl
-              ? `url(${displayUrl}) center/cover`
-              : 'linear-gradient(135deg, oklch(0.12 0.01 240), oklch(0.08 0.005 280))',
+            background: displayUrl ? `url(${displayUrl}) center/cover` : PLACEHOLDER,
+            borderTop: `1px solid ${LINE}`,
+            borderBottom: `1px solid ${LINE}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
           {!displayUrl && (
-            <span style={{ fontSize: 11, color: 'oklch(0.35 0 240)' }}>No image</span>
+            <span style={{ fontSize: 11, color: INK_2 }}>No image</span>
           )}
           {/* Carousel dots */}
           {isCarousel && (
@@ -95,8 +114,8 @@ export function InstagramMockup({
                     width: i === 0 ? 6 : 5,
                     height: i === 0 ? 6 : 5,
                     borderRadius: '50%',
-                    background: i === 0 ? 'oklch(0.6 0.2 250)' : 'oklch(0.5 0 240)',
-                    opacity: i === 0 ? 1 : 0.5,
+                    background: i === 0 ? BLUE : 'oklch(0.891 0 0)',
+                    opacity: i === 0 ? 1 : 0.9,
                   }}
                 />
               ))}
@@ -107,33 +126,33 @@ export function InstagramMockup({
         {/* Action row */}
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-4">
-            <Heart className="h-5 w-5" style={{ color: 'oklch(0.85 0 240)' }} />
-            <MessageCircle className="h-5 w-5" style={{ color: 'oklch(0.85 0 240)' }} />
-            <Send className="h-5 w-5" style={{ color: 'oklch(0.85 0 240)' }} />
+            <Heart className="h-5 w-5" style={{ color: INK }} />
+            <MessageCircle className="h-5 w-5" style={{ color: INK }} />
+            <Send className="h-5 w-5" style={{ color: INK }} />
           </div>
-          <Bookmark className="h-5 w-5" style={{ color: 'oklch(0.85 0 240)' }} />
+          <Bookmark className="h-5 w-5" style={{ color: INK }} />
         </div>
 
         {/* Likes */}
-        <div className="px-3" style={{ fontSize: 11, fontWeight: 600, color: 'oklch(0.85 0 240)' }}>
+        <div className="px-3" style={{ fontSize: 11, fontWeight: 600, color: INK }}>
           0 likes
         </div>
 
         {/* Caption */}
         <div className="flex-1 overflow-hidden px-3 py-1">
-          <p style={{ fontSize: 11, color: 'oklch(0.8 0 240)', lineHeight: 1.4 }}>
+          <p style={{ fontSize: 11, color: INK, lineHeight: 1.4 }}>
             <span style={{ fontWeight: 600 }}>{brandName.toLowerCase().replace(/\s+/g, '')} </span>
-            <span style={{ color: 'oklch(0.65 0 240)' }}>
+            <span>
               {fullCaption.length > 120 ? `${fullCaption.slice(0, 120)}... ` : fullCaption}
             </span>
             {fullCaption.length > 120 && (
-              <span style={{ color: 'oklch(0.4 0 240)', fontSize: 10 }}>more</span>
+              <span style={{ color: INK_2, fontSize: 10 }}>more</span>
             )}
           </p>
         </div>
 
         {/* Timestamp */}
-        <div className="px-3 pb-2" style={{ fontSize: 9, color: 'oklch(0.35 0 240)', textTransform: 'uppercase' }}>
+        <div className="px-3 pb-2" style={{ fontSize: 9, color: INK_2, textTransform: 'uppercase' }}>
           Just now
         </div>
       </div>

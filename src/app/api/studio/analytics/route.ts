@@ -7,13 +7,22 @@ import { PLATFORM_BRAND_COLOURS } from '@/lib/mixpost/ui-tokens'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/studio/analytics?brandId=xxx&platform=instagram&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET /api/studio/analytics
+ *   ?brandId=…&platform=instagram&from=YYYY-MM-DD&to=YYYY-MM-DD[&accountId=…]
  *
- * Fetches platform analytics for a brand. Today the source is Mixpost; after
- * Phase 10 it will fan out to direct platform APIs without UI changes.
+ * One platform's results for one brand. `getMetricsSource()` decides where the
+ * figures come from; this route never knows or names the source.
  *
- * Empty results are returned as a structured `PlatformMetrics` shell with
- * `empty: true` so the UI can render an empty state instead of erroring.
+ * `accountId` narrows the read to one of the brand's own accounts — the
+ * selector row above the report sends it. It is passed through as a hint only:
+ * the source resolves it against that brand's own scoped account list and
+ * ignores anything that is not in it, so a borrowed id reads nothing.
+ *
+ * Three answers, never two. `empty` on its own means a genuinely quiet period;
+ * `problem` means the read failed and is worth retrying; `notCollected` means
+ * nobody is gathering results for this business at all. The screen prints a
+ * different sentence for each, because acting on the wrong one is how a bad
+ * fortnight goes unnoticed at a health brand.
  */
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -28,6 +37,7 @@ export async function GET(req: NextRequest) {
   const platformParam = req.nextUrl.searchParams.get('platform')
   const fromParam = req.nextUrl.searchParams.get('from')
   const toParam = req.nextUrl.searchParams.get('to')
+  const accountIdParam = req.nextUrl.searchParams.get('accountId')
 
   if (!brandId) {
     return NextResponse.json({ error: 'brandId required' }, { status: 400 })
@@ -62,6 +72,7 @@ export async function GET(req: NextRequest) {
       from,
       to,
       socialUrls: brand.social_urls,
+      ...(accountIdParam ? { accountId: accountIdParam } : {}),
     })
     return NextResponse.json(metrics)
   } catch (err) {

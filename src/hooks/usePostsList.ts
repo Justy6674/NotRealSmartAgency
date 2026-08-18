@@ -44,6 +44,15 @@ export interface SocialPostAccount {
   id: string
   platform: string
   name: string
+  /**
+   * The handle, when the publisher reports one.
+   *
+   * Two of this owner's accounts — a Facebook page and an Instagram account —
+   * are both named "Scent Sell". The name alone cannot tell them apart in a
+   * filter, an avatar tooltip or a preview, so wherever an account is listed
+   * the handle is shown beside it.
+   */
+  username?: string
 }
 
 export interface SocialPostRow {

@@ -169,7 +169,12 @@ export type NavCountId = NavSectionId | 'social-waiting' | 'social-accounts'
  * has to be complete:
  *   blogging        — drafts not yet published
  *   engagement      — comments, messages and reviews not yet answered
- *   social-waiting  — posts sitting in the approval queue (Scent Sell: 59)
+ *   social-waiting  — posts an assistant wrote that the owner has not said yes
+ *                     to. NOT `status IN ('draft','failed')`, which is what it
+ *                     used to be: that put 68 on the badge while the screen it
+ *                     opens and the Posts tab beside it both offered 17. The
+ *                     one predicate is `isWaitingOnYou` in
+ *                     `@/lib/posts/desk-status` and nothing may restate it.
  *   social-accounts — connected accounts that have stopped being able to post.
  *                     Measured live on 2026-08-18: ten accounts, two in
  *                     warning, and the desk said everything was fine. An
@@ -609,6 +614,11 @@ export type SocialTabId = (typeof SOCIAL_TAB_IDS)[number]
  * waiting for you". The queue lives in the sidebar as "Waiting on you", where
  * it takes the attention colour. Two different claims, two different badges —
  * a 59 that reads like "59 templates" is a 59 nobody clears.
+ *
+ * `posts` is what the list's own "All" tab shows, which means it excludes the
+ * bin. It counted every row including `cancelled` and said 121 beside a list of
+ * 70: the badge was counting posts the owner had deleted. `countLivePosts` in
+ * `@/lib/posts/desk-status` is the one definition of "a post this business has".
  */
 export type SocialTabCountId = Extract<SocialTabId, 'posts' | 'media' | 'templates'>
 

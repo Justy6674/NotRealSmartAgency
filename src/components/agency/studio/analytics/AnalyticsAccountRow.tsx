@@ -23,6 +23,22 @@ import type { AnalyticsAccount } from './analytics-desk'
  * account nobody could check. The third is drawn as unmeasured rather than
  * flattered into working — that flattery is how an expiring connection stays
  * invisible until a post fails.
+ *
+ * ── And three states for the row itself ────────────────────────────────
+ * An empty row used to print one sentence: "nothing is connected". For most of
+ * these businesses that was false — they have accounts connected and posts
+ * published, and nobody was gathering the numbers. An empty row now says which
+ * of three things it means, and only one of them offers the connect button,
+ * because offering it to somebody whose accounts are already connected is a
+ * button that promises a fix it cannot deliver:
+ *
+ *   we could not look          → say so, no button
+ *   never set up for posting   → say so, offer the button
+ *   set up, none connected     → say so, offer the button
+ *
+ * When the accounts exist but nothing is measuring them, the row draws them —
+ * dimmed, with the reason underneath. They are real and the owner should see
+ * them; what is missing is the measuring, not the accounts.
  */
 
 const LINE = 'var(--line, oklch(0.915 0.007 240))'
@@ -47,6 +63,13 @@ export interface AnalyticsAccountRowProps {
   problem?: string | null
   /** False when this business has never had its accounts connected. */
   linked?: boolean
+  /**
+   * False when nobody is gathering results for this business. The accounts are
+   * still real and still drawn; only the figures are missing.
+   */
+  resultsCollected?: boolean
+  /** The owner-facing sentence for that, written server-side. */
+  notCollected?: string | null
 }
 
 function healthColour(account: AnalyticsAccount): string {
@@ -56,9 +79,12 @@ function healthColour(account: AnalyticsAccount): string {
   return INK_3
 }
 
-function healthWords(account: AnalyticsAccount): string {
+function healthWords(account: AnalyticsAccount, resultsCollected: boolean): string {
   if (account.health === 'error') return 'Needs reconnecting — it is not reporting anything.'
   if (account.health === 'warning') return 'Working, but something needs attention.'
+  // When nothing is being measured for the whole business, the account is not
+  // the thing at fault and must not be described as though it were.
+  if (!resultsCollected) return 'Connected. Nobody is gathering its results yet.'
   if (account.canFetchAnalytics === false) return 'Connected, but this one sends no figures back.'
   if (account.canFetchAnalytics === null) return 'We could not check this one just now.'
   return 'Reporting normally.'
@@ -76,6 +102,8 @@ export function AnalyticsAccountRow({
   loading = false,
   problem,
   linked = true,
+  resultsCollected = true,
+  notCollected = null,
 }: AnalyticsAccountRowProps) {
   if (loading) {
     return (
@@ -84,6 +112,25 @@ export function AnalyticsAccountRow({
         <span className="text-[12.5px]" style={{ color: INK_3 }}>
           Finding your accounts…
         </span>
+      </div>
+    )
+  }
+
+  // An empty row is never allowed to mean two things at once. A read that
+  // failed keeps its own sentence and no button — "connect an account" would
+  // be advice about a problem we have not established the owner has.
+  if (accounts.length === 0 && problem) {
+    return (
+      <div
+        className="flex flex-col items-start gap-[8px] rounded-[12px] p-[14px]"
+        style={{ border: `1px solid ${LINE}`, background: PANEL }}
+      >
+        <p className="text-[13px] font-[600]" style={{ color: BRAND_DEEP }}>
+          We could not check your accounts
+        </p>
+        <p className="text-[12.5px]" style={{ color: INK_3 }}>
+          {problem}
+        </p>
       </div>
     )
   }
@@ -133,14 +180,14 @@ export function AnalyticsAccountRow({
 
         {accounts.map((account) => {
           const active = selection.kind === 'account' && selection.accountId === account.id
-          const quiet = account.canFetchAnalytics === false
+          const quiet = !resultsCollected || account.canFetchAnalytics === false
           return (
             <button
               key={account.id}
               type="button"
               onClick={() => onSelect({ kind: 'account', accountId: account.id })}
               aria-pressed={active}
-              title={`${account.label} — ${healthWords(account)}`}
+              title={`${account.label} — ${healthWords(account, resultsCollected)}`}
               className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-[12px] transition-colors"
               style={{
                 border: `1px solid ${active ? BRAND : LINE}`,
@@ -182,6 +229,14 @@ export function AnalyticsAccountRow({
           : (accounts.find((a) => selection.kind === 'account' && a.id === selection.accountId)
               ?.label ?? 'One account')}
       </p>
+
+      {/* Connected, unmeasured. Said once here rather than repeated under every
+          panel, and said as the standing fact it is rather than as a failure. */}
+      {!resultsCollected && notCollected ? (
+        <p className="text-[11.5px]" style={{ color: INK_3 }}>
+          {notCollected}
+        </p>
+      ) : null}
 
       {problem ? (
         <p className="text-[11.5px]" style={{ color: WARN }}>

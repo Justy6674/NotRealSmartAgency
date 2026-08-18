@@ -9,23 +9,43 @@
  * screen looked like a quiet month rather than a broken pipe. The figures were
  * live upstream the whole time.
  *
- * Three sources, one seam. A brand linked to a publisher profile is answered
- * from its own accounts; Mixpost answers the rest; the stub answers a
- * deployment with neither. `getMetricsSource()` is the only place that chooses.
+ * Two sources, one seam. A brand linked to a publisher profile is answered from
+ * its own accounts. Every other brand is answered "not collected here yet",
+ * which is the measured truth — see below. `getMetricsSource()` is the only
+ * place that chooses.
  *
- * ── Honest emptiness ───────────────────────────────────────────────────
- * `empty: true` means "there is nothing to show". `problem` means "we could not
- * look". A report that cannot tell those apart tells a health brand its quiet
- * week was a quiet week when nobody actually read the numbers, so both are
- * carried separately and the shell prints whichever applies.
+ * ── Why the fallback publisher no longer answers ───────────────────────
+ * It used to. Twelve of the fourteen businesses fell through to the
+ * self-hosted publisher's `reports` endpoint, which returned
+ * `404 … could not be found` on EVERY platform, every time. The catch then
+ * produced an empty measurement with nothing set on it, so the screen said
+ * "nothing is connected" to a health brand that has accounts connected and
+ * posts published. That is the worst sentence this desk can print.
+ *
+ * Measured against the live instance on 2026-08-19, with a valid token:
+ *   GET /api/{workspace}/accounts  → 200, the real list
+ *   GET /api/{workspace}/posts     → 200
+ *   GET /api/{workspace}/tags      → 200
+ *   GET /api/{workspace}/reports   → 404   (also /report, /insights,
+ *   /statistics, /stats, /metrics, /analytics, /audience, /accounts/{id}/…)
+ *
+ * The path was wrong too — it omitted the `/api` segment every other call
+ * uses — but fixing it changes nothing: this build exposes no results
+ * endpoint at all. There is no figure to fetch, so the honest answer is that
+ * results are not collected for this business yet, and that is what is
+ * returned. Do not reinstate a metrics call here without first getting a 200
+ * out of the live instance.
+ *
+ * ── Honest emptiness: three states, never two ──────────────────────────
+ * `empty: true` alone means "there is nothing to show". `problem` means "we
+ * tried and could not look" — transient, worth retrying. `notCollected` means
+ * "results are not gathered for this business at all" — a real, standing
+ * answer with a different action attached. A report that cannot tell the three
+ * apart tells a health brand its quiet week was a quiet week when nobody
+ * actually read the numbers.
  */
 
 import type { PlatformKey } from '@/lib/mixpost/ui-tokens'
-import {
-  fetchMixpostReports,
-  fetchMixpostAccounts,
-  type MixpostAccount,
-} from '@/lib/mixpost/client'
 import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
 import { fetchZernioAccounts } from '@/lib/zernio/client'
 import { zernioOwnerMessage } from '@/lib/zernio/errors'
@@ -85,6 +105,17 @@ export interface PlatformMetrics {
    * for the owner rather than copied from upstream.
    */
   problem?: string
+  /**
+   * Set when results are not gathered for this business at all — the standing
+   * answer for every brand that is not linked to a results-capable profile.
+   *
+   * It is neither `problem` (a failed read, worth retrying) nor bare `empty`
+   * (a genuinely quiet period). Screens must print this sentence rather than
+   * "nothing is connected": these businesses do have accounts connected and
+   * posts published, and telling a health brand otherwise is the fault this
+   * field exists to close.
+   */
+  notCollected?: string
   /** Headline numbers. Any field may be undefined depending on platform. */
   totals: {
     reach?: number
@@ -128,6 +159,15 @@ export interface MetricsSourceParams {
   /** ISO date (YYYY-MM-DD) */
   to: string
   socialUrls?: unknown
+  /**
+   * One of this brand's own accounts, when the reader has picked one.
+   *
+   * Null or absent means "everything this brand has on that platform", which
+   * is the first matching account. A supplied id is checked against the
+   * brand's OWN scoped list before it is used — isolation is ours, so an id
+   * from another customer matches nothing and reads nothing.
+   */
+  accountId?: string | null
 }
 
 export type MetricsSource = (
@@ -135,19 +175,6 @@ export type MetricsSource = (
 ) => Promise<PlatformMetrics>
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-const PLATFORM_TO_PROVIDERS: Record<PlatformKey, string[]> = {
-  facebook: ['facebook_page', 'facebook_group'],
-  instagram: ['instagram'],
-  linkedin: ['linkedin', 'linkedin_page'],
-  twitter: ['x', 'twitter'],
-  tiktok: ['tiktok'],
-  youtube: ['youtube'],
-  pinterest: ['pinterest'],
-  threads: ['threads'],
-  bluesky: ['bluesky'],
-  mastodon: ['mastodon'],
-}
 
 function emptyMetrics(
   platform: PlatformKey,
@@ -167,34 +194,37 @@ function emptyMetrics(
   }
 }
 
-function findAccountForPlatform(
-  accounts: MixpostAccount[],
-  platform: PlatformKey
-): MixpostAccount | null {
-  const providers = PLATFORM_TO_PROVIDERS[platform]
-  return accounts.find((a) => providers.includes(a.provider)) ?? null
-}
+/**
+ * The sentence a business reads when nobody is gathering its results.
+ *
+ * No vendor, no endpoint, no department — and deliberately not "connect an
+ * account", because these businesses already have accounts connected. The
+ * thing that is missing is the measuring, and saying so is the whole point.
+ *
+ * It also promises nothing. An earlier draft said the Director would set this
+ * up, which is a fill this product cannot currently deliver; the owner is
+ * pointed at the one place they can ask, and told the truth about the state.
+ */
+export const RESULTS_NOT_COLLECTED =
+  'Results are not being collected for this business yet. Your posts are going out as normal — ' +
+  'nobody is gathering the numbers behind them, so there is nothing to show here. ' +
+  'Ask in chat if you would like results turned on for this business.'
 
-function periodFromRange(from: string, to: string): string {
-  const start = new Date(from)
-  const end = new Date(to)
-  const days = Math.max(
-    1,
-    Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-  )
-  // Mixpost period codes — fall back to "month" for anything > 28 days.
-  if (days <= 7) return 'week'
-  if (days <= 31) return 'month'
-  return 'quarter'
-}
-
-function safeNum(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value === 'string') {
-    const n = Number(value)
-    return Number.isFinite(n) ? n : undefined
+function notCollectedMetrics(
+  platform: PlatformKey,
+  from: string,
+  to: string
+): PlatformMetrics {
+  return {
+    platform,
+    from,
+    to,
+    empty: true,
+    notCollected: RESULTS_NOT_COLLECTED,
+    totals: {},
+    timeseries: {},
+    topPosts: [],
   }
-  return undefined
 }
 
 /** Normalise a platform name to the keys this UI uses. */
@@ -245,6 +275,36 @@ function sum(points: MetricTimeseriesPoint[] | undefined): number | undefined {
   return points.reduce((total, point) => total + point.value, 0)
 }
 
+/**
+ * Which of this brand's accounts a report is for.
+ *
+ * ── Two faults, one function ───────────────────────────────────────────
+ * The picker above the report used to change almost nothing. The report came
+ * through a `.find()` that always took the FIRST account on the platform, so a
+ * business with two pages on one channel saw the same page whichever it
+ * pressed — a control that looks like it works, which is worse than no control.
+ *
+ * And the id it now carries is resolved HERE, against the brand's own already
+ * scoped list, rather than handed upstream on trust. The publisher validates
+ * account ids against the whole team, not against a profile, so an id from
+ * another customer would be accepted there. Here it simply matches nothing and
+ * the report comes back empty — which is the truth from this brand's side.
+ * Isolation is ours; a profile is an organisational boundary, not a security one.
+ *
+ * `null` in, first match out. That is the summary view and it is deliberate.
+ */
+export function selectAccountForReport<T extends { id: string; platform: string }>(
+  accounts: T[],
+  platform: string,
+  accountId: string | null,
+): T | null {
+  const onPlatform = accounts.filter(
+    (account) => platformKeyOf(account.platform) === platform
+  )
+  if (!accountId) return onPlatform[0] ?? null
+  return onPlatform.find((account) => account.id === accountId) ?? null
+}
+
 // ── Publisher-profile source (a brand linked to its own accounts) ───────────
 
 const zernioMetricsSource: MetricsSource = async ({
@@ -252,15 +312,16 @@ const zernioMetricsSource: MetricsSource = async ({
   from,
   to,
   socialUrls,
+  accountId,
 }) => {
   const profileId = zernioProfileIdFromSocialUrls(socialUrls)
   if (!profileId || !process.env.ZERNIO_API_KEY) {
-    return emptyMetrics(platform, from, to)
+    return notCollectedMetrics(platform, from, to)
   }
 
   try {
     const accounts = await fetchZernioAccounts(profileId)
-    const match = accounts.find((account) => platformKeyOf(account.platform) === platform)
+    const match = selectAccountForReport(accounts, platform, accountId ?? null)
     if (!match) return emptyMetrics(platform, from, to)
 
     // Four reads, none of which depends on another. `allSettled` because one
@@ -410,86 +471,37 @@ const zernioMetricsSource: MetricsSource = async ({
   }
 }
 
-// ── Mixpost-backed source (fallback for brands without a publisher profile) ─
+// ── The rest of the brands ─────────────────────────────────────────────────
 
-const mixpostMetricsSource: MetricsSource = async ({
-  platform,
-  from,
-  to,
-}) => {
-  const accounts = (await fetchMixpostAccounts()) ?? []
-  const account = findAccountForPlatform(accounts, platform)
-
-  if (!account) {
-    return emptyMetrics(platform, from, to)
-  }
-
-  const period = periodFromRange(from, to)
-  const report = await fetchMixpostReports(account.id, period)
-
-  if (!report || !report.metrics) {
-    return emptyMetrics(platform, from, to)
-  }
-
-  const m = report.metrics as Record<string, unknown>
-
-  // Mixpost reports have wildly different shapes per platform — coerce
-  // gently and fall through to undefined for fields the platform doesn't
-  // expose. Components must handle missing fields gracefully.
-  const totals: PlatformMetrics['totals'] = {
-    reach: safeNum(m.reach ?? m.total_reach),
-    impressions: safeNum(m.impressions ?? m.total_impressions),
-    engagement: safeNum(m.engagement ?? m.total_engagement),
-    followers: safeNum(m.followers ?? m.followers_count),
-    followerGrowth: safeNum(m.follower_growth ?? m.new_followers),
-    profileVisits: safeNum(m.profile_visits),
-    clicks: safeNum(m.clicks ?? m.link_clicks),
-    videoViews: safeNum(m.video_views ?? m.views),
-    watchTimeSeconds: safeNum(m.watch_time ?? m.watch_time_seconds),
-    saves: safeNum(m.saves),
-    shares: safeNum(m.shares),
-    comments: safeNum(m.comments),
-    likes: safeNum(m.likes),
-  }
-
-  const hasAnyTotal = Object.values(totals).some((v) => v !== undefined)
-
-  // The self-hosted reports endpoint returns headline numbers only — no daily
-  // series and no per-post table. Stated here rather than left as an empty
-  // object, so the shell can say "not collected on this channel" instead of
-  // drawing a frame around nothing.
-  return {
-    platform,
-    from,
-    to,
-    empty: !hasAnyTotal,
-    totals,
-    timeseries: {},
-    topPosts: [],
-  }
-}
-
-// ── Stub source (used when no publisher is configured at all) ───────────────
-
-const stubMetricsSource: MetricsSource = async ({ platform, from, to }) => {
-  return emptyMetrics(platform, from, to)
-}
+/**
+ * Every brand that is not linked to a results-capable profile.
+ *
+ * This used to call the self-hosted publisher's `reports` endpoint. That
+ * endpoint does not exist on the running build — see the note at the top of
+ * this file for the measurement — so the call 404'd on every platform and the
+ * failure was returned as an ordinary empty measurement, which the screen drew
+ * as "nothing is connected". Twelve of fourteen businesses read that, and it
+ * was false for the ones with accounts connected and posts published.
+ *
+ * There is nothing to ask, so nothing is asked, and the answer says exactly
+ * that. It is the same answer whether the deployment has a publisher
+ * configured or not, because in neither case is anyone measuring.
+ */
+const uncollectedMetricsSource: MetricsSource = async ({ platform, from, to }) =>
+  notCollectedMetrics(platform, from, to)
 
 // ── Public ─────────────────────────────────────────────────────────────────
 
 /**
  * Returns the metrics source for a given brand. A linked brand is answered
- * from its own publisher accounts (filtered in our code). Mixpost is the
- * fallback for every other brand.
+ * from its own publisher accounts (filtered in our code). Every other brand is
+ * told plainly that its results are not collected yet.
  */
 export function getMetricsSource(params: MetricsSourceParams): MetricsSource {
   if (zernioProfileIdFromSocialUrls(params.socialUrls) && process.env.ZERNIO_API_KEY) {
     return zernioMetricsSource
   }
-  if (process.env.NEXT_PUBLIC_MIXPOST_DISABLED === 'true') {
-    return stubMetricsSource
-  }
-  return mixpostMetricsSource
+  return uncollectedMetricsSource
 }
 
 /** Convenience wrapper used by the hook. */

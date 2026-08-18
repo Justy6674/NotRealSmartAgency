@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Search, ChevronDown, X, Calendar as CalendarIcon } from 'lucide-react'
-import { isPostablePlatform } from './PlatformGlyph'
+import { PlatformGlyph, isPostablePlatform } from './PlatformGlyph'
+import { accountHandle } from './account-identity'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,7 +16,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ownerFacingPlatformLabel } from '@/lib/studio/social-read-source'
 import type { PostLabel } from '@/lib/posts/post-labels'
 import type {
   PostsListFilters,
@@ -208,10 +208,16 @@ export function PostsFilters({
                     toggleIn('accountIds', account.id)
                   }}
                 >
-                  <span className="truncate">
-                    {account.name}
-                    <span className="ml-1 text-muted-foreground">
-                      {ownerFacingPlatformLabel(account.platform)}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <PlatformGlyph platform={account.platform} size={12} />
+                    <span className="truncate">{account.name}</span>
+                    {/* The handle, not just the network. Two of this owner's
+                        accounts are both called "Scent Sell" — one a Facebook
+                        page, one an Instagram account — so a list showing the
+                        name alone asks him to choose between two identical
+                        rows. */}
+                    <span className="truncate text-muted-foreground">
+                      {accountHandle(account)}
                     </span>
                   </span>
                 </DropdownMenuCheckboxItem>

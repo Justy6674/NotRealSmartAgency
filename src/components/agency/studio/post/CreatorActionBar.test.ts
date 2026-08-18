@@ -36,3 +36,36 @@ test('composer copy never names the plumbing', () => {
   }
   void blob
 })
+
+/**
+ * The second way out of the composer used to be a dead button.
+ *
+ * It took a bare time, could not see what was already scheduled, and when no
+ * posting times were set at all it simply greyed itself out behind a tooltip.
+ * These pin the three things that made it real: the time is ON the button, an
+ * unset week becomes the way to go and set one, and a time typed by hand is
+ * read in the BUSINESS's zone rather than the laptop's.
+ */
+test('the next free time is named on the button, not hidden in a tooltip', () => {
+  assert.match(bar, /Add to next free time/)
+  assert.match(bar, /\{nextLabel\}/)
+})
+
+test('no posting times offers a way to set some, never a dead button', () => {
+  assert.match(bar, /Set your posting times/)
+  assert.match(bar, /setTimesHref/)
+})
+
+test('a time picked by hand is read in the business zone and refuses the past', () => {
+  assert.match(bar, /zonedDateTimeToUtc/)
+  assert.match(bar, /has already gone by/)
+  assert.match(bar, /disabled=\{disabled \|\| !chosen \|\| chosenIsPast\}/)
+})
+
+test('a post given a posting time carries it back to the row', () => {
+  // The row owns the time it was given, so the next post is offered the one
+  // after it — `queue_slot_id` was permanently null before this.
+  assert.match(bar, /slotIdByPlatform: nextFree\.slotIdByPlatform/)
+  assert.match(creator, /queue_slot_id/)
+  assert.match(creator, /next-free-time/)
+})

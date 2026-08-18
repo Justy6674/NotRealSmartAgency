@@ -55,8 +55,13 @@ import { SocialHangOffs } from '@/components/agency/social/SocialHangOffs'
  * The channel strip used to be ten fixed tabs written out by hand, all of them
  * always present. A business with one connected page saw nine dead tabs. The
  * strip is now built from the connected accounts, so an empty screen carries
- * the reason it is empty and the way to change it — which is the true state for
- * twelve of the fourteen businesses on this desk.
+ * the reason it is empty and the way to change it.
+ *
+ * Twelve of the fourteen businesses are not linked to a results profile, and
+ * this screen used to tell them "nothing is connected". Most of them do have
+ * accounts connected and posts published — nobody is gathering the numbers.
+ * The row draws their real accounts and every panel below says which of the
+ * two it means.
  *
  * X is not part of this product and appears nowhere on it.
  *
@@ -221,7 +226,12 @@ export default function SocialAnalyticsPage() {
         </p>
       ) : null}
 
-      {accountsState.accounts.length > 0 ? (
+      {/* Freshness, and the way to bring in a post published by hand. Both only
+          mean anything where results are actually being collected — for the
+          businesses nobody measures, "last collected" has no answer and
+          "bring this post in" is a button with nowhere to put it. A control
+          that cannot work is not offered. */}
+      {accountsState.accounts.length > 0 && accountsState.resultsCollected ? (
         <AnalyticsSyncProgress
           brandId={activeBrandId}
           sync={sync}
@@ -239,11 +249,34 @@ export default function SocialAnalyticsPage() {
         loading={accountsState.loading}
         problem={accountsState.problem}
         linked={accountsState.linked}
+        resultsCollected={accountsState.resultsCollected}
+        notCollected={accountsState.notCollected}
       />
 
       {selection.kind === 'account' && selectedAccount ? (
         (() => {
           const channel = channelOf(selectedAccount.platform)
+          if (!accountsState.resultsCollected) {
+            // Nobody is gathering figures for this business, so every panel
+            // below would be a frame around nothing. One sentence instead.
+            return (
+              <div
+                className="rounded-[12px] p-[14px]"
+                style={{
+                  border: '1px solid var(--line, oklch(0.915 0.007 240))',
+                  background: 'var(--panel, oklch(1 0 0))',
+                }}
+              >
+                <p className="text-[13px] font-[600]" style={{ color: BRAND_DEEP }}>
+                  {selectedAccount.label} — no results collected yet
+                </p>
+                <p className="mt-[6px] text-[12.5px]" style={{ color: INK_3 }}>
+                  {accountsState.notCollected ??
+                    'Results are not being collected for this business yet, so there is nothing to show for this account.'}
+                </p>
+              </div>
+            )
+          }
           if (!channel) {
             // A channel with no post-level report of its own — a business
             // listing, for instance. Its own figures are still worth showing,

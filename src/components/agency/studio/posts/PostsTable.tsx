@@ -27,6 +27,7 @@ import type { MediaItem } from '@/types/database'
 import { ownerReceiptLine } from '@/lib/publishers/receipts'
 import { PostStatusChip } from './PostStatusDot'
 import { PlatformGlyph, isPostablePlatform } from './PlatformGlyph'
+import { accountHandle, accountIdentityLine } from './account-identity'
 import { LabelChip, PostLabelPicker } from './PostLabelPicker'
 import type { PostLabel } from '@/lib/posts/post-labels'
 import type { SocialPostRow } from '@/hooks/usePostsList'
@@ -156,19 +157,22 @@ function AccountAvatar({ platform, title }: { platform: string; title: string })
 }
 
 function AccountsCell({ post, onPreview }: { post: SocialPostRow; onPreview: () => void }) {
-  // A post with accounts names them. One with only a platform (a desk row that
-  // has not gone out yet, so no account has been picked) shows the platform,
-  // which is all that is actually known.
+  // A post with accounts names them — drafts included, now that a desk row
+  // carries the accounts it is going to rather than an empty array. One where
+  // the accounts genuinely are not known (several connected on that network and
+  // nothing ticked) still shows the network, which is all that is true.
   const entries = (
     post.accounts.length > 0
       ? post.accounts.map((account) => ({
           key: account.id,
           platform: account.platform,
-          title: `${account.name} · ${ownerFacingPlatformLabel(account.platform)}`,
+          handle: accountHandle(account),
+          title: accountIdentityLine(account),
         }))
       : post.platforms.map((platform) => ({
           key: platform,
           platform,
+          handle: null,
           title: ownerFacingPlatformLabel(platform),
         }))
   ).filter((entry) => isPostablePlatform(entry.platform))
@@ -178,39 +182,57 @@ function AccountsCell({ post, onPreview }: { post: SocialPostRow; onPreview: () 
 
   if (entries.length === 0) return <span className="text-[12px] text-muted-foreground">—</span>
 
+  // The handle in plain sight, not only in a tooltip. Two of this owner's
+  // accounts are both called "Scent Sell", and a hover title is nothing at all
+  // to someone reading the list on a phone or with a keyboard.
+  const named = entries.filter((entry) => entry.handle)
+  const handleLine =
+    named.length === 0
+      ? null
+      : named.length === 1
+        ? named[0]!.handle
+        : `${named[0]!.handle} +${named.length - 1}`
+
   return (
-    <div className="flex items-center">
-      <button
-        type="button"
-        onClick={onPreview}
-        aria-label="Open this post"
-        className="flex items-center -space-x-2"
-      >
-        {shown.map((entry) => (
-          <AccountAvatar key={entry.key} platform={entry.platform} title={entry.title} />
-        ))}
-      </button>
-      {rest.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={(triggerProps) => (
-              <button
-                {...triggerProps}
-                type="button"
-                className="ml-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground hover:text-foreground"
-              >
-                +{rest.length}
-              </button>
-            )}
-          />
-          <DropdownMenuContent align="end" className="w-64">
-            {rest.map((entry) => (
-              <DropdownMenuItem key={entry.key} closeOnClick={false}>
-                <span className="truncate">{entry.title}</span>
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+    <div className="flex flex-col items-start gap-0.5">
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={onPreview}
+          aria-label={`Open this post — ${entries.map((entry) => entry.title).join(', ')}`}
+          className="flex items-center -space-x-2"
+        >
+          {shown.map((entry) => (
+            <AccountAvatar key={entry.key} platform={entry.platform} title={entry.title} />
+          ))}
+        </button>
+        {rest.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={(triggerProps) => (
+                <button
+                  {...triggerProps}
+                  type="button"
+                  className="ml-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground hover:text-foreground"
+                >
+                  +{rest.length}
+                </button>
+              )}
+            />
+            <DropdownMenuContent align="end" className="w-64">
+              {rest.map((entry) => (
+                <DropdownMenuItem key={entry.key} closeOnClick={false}>
+                  <span className="truncate">{entry.title}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+      {handleLine && (
+        <span className="max-w-[120px] truncate text-[11px] leading-tight text-muted-foreground">
+          {handleLine}
+        </span>
       )}
     </div>
   )

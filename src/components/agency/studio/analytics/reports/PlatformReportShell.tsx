@@ -39,9 +39,11 @@ export interface PlatformReportShellProps {
   /** How far back to measure. Chosen once at the top of the screen. */
   period?: AnalyticsPeriod
   /**
-   * The account this channel is being read for, when one is selected. Only the
-   * account's own extra figures need it — the post figures are already scoped
-   * to the business.
+   * The account this channel is being read for, when one is selected.
+   *
+   * It governs the whole report, not just the side panel. It used to reach
+   * only the panel, so a business with two pages on one channel could press
+   * either and see the same numbers — a control that looks like it works.
    */
   accountId?: string | null
 }
@@ -76,6 +78,13 @@ const BRAND_DEEP = 'var(--brand-deep, oklch(0.33 0.0209 240))'
  * report is never quietly a different length of time from the summary above it.
  * And a post can be opened to see its own curve, which is the only way to tell
  * a post that did well and stopped from one that kept earning for a fortnight.
+ *
+ * ── Three empty states, and only one of them offers the button ──────────
+ * "We could not look", "nobody is measuring this business", and "nothing is
+ * connected" are three different answers. This panel used to print the third
+ * for all three, and for most businesses on this desk the third was false —
+ * they have accounts connected and posts published. The connect button appears
+ * only on the one where connecting is actually the missing step.
  */
 export function PlatformReportShell({
   platform,
@@ -93,6 +102,10 @@ export function PlatformReportShell({
     platform,
     from: range.from,
     to: range.to,
+    // The selector row's choice reaches the report itself now, not only the
+    // panel at the bottom. Without it, pressing a second account redrew one
+    // card out of eight and left the rest showing the first account's figures.
+    accountId,
   })
   const [openPostId, setOpenPostId] = useState<string | null>(null)
   const colour = PLATFORM_BRAND_COLOURS[platform]
@@ -156,9 +169,29 @@ export function PlatformReportShell({
     )
   }
 
-  // Most businesses are legitimately here: twelve of fourteen have nothing
-  // connected. It is a real answer with an action attached, never an empty
-  // chart pretending to be a measurement.
+  // Connected, and nobody is gathering the numbers. This is the answer for
+  // most of the businesses on this desk, and it is emphatically NOT "nothing
+  // is connected" — saying that to a health brand with live accounts and
+  // published posts is how an owner stops believing the rest of the screen.
+  // No connect button: their accounts are already connected.
+  if (report?.notCollected) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: colour }} />
+          <p className="text-sm font-medium text-foreground">
+            No {label} results are being collected yet
+          </p>
+          <p className="text-xs max-w-md" style={{ color: INK_3 }}>
+            {report.notCollected}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Genuinely nothing connected on this channel. A real answer with an action
+  // attached, never an empty chart pretending to be a measurement.
   if (!report || report.empty) {
     return (
       <Card>

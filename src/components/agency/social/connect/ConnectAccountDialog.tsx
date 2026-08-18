@@ -451,8 +451,16 @@ export function ConnectAccountDialog({
           return
         }
 
-        // A 4xx here means the code is dead, not that the owner is slow.
-        if (!res.ok && res.status !== 404) {
+        /*
+         * Anything but ok stops it.
+         *
+         * The route answers 200 with `connected: false` for "not yet", so a
+         * failure status here is never impatience — it is an expired code, a
+         * screen left open past its window, or a code that has been replaced.
+         * Each of those carries its own sentence saying what to do, and each is
+         * shown rather than being polled through.
+         */
+        if (!res.ok) {
           stopped = true
           fail(data?.error ?? COULD_NOT_FINISH, platformLabel)
           return

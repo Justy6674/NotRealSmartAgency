@@ -82,9 +82,15 @@ test('the dead slot-assignment writer stays gone', () => {
   const exported = source.match(/^export\s+(?:async\s+)?function\s+(\w+)/gm) ?? []
   assert.deepEqual(
     exported.map((line) => line.split(/\s+/).pop()),
-    ['nextOccurrence', 'earliestNextSlot'],
-    'assign-to-slot.ts may only export the date arithmetic the composer reads for its hint',
+    ['nextOccurrence', 'earliestNextSlot', 'zonedDateTimeToUtc'],
+    'assign-to-slot.ts may only export date arithmetic — never a slot-assignment writer',
   )
+  // `zonedDateTimeToUtc` joined the list when the composer's "Choose a time"
+  // picker needed to read a typed wall clock as the BUSINESS's time. It is the
+  // same arithmetic `nextOccurrence` already used, exported rather than copied,
+  // because a second timezone implementation is how the southern states came to
+  // read an hour wrong for five months of the year. The invariant this test
+  // exists for is unchanged and asserted below: nothing here writes a slot.
   // The history is described in the docblock on purpose, so the match is for a
   // write — `queue_slot_id:` in an update payload — not for the words.
   assert.ok(

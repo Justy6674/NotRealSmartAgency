@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Plus, Sparkles, Hash } from 'lucide-react'
-import { sendToDirector } from '@/lib/chat-dispatch'
+import { X, Sparkles, Hash, Loader2, Check } from 'lucide-react'
 import { HashtagGroupPicker } from '../hashtags/HashtagGroupPicker'
 import type { PostPlatform } from '@/types/database'
 
@@ -22,12 +21,35 @@ const PLATFORM_HASHTAG_LIMITS: Record<string, number> = {
   youtube: 15,
 }
 
+/**
+ * The Suggest button, and whether the answer has landed in the box below it.
+ *
+ * The button used to hand a sentence to the Director and stop there. There was
+ * no reply handler and `onChange` was never called, so the tags arrived as text
+ * in the chat and the owner had to read them off and retype them one at a time —
+ * under a button sitting directly above the tag input, which reads as "fill this
+ * box". A button that promises a fill must fill.
+ *
+ * The fill happens through the same route the Director uses for everything else
+ * it puts on this screen, so the composer — not this card — is what hears the
+ * answer arrive. This card is handed the state and shows it: nothing here
+ * guesses, and `filledAt` is only ever set when tags actually changed.
+ *
+ * Omit `suggest` and no button is drawn at all. A control that cannot work must
+ * not be offered.
+ */
+export interface HashtagSuggestState {
+  onAsk: () => void
+  askedAt: string | null
+  filledAt: string | null
+}
+
 interface HashtagSectionProps {
   brandId: string
   hashtags: string[]
   onChange: (hashtags: string[]) => void
   selectedPlatforms: PostPlatform[]
-  caption?: string
+  suggest?: HashtagSuggestState
   /** Parent card already supplies the section title */
   embedded?: boolean
 }
@@ -37,7 +59,7 @@ export function HashtagSection({
   hashtags,
   onChange,
   selectedPlatforms,
-  caption,
+  suggest,
   embedded = false,
 }: HashtagSectionProps) {
   const [inputValue, setInputValue] = useState('')
@@ -61,13 +83,6 @@ export function HashtagSection({
     }
   }
 
-  const handleAiSuggest = () => {
-    const prompt = caption
-      ? `Suggest 10 relevant hashtags for this post: "${caption.slice(0, 200)}". Return just the hashtags.`
-      : 'Suggest 10 trending, relevant hashtags for my brand. Return just the hashtags.'
-    sendToDirector(prompt)
-  }
-
   const handleGroupInsert = (tags: string[]) => {
     const newTags = tags.filter(t => !hashtags.includes(t.replace(/^#/, '').toLowerCase()))
     onChange([...hashtags, ...newTags.map(t => t.replace(/^#/, '').toLowerCase())])
@@ -80,6 +95,13 @@ export function HashtagSection({
   }, 30)
 
   const isOverLimit = hashtags.length > tightestLimit
+
+  const waitingOnDirector = Boolean(suggest?.askedAt) && !suggest?.filledAt
+  const suggestLabel = suggest?.filledAt
+    ? 'Suggest again'
+    : waitingOnDirector
+      ? 'Asked'
+      : 'Suggest'
 
   return (
     <div className="space-y-3">
@@ -150,21 +172,41 @@ export function HashtagSection({
             }}
           />
         </div>
-        <button
-          type="button"
-          onClick={handleAiSuggest}
-          className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
-          style={{
-            borderColor: 'var(--line)',
-            background: 'var(--panel)',
-            color: 'var(--ink)',
-          }}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          Suggest
-        </button>
+        {suggest && (
+          <button
+            type="button"
+            data-testid="hashtag-suggest"
+            onClick={suggest.onAsk}
+            className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+            style={{
+              borderColor: waitingOnDirector ? 'var(--brand)' : 'var(--line)',
+              background: waitingOnDirector ? 'var(--brand-wash)' : 'var(--panel)',
+              color: waitingOnDirector ? 'var(--brand-deep)' : 'var(--ink)',
+            }}
+          >
+            {waitingOnDirector ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : suggest.filledAt ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {suggestLabel}
+          </button>
+        )}
         <HashtagGroupPicker brandId={brandId} onInsert={handleGroupInsert} />
       </div>
+
+      {/* What the press actually did. Said out loud because the answer comes
+          back from somewhere else on the screen, and a box that does not change
+          for a few seconds otherwise reads as a button that did nothing. */}
+      {suggest?.askedAt && (
+        <p className="text-[11px] leading-[1.5]" style={{ color: 'var(--ink-3)' }}>
+          {suggest.filledAt
+            ? `The Director’s tags landed at ${suggest.filledAt}. Remove any you do not want, or add your own.`
+            : `Asked at ${suggest.askedAt}. The tags drop into this box on their own when the answer comes back — nothing has changed here yet. If they come back written out in the chat instead, type the ones you want above.`}
+        </p>
+      )}
 
       {/* Platform limits info */}
       {selectedPlatforms.length > 1 && (

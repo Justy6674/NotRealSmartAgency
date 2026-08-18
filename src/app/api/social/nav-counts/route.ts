@@ -7,6 +7,7 @@ import { fetchZernioAccountsHealth, listZernioAccounts } from '@/lib/zernio/acco
 import { listZernioPosts } from '@/lib/zernio/posts'
 import { fetchMixpostAccounts } from '@/lib/mixpost/client'
 import { mapMixpostAccountsToBrands } from '@/lib/mixpost/brand-mapping'
+import { countLivePosts, countWaitingOnYou, type DeskStatusRow } from '@/lib/posts/desk-status'
 import type { NavCounts, NavCountsPayload, SocialTabCountId } from '@/components/agency/shell/nav-sections'
 
 export const dynamic = 'force-dynamic'
@@ -34,6 +35,18 @@ export const dynamic = 'force-dynamic'
  * layer, which re-filters to this profile's own accounts in OUR code — a Zernio
  * profile is an organisational boundary, never a security one.
  *
+ * ── One definition per number ─────────────────────────────────────────
+ * A count must mean what its label says, and two labels reading the same words
+ * must mean the same thing. "Waiting on you" here used to be
+ * `status IN ('draft','failed')` — 68 posts — while the Posts screen beside it
+ * showed the 17 an assistant had written and the owner had not yet approved.
+ * Both were called "Waiting on you". Neither route knew the other existed.
+ *
+ * So neither number is computed here any more: `@/lib/posts/desk-status` owns
+ * the derivation and the screen reads the same functions. Same rule for the
+ * Posts badge, which counted 121 rows beside a list showing 70 because 51 of
+ * them were in the bin.
+ *
  * ── Honesty ───────────────────────────────────────────────────────────
  * A number that could not be read is ABSENT, never 0. Absent renders bare;
  * zero renders "nothing is waiting", which is a claim we have not earned. Each
@@ -41,13 +54,52 @@ export const dynamic = 'force-dynamic'
  * account subtitle and nothing else.
  */
 
-/** Posts that stop until the owner decides. Drafts and failures both do. */
-const WAITING_STATUSES = ['draft', 'failed']
+/**
+ * How many of this business's posts we will read to count them.
+ *
+ * The two numbers this route puts beside "Waiting on you" and "Posts" cannot
+ * be asked of Postgres as a `count`, because neither is a value in the status
+ * column: one is derived per row (see `@/lib/posts/desk-status`) and the other
+ * has to skip the bin. So the rows come back and we count them here, using the
+ * SAME function the screen uses.
+ *
+ * That means the walk is bounded, and a business with more history than the
+ * bound has a real count we have not earned the right to state. It gets
+ * `undefined` and the badge renders bare — see the honesty note above. The cap
+ * is far above the largest live business (121 rows on 2026-08-18).
+ */
+const POST_ROW_CAP = 2000
 
 function countOf(result: PromiseSettledResult<{ count: number | null; error: unknown }>): number | undefined {
   if (result.status !== 'fulfilled') return undefined
   if (result.value.error) return undefined
   return typeof result.value.count === 'number' ? result.value.count : undefined
+}
+
+interface DeskPostCounts {
+  /** Posts that are not in the bin — the number the "All" tab shows. */
+  posts?: number
+  /** Posts an assistant wrote that the owner has not said yes to. */
+  waiting?: number
+}
+
+/**
+ * Both desk numbers, from one read of the rows.
+ *
+ * Absent rather than wrong whenever we did not see every row: `count` is the
+ * true total from Postgres, so if fewer rows came back than it reports, the cap
+ * truncated us and any number we produced would be a floor presented as exact.
+ */
+function deskCountsFrom(
+  result: PromiseSettledResult<{ data: DeskStatusRow[] | null; count: number | null; error: unknown }>,
+): DeskPostCounts {
+  if (result.status !== 'fulfilled') return {}
+  if (result.value.error) return {}
+  const rows = result.value.data
+  if (!Array.isArray(rows)) return {}
+  const total = result.value.count
+  if (typeof total === 'number' && total > rows.length) return {}
+  return { posts: countLivePosts(rows), waiting: countWaitingOnYou(rows) }
 }
 
 function accountsLine(count: number): string {
@@ -131,16 +183,16 @@ export async function GET(request: Request) {
 
     // Our own tables first. These are cheap, indexed, and they are the numbers
     // that must not depend on a publisher being reachable.
-    const [waiting, postsTotal, mediaTotal, templatesTotal] = await Promise.allSettled([
+    //
+    // The posts row is a SELECT rather than a head-count because both numbers
+    // it feeds are derived per row and neither exists as a status value. One
+    // read, one derivation, so the badge and the screen cannot drift apart.
+    const [deskPosts, mediaTotal, templatesTotal] = await Promise.allSettled([
       supabase
         .from('scheduled_posts')
-        .select('id', { count: 'exact', head: true })
+        .select('id, status, metadata', { count: 'exact' })
         .eq('brand_id', brandId)
-        .in('status', WAITING_STATUSES),
-      supabase
-        .from('scheduled_posts')
-        .select('id', { count: 'exact', head: true })
-        .eq('brand_id', brandId),
+        .limit(POST_ROW_CAP),
       supabase
         .from('media_items')
         .select('id', { count: 'exact', head: true })
@@ -191,14 +243,17 @@ export async function GET(request: Request) {
       }
     }
 
+    const desk = deskCountsFrom(deskPosts)
+    if (deskPosts.status === 'rejected') {
+      console.error('[nav-counts] posts could not be read', deskPosts.reason)
+    }
+
     const counts: NavCounts = {}
-    const waitingCount = countOf(waiting)
-    if (waitingCount !== undefined) counts['social-waiting'] = waitingCount
+    if (desk.waiting !== undefined) counts['social-waiting'] = desk.waiting
     if (needsReconnect !== undefined) counts['social-accounts'] = needsReconnect
 
     const tabCounts: Partial<Record<SocialTabCountId, number>> = {}
-    const posts = countOf(postsTotal)
-    if (posts !== undefined) tabCounts.posts = posts
+    if (desk.posts !== undefined) tabCounts.posts = desk.posts
     const media = countOf(mediaTotal)
     if (media !== undefined) tabCounts.media = media
     const templates = countOf(templatesTotal)
