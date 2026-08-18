@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { sanitizeIntakeFileName } from '@/lib/media/intake-link'
+import { sanitizeIntakeFileName } from '@/lib/media/intake-validation'
 
 /** Prefix every browser library upload must live under for this user + brand. */
 export function libraryUploadPrefix(userId: string, brandId: string): string {

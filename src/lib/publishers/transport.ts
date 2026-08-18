@@ -80,7 +80,7 @@ export async function resolveDirectorAccountIds(opts: {
       id: opts.brandId,
       name: opts.brandName ?? '',
       slug: opts.brandSlug ?? '',
-      social_urls: (opts.socialUrls ?? {}) as Record<string, unknown>,
+      social_urls: (opts.socialUrls ?? {}) as Record<string, string>,
     },
   ])
   const brandAccounts = mapping.get(opts.brandId) ?? []

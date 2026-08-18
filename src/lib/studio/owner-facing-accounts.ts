@@ -70,7 +70,15 @@ export async function loadOwnerFacingBoardAccounts(
     const mixpost = await fetchMixpostAccounts()
     if (mixpost) {
       anySource = true
-      const mapped = mapMixpostAccountsToBrands(mixpost, unlinked)
+      const mapped = mapMixpostAccountsToBrands(
+        mixpost,
+        unlinked.map((b) => ({
+          id: b.id,
+          name: b.name,
+          slug: b.slug,
+          social_urls: (b.social_urls ?? {}) as Record<string, string>,
+        })),
+      )
       for (const brand of unlinked) {
         const subset = ownerFacingAccounts({
           linked: false,

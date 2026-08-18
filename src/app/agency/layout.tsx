@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import type { CSSProperties } from 'react'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { CircleHelp, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
@@ -57,7 +58,7 @@ import type { Brand } from '@/types/database'
 /** The shell root. Everything below it reads `var(--brand)` and retints free. */
 const SHELL = '[data-nrs-shell]'
 
-function cssDecls(vars: Record<string, unknown>): string {
+function cssDecls(vars: CSSProperties): string {
   return Object.entries(vars)
     .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
     .map(([name, value]) => `${name}:${value}`)

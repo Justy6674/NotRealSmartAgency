@@ -8,7 +8,7 @@ import {
   type UploadLogFn,
 } from '@/lib/media/browser-upload'
 import { formatUploadBytes } from '@/lib/media/format-upload-bytes'
-import { validateIntakeFile } from '@/lib/media/intake-link'
+import { validateIntakeFile } from '@/lib/media/intake-validation'
 import {
   NRS_MEDIA_UPLOAD_FOCUS,
   type MediaUploadFocusDetail,
@@ -158,14 +158,14 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
       if (err instanceof UploadAbortError || abortController.signal.aborted) {
         patchRow(queueId, { status: 'stopped', percent: 0 })
         uploadQueue.update(queueId, { status: 'aborted' })
-        log(traceId, 'processFile:stopped')
+        log('processFile:stopped')
         return
       }
       const message =
         err instanceof Error ? err.message : 'That upload did not finish. Try again.'
       patchRow(queueId, { status: 'error', error: message })
       uploadQueue.update(queueId, { status: 'failed', error: message })
-      log(traceId, 'processFile:terminal error', { error: message })
+      log('processFile:terminal error', { error: message })
     }
   }
 

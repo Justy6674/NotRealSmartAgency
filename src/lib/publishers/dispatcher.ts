@@ -432,8 +432,6 @@ export async function publishToPlatform(
       await enqueueRetry({
         runId,
         scheduledPostId: req.scheduled_post_id,
-        brandId: req.brand_id,
-        accountId: req.account_id,
         platform: req.platform,
         error: 'Rate limit exceeded',
         attempt,
@@ -1079,8 +1077,6 @@ export async function publishToPlatform(
       await enqueueRetry({
         runId,
         scheduledPostId: req.scheduled_post_id,
-        brandId: req.brand_id,
-        accountId: req.account_id,
         platform: req.platform,
         error: 'Mixpost createPost returned null',
         attempt,
@@ -1115,8 +1111,6 @@ export async function publishToPlatform(
       await enqueueRetry({
         runId,
         scheduledPostId: req.scheduled_post_id,
-        brandId: req.brand_id,
-        accountId: req.account_id,
         platform: req.platform,
         error,
         attempt,

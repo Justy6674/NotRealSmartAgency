@@ -7,7 +7,7 @@ import {
   UploadAbortError,
 } from '@/lib/media/browser-upload'
 import { formatUploadBytes } from '@/lib/media/format-upload-bytes'
-import { validateIntakeFile } from '@/lib/media/intake-link'
+import { validateIntakeFile } from '@/lib/media/intake-validation'
 import { cn } from '@/lib/utils'
 
 interface ComposeUploadRow {

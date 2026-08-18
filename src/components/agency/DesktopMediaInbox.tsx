@@ -7,7 +7,7 @@ import { AlertCircle, ArrowLeft, ArrowRight, Check, FileVideo, Image as ImageIco
 import { NrsDeskConversation } from '@/components/agency/NrsDeskConversation'
 import { MediaTile } from '@/components/agency/media/MediaTile'
 import { ReloadAppButton } from '@/components/agency/shell/ReloadAppButton'
-import { useBrandTheme } from '@/components/agency/shell/brand-theme'
+import { useBrandTheme } from '@/components/agency/shell/use-brand-theme'
 import { desktopInboxDisplayName } from '@/lib/media/desktop-inbox'
 import { useAgencyStore } from '@/stores/agency-store'
 import { FOCUS_RING_INSET, FOCUS_RING_INSET_ON_SOLID } from '@/lib/ui/focus'

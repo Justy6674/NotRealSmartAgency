@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useAgencyStore } from '@/stores/agency-store'
-import { useBrandTheme } from '@/components/agency/shell/brand-theme'
+import { useBrandTheme } from '@/components/agency/shell/use-brand-theme'
 import type { Brand } from '@/types/database'
 
 /**
