@@ -4,18 +4,13 @@ import { z } from 'zod/v3'
 import { gateway } from '@ai-sdk/gateway'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getGatewayModel, getGatewayProviderOptions } from '@/lib/ai/model-routing'
-import type { Brand, PostPlatform } from '@/types/database'
+import type { Brand, PostPlatform, PostingScheduleSlot } from '@/types/database'
 import { getComplianceRules } from '../compliance-rules'
 import { createDraftPosts } from '@/lib/posts/create-draft'
 import { loadState, selectBestArms, hasEnoughData, type BanditArm } from '@/lib/content-optimisation/bandit'
+import { nextOccurrence } from '@/lib/posting-queue/assign-to-slot'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const AEST_OFFSET_HOURS = 10 // UTC+10 (AEST — not AEDT)
-
-/** Optimal posting slots in AEST hours */
-const WEEKDAY_SLOTS = [9, 12, 17] // 9am, 12pm, 5pm
-const WEEKEND_SLOTS = [10, 14]     // 10am, 2pm
 
 const PLATFORM_EMOJIS: Record<PostPlatform, string> = {
   instagram: '📱',
@@ -87,87 +82,41 @@ const PostBatchSchema = z.object({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function detectPlatforms(brand: Brand): PostPlatform[] {
-  const all: PostPlatform[] = ['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube']
-  const urls = brand.social_urls ?? {}
-
-  // If brand has social URLs configured, only use those platforms
-  const configured = all.filter((p) => {
-    const key = p === 'twitter' ? 'x' : p
-    return urls[p] || urls[key] || urls[`${p}_url`]
-  })
-
-  return configured.length > 0 ? configured : all
-}
-
-function isWeekend(date: Date): boolean {
-  const day = date.getUTCDay()
-  return day === 0 || day === 6
-}
-
 function buildPostSlots(
   weeks: number,
   postsPerWeek: number,
-  platforms: PostPlatform[],
+  scheduleSlots: PostingScheduleSlot[],
   existingDates: Set<string>,
-): { scheduledAt: string; platform: PostPlatform }[] {
-  const slots: { scheduledAt: string; platform: PostPlatform }[] = []
-  const now = new Date()
+  now = new Date(),
+): { scheduledAt: string; platform: PostPlatform; slotId: string }[] {
+  const horizon = new Date(now.getTime() + weeks * 7 * 86_400_000)
+  const candidates: { scheduledAt: string; platform: PostPlatform; slotId: string }[] = []
 
-  // Start from next Monday
-  const startDate = new Date(now)
-  const dayOfWeek = startDate.getUTCDay()
-  const daysUntilMonday = dayOfWeek === 0 ? 1 : dayOfWeek === 1 ? 0 : 8 - dayOfWeek
-  startDate.setUTCDate(startDate.getUTCDate() + daysUntilMonday)
-  startDate.setUTCHours(0, 0, 0, 0)
-
-  let platformIndex = 0
-
-  for (let week = 0; week < weeks; week++) {
-    let weekPostCount = 0
-
-    for (let dayOffset = 0; dayOffset < 7 && weekPostCount < postsPerWeek; dayOffset++) {
-      const day = new Date(startDate)
-      day.setUTCDate(day.getUTCDate() + week * 7 + dayOffset)
-
-      const timeSlots = isWeekend(day) ? WEEKEND_SLOTS : WEEKDAY_SLOTS
-
-      for (const hour of timeSlots) {
-        if (weekPostCount >= postsPerWeek) break
-
-        // Convert AEST hour to UTC
-        const utcHour = hour - AEST_OFFSET_HOURS
-        day.setUTCHours(utcHour < 0 ? utcHour + 24 : utcHour, 0, 0, 0)
-        if (utcHour < 0) {
-          day.setUTCDate(day.getUTCDate() - 1)
-        }
-
-        const isoStr = day.toISOString()
-        const dateKey = isoStr.slice(0, 13) // YYYY-MM-DDTHH — hourly granularity
-
-        // Skip if a post already exists in this slot
-        if (existingDates.has(dateKey)) {
-          // Reset date if we adjusted it
-          if (utcHour < 0) day.setUTCDate(day.getUTCDate() + 1)
-          continue
-        }
-
-        const platform = platforms[platformIndex % platforms.length]
-        platformIndex++
-
-        slots.push({
-          scheduledAt: isoStr,
-          platform,
-        })
-        weekPostCount++
-
-        // Reset date if we adjusted it
-        if (utcHour < 0) day.setUTCDate(day.getUTCDate() + 1)
+  for (const slot of scheduleSlots) {
+    let cursor = now
+    while (true) {
+      const occurrence = nextOccurrence(slot, cursor)
+      if (occurrence > horizon) break
+      const scheduledAt = occurrence.toISOString()
+      const key = `${slot.platform}|${scheduledAt.slice(0, 13)}`
+      if (!existingDates.has(key)) {
+        candidates.push({ scheduledAt, platform: slot.platform, slotId: slot.id })
       }
+      cursor = new Date(occurrence.getTime() + 1000)
     }
   }
 
-  return slots
+  candidates.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
+  const counts = new Map<number, number>()
+  return candidates.filter((slot) => {
+    const week = Math.floor(
+      (new Date(slot.scheduledAt).getTime() - now.getTime()) / (7 * 86_400_000),
+    )
+    const count = counts.get(week) ?? 0
+    if (count >= postsPerWeek) return false
+    counts.set(week, count + 1)
+    return true
+  })
 }
 
 function buildBrandPromptContext(brand: Brand): string {
@@ -265,31 +214,46 @@ export function createFillCalendarTool(
         return { success: false, error: 'Could not load brand. Please select a brand first.' }
       }
 
-      // 2. Fetch existing scheduled posts for the next 4 weeks
+      // 2. Fetch the owner's posting times and existing posts.
       const now = new Date()
       const fourWeeksOut = new Date(now)
       fourWeeksOut.setDate(fourWeeksOut.getDate() + 28)
 
-      const { data: existingPosts } = await supabase
+      const [{ data: configuredSlots, error: slotsError }, { data: existingPosts }] = await Promise.all([
+        supabase
+          .from('posting_schedule_slots')
+          .select('*')
+          .eq('brand_id', brandId),
+        supabase
         .from('scheduled_posts')
-        .select('scheduled_at')
+        .select('platform, scheduled_at')
         .eq('brand_id', brandId)
         .gte('scheduled_at', now.toISOString())
         .lte('scheduled_at', fourWeeksOut.toISOString())
-        .not('status', 'eq', 'cancelled')
+        .not('status', 'eq', 'cancelled'),
+      ])
 
       const existingDates = new Set(
-        (existingPosts ?? []).map((p: { scheduled_at: string }) => p.scheduled_at.slice(0, 13)),
+        (existingPosts ?? []).map(
+          (post: { platform: PostPlatform; scheduled_at: string }) =>
+            `${post.platform}|${post.scheduled_at.slice(0, 13)}`,
+        ),
       )
 
-      // 3. Determine platforms
-      const targetPlatforms: PostPlatform[] = (requestedPlatforms as PostPlatform[] | undefined) ?? detectPlatforms(brand as Brand)
-      if (targetPlatforms.length === 0) {
-        return { success: false, error: 'No social platforms configured for this brand. Add social URLs in brand settings.' }
+      if (slotsError) {
+        return { success: false, error: 'Could not load the posting times for this business.' }
       }
+      const requested = requestedPlatforms as PostPlatform[] | undefined
+      const scheduleSlots = (configuredSlots ?? [])
+        .filter((slot: PostingScheduleSlot) => !requested || requested.includes(slot.platform)) as PostingScheduleSlot[]
+      if (scheduleSlots.length === 0) {
+        return { success: false, error: 'No posting times are set for those accounts yet. Add posting times first.' }
+      }
+      const targetPlatforms = [...new Set(scheduleSlots.map((slot) => slot.platform))]
 
-      // 4. Calculate post slots
-      const slots = buildPostSlots(weeks, posts_per_week, targetPlatforms, existingDates)
+      // 4. Fill configured empty slots only. nextOccurrence applies each slot's
+      // IANA timezone, including Sydney daylight-saving transitions.
+      const slots = buildPostSlots(weeks, posts_per_week, scheduleSlots, existingDates, now)
       if (slots.length === 0) {
         return { success: false, error: 'All available time slots already have posts scheduled. Try a later date range.' }
       }
@@ -403,6 +367,11 @@ ${isRegulated ? '- AHPRA/TGA brand: NO testimonials, NO guaranteed results, NO b
             created_by: 'Director',
             content_type: post.content_type,
             conversation_id: conversationId,
+            queue_slot_id: slots.find(
+              (slot) =>
+                slot.platform === post.platform &&
+                slot.scheduledAt === post.scheduled_at,
+            )?.slotId,
           },
         })),
       )

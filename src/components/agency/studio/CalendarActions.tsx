@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { Wand2, CheckCheck, Loader2 } from 'lucide-react'
+import { Wand2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
@@ -29,7 +29,6 @@ export function CalendarActions({ activeFilters = [], onFilterChange }: Calendar
   const studioData = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(studioData.brand, studioData.posts, studioData.accounts)
   const [filling, setFilling] = useState(false)
-  const [approving, setApproving] = useState(false)
 
   // Fill empty slots — send strategy context to Director
   const handleFillSlots = useCallback(() => {
@@ -47,43 +46,6 @@ export function CalendarActions({ activeFilters = [], onFilterChange }: Calendar
     // Reset after a moment (the Director will handle the work)
     setTimeout(() => setFilling(false), 2000)
   }, [strategyContext, activeBrandId])
-
-  // Approve all drafts — PATCH each draft to scheduled
-  const handleApproveAll = useCallback(async () => {
-    if (!activeBrandId) return
-    setApproving(true)
-
-    try {
-      const res = await fetch(`/api/scheduled-posts?brandId=${activeBrandId}`)
-      if (!res.ok) return
-
-      const posts = await res.json()
-      const drafts = posts.filter(
-        (p: { status: string }) => p.status === 'draft'
-      )
-
-      if (drafts.length === 0) {
-        setApproving(false)
-        return
-      }
-
-      // PATCH each draft to scheduled
-      await Promise.all(
-        drafts.map((draft: { id: string }) =>
-          fetch('/api/scheduled-posts', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: draft.id, status: 'scheduled' }),
-          })
-        )
-      )
-
-      // Refresh studio data
-      studioData.refetch()
-    } finally {
-      setApproving(false)
-    }
-  }, [activeBrandId, studioData])
 
   // Toggle content type filter
   const toggleFilter = useCallback(
@@ -116,22 +78,6 @@ export function CalendarActions({ activeFilters = [], onFilterChange }: Calendar
           <Wand2 className="h-4 w-4" />
         )}
         Fill empty slots
-      </button>
-
-      <button
-        onClick={handleApproveAll}
-        disabled={approving}
-        className={cn(
-          'inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-sm font-medium text-foreground transition-colors',
-          'hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed'
-        )}
-      >
-        {approving ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <CheckCheck className="h-4 w-4" />
-        )}
-        Approve all drafts
       </button>
 
       {/* Separator */}

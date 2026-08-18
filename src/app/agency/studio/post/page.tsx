@@ -20,5 +20,5 @@ import { redirect } from 'next/navigation'
  * costs one round trip, which is the cheaper side of that trade.
  */
 export default function RetiredPostComposerPage() {
-  redirect('/agency/studio/create')
+  redirect('/agency/social/compose')
 }

@@ -82,6 +82,7 @@ interface PlatformSectionProps {
   onChange: (platforms: PostPlatform[]) => void
   selectedAccountIds?: string[]
   onAccountIdsChange?: (ids: string[]) => void
+  onAccountsChange?: (accounts: SocialAccount[]) => void
   brandName?: string
 }
 
@@ -91,11 +92,16 @@ export function PlatformSection({
   onChange,
   selectedAccountIds = [],
   onAccountIdsChange,
+  onAccountsChange,
   brandName,
 }: PlatformSectionProps) {
   const { activeBrandId } = useAgencyStore()
   const { accounts, loading, error } = useSocialAccounts(activeBrandId)
   const seededFor = useRef<string | null>(null)
+
+  useEffect(() => {
+    onAccountsChange?.(accounts)
+  }, [accounts, onAccountsChange])
 
   const compatibleIds = (list: SocialAccount[]) =>
     list
