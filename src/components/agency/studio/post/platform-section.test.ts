@@ -55,7 +55,9 @@ test('Director assist pills retint from the selected business, not amber', () =>
 
 test('the creator wires one-or-all account ticks into the save', () => {
   assert.match(creator, /selectedAccountIds/)
-  assert.match(creator, /account_ids: selectedAccountIds/)
+  assert.match(creator, /accountIdsForPlatform\(/)
+  assert.match(creator, /account_ids: platformAccountIds/)
+  assert.doesNotMatch(creator, /account_ids: selectedAccountIds/)
   assert.match(creator, /brandName=\{brandName\}/)
 })
 

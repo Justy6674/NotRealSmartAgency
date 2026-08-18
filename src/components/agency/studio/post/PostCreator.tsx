@@ -12,6 +12,8 @@ import { composerOptionsToDeskActions } from '@/lib/social/fill-payload'
 import { SOCIAL_PLATFORMS, type SocialPlatform } from '@/lib/social/model'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
+import type { SocialAccount } from '@/hooks/useSocialAccounts'
+import { accountIdsForPlatform } from '@/lib/social/account-targets'
 
 // Layout
 import { ComposerLayout } from './ComposerLayout'
@@ -180,6 +182,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [contentType, setContentType] = useState<ContentType>('post')
   const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>([])
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([])
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([])
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [caption, setCaption] = useState('')
@@ -819,6 +822,11 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         // the whole fault: the editor wrote the LinkedIn version, the preview
         // drew the LinkedIn version, and LinkedIn received the master.
         const publish = resolvePublishCaption(versions, platform, caption, hashtags)
+        const platformAccountIds = accountIdsForPlatform(
+          selectedAccountIds,
+          socialAccounts,
+          platform,
+        )
         let response: Response | null = null
         try {
           response = await fetch('/api/scheduled-posts', {
@@ -849,7 +857,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
                 ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
                   ? { platform_options: platformOptions[platform] }
                   : {}),
-                ...(selectedAccountIds.length > 0 ? { account_ids: selectedAccountIds } : {}),
+                ...(platformAccountIds.length > 0 ? { account_ids: platformAccountIds } : {}),
               },
             }),
           })
@@ -916,7 +924,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     } finally {
       setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, socialAccounts, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {
@@ -954,6 +962,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         onChange={handlePlatformsChange}
         selectedAccountIds={selectedAccountIds}
         onAccountIdsChange={setSelectedAccountIds}
+        onAccountsChange={setSocialAccounts}
         brandName={brandName}
       />
 

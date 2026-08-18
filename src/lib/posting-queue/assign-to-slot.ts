@@ -34,12 +34,6 @@ export interface AssignToSlotResult {
  * Compute the next concrete UTC ISO timestamp for a recurring slot,
  * given a "from" anchor. Time-of-day is interpreted in the slot's
  * own timezone (default Australia/Brisbane), then converted to UTC.
- *
- * For simplicity we treat the slot time as wall-clock in the slot
- * timezone and rely on the JS Date arithmetic — Brisbane has no DST
- * so this is exact for the default tz, and "good enough for queue
- * planning" for other Australian tzs (the cron job is the source of
- * truth at publish time anyway).
  */
 export function nextOccurrence(
   slot: Pick<PostingScheduleSlot, 'day_of_week' | 'time' | 'timezone'>,
@@ -51,26 +45,23 @@ export function nextOccurrence(
   const minute = parseInt(mStr ?? '0', 10)
   const second = parseInt(sStr ?? '0', 10)
 
-  // Step day-by-day from `from`. We compare against the slot's
-  // local-day-of-week (0..6 with 0 = Sunday) and update the time-of-day.
-  // We use UTC date arithmetic and assume the timezone offset is
-  // applied at the very end. For Brisbane (UTC+10, no DST) the wall
-  // clock is just UTC + 10h.
-  const offsetMinutes = timezoneOffsetMinutes(slot.timezone)
-
   for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
-    const candidate = new Date(from.getTime())
-    candidate.setUTCDate(from.getUTCDate() + dayOffset)
-    // Local wall-clock target on this day
-    candidate.setUTCHours(hour, minute, second, 0)
-    // Convert local wall-clock → UTC by subtracting the tz offset
-    candidate.setTime(candidate.getTime() - offsetMinutes * 60_000)
-
-    // Local day of week for that candidate (in slot tz)
-    const local = new Date(candidate.getTime() + offsetMinutes * 60_000)
-    const localDow = local.getUTCDay()
+    const probe = new Date(from.getTime() + dayOffset * 86_400_000)
+    const localDate = zonedParts(probe, slot.timezone)
+    const localDow = new Date(
+      Date.UTC(localDate.year, localDate.month - 1, localDate.day),
+    ).getUTCDay()
 
     if (localDow !== slot.day_of_week) continue
+    const candidate = zonedDateTimeToUtc(
+      localDate.year,
+      localDate.month,
+      localDate.day,
+      hour,
+      minute,
+      second,
+      slot.timezone,
+    )
     if (candidate.getTime() <= from.getTime()) continue
 
     return candidate
@@ -99,32 +90,66 @@ export function earliestNextSlot(
   return best
 }
 
-/**
- * Returns the IANA timezone offset in minutes (e.g. Brisbane = +600).
- * Hard-codes the Australian tzs we ship with; falls back to 0.
- */
-function timezoneOffsetMinutes(tz: string): number {
-  // No DST in QLD/NT/WA so these are stable.
-  switch (tz) {
-    case 'Australia/Brisbane':
-      return 600
-    case 'Australia/Darwin':
-      return 570 // UTC+9:30
-    case 'Australia/Perth':
-      return 480
-    // The southern states have DST — we approximate with the standard-time
-    // offset. Cron is the source of truth at publish time.
-    case 'Australia/Sydney':
-    case 'Australia/Melbourne':
-    case 'Australia/Hobart':
-      return 600
-    case 'Australia/Adelaide':
-      return 570
-    case 'UTC':
-      return 0
-    default:
-      return 600
+interface ZonedParts {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  second: number
+}
+
+function zonedParts(date: Date, timeZone: string): ZonedParts {
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0)
+  return {
+    year: value('year'),
+    month: value('month'),
+    day: value('day'),
+    hour: value('hour'),
+    minute: value('minute'),
+    second: value('second'),
   }
+}
+
+function offsetAt(date: Date, timeZone: string): number {
+  const local = zonedParts(date, timeZone)
+  const representedAsUtc = Date.UTC(
+    local.year,
+    local.month - 1,
+    local.day,
+    local.hour,
+    local.minute,
+    local.second,
+  )
+  return representedAsUtc - Math.floor(date.getTime() / 1000) * 1000
+}
+
+function zonedDateTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string,
+): Date {
+  const wallTime = Date.UTC(year, month - 1, day, hour, minute, second)
+  let candidate = new Date(wallTime)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    candidate = new Date(wallTime - offsetAt(candidate, timeZone))
+  }
+  return candidate
 }
 
 /**

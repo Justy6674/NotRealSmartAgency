@@ -20,3 +20,20 @@ test('the next free slot is the earliest occurrence after now', () => {
   const expected = nextOccurrence(mondayNine, from)
   assert.equal(when.toISOString(), expected.toISOString())
 })
+
+test('Sydney slots observe daylight saving time', () => {
+  const sydneyMondayNine = {
+    day_of_week: 1,
+    time: '09:00',
+    timezone: 'Australia/Sydney',
+  }
+
+  assert.equal(
+    nextOccurrence(sydneyMondayNine, new Date('2026-01-04T00:00:00.000Z')).toISOString(),
+    '2026-01-04T22:00:00.000Z',
+  )
+  assert.equal(
+    nextOccurrence(sydneyMondayNine, new Date('2026-07-05T00:00:00.000Z')).toISOString(),
+    '2026-07-05T23:00:00.000Z',
+  )
+})
