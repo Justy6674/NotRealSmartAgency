@@ -106,6 +106,10 @@ test('a missing token fails loudly rather than silently returning nothing', asyn
     () => getTrafficTotals(TARGET, {}, { token: undefined, fetchImpl }),
     /VERCEL_API_TOKEN is not set/,
   )
+  await assert.rejects(
+    () => getTrafficTotals(TARGET, {}, { token: '', fetchImpl }),
+    /VERCEL_API_TOKEN is not set/,
+  )
   assert.equal(vercelAnalyticsConfigured({} as unknown as NodeJS.ProcessEnv), false)
   assert.equal(vercelAnalyticsConfigured({ VERCEL_API_TOKEN: 'x' } as unknown as NodeJS.ProcessEnv), true)
 })

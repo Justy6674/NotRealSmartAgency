@@ -171,7 +171,46 @@ export type NavCounts = Partial<Record<NavCountId, number>>
 /** Where `+ Create post` goes. The one primary manual action in the sidebar. */
 export const CREATE_POST_HREF = '/agency/social/compose'
 
+/**
+ * The section that is actually ready to use. Everything else can be greyed from
+ * the sidebar so the product does not pretend twelve rooms are finished.
+ */
+export const READY_NAV_SECTION_ID: NavSectionId = 'social'
+
+export function isReadyNavSection(id: NavSectionId): boolean {
+  return id === READY_NAV_SECTION_ID
+}
+
 export const NAV_SECTIONS: NavSection[] = [
+  {
+    id: 'social',
+    label: 'Social media',
+    icon: Share2,
+    href: '/agency/social',
+    children: [
+      { kind: 'group', id: 'social-grp-content', label: 'Content' },
+      { kind: 'link', id: 'social-posts', label: 'Posts', href: '/agency/social/posts' },
+      {
+        // The approval queue. Directly under Posts because it IS Posts, held to
+        // the ones that need a decision — see rule 4 at the top of the file.
+        kind: 'link',
+        id: 'social-waiting',
+        label: 'Waiting on you',
+        href: `/agency/social/posts?${WAITING_ON_YOU_FILTER.param}=${WAITING_ON_YOU_FILTER.value}`,
+        filter: WAITING_ON_YOU_FILTER,
+        countId: 'social-waiting',
+      },
+      { kind: 'link', id: 'social-calendar', label: 'Calendar', href: '/agency/social/calendar' },
+      { kind: 'link', id: 'social-media', label: 'Media library', href: '/agency/social/media' },
+      { kind: 'link', id: 'social-templates', label: 'Templates', href: '/agency/social/templates' },
+      { kind: 'group', id: 'social-grp-setup', label: 'Setup' },
+      { kind: 'link', id: 'social-accounts', label: 'Social accounts', href: '/agency/social/accounts' },
+      { kind: 'link', id: 'social-schedule', label: 'Posting schedule', href: '/agency/social/schedule' },
+      { kind: 'group', id: 'social-grp-results', label: 'Results' },
+      { kind: 'link', id: 'social-analytics', label: 'Analytics', href: '/agency/social/analytics' },
+    ],
+  },
+
   {
     id: 'dashboard',
     label: 'Dashboard',
@@ -289,35 +328,6 @@ export const NAV_SECTIONS: NavSection[] = [
         href: '/agency/blogging/compliance',
         healthcareOnly: true,
       },
-    ],
-  },
-
-  {
-    id: 'social',
-    label: 'Social media',
-    icon: Share2,
-    href: '/agency/social',
-    children: [
-      { kind: 'group', id: 'social-grp-content', label: 'Content' },
-      { kind: 'link', id: 'social-posts', label: 'Posts', href: '/agency/social/posts' },
-      {
-        // The approval queue. Directly under Posts because it IS Posts, held to
-        // the ones that need a decision — see rule 4 at the top of the file.
-        kind: 'link',
-        id: 'social-waiting',
-        label: 'Waiting on you',
-        href: `/agency/social/posts?${WAITING_ON_YOU_FILTER.param}=${WAITING_ON_YOU_FILTER.value}`,
-        filter: WAITING_ON_YOU_FILTER,
-        countId: 'social-waiting',
-      },
-      { kind: 'link', id: 'social-calendar', label: 'Calendar', href: '/agency/social/calendar' },
-      { kind: 'link', id: 'social-media', label: 'Media library', href: '/agency/social/media' },
-      { kind: 'link', id: 'social-templates', label: 'Templates', href: '/agency/social/templates' },
-      { kind: 'group', id: 'social-grp-setup', label: 'Setup' },
-      { kind: 'link', id: 'social-accounts', label: 'Social accounts', href: '/agency/social/accounts' },
-      { kind: 'link', id: 'social-schedule', label: 'Posting schedule', href: '/agency/social/schedule' },
-      { kind: 'group', id: 'social-grp-results', label: 'Results' },
-      { kind: 'link', id: 'social-analytics', label: 'Analytics', href: '/agency/social/analytics' },
     ],
   },
 

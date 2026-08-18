@@ -60,11 +60,17 @@ export function escapeODataValue(value: string): string {
 async function query<T>(
   path: string,
   params: Record<string, string | number | undefined>,
-  { token = process.env.VERCEL_API_TOKEN, fetchImpl = fetch }: {
+  options: {
     token?: string
     fetchImpl?: typeof fetch
   } = {},
 ): Promise<T> {
+  // An explicit `token: undefined` must stay missing. A default parameter would
+  // fall through to `process.env.VERCEL_API_TOKEN`, and Vercel production builds
+  // inject one — which is how the missing-token test passed locally and failed
+  // the deploy.
+  const token = Object.hasOwn(options, 'token') ? options.token : process.env.VERCEL_API_TOKEN
+  const fetchImpl = options.fetchImpl ?? fetch
   if (!token) throw new VercelAnalyticsError('VERCEL_API_TOKEN is not set')
 
   const search = new URLSearchParams()

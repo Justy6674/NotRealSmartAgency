@@ -31,7 +31,7 @@
  * must not charcoal this column — the signed-in desk is paper, then brand.
  */
 
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { ChevronDown, Plus } from 'lucide-react'
@@ -43,6 +43,7 @@ import {
   activeChildId,
   CREATE_POST_HREF,
   isHealthcareBusiness,
+  isReadyNavSection,
   isSectionActive,
   visibleChildren,
   visibleSections,
@@ -50,6 +51,9 @@ import {
   type NavFilterState,
   type NavSection,
 } from './nav-sections'
+
+/** Remembered on this browser so the rest stay greyed after a refresh. */
+const DIM_UNREADY_KEY = 'nrs-nav-dim-unready'
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
@@ -164,6 +168,29 @@ export function AgencySidebar({
     brands?.find((brand) => brand.id === activeBrandId)?.compliance_flags ?? complianceFlags
   const healthcare = isHealthcareBusiness(liveFlags)
   const sections = visibleSections(healthcare)
+  const [dimUnready, setDimUnready] = useState(true)
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(DIM_UNREADY_KEY)
+      if (stored === '0') setDimUnready(false)
+      if (stored === '1') setDimUnready(true)
+    } catch {
+      // Private mode can refuse storage. Default stays greyed.
+    }
+  }, [])
+
+  function toggleDimUnready() {
+    setDimUnready((current) => {
+      const next = !current
+      try {
+        localStorage.setItem(DIM_UNREADY_KEY, next ? '1' : '0')
+      } catch {
+        // Same private-mode case as the read. The click still takes this session.
+      }
+      return next
+    })
+  }
 
   return (
     <aside
@@ -201,6 +228,15 @@ export function AgencySidebar({
         Create post
       </Link>
 
+      <button
+        type="button"
+        onClick={toggleDimUnready}
+        aria-pressed={dimUnready}
+        className="mx-3 mb-1 text-left text-[11px] font-medium text-[var(--nrs-ink-3)] hover:text-[var(--nrs-ink)]"
+      >
+        {dimUnready ? 'Show the rest' : 'Grey out the rest'}
+      </button>
+
       <nav aria-label="Sections" className="px-2 pb-1.5">
         {sections.map((section) => (
           <Section
@@ -211,6 +247,7 @@ export function AgencySidebar({
             counts={counts}
             activeFilters={filters}
             onNavigate={onNavigate}
+            dimmed={dimUnready && !isReadyNavSection(section.id)}
           />
         ))}
       </nav>
@@ -328,6 +365,7 @@ function Section({
   counts,
   activeFilters,
   onNavigate,
+  dimmed,
 }: {
   section: NavSection
   pathname: string
@@ -335,6 +373,7 @@ function Section({
   counts?: NavCounts
   activeFilters?: NavFilterState | null
   onNavigate?: () => void
+  dimmed?: boolean
 }) {
   const active = isSectionActive(section, pathname)
   const children = visibleChildren(section, healthcare)
@@ -344,7 +383,7 @@ function Section({
   const currentChildId = activeChildId(children, pathname, activeFilters)
 
   return (
-    <>
+    <div className={cn(dimmed && 'opacity-[0.38] grayscale')}>
       {section.groupLabel ? (
         <div className="px-[9px] pt-[14px] pb-[5px] text-[10.5px] font-[650] tracking-[0.09em] text-[var(--nrs-ink-3)] uppercase">
           {section.groupLabel}
@@ -400,7 +439,7 @@ function Section({
           )}
         </div>
       ) : null}
-    </>
+    </div>
   )
 }
 
