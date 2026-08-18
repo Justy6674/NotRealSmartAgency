@@ -317,91 +317,95 @@ export function EnhancedCalendar() {
       {/* FullCalendar theme overrides */}
       <style jsx global>{`
         .enhanced-calendar .fc {
-          --fc-border-color: hsl(var(--border));
-          --fc-button-bg-color: hsl(var(--secondary));
-          --fc-button-border-color: hsl(var(--border));
-          --fc-button-hover-bg-color: hsl(var(--muted));
-          --fc-button-hover-border-color: hsl(var(--border));
-          --fc-button-active-bg-color: hsl(var(--primary));
-          --fc-button-active-border-color: hsl(var(--primary));
-          --fc-button-text-color: hsl(var(--foreground));
+          --fc-border-color: var(--line);
+          --fc-button-bg-color: var(--panel);
+          --fc-button-border-color: var(--line);
+          --fc-button-hover-bg-color: var(--panel-2);
+          --fc-button-hover-border-color: var(--brand);
+          --fc-button-active-bg-color: var(--brand-deep);
+          --fc-button-active-border-color: var(--brand-deep);
+          --fc-button-text-color: var(--ink);
           --fc-page-bg-color: transparent;
-          --fc-neutral-bg-color: hsl(var(--muted));
-          --fc-today-bg-color: hsl(var(--primary) / 0.08);
+          --fc-neutral-bg-color: var(--panel-2);
+          --fc-today-bg-color: var(--brand-wash);
           --fc-event-border-color: transparent;
-          font-family: var(--font-ibm-plex-sans), system-ui, sans-serif;
+          font-family: var(--font-sans), system-ui, sans-serif;
         }
 
         .enhanced-calendar .fc .fc-toolbar-title {
-          font-size: 1.125rem;
+          font-size: 19px;
           font-weight: 600;
-          color: hsl(var(--foreground));
+          letter-spacing: -0.015em;
+          color: var(--ink);
         }
 
         .enhanced-calendar .fc .fc-col-header-cell-cushion,
         .enhanced-calendar .fc .fc-daygrid-day-number {
-          color: hsl(var(--muted-foreground));
-          font-size: 0.8125rem;
+          color: var(--ink-2);
+          font-size: 12.5px;
+          font-weight: 600;
         }
 
         .enhanced-calendar .fc .fc-event {
           border-radius: 6px;
           padding: 2px 6px;
-          font-size: 0.75rem;
+          font-size: 12px;
           cursor: pointer;
           border-width: 0;
           border-left-width: 3px;
         }
 
-        .enhanced-calendar .fc .fc-event:hover {
-          filter: brightness(1.15);
-        }
-
         .enhanced-calendar .fc .fc-button {
           border-radius: 8px;
-          font-size: 0.8125rem;
-          padding: 0.35rem 0.75rem;
+          font-size: 12.5px;
+          font-weight: 600;
+          padding: 7px 12px;
+        }
+
+        .enhanced-calendar .fc .fc-button-active {
+          color: var(--brand-ink);
         }
 
         .enhanced-calendar .fc .fc-daygrid-more-link {
-          color: hsl(var(--primary));
-          font-size: 0.75rem;
+          color: var(--brand-deep);
+          font-size: 12px;
+          font-weight: 600;
         }
 
-        /* Week/day view — cleaner slot grid */
         .enhanced-calendar .fc .fc-timegrid-slot {
-          border-color: hsl(var(--border) / 0.5);
+          border-color: var(--line-soft);
           height: 2.5rem;
         }
 
         .enhanced-calendar .fc .fc-timegrid-slot-label {
-          font-size: 0.7rem;
-          color: hsl(var(--muted-foreground));
+          font-size: 11px;
+          color: var(--ink-3);
+          font-variant-numeric: tabular-nums;
           vertical-align: top;
           padding-top: 4px;
         }
 
         .enhanced-calendar .fc .fc-timegrid-col {
-          border-color: hsl(var(--border) / 0.3);
+          border-color: var(--line-soft);
         }
 
         .enhanced-calendar .fc .fc-timegrid-now-indicator-line {
-          border-color: oklch(0.55 0.15 250);
+          border-color: var(--brand);
           border-width: 2px;
         }
 
         .enhanced-calendar .fc .fc-timegrid-now-indicator-arrow {
-          border-color: oklch(0.55 0.15 250);
+          border-color: var(--brand);
         }
 
         .enhanced-calendar .fc .fc-col-header-cell {
           padding: 8px 4px;
-          border-bottom: 2px solid hsl(var(--border));
-          background: hsl(var(--muted) / 0.3);
+          border-bottom: 1px solid var(--line);
+          background: var(--panel-2);
         }
 
         .enhanced-calendar .fc .fc-col-header-cell.fc-day-today {
-          background: hsl(var(--primary) / 0.08);
+          background: var(--brand-wash);
         }
 
         .enhanced-calendar .fc .fc-col-header-cell-cushion {
@@ -409,13 +413,12 @@ export function EnhancedCalendar() {
           letter-spacing: 0.01em;
         }
 
-        /* Clickable empty slots cursor */
         .enhanced-calendar .fc .fc-timegrid-slot-lane {
           cursor: pointer;
         }
 
         .enhanced-calendar .fc .fc-timegrid-slot-lane:hover {
-          background: hsl(var(--primary) / 0.04);
+          background: var(--brand-wash);
         }
 
         .enhanced-calendar .fc .fc-daygrid-day:not(.fc-day-disabled) {
@@ -423,7 +426,7 @@ export function EnhancedCalendar() {
         }
 
         .enhanced-calendar .fc .fc-daygrid-day:not(.fc-day-disabled):hover {
-          background: hsl(var(--primary) / 0.04);
+          background: var(--brand-wash);
         }
       `}</style>
     </div>

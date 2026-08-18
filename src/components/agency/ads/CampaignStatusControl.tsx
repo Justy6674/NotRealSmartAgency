@@ -79,7 +79,7 @@ export function StatusControl({
         // feedback at all between the tap and the spinner.
         pausing
           ? 'border-border text-foreground hover:bg-accent active:bg-accent/70'
-          : 'border-transparent bg-foreground text-background hover:bg-foreground/90 active:bg-foreground/80',
+          : 'border-transparent bg-[var(--brand-deep)] text-[var(--brand-ink)] hover:bg-[var(--brand)] active:opacity-90',
       )}
     >
       {sending ? (

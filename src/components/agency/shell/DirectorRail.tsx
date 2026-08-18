@@ -1113,7 +1113,7 @@ export function DirectorRail({
                 'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60',
                 copy.destructive
                   ? 'bg-destructive text-white hover:opacity-90'
-                  : 'bg-foreground text-background hover:opacity-90',
+                  : 'bg-[var(--brand-deep)] text-[var(--brand-ink)] hover:bg-[var(--brand)]',
               )}
             >
               {clearing && <Loader2 className="h-3 w-3 animate-spin" />}

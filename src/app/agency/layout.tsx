@@ -8,14 +8,10 @@ import { createClient } from '@/lib/supabase/server'
 import { AgencySidebar } from '@/components/agency/shell/AgencySidebar'
 import { BusinessSelector } from '@/components/agency/shell/BusinessSelector'
 import { DirectorRailConnected } from '@/components/agency/shell/DirectorRailConnected'
-import { ThemeToggle } from '@/components/agency/ThemeToggle'
 import { UserMenu } from '@/components/agency/UserMenu'
 import { BrandThemeSync } from '@/components/agency/shell/BrandThemeSync'
 import { ReloadAppButton } from '@/components/agency/shell/ReloadAppButton'
-import {
-  brandHasSurfacePalette,
-  brandThemeVars,
-} from '@/components/agency/shell/brand-theme'
+import { brandThemeVars } from '@/components/agency/shell/brand-theme'
 import type { Brand } from '@/types/database'
 
 /**
@@ -73,21 +69,13 @@ function brandThemeStyles(brands: Brand[]): string {
   }
 
   const fallbackLight = cssDecls(brandThemeVars(null, { dark: false }))
-  const fallbackDark = cssDecls(brandThemeVars(null, { dark: true }))
   rule(SHELL, fallbackLight)
-  rule(`.dark ${SHELL}`, fallbackDark)
 
   for (const brand of brands) {
     if (!/^[A-Za-z0-9_-]+$/.test(brand.id)) continue
 
     const scoped = `${SHELL}[data-brand-id="${brand.id}"]`
-    const lightVars = brandThemeVars(brand, { dark: false })
-    const darkVars = brandHasSurfacePalette(brand)
-      ? lightVars
-      : brandThemeVars(brand, { dark: true })
-
-    rule(scoped, cssDecls(lightVars))
-    rule(`.dark ${scoped}`, cssDecls(darkVars))
+    rule(scoped, cssDecls(brandThemeVars(brand, { dark: false })))
   }
 
   return rules.join('\n')
@@ -230,7 +218,6 @@ export default async function AgencyLayout({
           <div className="min-w-0 flex-1">
             <UserMenu />
           </div>
-          <ThemeToggle />
           <ReloadAppButton />
           <Link
             href="https://help.notrealsmart.com.au"

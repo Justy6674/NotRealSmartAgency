@@ -6,12 +6,17 @@ import { brandThemeVars } from './brand-theme.ts'
 
 test('desk shadcn surface tokens follow house paper, not the dark default', () => {
   const css = readFileSync(resolve(process.cwd(), 'src/app/globals.css'), 'utf8')
-  const shell = css.slice(css.indexOf('[data-nrs-shell]'), css.indexOf('.dark [data-nrs-shell]'))
+  const start = css.indexOf('[data-nrs-shell] {')
+  const end = css.indexOf('html.dark [data-nrs-shell]')
+  assert.notEqual(start, -1)
+  assert.notEqual(end, -1)
+  const shell = css.slice(start, end)
   assert.match(shell, /--background:\s*var\(--bg\)/)
   assert.match(shell, /--card:\s*var\(--panel\)/)
   assert.match(shell, /--muted:\s*var\(--panel-2\)/)
   assert.match(shell, /--border:\s*var\(--line\)/)
   assert.match(shell, /--foreground:\s*var\(--ink\)/)
+  assert.match(shell, /--primary:\s*var\(--brand-deep\)/)
 })
 
 test('Scent Sell cream paper still does not write --card itself — the alias does', () => {

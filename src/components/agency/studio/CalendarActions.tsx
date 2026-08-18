@@ -145,8 +145,8 @@ export function CalendarActions({ activeFilters = [], onFilterChange }: Calendar
           className={cn(
             'rounded-full px-3 py-1 text-xs font-medium transition-colors',
             activeFilters.includes(type.id)
-              ? 'bg-foreground text-background'
-              : 'bg-muted text-muted-foreground hover:text-foreground'
+              ? 'bg-[var(--brand-wash)] font-semibold text-[var(--brand-deep)]'
+              : 'bg-[var(--panel-2)] text-[var(--ink-2)] hover:text-[var(--ink)]'
           )}
         >
           {type.label}

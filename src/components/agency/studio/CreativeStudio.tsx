@@ -67,16 +67,16 @@ export function CreativeStudio() {
   return (
     <div className="flex h-full flex-col">
       {/* Tab bar */}
-      <div className="flex items-center gap-1.5 px-6 pt-4 pb-2">
+      <div className="flex items-center gap-0.5 border-b px-6 pt-3" style={{ borderColor: 'var(--line)' }}>
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={cn(
-              'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+              'rounded-none border-b-2 px-3 py-2 text-[13.5px] transition-colors',
               activeTab === tab.id
-                ? 'bg-foreground text-background'
-                : 'bg-muted text-muted-foreground hover:text-foreground'
+                ? 'border-[var(--brand)] font-semibold text-[var(--brand-deep)]'
+                : 'border-transparent text-[var(--ink-2)] hover:bg-[var(--panel-2)] hover:text-[var(--ink)]'
             )}
           >
             {tab.label}

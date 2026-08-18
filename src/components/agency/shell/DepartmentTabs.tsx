@@ -160,12 +160,12 @@ export function DepartmentTabs({
             onClick={() => onValueChange(tab.id)}
             style={isActive ? ACTIVE_STYLE : tab.care ? CARE_STYLE : undefined}
             className={cn(
-              'relative -mb-px flex shrink-0 items-center gap-2 whitespace-nowrap',
-              'border-b-2 border-transparent px-3 pb-2.5 pt-2 text-sm',
-              'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'relative -mb-px flex shrink-0 items-center gap-[7px] whitespace-nowrap',
+              'border-b-2 border-transparent px-3 pb-2.5 pt-[9px] text-[13.5px]',
+              'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]',
               isActive
                 ? 'font-semibold'
-                : 'text-muted-foreground hover:rounded-t-lg hover:bg-muted hover:text-foreground',
+                : 'text-[var(--ink-2)] hover:rounded-t-lg hover:bg-[var(--panel-2)] hover:text-[var(--ink)]',
             )}
           >
             {tab.icon ? (

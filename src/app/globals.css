@@ -155,6 +155,16 @@
    dark block + AgencySidebar.tsx fallbacks. Token drift resolved in DESIGN.md.
 */
 [data-nrs-shell] {
+  /* Signed-in desk is paper. html.dark is for login/marketing only.
+     Brand retint (layout + brand-theme.ts) paints --brand* and, when the
+     business stored a website background, the cream/copper paper too. */
+  color-scheme: light;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+
   --panel: oklch(1 0 0);
   --panel-2: oklch(0.975 0.004 240);
   --line: oklch(0.915 0.007 240);
@@ -174,11 +184,16 @@
   --care-deep: oklch(0.42 0.14 25);
   --nrs-shadow: 0 1px 2px oklch(0.2 0.02 240 / .05), 0 8px 24px -16px oklch(0.2 0.02 240 / .28);
 
-  /* Shadcn surface tokens follow the desk paper. ThemeProvider defaults to
-     dark, so without this alias `border-border` / `bg-card` / `bg-background`
-     stay near-black while `--bg` is cream. The collision is the default, not
-     a toggle. BrandThemeVars paints --bg/--panel/--line/--ink*; these names
-     just point at them. */
+  /* Quiet house accent until the selected business paints over it.
+     Chroma 0.03 — chrome, not Downscale-blue wearing hue 240. */
+  --brand: oklch(0.545 0.03 240);
+  --brand-deep: oklch(0.33 0.0209 240);
+  --brand-wash: oklch(0.966 0.0068 240);
+  --brand-ink: oklch(1 0 0);
+
+  /* Shadcn names follow desk paper and brand fill, not html.dark charcoal
+     and not --primary black. bg-card, default Button, and selected chips
+     all read these. */
   --background: var(--bg);
   --foreground: var(--ink);
   --card: var(--panel);
@@ -193,25 +208,49 @@
   --secondary-foreground: var(--ink);
   --border: var(--line);
   --input: var(--line);
+  --primary: var(--brand-deep);
+  --primary-foreground: var(--brand-ink);
+  --ring: var(--brand);
+  --radius: 8px;
+  --sidebar: var(--panel);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--brand-deep);
+  --sidebar-primary-foreground: var(--brand-ink);
+  --sidebar-accent: var(--brand-wash);
+  --sidebar-accent-foreground: var(--brand-deep);
+  --sidebar-border: var(--line);
 }
 
-.dark [data-nrs-shell] {
-  --panel: oklch(0.215 0.012 240);
-  --panel-2: oklch(0.245 0.013 240);
-  --line: oklch(0.315 0.015 240);
-  --line-soft: oklch(0.275 0.013 240);
-  --ink: oklch(0.960 0.005 240);
-  --ink-2: oklch(0.795 0.011 240);
-  --ink-3: oklch(0.640 0.013 240);
-  --bg: oklch(0.175 0.010 240);
-  --ok: oklch(0.55 0.13 155);
-  --ok-wash: oklch(0.268 0.040 155);
-  --warn: oklch(0.80 0.13 78);
-  --warn-wash: oklch(0.288 0.045 75);
-  --stop: oklch(0.70 0.16 27);
-  --care: oklch(0.77 0.13 25);
-  --care-wash: oklch(0.285 0.045 25);
-  --care-line: oklch(0.42 0.070 25);
-  --care-deep: oklch(0.86 0.10 25);
-  --nrs-shadow: 0 1px 2px oklch(0 0 0 / .5), 0 10px 30px -18px oklch(0 0 0 / .75);
+/* Do not invert furniture when ThemeProvider puts .dark on <html>. */
+html.dark [data-nrs-shell] {
+  color-scheme: light;
+}
+
+/* Type, icons, buttons — locked from .mockups/dept-social.html / DESIGN.md */
+[data-nrs-shell] h1 {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+[data-nrs-shell] svg.lucide {
+  stroke-width: 1.9;
+}
+
+[data-nrs-shell] [data-slot="button"] {
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+/* Selected shadcn chips used ink fill (black on cream). Primary actions and
+   leftover selected states fill with the business, not --ink. */
+[data-nrs-shell] :is(button, a, [role="tab"], [role="button"]).bg-foreground {
+  background-color: var(--brand-deep);
+  color: var(--brand-ink);
+}
+[data-nrs-shell] :is(button, a, [role="tab"], [role="button"]).text-background {
+  color: var(--brand-ink);
 }

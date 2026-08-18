@@ -87,7 +87,7 @@ function SelectionBox({ selected }: { selected: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border transition-colors duration-200 ${selected ? 'border-foreground bg-foreground text-background' : 'border-border'}`}
+      className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border transition-colors duration-200 ${selected ? 'border-transparent bg-[var(--brand-deep)] text-[var(--brand-ink)]' : 'border-[var(--line)] bg-[var(--panel)]'}`}
     >
       {selected && <Check className="h-3.5 w-3.5" />}
     </span>
@@ -436,7 +436,7 @@ export function DesktopMediaInbox({ brands }: { brands: InboxBrand[] }) {
                             : 'border-border bg-background hover:border-foreground/40 hover:bg-accent/40 active:bg-accent/60'
                       }`}
                     >
-                      <span className={`mb-2 flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-200 ${dragging ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`mb-2 flex h-9 w-9 items-center justify-center rounded-md transition-colors duration-200 ${dragging ? 'bg-[var(--brand-deep)] text-[var(--brand-ink)]' : 'bg-[var(--panel-2)] text-[var(--ink-3)]'}`}>
                         {busy && !dragging
                           ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                           : <Upload className="h-4 w-4" aria-hidden="true" />}

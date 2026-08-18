@@ -27,9 +27,8 @@
  *
  * Colour comes entirely from custom properties, so the business selector can
  * retint the whole column by changing --brand / --brand-deep / --brand-wash on
- * an ancestor. Each alias below falls back to the silver hue-240 house palette,
- * so the sidebar is correct in both themes before any retinting exists and
- * a business with no colours set gets honest neutral rather than a guessed tint.
+ * an ancestor. Fallbacks are paper + quiet chrome (chroma 0.03). html.dark
+ * must not charcoal this column — the signed-in desk is paper, then brand.
  */
 
 import type { ReactNode } from 'react'
@@ -62,46 +61,22 @@ import {
  * app switches theme by class (next-themes), not by system preference.
  */
 const TOKENS = [
-  // Surfaces
   '[--nrs-panel:var(--panel,oklch(1_0_0))]',
-  'dark:[--nrs-panel:var(--panel,oklch(0.215_0.012_240))]',
   '[--nrs-panel-2:var(--panel-2,oklch(0.975_0.004_240))]',
-  'dark:[--nrs-panel-2:var(--panel-2,oklch(0.245_0.013_240))]',
   '[--nrs-line:var(--line,oklch(0.915_0.007_240))]',
-  'dark:[--nrs-line:var(--line,oklch(0.315_0.015_240))]',
   '[--nrs-line-soft:var(--line-soft,oklch(0.950_0.005_240))]',
-  'dark:[--nrs-line-soft:var(--line-soft,oklch(0.275_0.013_240))]',
-  // Ink
   '[--nrs-ink:var(--ink,oklch(0.20_0.014_240))]',
-  'dark:[--nrs-ink:var(--ink,oklch(0.960_0.005_240))]',
   '[--nrs-ink-2:var(--ink-2,oklch(0.46_0.012_240))]',
-  'dark:[--nrs-ink-2:var(--ink-2,oklch(0.795_0.011_240))]',
   '[--nrs-ink-3:var(--ink-3,oklch(0.615_0.011_240))]',
-  'dark:[--nrs-ink-3:var(--ink-3,oklch(0.640_0.013_240))]',
-  // The business accent. One switch retints the column.
-  '[--nrs-brand:var(--brand,oklch(0.545_0.115_240))]',
-  'dark:[--nrs-brand:var(--brand,oklch(0.74_0.11_240))]',
-  '[--nrs-brand-deep:var(--brand-deep,oklch(0.33_0.080_240))]',
-  'dark:[--nrs-brand-deep:var(--brand-deep,oklch(0.87_0.08_240))]',
-  '[--nrs-brand-wash:var(--brand-wash,oklch(0.966_0.026_240))]',
-  'dark:[--nrs-brand-wash:var(--brand-wash,oklch(0.272_0.038_240))]',
-  // Text sitting ON the accent. In dark the accent inverts to a light tint, so
-  // white here would drop to almost no contrast on the Create post button.
-  // brand-theme.ts derives this as --brand-ink for exactly that reason.
+  '[--nrs-brand:var(--brand,oklch(0.545_0.03_240))]',
+  '[--nrs-brand-deep:var(--brand-deep,oklch(0.33_0.0209_240))]',
+  '[--nrs-brand-wash:var(--brand-wash,oklch(0.966_0.0068_240))]',
   '[--nrs-on-brand:var(--brand-ink,oklch(1_0_0))]',
-  'dark:[--nrs-on-brand:var(--brand-ink,oklch(0.17_0.020_240))]',
-  // Healthcare. Warm red, hue 25, and only ever visible on a regulated business.
   '[--nrs-care:var(--care,oklch(0.52_0.150_25))]',
-  'dark:[--nrs-care:var(--care,oklch(0.77_0.13_25))]',
   '[--nrs-care-wash:var(--care-wash,oklch(0.965_0.028_25))]',
-  'dark:[--nrs-care-wash:var(--care-wash,oklch(0.285_0.045_25))]',
   '[--nrs-care-line:oklch(0.89_0.050_25)]',
-  'dark:[--nrs-care-line:oklch(0.42_0.070_25)]',
   '[--nrs-knob:oklch(1_0_0)]',
-  'dark:[--nrs-knob:oklch(0.20_0.040_25)]',
-  // Elevation
   '[--nrs-shadow:0_1px_2px_oklch(0.2_0.02_240/.05),0_8px_24px_-16px_oklch(0.2_0.02_240/.28)]',
-  'dark:[--nrs-shadow:0_1px_2px_oklch(0_0_0/.5),0_10px_30px_-18px_oklch(0_0_0/.75)]',
 ].join(' ')
 
 /** Shared by the business logo chip and the owner's avatar. */

@@ -106,8 +106,8 @@ export function MultiPlatformPreview({
             className={cn(
               'rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors',
               activePlatform === 'all'
-                ? 'bg-foreground text-background'
-                : 'bg-muted text-muted-foreground hover:text-foreground'
+                ? 'bg-[var(--brand-wash)] font-semibold text-[var(--brand-deep)]'
+                : 'bg-[var(--panel-2)] text-[var(--ink-2)] hover:text-[var(--ink)]'
             )}
           >
             All
@@ -119,8 +119,8 @@ export function MultiPlatformPreview({
               className={cn(
                 'rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors',
                 activePlatform === p
-                  ? 'bg-foreground text-background'
-                  : 'bg-muted text-muted-foreground hover:text-foreground'
+                  ? 'bg-[var(--brand-wash)] font-semibold text-[var(--brand-deep)]'
+                  : 'bg-[var(--panel-2)] text-[var(--ink-2)] hover:text-[var(--ink)]'
               )}
             >
               {PLATFORM_LABELS[p] ?? p}

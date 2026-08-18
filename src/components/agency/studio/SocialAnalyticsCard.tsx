@@ -76,8 +76,8 @@ export function SocialAnalyticsCard() {
               onClick={() => setPeriod(opt.value)}
               className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${
                 period === opt.value
-                  ? 'bg-foreground text-background'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'bg-[var(--brand-wash)] font-semibold text-[var(--brand-deep)]'
+                  : 'text-[var(--ink-2)] hover:text-[var(--ink)]'
               }`}
             >
               {opt.label}

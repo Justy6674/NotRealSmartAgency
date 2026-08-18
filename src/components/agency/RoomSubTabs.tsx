@@ -25,8 +25,8 @@ export function RoomSubTabs() {
             className={cn(
               'shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors',
               isActive
-                ? 'bg-foreground text-background'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                ? 'bg-[var(--brand-wash)] font-semibold text-[var(--brand-deep)]'
+                : 'bg-[var(--panel-2)] text-[var(--ink-2)] hover:text-[var(--ink)]'
             )}
           >
             {tab.label}

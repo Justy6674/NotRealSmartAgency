@@ -153,8 +153,8 @@ function Row({
           className={cn(
             'shrink-0 rounded-md px-3 py-1.5 text-xs font-medium',
             connected
-              ? 'border text-muted-foreground hover:bg-accent'
-              : 'bg-foreground text-background',
+              ? 'border border-[var(--line)] text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--brand-deep)]'
+              : 'bg-[var(--brand-deep)] text-[var(--brand-ink)]',
           )}
         >
           {action.label}

@@ -82,8 +82,8 @@ export function AgencyHeader() {
                   className={cn(
                     'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'bg-[var(--brand-wash)] font-semibold text-[var(--brand-deep)]'
+                      : 'text-[var(--ink-2)] hover:bg-[var(--panel-2)] hover:text-[var(--ink)]'
                   )}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -111,8 +111,8 @@ export function AgencyHeader() {
                 className={cn(
                   'shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors',
                   isActive
-                    ? 'bg-foreground text-background'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                    ? 'bg-[var(--brand-wash)] font-semibold text-[var(--brand-deep)]'
+                    : 'bg-[var(--panel-2)] text-[var(--ink-2)] hover:text-[var(--ink)]'
                 )}
               >
                 {tab.label}
