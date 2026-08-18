@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useComposeDeskStore } from '@/stores/compose-desk-store'
+import { DIRECTOR_HASHTAG_DISCLAIMER } from '@/lib/desk/extract-caption-draft'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 
@@ -32,7 +33,7 @@ import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
 import { MediaSelector } from './MediaSelector'
 import { ComposeMediaUpload } from './ComposeMediaUpload'
 
-import { createVersionsFromMaster, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
+import { createVersionsFromMaster, customisePlatform, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
 import { earliestNextSlot } from '@/lib/posting-queue/assign-to-slot'
 import type { PostPlatform, PostType, PostingScheduleSlot } from '@/types/database'
 
@@ -197,7 +198,9 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [creatorMode, setCreatorMode] = useState<CreatorMode>('fresh')
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [showComposeUpload, setShowComposeUpload] = useState(false)
+  const [showDirectorHashtagNote, setShowDirectorHashtagNote] = useState(false)
   const [showPerPlatformVersions, setShowPerPlatformVersions] = useState(false)
+  const pendingCaptionApply = useComposeDeskStore((s) => s.pendingCaptionApply)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
   const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
@@ -429,6 +432,53 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     selectedPlatforms,
     caption,
   ])
+
+  useEffect(() => {
+    if (!pendingCaptionApply || !activeBrandId || pendingCaptionApply.brandId !== activeBrandId) {
+      return
+    }
+    const { caption: nextCaption, hashtags: nextTags, platforms: nextPlatforms } = pendingCaptionApply
+    const draftPlatforms = nextPlatforms ?? []
+    const singlePlatform = draftPlatforms.length === 1 ? draftPlatforms[0] : undefined
+
+    setCaption(nextCaption)
+    setHashtags(nextTags)
+
+    if (
+      singlePlatform &&
+      selectedPlatforms.length > 1 &&
+      selectedPlatforms.includes(singlePlatform)
+    ) {
+      // Draft targets one platform while several are selected — override that account only.
+      setVersions((prev) => customisePlatform(prev, singlePlatform, nextCaption, nextTags))
+      setShowPerPlatformVersions(true)
+    } else if (draftPlatforms.length > 0 && selectedPlatforms.length === 0) {
+      setSelectedPlatforms(draftPlatforms)
+      setVersions(createVersionsFromMaster(draftPlatforms, nextCaption, nextTags))
+    } else if (draftPlatforms.length > 0) {
+      setVersions((prev) => {
+        const base =
+          Object.keys(prev).length > 0
+            ? updateMasterCaption(prev, nextCaption, nextTags)
+            : createVersionsFromMaster(
+                selectedPlatforms.length > 0 ? selectedPlatforms : draftPlatforms,
+                nextCaption,
+                nextTags,
+              )
+        if (singlePlatform && selectedPlatforms.includes(singlePlatform)) {
+          return customisePlatform(base, singlePlatform, nextCaption, nextTags)
+        }
+        return base
+      })
+    } else {
+      setVersions((prev) => updateMasterCaption(prev, nextCaption, nextTags))
+    }
+
+    setShowDirectorHashtagNote(
+      Boolean(pendingCaptionApply.hashtagsAreSuggested && nextTags.length > 0),
+    )
+    useComposeDeskStore.getState().setPendingCaptionApply(null)
+  }, [pendingCaptionApply, activeBrandId, selectedPlatforms])
 
   // ── AI Generation — CAPTION ONLY ──────────────────────────────────────────
   // This button lives in the Caption card and writes the caption TEXT for
@@ -987,6 +1037,18 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       </ComposeDeskCard>
 
       <ComposeDeskCard header="Hashtags">
+        {showDirectorHashtagNote && (
+          <p
+            className="mb-3 rounded-[8px] border px-3 py-2 text-[11px] leading-snug"
+            style={{
+              borderColor: 'var(--line)',
+              background: 'var(--panel-2)',
+              color: 'var(--ink-3)',
+            }}
+          >
+            {DIRECTOR_HASHTAG_DISCLAIMER}
+          </p>
+        )}
         <HashtagSection
           embedded
           brandId={activeBrandId}

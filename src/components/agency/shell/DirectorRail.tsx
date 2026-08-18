@@ -771,8 +771,16 @@ export function DirectorRail({
         </div>
       )}
 
-      <p id={`${scope}-context`} className="text-[11px] leading-relaxed text-muted-foreground">
-        {brandName && <span className="font-medium text-foreground">{brandName}</span>}
+      <p
+        id={`${scope}-context`}
+        className="text-[11px] leading-relaxed"
+        style={{ color: 'var(--ink-3)' }}
+      >
+        {brandName && (
+          <span className="font-medium" style={{ color: 'var(--ink-2)' }}>
+            {brandName}
+          </span>
+        )}
         {brandName ? ' · ' : ''}
         {contextLabel}
         {'. '}
@@ -803,15 +811,22 @@ export function DirectorRail({
           </p>
         </div>
       ) : (
-        <div className="divide-y divide-border/50">
+        <div className="divide-y" style={{ borderColor: 'var(--line-soft)' }}>
           {messages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
+            <ChatMessage key={message.id} message={message} variant="rail" />
           ))}
           {isLoading && messages[messages.length - 1]?.role === 'user' && (
             <div className="flex gap-3 py-4">
               <AgentAvatar agentType="overall" size="sm" />
-              <div className="rounded-2xl rounded-bl-md bg-muted px-4 py-2.5">
-                <p className="text-sm text-muted-foreground">Thinking…</p>
+              <div
+                className="rounded-2xl rounded-bl-md px-4 py-2.5"
+                style={{
+                  background: 'var(--panel-2)',
+                  border: '1px solid var(--line-soft)',
+                  color: 'var(--ink-3)',
+                }}
+              >
+                <p className="text-sm">Thinking…</p>
               </div>
             </div>
           )}

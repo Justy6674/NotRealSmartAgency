@@ -18,15 +18,19 @@ import type { UIMessage } from 'ai'
 interface ChatMessageProps {
   message: UIMessage
   onRegenerate?: () => void
+  /** Brand-paper styling for the Director rail */
+  variant?: 'default' | 'rail'
 }
 
-// ─── Inline Card Renderer ─────────────────────────────────────────────────────
+function RichTextContent({ text, variant }: { text: string; variant: 'default' | 'rail' }) {
+  const proseClass =
+    variant === 'rail'
+      ? 'prose prose-sm max-w-none [&_*]:text-[var(--ink)]'
+      : 'prose prose-sm dark:prose-invert max-w-none'
 
-function RichTextContent({ text }: { text: string }) {
-  // Fast path: no card markers, render as plain markdown
   if (!hasInlineCards(text)) {
     return (
-      <div className="prose prose-sm dark:prose-invert max-w-none">
+      <div className={proseClass}>
         <Markdown>{text}</Markdown>
       </div>
     )
@@ -40,7 +44,7 @@ function RichTextContent({ text }: { text: string }) {
         switch (segment.type) {
           case 'markdown':
             return (
-              <div key={i} className="prose prose-sm dark:prose-invert max-w-none">
+              <div key={i} className={proseClass}>
                 <Markdown>{segment.content}</Markdown>
               </div>
             )
@@ -62,9 +66,10 @@ function RichTextContent({ text }: { text: string }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
+export function ChatMessage({ message, onRegenerate, variant = 'default' }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const { activeAgentType } = useAgencyStore()
+  const isRail = variant === 'rail'
 
   // Extract full text content for action buttons
   const textContent = message.parts
@@ -102,21 +107,39 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
       <div className={cn('max-w-[80%] space-y-2', isUser ? '' : '')}>
         {/* Agent name label for assistant messages */}
         {!isUser && (
-          <p className="text-xs font-medium text-muted-foreground">
+          <p
+            className={cn('text-xs font-medium', !isRail && 'text-muted-foreground')}
+            style={isRail ? { color: 'var(--ink-3)' } : undefined}
+          >
             {AGENT_LABELS[activeAgentType]}
           </p>
         )}
 
         <div
           className={cn(
-            isUser
-              ? 'rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground'
-              : 'rounded-2xl rounded-bl-md bg-muted px-4 py-2.5'
+            'rounded-2xl px-4 py-2.5',
+            isUser ? 'rounded-br-md' : 'rounded-bl-md',
+            !isRail && isUser && 'bg-primary text-primary-foreground',
+            !isRail && !isUser && 'bg-muted',
           )}
+          style={
+            isRail
+              ? isUser
+                ? {
+                    background: 'var(--brand-deep)',
+                    color: 'var(--brand-ink)',
+                  }
+                : {
+                    background: 'var(--panel-2)',
+                    color: 'var(--ink)',
+                    border: '1px solid var(--line-soft)',
+                  }
+              : undefined
+          }
         >
           {parts?.map((part, i) => {
             if (part.type === 'text') {
-              return <RichTextContent key={i} text={part.text} />
+              return <RichTextContent key={i} text={part.text} variant={variant} />
             }
             // Tool invocation parts in v6 have type starting with 'tool-'
             if (part.type.startsWith('tool-')) {
@@ -161,13 +184,20 @@ export function ChatMessage({ message, onRegenerate }: ChatMessageProps) {
 
         {/* Action bar for substantial assistant messages */}
         {showActions && (
-          <MessageActions content={textContent} onRegenerate={onRegenerate} />
+          <MessageActions content={textContent} onRegenerate={onRegenerate} variant={variant} />
         )}
       </div>
 
       {isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-          <User className="h-4 w-4 text-muted-foreground" />
+        <div
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+          style={
+            isRail
+              ? { background: 'var(--panel-2)', color: 'var(--ink-3)' }
+              : undefined
+          }
+        >
+          <User className={cn('h-4 w-4', !isRail && 'text-muted-foreground')} />
         </div>
       )}
     </div>

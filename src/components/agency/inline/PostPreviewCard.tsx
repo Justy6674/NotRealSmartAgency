@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Instagram,
   Facebook,
@@ -13,8 +14,21 @@ import {
   Pencil,
   SkipForward,
   Loader2,
+  PenLine,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAgencyStore } from '@/stores/agency-store'
+import { useComposeDeskStore } from '@/stores/compose-desk-store'
+import type { PostPlatform } from '@/types/database'
+
+const PLATFORM_NAME_MAP: Record<string, PostPlatform> = {
+  tiktok: 'tiktok',
+  instagram: 'instagram',
+  facebook: 'facebook',
+  linkedin: 'linkedin',
+  twitter: 'twitter',
+  youtube: 'youtube',
+}
 
 // ─── Platform Config ──────────────────────────────────────────────────────────
 
@@ -48,12 +62,14 @@ export interface PostPreviewCardProps {
   platform: string
   caption: string
   hashtags?: string[]
+  hashtagsAreSuggested?: boolean
   scheduledAt?: string
   status: string
   postId?: string
   onApprove?: () => void
   onEdit?: () => void
   onSkip?: () => void
+  showAddToCaption?: boolean
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -62,16 +78,38 @@ export function PostPreviewCard({
   platform,
   caption,
   hashtags,
+  hashtagsAreSuggested,
   scheduledAt,
   status,
   postId,
   onApprove,
   onEdit,
   onSkip,
+  showAddToCaption,
 }: PostPreviewCardProps) {
-  const [actionState, setActionState] = useState<'idle' | 'approving' | 'approved'>('idle')
+  const router = useRouter()
+  const { activeBrandId } = useAgencyStore()
+  const [actionState, setActionState] = useState<'idle' | 'approving' | 'approved' | 'added'>('idle')
 
-  const platformCfg = PLATFORM_CONFIG[platform.toLowerCase()] ?? {
+  const handleAddToCaption = () => {
+    if (!activeBrandId || !caption.trim()) return
+    useComposeDeskStore.getState().setPendingCaptionApply({
+      brandId: activeBrandId,
+      caption: caption.trim(),
+      hashtags: (hashtags ?? []).map((h) => h.replace(/^#+/, '').toLowerCase()),
+      platforms: PLATFORM_NAME_MAP[platform.toLowerCase()]
+        ? [PLATFORM_NAME_MAP[platform.toLowerCase()]]
+        : undefined,
+      hashtagsAreSuggested: true,
+    })
+    if (!window.location.pathname.startsWith('/agency/social')) {
+      router.push('/agency/social')
+    }
+    setActionState('added')
+  }
+
+  const platformKey = platform.toLowerCase()
+  const platformCfg = PLATFORM_CONFIG[platformKey] ?? {
     label: platform,
     icon: CalendarDays,
     bgClass: 'bg-muted',
@@ -114,6 +152,11 @@ export function PostPreviewCard({
       {/* Hashtags */}
       {hashtags && hashtags.length > 0 && (
         <p className="mt-2 text-xs text-muted-foreground">
+          {hashtagsAreSuggested && (
+            <span className="block mb-1 text-[10px] uppercase tracking-wide opacity-80">
+              Suggested tags
+            </span>
+          )}
           {hashtags.map(h => (h.startsWith('#') ? h : `#${h}`)).join(' ')}
         </p>
       )}
@@ -127,8 +170,22 @@ export function PostPreviewCard({
       )}
 
       {/* Action buttons */}
-      {(onApprove || onEdit || onSkip) && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+      {(showAddToCaption || onApprove || onEdit || onSkip) && (
+        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border/50">
+          {showAddToCaption && (
+            <button
+              type="button"
+              onClick={handleAddToCaption}
+              className="inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold transition-colors"
+              style={{
+                background: actionState === 'added' ? 'var(--brand-wash)' : 'var(--brand-deep)',
+                color: actionState === 'added' ? 'var(--brand-deep)' : 'var(--brand-ink)',
+              }}
+            >
+              {actionState === 'added' ? <Check className="h-3 w-3" /> : <PenLine className="h-3 w-3" />}
+              {actionState === 'added' ? 'Added' : 'Add to caption'}
+            </button>
+          )}
           {onApprove && (
             <button
               onClick={handleApprove}

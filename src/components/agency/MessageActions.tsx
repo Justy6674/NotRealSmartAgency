@@ -1,23 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   BookmarkPlus, Mail, Forward, GitCompareArrows, RefreshCw,
-  ListChecks, Copy, Brain, Maximize2, FileDown, Check, Loader2, X, CircleHelp
+  ListChecks, Copy, Brain, Maximize2, FileDown, Check, Loader2, X, CircleHelp, PenLine
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useComposeDeskStore } from '@/stores/compose-desk-store'
 import { getNamespace } from '@/lib/ruflo/namespaces'
+import { extractCaptionDraftFromMessage } from '@/lib/desk/extract-caption-draft'
 
 interface MessageActionsProps {
   content: string
   onRegenerate?: () => void
+  /** Rail uses brand paper tokens and surfaces caption apply first */
+  variant?: 'default' | 'rail'
 }
 
 type ActionState = 'idle' | 'loading' | 'done' | 'error'
 
-export function MessageActions({ content, onRegenerate }: MessageActionsProps) {
+export function MessageActions({ content, onRegenerate, variant = 'default' }: MessageActionsProps) {
+  const router = useRouter()
   const { activeBrandId, activeAgentType } = useAgencyStore()
+  const captionDraft = useMemo(() => extractCaptionDraftFromMessage(content), [content])
   const [states, setStates] = useState<Record<string, ActionState>>({})
   const [showEmailInput, setShowEmailInput] = useState(false)
   const [emailTo, setEmailTo] = useState('')
@@ -31,6 +38,27 @@ export function MessageActions({ content, onRegenerate }: MessageActionsProps) {
   const getTitle = () => {
     const firstLine = content.split('\n').find(l => l.trim())
     return firstLine?.replace(/^#+\s*/, '').slice(0, 80) || 'Agency Report'
+  }
+
+  // 0. Add to caption — one press into Compose
+  const handleAddToCaption = () => {
+    if (!activeBrandId || !captionDraft) return
+    setState('addCaption', 'loading')
+    try {
+      useComposeDeskStore.getState().setPendingCaptionApply({
+        brandId: activeBrandId,
+        caption: captionDraft.caption,
+        hashtags: captionDraft.hashtags,
+        platforms: captionDraft.platforms.length ? captionDraft.platforms : undefined,
+        hashtagsAreSuggested: captionDraft.hashtagsAreSuggested,
+      })
+      if (!window.location.pathname.startsWith('/agency/social')) {
+        router.push('/agency/social')
+      }
+      setState('addCaption', 'done')
+    } catch {
+      setState('addCaption', 'error')
+    }
   }
 
   // 1. Save to Outputs
@@ -185,7 +213,7 @@ export function MessageActions({ content, onRegenerate }: MessageActionsProps) {
     { key: 'save', icon: BookmarkPlus, label: 'Save', onClick: handleSave },
     { key: 'emailMe', icon: Mail, label: 'Email Me', onClick: handleEmailMe },
     { key: 'emailSomeone', icon: Forward, label: 'Send to...', onClick: () => setShowEmailInput(!showEmailInput) },
-    { key: 'baseline', icon: GitCompareArrows, label: 'Baseline', onClick: handleBaseline },
+    { key: 'baseline', icon: GitCompareArrows, label: variant === 'rail' ? 'Base' : 'Baseline', onClick: handleBaseline },
     { key: 'reanalyse', icon: RefreshCw, label: 'Re-analyse', onClick: handleReanalyse },
     { key: 'todo', icon: ListChecks, label: todoCount !== null ? `${todoCount} tasks` : 'Todo', onClick: handleTodo },
     { key: 'copy', icon: Copy, label: 'Copy', onClick: handleCopy },
@@ -195,10 +223,60 @@ export function MessageActions({ content, onRegenerate }: MessageActionsProps) {
     { key: 'help', icon: CircleHelp, label: 'Help', onClick: () => window.open('https://help.notrealsmart.com.au', '_blank') },
   ]
 
+  const visibleActions =
+    variant === 'rail'
+      ? actions.filter((a) => ['save', 'emailMe', 'emailSomeone', 'baseline'].includes(a.key))
+      : actions
+
+  const secondaryButtonClass = cn(
+    'flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0',
+    variant === 'rail'
+      ? 'text-[var(--ink-3)] hover:bg-[var(--brand-wash)] hover:text-[var(--brand-deep)]'
+      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+  )
+
+  const secondaryDoneClass =
+    variant === 'rail'
+      ? 'bg-[var(--brand-wash)] text-[var(--brand-deep)]'
+      : 'bg-emerald-500/10 text-emerald-500'
+
+  const secondaryErrorClass =
+    variant === 'rail' ? 'bg-[var(--care-wash)] text-[var(--care)]' : 'bg-red-500/10 text-red-400'
+
   return (
     <>
       <div className="flex items-center gap-1 overflow-x-auto py-1.5 scrollbar-none">
-        {actions.map(({ key, icon: Icon, label, onClick }) => {
+        {captionDraft && (
+          <button
+            type="button"
+            onClick={handleAddToCaption}
+            disabled={states.addCaption === 'loading'}
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[11px] font-semibold transition-colors',
+              states.addCaption === 'done' && secondaryDoneClass,
+              states.addCaption === 'error' && secondaryErrorClass,
+            )}
+            style={
+              states.addCaption === 'idle' || states.addCaption === 'loading'
+                ? {
+                    background: 'var(--brand-deep)',
+                    color: 'var(--brand-ink)',
+                  }
+                : undefined
+            }
+          >
+            {states.addCaption === 'loading' ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : states.addCaption === 'done' ? (
+              <Check className="h-3 w-3" />
+            ) : (
+              <PenLine className="h-3 w-3" />
+            )}
+            <span>{states.addCaption === 'done' ? 'Added' : variant === 'rail' ? 'Use on post' : 'Add to caption'}</span>
+          </button>
+        )}
+
+        {visibleActions.map(({ key, icon: Icon, label, onClick }) => {
           const state = states[key] ?? 'idle'
           return (
             <button
@@ -206,12 +284,9 @@ export function MessageActions({ content, onRegenerate }: MessageActionsProps) {
               onClick={onClick}
               disabled={state === 'loading'}
               className={cn(
-                'flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors shrink-0',
-                state === 'done'
-                  ? 'bg-emerald-500/10 text-emerald-500'
-                  : state === 'error'
-                  ? 'bg-red-500/10 text-red-400'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                secondaryButtonClass,
+                state === 'done' && secondaryDoneClass,
+                state === 'error' && secondaryErrorClass,
               )}
             >
               {state === 'loading' ? (
