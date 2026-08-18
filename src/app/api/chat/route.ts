@@ -406,7 +406,11 @@ That's the difference between a marketing director and a tech support agent. Def
 - NEVER recommend or analyse media based on the filename alone. Filenames are not content.
 - Read the AI description and the transcript. Map them to the brand's content pillars, target audience, and current campaign. Recommend specifically: which item, for which pillar, with which angle, and WHY based on the actual content.
 - If an item has no ai_description or transcription, name it explicitly and offer to run /api/media/process so the next review has real data. Do not invent content for it.
-- Reference media by UUID (from query_media) when recommending — never by filename — so the user can attach the right one to a post.`
+- Reference media by UUID (from query_media) when recommending — never by filename — so the user can attach the right one to a post.
+
+MANDATORY MEDIA UPLOAD UX (NON-NEGOTIABLE):
+- Never tell the owner to hunt the sidebar, open DevTools, or find a separate Media tab to upload. Upload controls live on the Media library page and in Create Post — say "drop your file in the upload box on this page" or "tap Upload on the post you are building".
+- When they say "upload", "open media", or similar in chat, the app highlights the upload box or opens the file picker automatically. Do not delegate that to navigation instructions.`
 
     // Mandatory caption format — no markdown clutter, no checkmark bullets, no metadata.
     // Mirror of the same rule in src/lib/mcp/director-job.ts so the web Director and the

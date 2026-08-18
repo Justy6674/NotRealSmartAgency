@@ -5,6 +5,10 @@ import { SendHorizontal, Plus, Paperclip, X } from 'lucide-react'
 import type { AgentType, Brand } from '@/types/database'
 import { useAgencyStore } from '@/stores/agency-store'
 import { filterCommands, type SlashCommand } from '@/lib/slash-commands'
+import {
+  messageRequestsMediaUploadFocus,
+  requestMediaUploadFocus,
+} from '@/lib/media/upload-focus'
 
 interface ChatInputProps {
   onSend: (text: string, images?: { data: string; mimeType: string }[]) => void
@@ -211,6 +215,18 @@ export function ChatInput({
   const handleSend = async () => {
     const trimmed = input.trim()
     if ((!trimmed && !selectedFile) || isLoading || isUploading) return
+
+    if (trimmed && !selectedFile) {
+      const focusMode = messageRequestsMediaUploadFocus(trimmed)
+      if (focusMode) {
+        requestMediaUploadFocus(focusMode)
+        if (focusMode === 'picker' && allowAttachments) {
+          fileInputRef.current?.click()
+        }
+        setInput('')
+        return
+      }
+    }
 
     if (selectedFile && activeBrandId) {
       const isImage = selectedFile.type.startsWith('image/')

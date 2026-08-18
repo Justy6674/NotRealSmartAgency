@@ -34,7 +34,7 @@ function statusLabel(item: UploadQueueItem): string {
     case 'failed':
       return item.error ?? 'Upload failed'
     case 'aborted':
-      return 'Cancelled'
+      return 'Stopped'
   }
 }
 

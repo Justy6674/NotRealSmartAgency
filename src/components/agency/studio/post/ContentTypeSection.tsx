@@ -16,7 +16,7 @@ interface ContentTypeDef {
 const CONTENT_TYPES: ContentTypeDef[] = [
   { value: 'post', label: 'Post', description: 'Single image or text post', icon: ImageIcon, colour: 'text-blue-400' },
   { value: 'carousel', label: 'Carousel', description: 'Multi-slide swipeable gallery (2-10 images)', icon: Images, colour: 'text-indigo-400' },
-  { value: 'short_video', label: 'Short Video', description: 'Reels, Shorts, TikTok (9:16, under 90s)', icon: Film, colour: 'text-pink-400' },
+  { value: 'short_video', label: 'Short Video', description: 'Reels, YouTube Shorts, TikTok (9:16, under 90s)', icon: Film, colour: 'text-pink-400' },
   { value: 'long_video', label: 'Long Video', description: 'YouTube, LinkedIn video (16:9, 1-60 min)', icon: Youtube, colour: 'text-red-400' },
   { value: 'story', label: 'Story', description: '24-hour ephemeral content (9:16)', icon: Clock, colour: 'text-amber-400' },
   { value: 'ad', label: 'Advertisement', description: 'Paid promotion with CTA', icon: Target, colour: 'text-emerald-400' },

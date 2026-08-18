@@ -31,6 +31,7 @@ import { PostTemplatePicker } from '../templates/PostTemplatePicker'
 import { ComplianceSection } from './ComplianceSection'
 import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
 import { MediaSelector } from './MediaSelector'
+import { ComposeMediaUpload } from './ComposeMediaUpload'
 
 import { createVersionsFromMaster, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
 import { earliestNextSlot } from '@/lib/posting-queue/assign-to-slot'
@@ -196,6 +197,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [saveProblem, setSaveProblem] = useState<string | null>(null)
   const [creatorMode, setCreatorMode] = useState<CreatorMode>('fresh')
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
+  const [showComposeUpload, setShowComposeUpload] = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
   const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
@@ -907,8 +909,16 @@ If any items have no AI description or transcription yet, name them and offer to
           </button>
           <button
             type="button"
-            onClick={() => sendToDirector(`I need to upload media for a ${contentType.replace('_', ' ')}. Open the Media tab so I can drag and drop files.`)}
-            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-border px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50 transition-all"
+            onClick={() => {
+              setShowComposeUpload((open) => !open)
+              setShowMediaLibrary(false)
+            }}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all',
+              showComposeUpload
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-foreground/80 hover:border-primary/50',
+            )}
           >
             <Upload className="h-3.5 w-3.5" />
             Upload
@@ -949,6 +959,20 @@ If any items have no AI description or transcription yet, name them and offer to
             </button>
           )}
         </div>
+
+        {showComposeUpload && activeBrandId && (
+          <ComposeMediaUpload
+            brandId={activeBrandId}
+            accept={acceptTypes.includes('video') ? 'video' : 'image'}
+            className="mt-3"
+            onUploaded={(mediaItemId) => {
+              setSelectedMediaIds((prev) =>
+                maxMedia === 1 ? [mediaItemId] : [...prev, mediaItemId].slice(0, maxMedia),
+              )
+              void fetchMedia()
+            }}
+          />
+        )}
 
         {/* Expandable media library grid — uses the Creator's own fetched
             mediaItems as the source of truth so the slot card and the picker
