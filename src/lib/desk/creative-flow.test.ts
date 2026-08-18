@@ -23,6 +23,7 @@ test('Desk removes draft, delegation, and processing tools until the correct own
   const tools = {
     query_media: 'read',
     propose_post_from_media: 'proposal',
+    fill_compose_desk: 'fill',
     manage_posts: 'draft',
     process_media: 'unsafe',
     delegate_to_agent: 'unsafe',
@@ -30,12 +31,14 @@ test('Desk removes draft, delegation, and processing tools until the correct own
   }
 
   assert.deepEqual(Object.keys(restrictDeskTools(tools, 'awaiting_direction')), ['query_media'])
-  assert.deepEqual(Object.keys(restrictDeskTools(tools, 'proposal_ready')), ['query_media', 'propose_post_from_media'])
-  assert.deepEqual(Object.keys(restrictDeskTools(tools, 'draft_approved')), ['query_media', 'manage_posts'])
+  assert.deepEqual(Object.keys(restrictDeskTools(tools, 'proposal_ready')), ['query_media', 'propose_post_from_media', 'fill_compose_desk'])
+  assert.deepEqual(Object.keys(restrictDeskTools(tools, 'draft_approved')), ['query_media', 'fill_compose_desk', 'manage_posts'])
 })
 
 test('the Director prompt makes the current stage and the no-save boundary explicit', () => {
   assert.match(buildDeskCreativeDirectorPrompt('awaiting_direction'), /Do not create a post, output, draft, schedule or publish/i)
-  assert.match(buildDeskCreativeDirectorPrompt('proposal_ready'), /Say exactly: “yes, save these as Mixpost drafts”/i)
+  assert.match(buildDeskCreativeDirectorPrompt('proposal_ready'), /fill_compose_desk/)
+  assert.match(buildDeskCreativeDirectorPrompt('proposal_ready'), /Do not save, schedule or publish/)
+  assert.doesNotMatch(buildDeskCreativeDirectorPrompt('proposal_ready'), /Mixpost/)
   assert.match(buildDeskCreativeDirectorPrompt('draft_approved'), /create_draft/i)
 })

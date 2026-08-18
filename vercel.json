@@ -1,4 +1,6 @@
 {
+  "ignoreCommand": "node scripts/vercel-ignored-build.mjs",
+  "buildCommand": "node scripts/vercel-production-build.mjs",
   "crons": [
     {
       "path": "/api/heartbeat",

@@ -5,7 +5,14 @@ import {
   type PostVersions,
 } from '@/lib/post-versions'
 import type { PostPlatform } from '@/types/database'
-import type { CaptionApplyPayload } from '@/stores/compose-desk-store'
+
+export interface CaptionApplyPayload {
+  brandId: string
+  caption: string
+  hashtags: string[]
+  platforms?: PostPlatform[]
+  hashtagsAreSuggested?: boolean
+}
 
 export interface CaptionApplyResult {
   caption: string

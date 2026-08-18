@@ -30,6 +30,7 @@ import { fetchZernioAccounts, type ZernioAccount } from '@/lib/zernio/client'
 import { checkPublishAllowed } from '@/lib/agents/publish-gate'
 import { publishTickedAccounts } from '@/lib/publishers/publish-ticked'
 import { asPublisherPlatform, type PublishMedia } from '@/lib/publishers/types'
+import { platformOptionsOf } from '@/lib/publishers/zernio-platform-data'
 import { relayIfSafe, userSafeError } from '@/lib/errors/user-safe'
 
 const Schema = z.object({
@@ -101,24 +102,6 @@ function toPublishMedia(row: MediaRow): PublishMedia {
     ...(cached ? { mixpost_media_id: cached } : {}),
     ...(row.thumbnail_url ? { thumbnail_url: row.thumbnail_url } : {}),
   }
-}
-
-/**
- * The owner's per-platform choices, as the composer stored them.
- *
- * PostCreator writes `platformOptions[platform]` — the settings for THIS row's
- * platform only, flat — to `scheduled_posts.metadata.platform_options`. Nothing
- * in any publishing path has ever read it, so every choice made in that panel
- * has gone nowhere. It is handed to the dispatcher as its own field rather than
- * left buried in `metadata`, because `metadata` was already being passed and
- * ignored, which is how post_type was promised and dropped.
- */
-function platformOptionsOf(post: Record<string, unknown>): Record<string, unknown> | undefined {
-  const metadata = post.metadata as Record<string, unknown> | null | undefined
-  const options = metadata?.platform_options
-  return options && typeof options === 'object' && !Array.isArray(options)
-    ? (options as Record<string, unknown>)
-    : undefined
 }
 
 export async function POST(request: Request) {
@@ -321,7 +304,7 @@ export async function POST(request: Request) {
           hashtags: (post.hashtags as string[] | null) ?? undefined,
           signature: signatureSuffix === '' ? undefined : signatureSuffix,
           post_type: (post as Record<string, unknown>).post_type as string | null,
-          platform_options: platformOptionsOf(post as Record<string, unknown>),
+          platform_options: platformOptionsOf((post as Record<string, unknown>).metadata),
           metadata: { source: 'scheduled-posts/publish-now' },
         },
         (post as Record<string, unknown>).metadata,

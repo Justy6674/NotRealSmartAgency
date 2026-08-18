@@ -47,17 +47,17 @@ export function asPublisherPlatform(value: unknown): PublisherPlatform | null {
 }
 
 /**
- * 'zernio' arrived after the audit table was written.
- *
- * supabase/migrations/034_direct_publishing.sql still declares
- * `publisher text not null check (publisher in ('native','mixpost'))`, so a
- * Zernio run cannot be recorded until that constraint is widened: PostgREST
- * rejects the insert, logRun returns null, and the retry enqueue that needs the
- * run id is skipped with it. The publish still happens — what is lost is the
- * audit row, which is the one thing this table exists to guarantee. Widening it
- * is a live schema change and belongs to whoever owns the migration, not here.
+ * Live `publisher_runs.publisher` accepts native|mixpost|zernio
+ * (migration 20260818000000, confirmed on uyhtrwlotoriblicqqrl 2026-08-18).
+ * Migration 034's two-value check is no longer the live constraint.
  */
 export type PublisherBackend = 'native' | 'mixpost' | 'zernio'
+
+/**
+ * A result that never reached a publisher. Not a publisher_runs.publisher
+ * value — that column still only accepts native|mixpost|zernio.
+ */
+export type PublishAttemptPublisher = PublisherBackend | 'unsent'
 
 /**
  * Which publisher a given brand + platform resolves to, and the Zernio account
@@ -204,7 +204,7 @@ export interface PublishRequest {
 
 export interface PublishResult {
   ok: boolean
-  publisher: PublisherBackend
+  publisher: PublishAttemptPublisher
   external_post_id?: string
   external_permalink?: string
   error?: string

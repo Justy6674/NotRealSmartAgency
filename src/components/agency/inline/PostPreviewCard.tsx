@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useComposeDeskStore } from '@/stores/compose-desk-store'
+import { captionDraftToDeskActions } from '@/lib/social/apply-desk-actions'
 import type { PostPlatform } from '@/types/database'
 
 const PLATFORM_NAME_MAP: Record<string, PostPlatform> = {
@@ -93,13 +94,15 @@ export function PostPreviewCard({
 
   const handleAddToCaption = () => {
     if (!activeBrandId || !caption.trim()) return
-    useComposeDeskStore.getState().setPendingCaptionApply({
+    useComposeDeskStore.getState().enqueueDeskActions({
       brandId: activeBrandId,
-      caption: caption.trim(),
-      hashtags: (hashtags ?? []).map((h) => h.replace(/^#+/, '').toLowerCase()),
-      platforms: PLATFORM_NAME_MAP[platform.toLowerCase()]
-        ? [PLATFORM_NAME_MAP[platform.toLowerCase()]]
-        : undefined,
+      actions: captionDraftToDeskActions({
+        caption: caption.trim(),
+        hashtags: (hashtags ?? []).map((h) => h.replace(/^#+/, '')),
+        platforms: PLATFORM_NAME_MAP[platform.toLowerCase()]
+          ? [PLATFORM_NAME_MAP[platform.toLowerCase()]]
+          : undefined,
+      }),
       hashtagsAreSuggested: true,
     })
     if (!window.location.pathname.startsWith('/agency/social')) {

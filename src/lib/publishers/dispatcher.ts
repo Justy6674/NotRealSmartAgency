@@ -27,6 +27,7 @@ import {
   fetchZernioAccounts,
   type ZernioAccount,
 } from '@/lib/zernio/client'
+import { toZernioPlatformData } from './zernio-platform-data'
 import {
   OWNER_ACCOUNT_MISSING,
   OWNER_NO_TICK,
@@ -484,8 +485,14 @@ export async function publishToPlatform(
       // X's 280-char failures. A PublishRequest carries exactly one platform, so
       // there is nothing here to override, and inventing a fan-out to use the
       // field would create the very problem the field solves.
+      const platformSpecificData = toZernioPlatformData({
+        platform: req.platform,
+        options: req.platform_options,
+        postType: req.post_type,
+      })
+      const caption = buildCaption(req)
       const result = await createZernioPost({
-        content: buildCaption(req),
+        content: caption,
         accounts: [{ platform: req.platform, accountId: req.account_id }],
         requestId: req.idempotency_key,
         // Public URLs, not an upload: Zernio fetches them, and its docs state it
@@ -496,17 +503,16 @@ export async function publishToPlatform(
         // src/lib/zernio/client.ts, not to this file.
         mediaUrls: req.media.map((m) => m.url),
         publishNow: true,
+        platformSpecificData,
       })
 
       const outcome = readZernioOutcome(result)
       const durationMs = Date.now() - start
 
-      // KNOWN GAP, recorded rather than papered over: publisher_runs still
-      // carries `check (publisher in ('native','mixpost'))` from migration 034.
-      // Until that is widened these inserts are rejected, logRun returns null,
-      // and the retry below never enqueues because it needs the run id. The
-      // publish is unaffected; the audit row is not written. Widening a live
-      // constraint is not this file's call to make.
+      // Live publisher_runs on uyhtrwlotoriblicqqrl already accepts 'zernio'
+      // (migration 20260818000000, confirmed 2026-08-18). The 034 check
+      // constraint was widened. Pass idempotency_key so a retry is the same
+      // logical request, not a new row.
       const runId = await logRun({
         scheduledPostId: req.scheduled_post_id,
         brandId: req.brand_id,
@@ -515,12 +521,19 @@ export async function publishToPlatform(
         publisher: 'zernio',
         status: outcome.ok ? 'success' : 'failed',
         attempt,
-        requestPayload: { caption: buildCaption(req), mediaCount: req.media.length },
+        requestPayload: {
+          caption,
+          mediaCount: req.media.length,
+          post_type: req.post_type ?? null,
+          platform_options: req.platform_options ?? null,
+          platformSpecificData: platformSpecificData ?? null,
+        },
         responsePayload: result,
         externalPostId: outcome.externalPostId,
         externalPermalink: outcome.externalPermalink,
         error: outcome.error,
         durationMs,
+        idempotencyKey: req.idempotency_key,
       })
 
       if (outcome.ok) {
@@ -1045,9 +1058,16 @@ export async function publishToPlatform(
         publisher: 'mixpost',
         status: 'success',
         attempt,
+        requestPayload: {
+          caption: fullCaption,
+          mediaCount: mediaIds.length,
+          post_type: req.post_type ?? null,
+          platform_options: req.platform_options ?? null,
+        },
         responsePayload: result,
         externalPostId: result.uuid,
         durationMs,
+        idempotencyKey: req.idempotency_key,
       })
       recordPublish(req.platform, req.brand_id)
       return {

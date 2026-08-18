@@ -75,9 +75,12 @@ test('every column asked for in a .select() actually exists', () => {
   for (const file of sourceFiles(resolve(ROOT, 'src'))) {
     const source = readFileSync(file, 'utf8')
 
-    // .from('table') … .select('a, b, c') — the select may sit on a later line.
+    // .from('table') … .select('a, b, c') — the select may sit on a later line,
+    // but it must belong to THIS from. Crossing another `.from(` is how
+    // billing-pause.ts was reported as `scheduled_posts.social_urls` when the
+    // select was on `brands` four lines later.
     for (const match of source.matchAll(
-      /\.from\(\s*['"]([a-z_]+)['"]\s*\)[\s\S]{0,400}?\.select\(\s*['"]([^'"]*)['"]/g,
+      /\.from\(\s*['"]([a-z_]+)['"]\s*\)(?:(?!\.from\()[\s\S]){0,400}?\.select\(\s*['"]([^'"]*)['"]/g,
     )) {
       const [, table, columns] = match
       const typeName = TABLE_TYPES[table]
@@ -124,4 +127,21 @@ test('the guard can actually fail — it is not vacuously passing', () => {
     'utf8',
   )
   assert.match(deliverables, /\.select\('id, file_url, file_type, file_size_bytes'\)/)
+
+  // The pairing that used to cry wolf: two .from() calls close together, the
+  // second table's select must not be attributed to the first.
+  const pause = readFileSync(resolve(ROOT, 'src/lib/publishers/billing-pause.ts'), 'utf8')
+  const pairs = [
+    ...pause.matchAll(
+      /\.from\(\s*['"]([a-z_]+)['"]\s*\)(?:(?!\.from\()[\s\S]){0,400}?\.select\(\s*['"]([^'"]*)['"]/g,
+    ),
+  ].map((m) => `${m[1]}:${m[2]}`)
+  assert.ok(
+    pairs.some((p) => p.startsWith('brands:') && p.includes('social_urls')),
+    'billing-pause still selects brands.social_urls — the pairing must still see it',
+  )
+  assert.ok(
+    !pairs.some((p) => p.startsWith('scheduled_posts:') && p.includes('social_urls')),
+    'scheduled_posts must not inherit brands.social_urls from a later select',
+  )
 })

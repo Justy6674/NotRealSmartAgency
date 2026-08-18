@@ -3,9 +3,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-const SHADOW =
-  '0 1px 2px oklch(0.2 0.02 240 / 0.05), 0 8px 24px -16px oklch(0.2 0.02 240 / 0.28)'
-
 interface ComposeDeskCardProps {
   /** Card header row — 12.5px semibold, hairline under */
   header?: ReactNode
@@ -35,7 +32,7 @@ export function ComposeDeskCard({
       style={{
         borderColor: 'var(--line, oklch(0.915 0.007 240))',
         background: 'var(--panel, oklch(1 0 0))',
-        boxShadow: SHADOW,
+        boxShadow: 'var(--nrs-shadow)',
       }}
     >
       {header ? (

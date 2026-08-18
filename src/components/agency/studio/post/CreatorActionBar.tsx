@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { PostPlatform } from '@/types/database'
@@ -30,6 +30,9 @@ interface CreatorActionBarProps {
   nextSlotIso?: string | null
   /** Time of the last successful save, e.g. "2:14 pm" */
   savedAt?: string | null
+  /** datetime-local value the Director (or calendar) already chose */
+  scheduledWhen?: string
+  onScheduledWhenChange?: (value: string) => void
 }
 
 function slotLabel(iso: string): string {
@@ -71,11 +74,19 @@ export function CreatorActionBar({
   editMode,
   nextSlotIso,
   savedAt,
+  scheduledWhen,
+  onScheduledWhenChange,
 }: CreatorActionBarProps) {
-  const [pickingTime, setPickingTime] = useState(false)
-  const [when, setWhen] = useState(() => toLocalInputValue(new Date().toISOString()))
+  const [pickingTime, setPickingTime] = useState(() => Boolean(scheduledWhen))
+  const [when, setWhen] = useState(() => scheduledWhen || toLocalInputValue(new Date().toISOString()))
   const disabled = saving || captionEmpty
   const blockedByHealth = compliancePassed === false
+
+  useEffect(() => {
+    if (!scheduledWhen) return
+    setWhen(scheduledWhen)
+    setPickingTime(true)
+  }, [scheduledWhen])
 
   return (
     <div
@@ -276,7 +287,10 @@ export function CreatorActionBar({
             <input
               type="datetime-local"
               value={when}
-              onChange={(event) => setWhen(event.target.value)}
+              onChange={(event) => {
+                setWhen(event.target.value)
+                onScheduledWhenChange?.(event.target.value)
+              }}
               className="rounded-[8px] border px-[8px] py-[5px] text-[12.5px]"
               style={{
                 borderColor: 'var(--line)',

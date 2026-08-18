@@ -114,9 +114,19 @@ const RETIRED: readonly Exit[] = [
   { name: 'Ayrshare publish', pattern: /app\.ayrshare\.com\/api\/post/ },
 ]
 
-/** The chokepoint, and the one delegation proven below to reach it. */
+/** The chokepoint, and the delegations proven below to reach it. */
 const GATE = /\bcheckPublishAllowed\s*\(/
 const DELEGATE = /\bawait\s+publishToPlatform\s*\(/
+/**
+ * One extra hop, not a second door.
+ *
+ * Cron, publish-now and publish_to_social call publishTickedAccounts, which
+ * loops ticked accounts and awaits publishToPlatform for each. The hop is
+ * proven in 'publishTickedAccounts is only a wrapper around the one door' —
+ * without that test this would be relaxing the detector the way the last
+ * fourteen deploys did.
+ */
+const TICKED = /\bawait\s+publishTickedAccounts\s*\(/
 
 /**
  * An exit that reaches the same verdict without importing the gate.
@@ -187,11 +197,11 @@ function sourceFiles(dir: string = root): string[] {
 
 const rel = (path: string) => path.slice(root.length + 1)
 const exitsIn = (source: string) => LIVE_SEND.filter((e) => e.pattern.test(source))
-const gated = (source: string) => GATE.test(source) || DELEGATE.test(source)
+const gated = (source: string) => GATE.test(source) || DELEGATE.test(source) || TICKED.test(source)
 
 /** Where the regulatory decision is made in a file, or Infinity if nowhere. */
 function reviewIndex(path: string, source: string): number {
-  const markers = INLINE_EQUIVALENT[path] ?? [GATE, DELEGATE]
+  const markers = INLINE_EQUIVALENT[path] ?? [GATE, DELEGATE, TICKED]
   return Math.min(
     ...markers.map((p) => {
       const match = p.exec(source)
@@ -252,6 +262,31 @@ test('every route to a live account passes the shared publishing gate', () => {
   }
 })
 
+test('publishTickedAccounts is only a wrapper around the one door', () => {
+  // Without this, treating await publishTickedAccounts as "gated" would
+  // bless any helper that happened to share the name. The wrapper must still
+  // send through publishToPlatform and must not grow its own Zernio/Mixpost
+  // call — that is how cron and publish-now drifted apart last time.
+  const ticked = read('lib/publishers/publish-ticked.ts')
+  assert.match(ticked, DELEGATE, 'the wrapper must still call publishToPlatform')
+  assert.doesNotMatch(
+    ticked,
+    GATE,
+    'the wrapper must not re-implement the review — that is how a second copy drifts',
+  )
+  for (const [name, pattern] of [
+    ['a Zernio send', /\bawait\s+createZernioPost\s*\(/],
+    ['a Mixpost send', /\bawait\s+createMixpostPost\s*\(/],
+    ['a native publisher send', /\bpublisher\.publish\s*\(/],
+  ] as const) {
+    assert.doesNotMatch(
+      ticked,
+      pattern,
+      `publishTickedAccounts has taken back ${name} — backend choice belongs to the dispatcher`,
+    )
+  }
+})
+
 test('the scheduled publisher no longer picks its own backend', () => {
   // The fault this pins. This route chose Zernio whenever a matching account
   // existed and fell through to Mixpost otherwise, while
@@ -262,7 +297,7 @@ test('the scheduled publisher no longer picks its own backend', () => {
   // separate services, with nothing asserting they point at the same page.
   const cron = read('app/api/cron/publish-posts/route.ts')
 
-  assert.match(cron, DELEGATE, 'the scheduled publisher must go through the one door')
+  assert.match(cron, TICKED, 'the scheduled publisher must go through the one door')
 
   for (const [name, pattern] of [
     ['a Zernio send', /\bawait\s+createZernioPost\s*\(/],
@@ -567,7 +602,7 @@ test('the publishing tool blocks on a review that did not complete', () => {
   const tool = read('lib/agents/tools/publish-to-social.ts')
   assert.match(
     tool,
-    /publishToPlatform\s*\(/,
+    TICKED,
     'publish_to_social must reach the shared gate rather than deciding for itself',
   )
 

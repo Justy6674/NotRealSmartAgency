@@ -96,7 +96,9 @@ export function SocialAnalyticsCard() {
         <div className="flex flex-col items-center justify-center py-8 gap-2">
           <TrendingUp className="h-5 w-5 text-muted-foreground/50" />
           <p className="text-xs text-muted-foreground text-center">
-            Connect Mixpost to see social analytics
+            {data?.error
+              ? 'Numbers for this period are not available yet.'
+              : 'Connect a social account to see how posts are doing.'}
           </p>
         </div>
       ) : Object.keys(data.platforms).length === 0 ? (

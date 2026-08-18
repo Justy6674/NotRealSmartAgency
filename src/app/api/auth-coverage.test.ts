@@ -77,11 +77,12 @@ const MECHANISMS: readonly Mechanism[] = [
   },
   {
     name: 'a verified webhook signature',
-    // Stripe's constructEvent, Mixpost's verifier, the raw HMAC compares used
-    // by the Telegram and Zernio webhooks, and Telegram Mini App initData —
-    // which is itself an HMAC of the payload against the bot token.
+    // Stripe's constructEvent, Mixpost's verifier, verifyZernioWebhook (HMAC
+    // on the raw body, fail-closed), the raw HMAC compares used by Telegram,
+    // and Telegram Mini App initData — which is itself an HMAC of the payload
+    // against the bot token.
     pattern:
-      /\bconstructEvent\s*\(|\bcreateHmac\s*\(|\btimingSafeEqual\s*\(|\bverify[A-Za-z]*Signature\s*\(|\bvalidateTelegram[A-Za-z]*InitData\s*\(/,
+      /\bconstructEvent\s*\(|\bcreateHmac\s*\(|\btimingSafeEqual\s*\(|\bverify[A-Za-z]*Signature\s*\(|\bverifyZernioWebhook\s*\(|\bvalidateTelegram[A-Za-z]*InitData\s*\(/,
   },
   {
     name: 'a single-use secret the caller must present, stored only as a hash',

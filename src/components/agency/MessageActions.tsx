@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useComposeDeskStore } from '@/stores/compose-desk-store'
 import { getNamespace } from '@/lib/ruflo/namespaces'
+import { captionDraftToDeskActions } from '@/lib/social/apply-desk-actions'
 import { extractCaptionDraftFromMessage } from '@/lib/desk/extract-caption-draft'
 
 interface MessageActionsProps {
@@ -53,11 +54,13 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
         : null
       const doneLabel = platformName ? `Added to ${platformName} caption` : 'Added to caption'
 
-      useComposeDeskStore.getState().setPendingCaptionApply({
+      useComposeDeskStore.getState().enqueueDeskActions({
         brandId: activeBrandId,
-        caption: captionDraft.caption,
-        hashtags: captionDraft.hashtags,
-        platforms: captionDraft.platforms.length ? captionDraft.platforms : undefined,
+        actions: captionDraftToDeskActions({
+          caption: captionDraft.caption,
+          hashtags: captionDraft.hashtags,
+          platforms: captionDraft.platforms.length ? captionDraft.platforms : undefined,
+        }),
         hashtagsAreSuggested: captionDraft.hashtagsAreSuggested,
       })
       if (!window.location.pathname.startsWith('/agency/social')) {

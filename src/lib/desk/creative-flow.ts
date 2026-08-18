@@ -48,13 +48,13 @@ export function deskCreativeStateForMessage(
 }
 
 const TOOL_NAMES_BY_STATE: Record<DeskCreativeState, readonly string[]> = {
-  collecting: ['query_media'],
+  collecting: ['query_media', 'fill_compose_desk'],
   awaiting_direction: ['query_media'],
-  proposal_ready: ['query_media', 'propose_post_from_media'],
-  draft_approved: ['query_media', 'manage_posts'],
-  working: ['query_media'],
-  needs_input: ['query_media'],
-  result_ready: ['query_media'],
+  proposal_ready: ['query_media', 'propose_post_from_media', 'fill_compose_desk'],
+  draft_approved: ['query_media', 'fill_compose_desk', 'manage_posts'],
+  working: ['query_media', 'fill_compose_desk'],
+  needs_input: ['query_media', 'fill_compose_desk'],
+  result_ready: ['query_media', 'fill_compose_desk'],
   completed: ['query_media'],
 }
 
@@ -89,19 +89,20 @@ export function buildDeskCreativeDirectorPrompt(state: DeskCreativeState): strin
     return [
       ...common,
       'STAGE: PROPOSAL AND ITERATION.',
-      'The owner has responded to the shared understanding. Briefly state the agreed description, purpose, message and voice before presenting the proposed post in this chat.',
-      'For selected media, use propose_post_from_media. For a text-only request, write the proposal directly in chat. Keep the proposed hook, caption and hashtags easy to review and revise here.',
-      'Do not create a post, output, draft, schedule or publish anything in this stage. Ask what the owner would change. When the owner is happy, say exactly: “yes, save these as Mixpost drafts”.',
+      'The owner has responded to the shared understanding. Briefly state the agreed description, purpose, message and voice before presenting the proposed post.',
+      'For selected media, use propose_post_from_media. Then call fill_compose_desk so the caption, media, accounts, title, first comment, privacy and time appear on the Compose screen. Partial fills are fine.',
+      'Ask in plain language for anything still missing. Do not name departments, publishing vendors, or internal tool names.',
+      'Do not save, schedule or publish. The owner presses those buttons. You fill the desk.',
     ].join('\n\n')
   }
 
   if (state === 'draft_approved') {
     return [
       ...common,
-      'STAGE: EXPLICIT MIXPOST DRAFT AUTHORISATION.',
-      'The owner has just explicitly asked for Mixpost drafts. Use manage_posts with action="create_draft" once for each selected platform, using only the agreed copy and selected media.',
+      'STAGE: OWNER ASKED TO SAVE A DRAFT.',
+      'The owner has explicitly asked to save the draft. Use fill_compose_desk so the screen matches the agreed copy, then manage_posts with action="create_draft" only if they asked to save, not merely to fill the screen.',
       'Create unscheduled review drafts only. Do not queue, schedule, approve or publish anything.',
-      'Report the returned Mixpost state exactly as synced, pending or failed. Do not call a pending or failed draft ready.',
+      'Report whether the draft saved, is still pending, or failed. Do not call a pending or failed draft ready.',
     ].join('\n\n')
   }
 

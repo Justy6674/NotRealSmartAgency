@@ -1,7 +1,6 @@
-import { randomUUID } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { publishToPlatform } from './dispatcher'
-import type { PublishRequest, PublishResult } from './types'
+import type { PublishRequest, PublishResult, PublisherBackend } from './types'
 import {
   OWNER_NO_TICK,
   OWNER_POSTING_PAUSED,
@@ -9,6 +8,11 @@ import {
   captionForAccount,
   postingPausedOf,
 } from './transport'
+
+/** Same key on every retry so Zernio x-request-id and publisher_runs unique index do their job. */
+export function idempotencyKeyForAccount(scheduledPostId: string, accountId: string): string {
+  return `${scheduledPostId}:${accountId}`
+}
 
 export async function lockScheduledPost(postId: string) {
   const admin = createAdminClient()
@@ -22,12 +26,28 @@ export async function lockScheduledPost(postId: string) {
 
 async function successfulAccountIds(scheduledPostId: string): Promise<Set<string>> {
   const admin = createAdminClient()
-  const { data } = await admin
+  const { data, error } = await admin
     .from('publisher_runs')
     .select('account_id')
     .eq('scheduled_post_id', scheduledPostId)
     .eq('status', 'success')
+  if (error) console.error('[publish-ticked] successfulAccountIds:', error.message)
   return new Set((data ?? []).map((row) => String(row.account_id)))
+}
+
+async function lastSuccessfulPublisher(scheduledPostId: string): Promise<PublisherBackend | null> {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('publisher_runs')
+    .select('publisher')
+    .eq('scheduled_post_id', scheduledPostId)
+    .eq('status', 'success')
+    .order('finished_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const publisher = data?.publisher
+  if (publisher === 'native' || publisher === 'mixpost' || publisher === 'zernio') return publisher
+  return null
 }
 
 /**
@@ -44,7 +64,7 @@ export async function publishTickedAccounts(
   if (postingPausedOf(locked?.metadata ?? metadata)) {
     return {
       ok: false,
-      publisher: 'zernio',
+      publisher: 'unsent',
       retryable: false,
       error: OWNER_POSTING_PAUSED,
     }
@@ -54,7 +74,7 @@ export async function publishTickedAccounts(
   if (ids.length === 0) {
     return {
       ok: false,
-      publisher: 'zernio',
+      publisher: 'unsent',
       retryable: false,
       error: OWNER_NO_TICK,
     }
@@ -63,9 +83,10 @@ export async function publishTickedAccounts(
   const already = await successfulAccountIds(req.scheduled_post_id)
   const remaining = ids.filter((id) => !already.has(id))
   if (remaining.length === 0) {
+    const lastPublisher = await lastSuccessfulPublisher(req.scheduled_post_id)
     return {
       ok: true,
-      publisher: 'zernio',
+      publisher: lastPublisher ?? 'mixpost',
       confirmed: true,
     }
   }
@@ -83,7 +104,7 @@ export async function publishTickedAccounts(
         ...req,
         account_id: accountId,
         caption: captionForAccount(req.caption, metadata, accountId),
-        idempotency_key: randomUUID(),
+        idempotency_key: idempotencyKeyForAccount(req.scheduled_post_id, accountId),
       },
       1,
       options,

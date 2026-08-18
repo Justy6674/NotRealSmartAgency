@@ -111,6 +111,11 @@ export async function createZernioPost(params: {
   publishNow?: boolean;
   /** Stored on publisher_runs.idempotency_key. Retry the same UUID. */
   requestId?: string;
+  /**
+   * One platform per NRS call. Names must match the SDK *PlatformData types
+   * (`toZernioPlatformData`). Omitted rather than sent empty.
+   */
+  platformSpecificData?: Record<string, unknown>;
 }) {
   try {
     if (!process.env.ZERNIO_API_KEY) throw new Error('Missing ZERNIO_API_KEY');
@@ -119,7 +124,13 @@ export async function createZernioPost(params: {
     
     const body: any = {
       content: params.content,
-      platforms: params.accounts
+      platforms: params.accounts.map((account) => ({
+        platform: account.platform,
+        accountId: account.accountId,
+        ...(params.platformSpecificData
+          ? { platformSpecificData: params.platformSpecificData }
+          : {}),
+      })),
     };
 
     if (params.scheduledFor) {

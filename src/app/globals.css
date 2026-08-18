@@ -173,6 +173,26 @@
   --care-line: oklch(0.89 0.050 25);
   --care-deep: oklch(0.42 0.14 25);
   --nrs-shadow: 0 1px 2px oklch(0.2 0.02 240 / .05), 0 8px 24px -16px oklch(0.2 0.02 240 / .28);
+
+  /* Shadcn surface tokens follow the desk paper. ThemeProvider defaults to
+     dark, so without this alias `border-border` / `bg-card` / `bg-background`
+     stay near-black while `--bg` is cream. The collision is the default, not
+     a toggle. BrandThemeVars paints --bg/--panel/--line/--ink*; these names
+     just point at them. */
+  --background: var(--bg);
+  --foreground: var(--ink);
+  --card: var(--panel);
+  --card-foreground: var(--ink);
+  --popover: var(--panel);
+  --popover-foreground: var(--ink);
+  --muted: var(--panel-2);
+  --muted-foreground: var(--ink-2);
+  --accent: var(--panel-2);
+  --accent-foreground: var(--ink);
+  --secondary: var(--panel-2);
+  --secondary-foreground: var(--ink);
+  --border: var(--line);
+  --input: var(--line);
 }
 
 .dark [data-nrs-shell] {

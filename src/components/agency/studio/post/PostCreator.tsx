@@ -7,7 +7,9 @@ import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useComposeDeskStore } from '@/stores/compose-desk-store'
 import { DIRECTOR_HASHTAG_DISCLAIMER } from '@/lib/desk/extract-caption-draft'
-import { applyCaptionPayloadToCompose } from '@/lib/desk/apply-caption-to-compose'
+import { applyDeskActionsToCompose } from '@/lib/social/apply-desk-actions'
+import { composerOptionsToDeskActions } from '@/lib/social/fill-payload'
+import { SOCIAL_PLATFORMS, type SocialPlatform } from '@/lib/social/model'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 
@@ -34,7 +36,9 @@ import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
 import { MediaSelector } from './MediaSelector'
 import { ComposeMediaUpload } from './ComposeMediaUpload'
 
+import { PlatformOptions } from './PlatformOptions'
 import { createVersionsFromMaster, customisePlatform, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
+import { brandIsPublisherLinked } from '@/lib/studio/social-read-source'
 import { earliestNextSlot } from '@/lib/posting-queue/assign-to-slot'
 import type { PostPlatform, PostType, PostingScheduleSlot } from '@/types/database'
 
@@ -203,17 +207,39 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [showPerPlatformVersions, setShowPerPlatformVersions] = useState(false)
   const [captionEditorKey, setCaptionEditorKey] = useState(0)
   const captionEditorRef = useRef<HTMLDivElement>(null)
-  const composeStateRef = useRef({ selectedPlatforms, versions, caption, hashtags })
-  composeStateRef.current = { selectedPlatforms, versions, caption, hashtags }
-  const pendingCaptionApply = useComposeDeskStore((s) => s.pendingCaptionApply)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
   const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
+  const [scheduledWhen, setScheduledWhen] = useState<string>(() => {
+    if (!initialScheduleDate) return ''
+    return initialScheduleDate.length === 16 ? initialScheduleDate : initialScheduleDate.slice(0, 16)
+  })
+  const composeStateRef = useRef({
+    selectedPlatforms,
+    versions,
+    caption,
+    hashtags,
+    selectedMediaIds,
+    selectedAccountIds,
+    platformOptions,
+  })
+  composeStateRef.current = {
+    selectedPlatforms,
+    versions,
+    caption,
+    hashtags,
+    selectedMediaIds,
+    selectedAccountIds,
+    platformOptions,
+  }
+  const pendingDeskActions = useComposeDeskStore((s) => s.pendingDeskActions)
+  const undoActions = useComposeDeskStore((s) => s.undoActions)
 
   const brandName = data.brand?.name ?? 'Brand'
   const postType = CONTENT_TO_POST_TYPE[contentType]
   const complianceFlags = data.brand?.compliance_flags as unknown as Record<string, boolean> | null
   const isHealthBrand = !!complianceFlags?.ahpra || !!complianceFlags?.tga
+  const publisherTransport = brandIsPublisherLinked(data.brand?.social_urls) ? 'zernio' : 'mixpost'
 
   // ── Auto-save / restore draft from localStorage ────────────────────────
   // Storage key bumped to v2 on 2026-04-10 to invalidate any drafts saved
@@ -439,29 +465,70 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   ])
 
   useEffect(() => {
-    if (!pendingCaptionApply || !activeBrandId || pendingCaptionApply.brandId !== activeBrandId) {
+    if (!pendingDeskActions || !activeBrandId || pendingDeskActions.brandId !== activeBrandId) {
       return
     }
 
-    const applied = applyCaptionPayloadToCompose(
-      pendingCaptionApply,
-      composeStateRef.current,
+    const mediaById = new Map(
+      mediaItems.map((item) => [
+        item.id,
+        {
+          mediaItemId: item.id,
+          position: 0,
+          type: (item.file_type?.startsWith('video')
+            ? 'video'
+            : item.file_type === 'image/gif'
+              ? 'gif'
+              : 'image') as 'image' | 'video' | 'gif',
+          title: item.file_name,
+          thumbnailUrl: item.thumbnail_url ?? undefined,
+        },
+      ]),
+    )
+
+    const applied = applyDeskActionsToCompose(
+      pendingDeskActions.actions,
+      {
+        brandId: activeBrandId,
+        caption: composeStateRef.current.caption,
+        hashtags: composeStateRef.current.hashtags,
+        selectedPlatforms: composeStateRef.current.selectedPlatforms,
+        selectedMediaIds: composeStateRef.current.selectedMediaIds,
+        selectedAccountIds: composeStateRef.current.selectedAccountIds,
+        versions: composeStateRef.current.versions,
+        platformOptions: composeStateRef.current.platformOptions,
+        mediaById,
+      },
+      { hashtagsAreSuggested: pendingDeskActions.hashtagsAreSuggested },
     )
 
     setCaption(applied.caption)
     setHashtags(applied.hashtags)
     setSelectedPlatforms(applied.selectedPlatforms)
     setVersions(applied.versions)
+    setPlatformOptions(applied.platformOptions)
+    setSelectedMediaIds(applied.selectedMediaIds)
+    setSelectedAccountIds(applied.selectedAccountIds)
     if (applied.showPerPlatformVersions) setShowPerPlatformVersions(true)
     setShowDirectorHashtagNote(applied.showDirectorHashtagNote)
+    if (applied.scheduledAt) {
+      const date = new Date(applied.scheduledAt)
+      if (!Number.isNaN(date.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, '0')
+        setScheduledWhen(
+          `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`,
+        )
+      }
+    }
     setCaptionEditorKey((k) => k + 1)
-    useComposeDeskStore.getState().setPendingCaptionApply(null)
+    useComposeDeskStore.getState().setUndoActions(applied.inverseActions)
+    useComposeDeskStore.getState().enqueueDeskActions(null)
 
     requestAnimationFrame(() => {
       captionEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       captionEditorRef.current?.querySelector<HTMLElement>('.ProseMirror')?.focus()
     })
-  }, [pendingCaptionApply, activeBrandId])
+  }, [pendingDeskActions, activeBrandId])
 
   // ── AI Generation — CAPTION ONLY ──────────────────────────────────────────
   // This button lives in the Caption card and writes the caption TEXT for
@@ -1022,6 +1089,62 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         />
       </ComposeDeskCard>
 
+      {selectedPlatforms.length > 0 && (
+        <ComposeDeskCard header="Account options">
+          {selectedPlatforms.map((platform) => (
+            <PlatformOptions
+              key={platform}
+              platform={platform}
+              transport={publisherTransport}
+              options={platformOptions[platform] ?? {}}
+              onChange={(opts) => {
+                if (!(SOCIAL_PLATFORMS as readonly string[]).includes(platform)) {
+                  setPlatformOptions((current) => ({ ...current, [platform]: opts }))
+                  return
+                }
+                if (!activeBrandId) return
+                const mediaById = new Map(
+                  mediaItems.map((item) => [
+                    item.id,
+                    {
+                      mediaItemId: item.id,
+                      position: 0,
+                      type: (item.file_type?.startsWith('video')
+                        ? 'video'
+                        : item.file_type === 'image/gif'
+                          ? 'gif'
+                          : 'image') as 'image' | 'video' | 'gif',
+                    },
+                  ]),
+                )
+                const actions = composerOptionsToDeskActions(platform as SocialPlatform, opts)
+                if (actions.length === 0) {
+                  setPlatformOptions((current) => ({ ...current, [platform]: opts }))
+                  return
+                }
+                try {
+                  const applied = applyDeskActionsToCompose(actions, {
+                    brandId: activeBrandId,
+                    caption: composeStateRef.current.caption,
+                    hashtags: composeStateRef.current.hashtags,
+                    selectedPlatforms: composeStateRef.current.selectedPlatforms,
+                    selectedMediaIds: composeStateRef.current.selectedMediaIds,
+                    selectedAccountIds: composeStateRef.current.selectedAccountIds,
+                    versions: composeStateRef.current.versions,
+                    platformOptions: composeStateRef.current.platformOptions,
+                    mediaById,
+                  })
+                  setPlatformOptions(applied.platformOptions)
+                  useComposeDeskStore.getState().setUndoActions(applied.inverseActions)
+                } catch {
+                  setPlatformOptions((current) => ({ ...current, [platform]: opts }))
+                }
+              }}
+            />
+          ))}
+        </ComposeDeskCard>
+      )}
+
       <ComposeDeskCard header="Hashtags">
         {showDirectorHashtagNote && (
           <p
@@ -1072,6 +1195,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
             onVersionsChange={setVersions}
             platformOptions={platformOptions}
             onPlatformOptionsChange={setPlatformOptions}
+            transport={publisherTransport}
           />
         </ComposeDeskCard>
       )}
@@ -1197,6 +1321,19 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
           <span>{saveProblem}</span>
         </div>
       )}
+      {undoActions && undoActions.length > 0 && (
+        <div className="flex items-center justify-between rounded-[8px] border px-3 py-2 text-[12px]" style={{ borderColor: 'var(--line)', background: 'var(--panel-2)', color: 'var(--ink-2)' }}>
+          <span>Director change is on the post.</span>
+          <button
+            type="button"
+            onClick={() => useComposeDeskStore.getState().requestUndo()}
+            className="font-[600] underline-offset-2 hover:underline"
+            style={{ color: 'var(--brand-deep, var(--ink))' }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
       <CreatorActionBar
         platforms={selectedPlatforms}
         captionEmpty={!caption.trim() || hasOverLimit}
@@ -1206,6 +1343,8 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         editMode={editMode}
         nextSlotIso={nextSlotIso}
         savedAt={savedAt}
+        scheduledWhen={scheduledWhen}
+        onScheduledWhenChange={setScheduledWhen}
       />
     </div>
   )

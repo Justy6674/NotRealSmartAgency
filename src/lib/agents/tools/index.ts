@@ -50,6 +50,7 @@ import { createListMixpostTemplatesTool, createCreateMixpostTemplateTool } from 
 import { createAnalyseContentGapsTool } from './analyse-content-gaps'
 import { createPublishToSocialTool } from './publish-to-social'
 import { createProposePostTool } from './propose-post'
+import { createFillComposeDeskTool } from './fill-compose-desk'
 import { createUploadMediaTool } from './upload-media'
 import { createManageCollectionsTool } from './manage-collections'
 import { createManageMediaTagsTool } from './manage-media-tags'
@@ -218,6 +219,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
   const analyseContentGaps = createAnalyseContentGapsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const publishToSocial = createPublishToSocialTool(ctx.supabase, ctx.userId, ctx.brandId)
   const proposePost = createProposePostTool(ctx.supabase, ctx.userId, ctx.brandId)
+  const fillComposeDesk = createFillComposeDeskTool(ctx.supabase, ctx.userId, ctx.brandId)
   const uploadMedia = createUploadMediaTool(ctx.supabase, ctx.userId, ctx.brandId)
   const manageCollections = createManageCollectionsTool(ctx.supabase, ctx.userId, ctx.brandId)
   const manageMediaTags = createManageMediaTagsTool(ctx.supabase, ctx.userId, ctx.brandId)
@@ -369,6 +371,7 @@ export function getToolsForAgent(agentType: AgentType, ctx: ToolContext) {
       analyse_content_gaps: analyseContentGaps,
       publish_to_social: publishToSocial,
       propose_post_from_media: proposePost,
+      fill_compose_desk: fillComposeDesk,
       upload_media: uploadMedia,
       manage_collections: manageCollections,
       manage_media_tags: manageMediaTags,

@@ -20,6 +20,7 @@ interface PlatformVersionEditorProps {
   platformOptions?: Record<string, Record<string, unknown>>
   /** Called when platform-specific metadata changes */
   onPlatformOptionsChange?: (platformOptions: Record<string, Record<string, unknown>>) => void
+  transport?: 'zernio' | 'mixpost'
 }
 
 const LINK_PLATFORMS = new Set(['facebook', 'linkedin', 'twitter'])
@@ -43,6 +44,7 @@ export function PlatformVersionEditor({
   onVersionsChange,
   platformOptions,
   onPlatformOptionsChange,
+  transport = 'mixpost',
 }: PlatformVersionEditorProps) {
   const [activeTab, setActiveTab] = useState<'master' | PostPlatform>('master')
 
@@ -171,6 +173,7 @@ export function PlatformVersionEditor({
           <PlatformOptions
             platform={activeTab}
             options={platformOptions?.[activeTab] ?? {}}
+            transport={transport}
             onChange={(opts) =>
               onPlatformOptionsChange({
                 ...(platformOptions ?? {}),

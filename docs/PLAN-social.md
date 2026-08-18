@@ -19,9 +19,20 @@ Owner rule, 2026-08-18: the desk being unusable to the person who uses it daily 
 first-class fault, not cosmetics. An outside review called the visual work a "vanity
 sink"; the owner overruled it. He is the user.
 
+For this work DESIGN.md wins on the desk: buttons do the work; the Director is an
+extra pair of hands. CLAUDE.md's "Director is the only face" does not override that.
+
 ---
 
-## Job A — Stop production accepting broken code  ☐
+## Job A — Stop production accepting broken code  ☑
+
+Done 2026-08-18. Quality detectors follow `publishTickedAccounts`. Vercel
+production runs the test suite before `next build` and skips a SHA whose
+Quality check already failed. Live `publisher_runs` on `uyhtrwlotoriblicqqrl`
+already has `brand_id`, `account_id`, `idempotency_key`; `lock_scheduled_post`
+exists (fake id returns `scheduled_post not found`). No live migration needed.
+Branch protection on `main` was **not** turned on — it would block push-to-main.
+The deploy gate is the protection.
 
 **This is the root cause and it goes first.** `main` has no branch protection. The
 quality check (`npm test`, `lint`, `build`) has been **red on 14 consecutive pushes**
@@ -48,7 +59,30 @@ Every other job in this plan is decoration until this is true: a red check canno
 
 ---
 
-## Job B — Stop the app offering controls it ignores  ☐
+## Job B — Stop the app offering controls it ignores  ☑
+
+Done 2026-08-18. Inventory lives in `src/lib/publishers/zernio-platform-data.ts`
+(`COMPOSER_FIELDS`). Compose shows Account options for every ticked network.
+A switch the pipe cannot send is shown as off, with the reason in plain English.
+Mastodon / Pinterest / Threads / Bluesky say they are not on the publishing list.
+
+## Job D — Make the owner's choices reach the platform  ☑
+
+Done 2026-08-18 in code. Cron and Publish now both put `post_type` and
+`platform_options` on the request. `createZernioPost` sends SDK
+`platformSpecificData`. Idempotency is `${scheduledPostId}:${accountId}`.
+Unsent results are `publisher: 'unsent'`. `publisher_runs.request_payload`
+records caption, media count, options chosen, and the payload sent.
+
+**Live proof still needs you:** one controlled Scent Sell post, with the
+platform URL and the setting visible on the live post. This run did not
+publish to a live account.
+
+## Job E — One colour system on the Social desk  ☑
+
+Done 2026-08-18. `[data-nrs-shell]` aliases `--background/--card/--muted/--border`
+to `--bg/--panel/--panel-2/--line`. Social analytics no longer says "Connect Mixpost".
+The command-bus migration file is **not applied** to live Supabase.
 
 The owner's actual complaint is "it tells me it did something it didn't do." This job
 is the direct answer, it carries no live-publish risk, and it needs no migration.
@@ -150,7 +184,12 @@ E on compose and media only and defer the rest. **Owner's call.**
 
 ---
 
-## Job F — The Director actually drives the desk  ☐
+## Job F — The Director actually drives the desk  ☑
+
+Done 2026-08-18. `fill_compose_desk` puts caption, media, accounts, title, first
+comment, privacy and time on Compose. The same reducer is the door for Director
+fills and Account options. Undo sits above Save. `pendingCaptionApply` is gone.
+The social_compositions migration is **not applied** to live Supabase.
 
 **Asked for by the owner, 2026-08-18.** This is the product. It was parked; it is back.
 

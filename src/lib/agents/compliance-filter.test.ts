@@ -75,8 +75,14 @@ test('publish_to_social blocks regulated content when the review did not run', (
     new URL('./tools/publish-to-social.ts', import.meta.url),
     'utf8',
   )
-  assert.match(tool, /publishToPlatform\s*\(/)
+  assert.match(tool, /publishTickedAccounts\s*\(/)
   assert.doesNotMatch(tool, /if \(complianceFlags\.ahpra\) \{/)
+
+  const wrapper = readFileSync(
+    new URL('../publishers/publish-ticked.ts', import.meta.url),
+    'utf8',
+  )
+  assert.match(wrapper, /publishToPlatform\s*\(/)
 
   const gate = readFileSync(
     new URL('./publish-gate.ts', import.meta.url),

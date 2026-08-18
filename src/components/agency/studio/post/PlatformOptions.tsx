@@ -1,29 +1,30 @@
 'use client'
 
- 
+import {
+  composerFieldStatusForTransport,
+  type FieldStatus,
+} from '@/lib/publishers/zernio-platform-data'
 
 /**
- * PlatformOptions — per-platform metadata fields.
+ * Per-platform settings the owner can actually send.
  *
- * Renders below the caption in PlatformVersionEditor when a specific
- * platform tab is active (not "All Platforms"). Each platform has
- * its own set of inputs reflecting real API fields (privacy, titles,
- * first comments, content warnings, etc.).
- *
- * All values are stored as Record<string, unknown> and passed up via
- * onChange so they can be included in scheduled_posts metadata on save.
+ * A switch we cannot deliver is shown as off, with the reason in plain English.
+ * Silent no-ops are how this panel used to lie.
  */
 
 interface PlatformOptionsProps {
   platform: string
   options: Record<string, unknown>
   onChange: (options: Record<string, unknown>) => void
+  transport?: 'zernio' | 'mixpost'
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function OptionLabel({ children }: { children: React.ReactNode }) {
   return <label className="block text-[11px] font-medium text-muted-foreground mb-1">{children}</label>
+}
+
+function OptionNote({ children }: { children: React.ReactNode }) {
+  return <p className="text-[11px] leading-snug text-muted-foreground">{children}</p>
 }
 
 function OptionInput({
@@ -31,12 +32,22 @@ function OptionInput({
   value,
   onChange,
   placeholder,
+  status,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  status?: FieldStatus | null
 }) {
+  if (status && !status.ships) {
+    return (
+      <div>
+        <OptionLabel>{label}</OptionLabel>
+        <OptionNote>{status.reason}</OptionNote>
+      </div>
+    )
+  }
   return (
     <div>
       <OptionLabel>{label}</OptionLabel>
@@ -57,13 +68,23 @@ function OptionTextarea({
   onChange,
   placeholder,
   rows = 2,
+  status,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
   rows?: number
+  status?: FieldStatus | null
 }) {
+  if (status && !status.ships) {
+    return (
+      <div>
+        <OptionLabel>{label}</OptionLabel>
+        <OptionNote>{status.reason}</OptionNote>
+      </div>
+    )
+  }
   return (
     <div>
       <OptionLabel>{label}</OptionLabel>
@@ -83,12 +104,22 @@ function OptionSelect({
   value,
   onChange,
   options,
+  status,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
+  status?: FieldStatus | null
 }) {
+  if (status && !status.ships) {
+    return (
+      <div>
+        <OptionLabel>{label}</OptionLabel>
+        <OptionNote>{status.reason}</OptionNote>
+      </div>
+    )
+  }
   return (
     <div>
       <OptionLabel>{label}</OptionLabel>
@@ -111,11 +142,21 @@ function OptionCheckbox({
   label,
   checked,
   onChange,
+  status,
 }: {
   label: string
   checked: boolean
   onChange: (v: boolean) => void
+  status?: FieldStatus | null
 }) {
+  if (status && !status.ships) {
+    return (
+      <div>
+        <OptionLabel>{label}</OptionLabel>
+        <OptionNote>{status.reason}</OptionNote>
+      </div>
+    )
+  }
   return (
     <label className="flex items-center gap-2 cursor-pointer">
       <input
@@ -128,8 +169,6 @@ function OptionCheckbox({
     </label>
   )
 }
-
-// ── YouTube categories ───────────────────────────────────────────────────────
 
 const YOUTUBE_CATEGORIES = [
   { value: '1', label: 'Film & Animation' },
@@ -156,159 +195,197 @@ const YOUTUBE_CATEGORIES = [
   { value: '37', label: 'Family' },
 ]
 
-// ── Bluesky language options ─────────────────────────────────────────────────
-
-const BLUESKY_LANGUAGES = [
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'fr', label: 'French' },
-  { value: 'de', label: 'German' },
-  { value: 'pt', label: 'Portuguese' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'ko', label: 'Korean' },
-  { value: 'zh', label: 'Chinese' },
-  { value: 'ar', label: 'Arabic' },
-  { value: 'hi', label: 'Hindi' },
-  { value: 'it', label: 'Italian' },
-  { value: 'nl', label: 'Dutch' },
-  { value: 'ru', label: 'Russian' },
-]
-
-// ── Per-platform field sets ──────────────────────────────────────────────────
-
 function set(opts: Record<string, unknown>, key: string, val: unknown, onChange: (o: Record<string, unknown>) => void) {
   onChange({ ...opts, [key]: val })
 }
 
-function TikTokOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
+function fieldStatus(
+  platform: string,
+  key: string,
+  transport: 'zernio' | 'mixpost',
+): FieldStatus | null {
+  return composerFieldStatusForTransport(platform, key, transport)
+}
+
+function TikTokOptions({
+  options: o,
+  onChange,
+  transport,
+}: {
+  options: Record<string, unknown>
+  onChange: (o: Record<string, unknown>) => void
+  transport: 'zernio' | 'mixpost'
+}) {
   return (
     <div className="space-y-2.5">
-      <OptionInput label="Title" value={(o.title as string) ?? ''} onChange={v => set(o, 'title', v, onChange)} placeholder="Optional TikTok title" />
-      <OptionSelect label="Privacy" value={(o.privacy as string) ?? 'public'} onChange={v => set(o, 'privacy', v, onChange)} options={[
-        { value: 'public', label: 'Public' },
-        { value: 'friends', label: 'Friends' },
-        { value: 'private', label: 'Private' },
-      ]} />
+      <OptionInput
+        label="Title"
+        value={(o.title as string) ?? ''}
+        onChange={v => set(o, 'title', v, onChange)}
+        placeholder="Optional TikTok title"
+        status={fieldStatus('tiktok', 'title', transport)}
+      />
+      <OptionSelect
+        label="Privacy"
+        value={(o.privacy as string) ?? 'public'}
+        onChange={v => set(o, 'privacy', v, onChange)}
+        options={[
+          { value: 'public', label: 'Public' },
+          { value: 'friends', label: 'Friends' },
+          { value: 'private', label: 'Private' },
+        ]}
+        status={fieldStatus('tiktok', 'privacy', transport)}
+      />
       <div className="space-y-1.5">
-        <OptionCheckbox label="Allow comments" checked={(o.allow_comments as boolean) ?? true} onChange={v => set(o, 'allow_comments', v, onChange)} />
-        <OptionCheckbox label="Allow duet" checked={(o.allow_duet as boolean) ?? true} onChange={v => set(o, 'allow_duet', v, onChange)} />
-        <OptionCheckbox label="Allow stitch" checked={(o.allow_stitch as boolean) ?? true} onChange={v => set(o, 'allow_stitch', v, onChange)} />
-        <OptionCheckbox label="AI-generated content disclosure" checked={(o.ai_disclosure as boolean) ?? false} onChange={v => set(o, 'ai_disclosure', v, onChange)} />
+        <OptionCheckbox label="Allow comments" checked={(o.allow_comments as boolean) ?? true} onChange={v => set(o, 'allow_comments', v, onChange)} status={fieldStatus('tiktok', 'allow_comments', transport)} />
+        <OptionCheckbox label="Allow duet" checked={(o.allow_duet as boolean) ?? true} onChange={v => set(o, 'allow_duet', v, onChange)} status={fieldStatus('tiktok', 'allow_duet', transport)} />
+        <OptionCheckbox label="Allow stitch" checked={(o.allow_stitch as boolean) ?? true} onChange={v => set(o, 'allow_stitch', v, onChange)} status={fieldStatus('tiktok', 'allow_stitch', transport)} />
+        <OptionCheckbox label="AI-generated content disclosure" checked={(o.ai_disclosure as boolean) ?? false} onChange={v => set(o, 'ai_disclosure', v, onChange)} status={fieldStatus('tiktok', 'ai_disclosure', transport)} />
       </div>
     </div>
   )
 }
 
-function YouTubeOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
+function YouTubeOptions({
+  options: o,
+  onChange,
+  transport,
+}: {
+  options: Record<string, unknown>
+  onChange: (o: Record<string, unknown>) => void
+  transport: 'zernio' | 'mixpost'
+}) {
   return (
     <div className="space-y-2.5">
-      <OptionInput label="Title" value={(o.title as string) ?? ''} onChange={v => set(o, 'title', v, onChange)} placeholder="YouTube video title" />
-      <OptionSelect label="Category" value={(o.category as string) ?? '22'} onChange={v => set(o, 'category', v, onChange)} options={YOUTUBE_CATEGORIES} />
-      <OptionSelect label="Privacy" value={(o.privacy as string) ?? 'public'} onChange={v => set(o, 'privacy', v, onChange)} options={[
-        { value: 'public', label: 'Public' },
-        { value: 'unlisted', label: 'Unlisted' },
-        { value: 'private', label: 'Private' },
-      ]} />
+      <OptionInput label="Title" value={(o.title as string) ?? ''} onChange={v => set(o, 'title', v, onChange)} placeholder="YouTube video title" status={fieldStatus('youtube', 'title', transport)} />
+      <OptionSelect
+        label="Category"
+        value={(o.category as string) ?? '22'}
+        onChange={v => set(o, 'category', v, onChange)}
+        options={YOUTUBE_CATEGORIES}
+        status={fieldStatus('youtube', 'category', transport)}
+      />
+      <OptionSelect
+        label="Privacy"
+        value={(o.privacy as string) ?? 'public'}
+        onChange={v => set(o, 'privacy', v, onChange)}
+        options={[
+          { value: 'public', label: 'Public' },
+          { value: 'unlisted', label: 'Unlisted' },
+          { value: 'private', label: 'Private' },
+        ]}
+        status={fieldStatus('youtube', 'privacy', transport)}
+      />
       <div className="space-y-1.5">
-        <OptionCheckbox label="YouTube Shorts" checked={(o.shorts as boolean) ?? false} onChange={v => set(o, 'shorts', v, onChange)} />
-        <OptionCheckbox label="Made for kids" checked={(o.made_for_kids as boolean) ?? false} onChange={v => set(o, 'made_for_kids', v, onChange)} />
+        <OptionCheckbox label="YouTube Shorts" checked={(o.shorts as boolean) ?? false} onChange={v => set(o, 'shorts', v, onChange)} status={fieldStatus('youtube', 'shorts', transport)} />
+        <OptionCheckbox label="Made for kids" checked={(o.made_for_kids as boolean) ?? false} onChange={v => set(o, 'made_for_kids', v, onChange)} status={fieldStatus('youtube', 'made_for_kids', transport)} />
       </div>
     </div>
   )
 }
 
-function InstagramOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
+function InstagramOptions({
+  options: o,
+  onChange,
+  transport,
+}: {
+  options: Record<string, unknown>
+  onChange: (o: Record<string, unknown>) => void
+  transport: 'zernio' | 'mixpost'
+}) {
   return (
     <div className="space-y-2.5">
-      <OptionTextarea label="First comment" value={(o.first_comment as string) ?? ''} onChange={v => set(o, 'first_comment', v, onChange)} placeholder="Hashtags or engagement prompt..." />
-      <OptionInput label="Cover image URL (Reels)" value={(o.cover_image_url as string) ?? ''} onChange={v => set(o, 'cover_image_url', v, onChange)} placeholder="https://..." />
+      <OptionTextarea label="First comment" value={(o.first_comment as string) ?? ''} onChange={v => set(o, 'first_comment', v, onChange)} placeholder="Hashtags or engagement prompt..." status={fieldStatus('instagram', 'first_comment', transport)} />
+      <OptionInput label="Cover image URL (Reels)" value={(o.cover_image_url as string) ?? ''} onChange={v => set(o, 'cover_image_url', v, onChange)} placeholder="https://..." status={fieldStatus('instagram', 'cover_image_url', transport)} />
     </div>
   )
 }
 
-function FacebookOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
+function FacebookOptions({
+  options: o,
+  onChange,
+  transport,
+}: {
+  options: Record<string, unknown>
+  onChange: (o: Record<string, unknown>) => void
+  transport: 'zernio' | 'mixpost'
+}) {
   return (
     <div className="space-y-2.5">
-      <OptionCheckbox label="Show link preview" checked={(o.link_preview as boolean) ?? true} onChange={v => set(o, 'link_preview', v, onChange)} />
+      <OptionCheckbox label="Show link preview" checked={(o.link_preview as boolean) ?? true} onChange={v => set(o, 'link_preview', v, onChange)} status={fieldStatus('facebook', 'link_preview', transport)} />
     </div>
   )
 }
 
-function LinkedInOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
+function LinkedInOptions({
+  options: o,
+  onChange,
+  transport,
+}: {
+  options: Record<string, unknown>
+  onChange: (o: Record<string, unknown>) => void
+  transport: 'zernio' | 'mixpost'
+}) {
   return (
     <div className="space-y-2.5">
-      <OptionInput label="Article link" value={(o.article_link as string) ?? ''} onChange={v => set(o, 'article_link', v, onChange)} placeholder="https://..." />
+      <OptionInput label="Article link" value={(o.article_link as string) ?? ''} onChange={v => set(o, 'article_link', v, onChange)} placeholder="https://..." status={fieldStatus('linkedin', 'article_link', transport)} />
     </div>
   )
 }
 
-function TwitterOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
+function TwitterOptions({
+  options: o,
+  onChange,
+  transport,
+}: {
+  options: Record<string, unknown>
+  onChange: (o: Record<string, unknown>) => void
+  transport: 'zernio' | 'mixpost'
+}) {
   return (
     <div className="space-y-2.5">
-      <OptionCheckbox label="Post as thread" checked={(o.thread as boolean) ?? false} onChange={v => set(o, 'thread', v, onChange)} />
+      <OptionCheckbox label="Post as thread" checked={(o.thread as boolean) ?? false} onChange={v => set(o, 'thread', v, onChange)} status={fieldStatus('twitter', 'thread', transport)} />
     </div>
   )
 }
 
-function MastodonOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
-  return (
-    <div className="space-y-2.5">
-      <OptionInput label="Content warning" value={(o.content_warning as string) ?? ''} onChange={v => set(o, 'content_warning', v, onChange)} placeholder="Optional CW text" />
-      <OptionSelect label="Visibility" value={(o.visibility as string) ?? 'public'} onChange={v => set(o, 'visibility', v, onChange)} options={[
-        { value: 'public', label: 'Public' },
-        { value: 'unlisted', label: 'Unlisted' },
-        { value: 'private', label: 'Followers only' },
-        { value: 'direct', label: 'Direct' },
-      ]} />
-    </div>
-  )
+const NOT_ON_THE_LIST =
+  'This network is not on the publishing list yet — these switches are not sent.'
+
+function UnsupportedNetwork({ name }: { name: string }) {
+  return <OptionNote>{name}: {NOT_ON_THE_LIST}</OptionNote>
 }
 
-function PinterestOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
-  return (
-    <div className="space-y-2.5">
-      <OptionInput label="Pin link URL" value={(o.pin_link as string) ?? ''} onChange={v => set(o, 'pin_link', v, onChange)} placeholder="https://..." />
-      <OptionInput label="Alt text" value={(o.alt_text as string) ?? ''} onChange={v => set(o, 'alt_text', v, onChange)} placeholder="Describe the image for accessibility" />
-    </div>
-  )
-}
-
-function ThreadsOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
-  return (
-    <div className="space-y-2.5">
-      <OptionSelect label="Reply control" value={(o.reply_control as string) ?? 'anyone'} onChange={v => set(o, 'reply_control', v, onChange)} options={[
-        { value: 'anyone', label: 'Anyone' },
-        { value: 'followers', label: 'Followers only' },
-        { value: 'mentioned', label: 'Mentioned only' },
-      ]} />
-    </div>
-  )
-}
-
-function BlueskyOptions({ options: o, onChange }: { options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }) {
-  return (
-    <div className="space-y-2.5">
-      <OptionSelect label="Language" value={(o.language as string) ?? 'en'} onChange={v => set(o, 'language', v, onChange)} options={BLUESKY_LANGUAGES} />
-    </div>
-  )
-}
-
-// ── Platform → Component map ─────────────────────────────────────────────────
-
-const PLATFORM_OPTIONS_MAP: Record<string, React.ComponentType<{ options: Record<string, unknown>; onChange: (o: Record<string, unknown>) => void }>> = {
+const PLATFORM_OPTIONS_MAP: Record<
+  string,
+  React.ComponentType<{
+    options: Record<string, unknown>
+    onChange: (o: Record<string, unknown>) => void
+    transport: 'zernio' | 'mixpost'
+  }>
+> = {
   tiktok: TikTokOptions,
   youtube: YouTubeOptions,
   instagram: InstagramOptions,
   facebook: FacebookOptions,
   linkedin: LinkedInOptions,
   twitter: TwitterOptions,
-  mastodon: MastodonOptions,
-  pinterest: PinterestOptions,
-  threads: ThreadsOptions,
-  bluesky: BlueskyOptions,
 }
 
-export function PlatformOptions({ platform, options, onChange }: PlatformOptionsProps) {
+export function PlatformOptions({
+  platform,
+  options,
+  onChange,
+  transport = 'mixpost',
+}: PlatformOptionsProps) {
+  if (platform === 'mastodon' || platform === 'pinterest' || platform === 'threads' || platform === 'bluesky') {
+    return (
+      <div className="mt-3 rounded-lg border border-border/60 bg-muted/30 p-3">
+        <UnsupportedNetwork name={platform.charAt(0).toUpperCase() + platform.slice(1)} />
+      </div>
+    )
+  }
+
   const Component = PLATFORM_OPTIONS_MAP[platform]
   if (!Component) return null
 
@@ -317,7 +394,7 @@ export function PlatformOptions({ platform, options, onChange }: PlatformOptions
       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
         {platform.charAt(0).toUpperCase() + platform.slice(1)} options
       </p>
-      <Component options={options} onChange={onChange} />
+      <Component options={options} onChange={onChange} transport={transport} />
     </div>
   )
 }

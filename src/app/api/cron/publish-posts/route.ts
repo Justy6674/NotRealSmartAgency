@@ -12,6 +12,7 @@ import {
   type ZernioAccount,
 } from '@/lib/zernio/client'
 import type { PublishMedia, PublishResult, PublisherPlatform } from '@/lib/publishers/types'
+import { platformOptionsOf } from '@/lib/publishers/zernio-platform-data'
 
 /**
  * Raised when the publisher could not be reached at all — not when it rejected
@@ -405,9 +406,10 @@ export async function GET(request: Request) {
           media: mediaRows.map(toPublishMedia),
           hashtags: (post.hashtags as string[] | null) ?? undefined,
           signature: signatureSuffix === '' ? undefined : signatureSuffix,
+          post_type: (post as Record<string, unknown>).post_type as string | null,
+          platform_options: platformOptionsOf((post as Record<string, unknown>).metadata),
           metadata: {
             source: 'cron/publish-posts',
-            post_type: (post as Record<string, unknown>).post_type ?? null,
           },
         },
         (post as Record<string, unknown>).metadata,

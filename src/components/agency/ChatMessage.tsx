@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { User } from 'lucide-react'
 import Markdown from 'react-markdown'
@@ -8,6 +9,8 @@ import { MessageActions } from './MessageActions'
 import { AgentAvatar } from './AgentAvatar'
 import { AGENT_LABELS } from '@/types/database'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useComposeDeskStore } from '@/stores/compose-desk-store'
+import { extractDeskFillFromMessage } from '@/lib/social/extract-desk-fill'
 import { hasInlineCards, parseInlineCards } from './inline/parseInlineCards'
 import { PostPreviewCard } from './inline/PostPreviewCard'
 import { AnalyticsSummaryCard } from './inline/AnalyticsSummaryCard'
@@ -68,7 +71,7 @@ function RichTextContent({ text, variant }: { text: string; variant: 'default' |
 
 export function ChatMessage({ message, onRegenerate, variant = 'default' }: ChatMessageProps) {
   const isUser = message.role === 'user'
-  const { activeAgentType } = useAgencyStore()
+  const { activeAgentType, activeBrandId } = useAgencyStore()
   const isRail = variant === 'rail'
 
   // Extract full text content for action buttons
@@ -78,6 +81,31 @@ export function ChatMessage({ message, onRegenerate, variant = 'default' }: Chat
     .join('\n') ?? ''
 
   const showActions = !isUser && textContent.length > 100
+
+  useEffect(() => {
+    if (!activeBrandId || isUser) return
+    const fill = extractDeskFillFromMessage(message)
+    if (!fill) return
+    const store = useComposeDeskStore.getState()
+    const storageKey = `nrs-desk-fill:${fill.fillId}`
+    try {
+      if (sessionStorage.getItem(storageKey) === '1') return
+    } catch {
+      /* private mode */
+    }
+    if (store.appliedFillIds[fill.fillId]) return
+    store.markFillApplied(fill.fillId)
+    try {
+      sessionStorage.setItem(storageKey, '1')
+    } catch {
+      /* private mode */
+    }
+    store.enqueueDeskActions({
+      brandId: activeBrandId,
+      actions: fill.actions,
+      hashtagsAreSuggested: true,
+    })
+  }, [message, activeBrandId, isUser])
 
   // Drop a text part that repeats the one before it.
   //

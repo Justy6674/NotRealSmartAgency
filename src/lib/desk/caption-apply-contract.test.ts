@@ -9,18 +9,19 @@ const SRC = join(import.meta.dirname, '../..')
  * Architectural contract: Director caption apply must wire store → PostCreator → editor sync.
  */
 describe('caption apply contract', () => {
-  it('MessageActions publishes pendingCaptionApply and exposes Use on post', () => {
+  it('MessageActions publishes desk actions and exposes Use on post', () => {
     const src = readFileSync(join(SRC, 'components/agency/MessageActions.tsx'), 'utf8')
-    assert.match(src, /setPendingCaptionApply/)
+    assert.match(src, /enqueueDeskActions/)
+    assert.match(src, /captionDraftToDeskActions/)
     assert.match(src, /Use on post/)
     assert.match(src, /data-testid="use-on-post"/)
     assert.match(src, /extractCaptionDraftFromMessage/)
   })
 
-  it('PostCreator consumes pendingCaptionApply and bumps editor sync key', () => {
+  it('PostCreator consumes pendingDeskActions and bumps editor sync key', () => {
     const src = readFileSync(join(SRC, 'components/agency/studio/post/PostCreator.tsx'), 'utf8')
-    assert.match(src, /pendingCaptionApply/)
-    assert.match(src, /applyCaptionPayloadToCompose/)
+    assert.match(src, /pendingDeskActions/)
+    assert.match(src, /applyDeskActionsToCompose/)
     assert.match(src, /captionEditorKey/)
     assert.match(src, /data-caption-editor/)
   })
