@@ -229,6 +229,11 @@ export interface DirectorRailProps {
   brandName?: string | null
   /** Footer middle phrase. Defaults to the plain "sees this screen". */
   contextLabel?: string
+  /** True when desk context is synced to the active conversation metadata. */
+  deskContextLive?: boolean
+  /** Replace generic idle copy when Compose (or desk) has live context. */
+  idleHeadline?: string
+  idleBody?: string
   departmentCount?: number
 
   /* ── The other three tabs are slots the screen fills, or honest blanks ── */
@@ -385,6 +390,9 @@ export function DirectorRail({
   forgetBusinessDescription,
   brandName,
   contextLabel = 'sees this screen',
+  deskContextLive = false,
+  idleHeadline = 'Director',
+  idleBody = 'Everything on this screen works without me. I am here if you want a hand.',
   departmentCount = 14,
   previewSlot,
   activitySlot,
@@ -787,9 +795,11 @@ export function DirectorRail({
       {messages.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-2 pt-8 text-center">
           <AgentAvatar agentType="overall" size="lg" />
-          <p className="text-sm font-medium text-foreground">Director</p>
-          <p className="text-xs text-muted-foreground">
-            Everything on this screen works without me. I am here if you want a hand.
+          <p className="text-sm font-medium" style={{ color: 'var(--ink, oklch(0.20 0.014 240))' }}>
+            {idleHeadline}
+          </p>
+          <p className="max-w-[280px] text-xs leading-relaxed" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
+            {idleBody}
           </p>
         </div>
       ) : (
@@ -962,7 +972,13 @@ export function DirectorRail({
   /* ── Pinned footer. Last child of a flex column, and shrink-0, so a long
         conversation scrolls under it rather than pushing it off. ─────────── */
   const footer = (
-    <div className="shrink-0 border-t bg-card">
+    <div
+      className="shrink-0 border-t"
+      style={{
+        borderColor: 'var(--line, oklch(0.915 0.007 240))',
+        background: 'var(--panel, oklch(1 0 0))',
+      }}
+    >
       {errorMessage && (
         <div className="mx-3 mt-2 flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2">
           <p className="flex-1 text-xs text-destructive">{errorMessage}</p>
@@ -984,9 +1000,22 @@ export function DirectorRail({
         agentType="overall"
         showChips={false}
       />
-      <div className="flex items-center gap-1.5 px-3 pb-2.5 text-[11px] text-muted-foreground">
-        <span className="rounded-md border bg-muted/50 px-1.5 py-0.5">Director</span>
-        <span className="truncate">{contextLabel}</span>
+      <div
+        className="flex items-center gap-1.5 px-3 pb-2.5 text-[11px]"
+        style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+      >
+        <span
+          className="rounded-md border px-1.5 py-0.5"
+          style={{
+            borderColor: 'var(--line, oklch(0.915 0.007 240))',
+            background: 'var(--panel-2, oklch(0.975 0.004 240))',
+          }}
+        >
+          Director
+        </span>
+        <span className="truncate">
+          {deskContextLive ? contextLabel : 'ready when you are'}
+        </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-[oklch(0.55_0.13_155)] dark:bg-[oklch(0.74_0.13_155)]" />
           {departmentCount} departments ready
@@ -1090,9 +1119,13 @@ export function DirectorRail({
             // `relative` so the confirm covers the rail and nothing else — a
             // page-wide modal from a 380px column reads as the whole app
             // stopping, when what is being decided is only the Director's.
-            'relative hidden h-full w-[380px] shrink-0 flex-col border-l bg-card md:flex',
+            'relative hidden h-full w-[380px] shrink-0 flex-col border-l md:flex',
             className,
           )}
+          style={{
+            borderColor: 'var(--line, oklch(0.915 0.007 240))',
+            background: 'var(--panel, oklch(1 0 0))',
+          }}
         >
           {tabStrip('rail', true)}
           {body('rail')}
@@ -1107,9 +1140,13 @@ export function DirectorRail({
           data-director-rail="collapsed"
           aria-label="Director, hidden"
           className={cn(
-            'hidden h-full w-[52px] shrink-0 flex-col items-center gap-3.5 border-l bg-card py-3 md:flex',
+            'hidden h-full w-[52px] shrink-0 flex-col items-center gap-3.5 border-l py-3 md:flex',
             className,
           )}
+          style={{
+            borderColor: 'var(--line, oklch(0.915 0.007 240))',
+            background: 'var(--panel, oklch(1 0 0))',
+          }}
         >
           <button
             type="button"
@@ -1152,7 +1189,11 @@ export function DirectorRail({
           <div
             data-director-rail="mobile"
             aria-label="Director"
-            className="fixed top-0 right-0 z-40 flex h-screen w-full flex-col border-l bg-card shadow-xl md:hidden"
+            className="fixed top-0 right-0 z-40 flex h-screen w-full flex-col border-l shadow-xl md:hidden"
+            style={{
+              borderColor: 'var(--line, oklch(0.915 0.007 240))',
+              background: 'var(--panel, oklch(1 0 0))',
+            }}
           >
             <div className="flex h-[50px] shrink-0 items-center gap-2 border-b px-3">
               <AgentAvatar agentType="overall" size="sm" />

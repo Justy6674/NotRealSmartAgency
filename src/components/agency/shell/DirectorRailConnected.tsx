@@ -3,21 +3,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { DirectorRail } from '@/components/agency/shell/DirectorRail'
+import { DirectorRail, type DirectorSuggestion } from '@/components/agency/shell/DirectorRail'
 import type { DirectorConversation } from '@/components/agency/shell/DirectorHistory'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useComposeDeskStore } from '@/stores/compose-desk-store'
+import {
+  buildComposeDeskIntent,
+  composeDeskIsActive,
+  composeDirectorIdleCopy,
+  composeDirectorSuggestions,
+  wrapComposeDirectorPrompt,
+} from '@/lib/desk/compose-desk'
+import { deskCreativeStateForMessage, type DeskCreativeState } from '@/lib/desk/creative-flow'
+import { readDeskContext } from '@/lib/desk/context'
 
 /**
- * The Director rail, actually wired.
+ * The Director rail, actually wired — including live Compose desk context.
  *
- * DirectorRail itself does not fetch — that was the right seam, and it stays.
- * This container is the missing half the restored shell never landed: without
- * it the input fires `nrs-send-chat` at a ChatPanel that is no longer mounted,
- * history never appears, and "the Director on every screen" is a 380px blank.
- *
- * One history store (`GET /api/conversations`), one chat transport
- * (`POST /api/chat`), one listener for every "Ask the Director" button that
- * still dispatches the old event.
+ * When PostCreator publishes a snapshot, this container PATCHes
+ * `/api/desk/context` on the active conversation so `/api/chat` receives
+ * media IDs, platforms and caption facts via conversation metadata. The footer
+ * badge only claims "sees this screen" after that sync succeeds.
  */
 export function DirectorRailConnected({
   brandName,
@@ -35,15 +41,22 @@ export function DirectorRailConnected({
     setChatPanelMinimised,
   } = useAgencyStore()
 
+  const composeSnapshot = useComposeDeskStore((s) => s.snapshot)
+
   const [panelConversationId, setPanelConversationId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<DirectorConversation[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyFailed, setHistoryFailed] = useState(false)
+  const [deskContextLive, setDeskContextLive] = useState(false)
+  const [deskState, setDeskState] = useState<DeskCreativeState>('collecting')
 
   const brandIdRef = useRef(activeBrandId)
   brandIdRef.current = activeBrandId
   const convIdRef = useRef(panelConversationId)
   convIdRef.current = panelConversationId
+  const creationRef = useRef<Promise<string> | null>(null)
+  const clientTurnIdRef = useRef<string | null>(null)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const transport = useMemo(
     () =>
@@ -56,6 +69,9 @@ export function DirectorRailConnected({
           agentType: 'overall',
           get conversationId() {
             return convIdRef.current
+          },
+          get clientTurnId() {
+            return clientTurnIdRef.current
           },
         },
       }),
@@ -123,13 +139,14 @@ export function DirectorRailConnected({
       setMessages([])
       setPanelConversationId(null)
       setConversations([])
+      setDeskContextLive(false)
       return
     }
 
     let cancelled = false
     fetch(`/api/conversations?brandId=${activeBrandId}`)
       .then((r) => (r.ok ? r.json() : []))
-      .then(async (convs: Array<DirectorConversation & { agent_type?: string }>) => {
+      .then(async (convs: Array<DirectorConversation & { agent_type?: string; metadata?: unknown }>) => {
         if (cancelled) return
         const list = Array.isArray(convs) ? convs : []
         setConversations(list)
@@ -137,15 +154,20 @@ export function DirectorRailConnected({
         if (!latest) {
           setMessages([])
           setPanelConversationId(null)
+          setDeskContextLive(false)
           return
         }
         setPanelConversationId(latest.id)
+        const ctx = readDeskContext(latest.metadata)
+        setDeskContextLive(!!ctx)
+        if (ctx?.state) setDeskState(ctx.state)
         await loadMessages(latest.id)
       })
       .catch(() => {
         if (!cancelled) {
           setMessages([])
           setPanelConversationId(null)
+          setDeskContextLive(false)
         }
       })
 
@@ -161,9 +183,117 @@ export function DirectorRailConnected({
     }
   }, [activeConversationId, panelConversationId, loadMessages])
 
+  const ensureDeskConversation = useCallback(
+    async (title: string) => {
+      if (panelConversationId) return panelConversationId
+      if (creationRef.current) return creationRef.current
+      if (!activeBrandId) throw new Error('Select a business first.')
+
+      creationRef.current = (async () => {
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brandId: activeBrandId,
+            agentType: 'overall',
+            title: title.slice(0, 90),
+            source: 'nrs_desk',
+            mediaItemIds: composeSnapshot?.mediaItemIds ?? [],
+            platforms: composeSnapshot?.platforms ?? [],
+          }),
+        })
+        const conv = await res.json()
+        if (!res.ok || !conv?.id) {
+          throw new Error(conv?.error ?? 'Could not start this conversation.')
+        }
+        setPanelConversationId(conv.id)
+        setConversation(conv.id)
+        void loadHistory()
+        return conv.id as string
+      })()
+
+      try {
+        return await creationRef.current
+      } finally {
+        creationRef.current = null
+      }
+    },
+    [activeBrandId, composeSnapshot, loadHistory, panelConversationId, setConversation],
+  )
+
+  const syncDeskContext = useCallback(
+    async (conversationId: string, intent?: string) => {
+      if (!composeSnapshot || !composeDeskIsActive(composeSnapshot)) {
+        setDeskContextLive(false)
+        return false
+      }
+      if (composeSnapshot.brandId !== activeBrandId) return false
+
+      const res = await fetch('/api/desk/context', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          mediaItemIds: composeSnapshot.mediaItemIds,
+          platforms: composeSnapshot.platforms,
+          intent: intent ?? buildComposeDeskIntent(composeSnapshot),
+          state: deskState,
+        }),
+      })
+      if (!res.ok) {
+        setDeskContextLive(false)
+        return false
+      }
+      setDeskContextLive(true)
+      return true
+    },
+    [activeBrandId, composeSnapshot, deskState],
+  )
+
+  // Debounced sync whenever Compose publishes a new snapshot
+  useEffect(() => {
+    if (!composeSnapshot || !composeDeskIsActive(composeSnapshot)) {
+      setDeskContextLive(false)
+      return
+    }
+    if (composeSnapshot.brandId !== activeBrandId) return
+
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    syncTimerRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const id = await ensureDeskConversation('Compose desk')
+          await syncDeskContext(id)
+        } catch {
+          setDeskContextLive(false)
+        }
+      })()
+    }, 400)
+
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    }
+  }, [activeBrandId, composeSnapshot, ensureDeskConversation, syncDeskContext])
+
   const handleSend = useCallback(
     async (text: string, images?: { data: string; mimeType: string }[]) => {
       if (!activeBrandId) return
+
+      const id = await ensureDeskConversation(text)
+      convIdRef.current = id
+
+      if (composeSnapshot && composeDeskIsActive(composeSnapshot)) {
+        const nextState = deskCreativeStateForMessage(deskState, text)
+        setDeskState(nextState)
+        await syncDeskContext(id, text.trim() || buildComposeDeskIntent(composeSnapshot))
+      }
+
+      clientTurnIdRef.current = crypto.randomUUID()
+
+      const outbound =
+        composeSnapshot && composeDeskIsActive(composeSnapshot)
+          ? wrapComposeDirectorPrompt(composeSnapshot, text)
+          : text
 
       if (images?.length) {
         const files = images.map((img) => ({
@@ -171,30 +301,12 @@ export function DirectorRailConnected({
           mediaType: img.mimeType,
           url: `data:${img.mimeType};base64,${img.data}`,
         }))
-        await sendMessage({ text: text || 'What do you see in this image?', files })
+        await sendMessage({ text: outbound || 'What do you see in this image?', files })
       } else {
-        await sendMessage({ text })
-      }
-
-      if (!panelConversationId) {
-        const res = await fetch('/api/conversations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            brandId: activeBrandId,
-            agentType: 'overall',
-            title: text.slice(0, 80),
-          }),
-        })
-        const conv = await res.json()
-        if (conv?.id) {
-          setPanelConversationId(conv.id)
-          setConversation(conv.id)
-          void loadHistory()
-        }
+        await sendMessage({ text: outbound })
       }
     },
-    [activeBrandId, panelConversationId, sendMessage, setConversation, loadHistory],
+    [activeBrandId, composeSnapshot, deskState, ensureDeskConversation, sendMessage, syncDeskContext],
   )
 
   const handleSendRef = useRef(handleSend)
@@ -225,6 +337,7 @@ export function DirectorRailConnected({
     setMessages([])
     setPanelConversationId(null)
     setConversation(null)
+    setDeskContextLive(false)
   }, [setMessages, setConversation])
 
   const handleForgetBusiness = useCallback(async () => {
@@ -234,6 +347,33 @@ export function DirectorRailConnected({
 
   const liveBrandName = brands.find((row) => row.id === activeBrandId)?.name ?? brandName
 
+  const composeActive =
+    composeSnapshot &&
+    composeDeskIsActive(composeSnapshot) &&
+    composeSnapshot.brandId === activeBrandId
+
+  const idle = composeActive
+    ? composeDirectorIdleCopy(composeSnapshot)
+    : {
+        headline: 'Director',
+        body: 'Everything on this screen works without me. I am here if you want a hand.',
+      }
+
+  const railSuggestions: DirectorSuggestion[] = useMemo(() => {
+    if (!composeActive || messages.length > 0) return []
+    return composeDirectorSuggestions(composeSnapshot!).map((item) => ({
+      id: item.id,
+      label: item.label,
+      prompt: item.prompt,
+    }))
+  }, [composeActive, composeSnapshot, messages.length])
+
+  const contextLabel = deskContextLive
+    ? composeSnapshot?.screen === 'compose'
+      ? 'sees your post in progress'
+      : 'sees this screen'
+    : 'ready when you are'
+
   return (
     <DirectorRail
       brandName={liveBrandName}
@@ -242,6 +382,7 @@ export function DirectorRailConnected({
       onSend={handleSend}
       errorMessage={error ? 'Something went wrong talking to the Director. Try again.' : null}
       onDismissError={clearError}
+      suggestions={railSuggestions}
       conversations={conversations}
       historyLoading={historyLoading}
       historyFailed={historyFailed}
@@ -251,6 +392,10 @@ export function DirectorRailConnected({
       onNewConversation={handleNewConversation}
       onForgetBusiness={activeBrandId ? handleForgetBusiness : undefined}
       historyCount={conversations.length > 0 ? conversations.length : null}
+      contextLabel={contextLabel}
+      deskContextLive={deskContextLive}
+      idleHeadline={idle.headline}
+      idleBody={idle.body}
     />
   )
 }

@@ -10,16 +10,15 @@ interface ContentTypeDef {
   label: string
   description: string
   icon: typeof ImageIcon
-  colour: string
 }
 
 const CONTENT_TYPES: ContentTypeDef[] = [
-  { value: 'post', label: 'Post', description: 'Single image or text post', icon: ImageIcon, colour: 'text-blue-400' },
-  { value: 'carousel', label: 'Carousel', description: 'Multi-slide swipeable gallery (2-10 images)', icon: Images, colour: 'text-indigo-400' },
-  { value: 'short_video', label: 'Short Video', description: 'Reels, YouTube Shorts, TikTok (9:16, under 90s)', icon: Film, colour: 'text-pink-400' },
-  { value: 'long_video', label: 'Long Video', description: 'YouTube, LinkedIn video (16:9, 1-60 min)', icon: Youtube, colour: 'text-red-400' },
-  { value: 'story', label: 'Story', description: '24-hour ephemeral content (9:16)', icon: Clock, colour: 'text-amber-400' },
-  { value: 'ad', label: 'Advertisement', description: 'Paid promotion with CTA', icon: Target, colour: 'text-emerald-400' },
+  { value: 'post', label: 'Post', description: 'Single image or text post', icon: ImageIcon },
+  { value: 'carousel', label: 'Carousel', description: 'Multi-slide swipeable gallery (2-10 images)', icon: Images },
+  { value: 'short_video', label: 'Short Video', description: 'Reels, YouTube Shorts, TikTok (9:16, under 90s)', icon: Film },
+  { value: 'long_video', label: 'Long Video', description: 'YouTube, LinkedIn video (16:9, 1-60 min)', icon: Youtube },
+  { value: 'story', label: 'Story', description: '24-hour ephemeral content (9:16)', icon: Clock },
+  { value: 'ad', label: 'Advertisement', description: 'Paid promotion with CTA', icon: Target },
 ]
 
 interface ContentTypeSectionProps {
@@ -30,9 +29,11 @@ interface ContentTypeSectionProps {
 export function ContentTypeSection({ value, onChange }: ContentTypeSectionProps) {
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-foreground">What are you creating?</h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {CONTENT_TYPES.map(ct => {
+      <h3 className="text-sm font-semibold" style={{ color: 'var(--ink, oklch(0.20 0.014 240))' }}>
+        What are you creating?
+      </h3>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {CONTENT_TYPES.map((ct) => {
           const Icon = ct.icon
           const isSelected = value === ct.value
           return (
@@ -41,24 +42,54 @@ export function ContentTypeSection({ value, onChange }: ContentTypeSectionProps)
               type="button"
               onClick={() => onChange(ct.value)}
               className={cn(
-                'relative p-4 rounded-lg border-2 transition-all text-left space-y-2',
-                isSelected
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border bg-card hover:border-primary/50'
+                'relative space-y-2 rounded-lg border-2 p-4 text-left transition-all',
               )}
+              style={
+                isSelected
+                  ? {
+                      borderColor: 'var(--brand-deep, oklch(0.33 0.08 240))',
+                      background: 'var(--brand-wash, oklch(0.965 0.018 240))',
+                    }
+                  : {
+                      borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                      background: 'var(--panel, oklch(1 0 0))',
+                    }
+              }
             >
-              {/* Check badge — Scent Sell condition card pattern */}
               {isSelected && (
-                <span className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary flex items-center justify-center">
-                  <Check className="h-3 w-3 text-primary-foreground" />
+                <span
+                  className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full"
+                  style={{
+                    background: 'var(--brand-deep, oklch(0.33 0.08 240))',
+                    color: 'var(--brand-ink, oklch(1 0 0))',
+                  }}
+                >
+                  <Check className="h-3 w-3" />
                 </span>
               )}
-              <Icon className={cn('h-6 w-6', isSelected ? 'text-primary' : ct.colour)} />
+              <Icon
+                className="h-6 w-6"
+                style={{
+                  color: isSelected
+                    ? 'var(--brand-deep, oklch(0.33 0.08 240))'
+                    : 'var(--ink-3, oklch(0.615 0.011 240))',
+                }}
+              />
               <div>
-                <p className={cn('text-sm font-medium', isSelected ? 'text-primary' : 'text-foreground')}>
+                <p
+                  className="text-sm font-medium"
+                  style={{
+                    color: isSelected
+                      ? 'var(--brand-deep, oklch(0.33 0.08 240))'
+                      : 'var(--ink, oklch(0.20 0.014 240))',
+                  }}
+                >
                   {ct.label}
                 </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                <p
+                  className="mt-0.5 text-[11px] leading-snug"
+                  style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+                >
                   {ct.description}
                 </p>
               </div>
@@ -70,5 +101,4 @@ export function ContentTypeSection({ value, onChange }: ContentTypeSectionProps)
   )
 }
 
-// Exports for use by other sections
 export const CONTENT_TYPE_DEFS = CONTENT_TYPES

@@ -45,6 +45,10 @@ export interface DepartmentTab {
    */
   count?: number
   /**
+   * Queue badge — attention styling (--brand-deep), not inventory grey.
+   */
+  attention?: boolean
+  /**
    * A compliance item. Tinted with the care colour so a health rule never
    * looks like an ordinary tab. Only ever set this for a business whose
    * compliance flags are actually on.
@@ -80,6 +84,12 @@ const ACTIVE_STYLE: CSSProperties = {
 
 const CARE_STYLE: CSSProperties = {
   color: 'var(--care, var(--destructive))',
+}
+
+const ATTENTION_COUNT_STYLE: CSSProperties = {
+  background: 'var(--brand-deep, var(--foreground))',
+  color: 'var(--brand-ink, oklch(1 0 0))',
+  borderColor: 'transparent',
 }
 
 const ACTIVE_COUNT_STYLE: CSSProperties = {
@@ -124,10 +134,11 @@ export function DepartmentTabs({
       aria-label={label}
       aria-orientation="horizontal"
       onKeyDown={handleKeyDown}
-      className={cn(
-        'flex items-center gap-0.5 overflow-x-auto border-b border-border',
-        className,
-      )}
+        className={cn(
+          'flex items-center gap-0.5 overflow-x-auto border-b',
+          className,
+        )}
+        style={{ borderColor: 'var(--line, oklch(0.915 0.007 240))' }}
     >
       {tabs.map((tab, index) => {
         const isActive = tab.id === value
@@ -165,10 +176,18 @@ export function DepartmentTabs({
             <span>{tab.label}</span>
             {hasCount ? (
               <span
-                style={isActive ? ACTIVE_COUNT_STYLE : undefined}
+                style={
+                  isActive
+                    ? ACTIVE_COUNT_STYLE
+                    : tab.attention
+                      ? ATTENTION_COUNT_STYLE
+                      : undefined
+                }
                 className={cn(
                   'rounded-sm border px-1.5 py-px text-[10px] font-semibold tabular-nums',
-                  isActive ? '' : 'border-border bg-muted text-muted-foreground',
+                  isActive || tab.attention
+                    ? ''
+                    : 'border-[var(--line,oklch(0.915_0.007_240))] bg-[var(--panel-2,oklch(0.975_0.004_240))] text-[var(--ink-3,oklch(0.615_0.011_240))]',
                 )}
               >
                 {tab.count}

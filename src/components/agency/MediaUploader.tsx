@@ -28,6 +28,8 @@ interface UploadRow {
 interface MediaUploaderProps {
   brandId: string
   onUploadComplete: () => void
+  /** Quiet card drop per dept-social mockup — less vertical space */
+  compact?: boolean
 }
 
 const BUILD_SHA = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local'
@@ -52,7 +54,7 @@ function logBreadcrumb(traceId: string, step: string, data?: Record<string, unkn
   }
 }
 
-export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps) {
+export function MediaUploader({ brandId, onUploadComplete, compact = false }: MediaUploaderProps) {
   const [rows, setRows] = useState<UploadRow[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
@@ -189,20 +191,45 @@ export function MediaUploader({ brandId, onUploadComplete }: MediaUploaderProps)
   )
 
   return (
-    <div className="space-y-4">
+    <div className={compact ? 'space-y-2' : 'space-y-4'}>
       <div
         ref={dropRef}
         tabIndex={-1}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors outline-none"
+        className={
+          compact
+            ? 'flex cursor-pointer items-center gap-2.5 rounded-[12px] border px-[15px] py-[14px] outline-none transition-colors hover:border-[var(--brand,oklch(0.545_0.115_240))]'
+            : 'cursor-pointer rounded-lg border-2 border-dashed p-8 text-center outline-none transition-colors hover:border-[var(--brand,oklch(0.545_0.115_240))]'
+        }
+        style={{
+          borderColor: 'var(--line, oklch(0.915 0.007 240))',
+          background: 'var(--panel, oklch(1 0 0))',
+          boxShadow: compact
+            ? 'var(--nrs-shadow, 0 1px 2px oklch(0.2 0.02 240 / .05))'
+            : undefined,
+        }}
       >
-        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-sm font-medium">Drop files here or click to upload</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Videos, photos, or audio — AI describes and captions everything
-        </p>
+        <Upload
+          className={compact ? 'h-[17px] w-[17px] shrink-0' : 'mx-auto mb-2 h-8 w-8'}
+          style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+        />
+        <div className={compact ? 'min-w-0 flex-1 text-left' : undefined}>
+          <p
+            className={compact ? 'text-[13px]' : 'text-sm font-medium'}
+            style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))' }}
+          >
+            {compact
+              ? 'Drag files here, or browse your computer. Photos, videos and audio.'
+              : 'Drop files here or click to upload'}
+          </p>
+          {!compact ? (
+            <p className="mt-1 text-xs" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
+              Videos, photos, or audio — AI describes and captions everything
+            </p>
+          ) : null}
+        </div>
         <input
           ref={inputRef}
           type="file"

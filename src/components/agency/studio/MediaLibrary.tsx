@@ -4,13 +4,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Tag, Images, Plus, Palette, Sparkles, Loader2, CheckSquare, Square, Trash2, ImageIcon, Film } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useComposeDeskStore } from '@/stores/compose-desk-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { sendToDirector } from '@/lib/chat-dispatch'
-import { DirectorAssistBar } from './DirectorAssistBar'
 import { MediaUploader } from '@/components/agency/MediaUploader'
 import { MediaLibraryFilters } from './MediaLibraryFilters'
 import { MediaLibraryCard } from './MediaLibraryCard'
-import { TagManager } from './TagManager'
 import { CollectionCard } from './CollectionCard'
 import { CollectionView } from './CollectionView'
 import { MediaDetailPanel } from './MediaDetailPanel'
@@ -30,7 +29,6 @@ export function MediaLibrary() {
   const pathname = usePathname() ?? ''
   const { activeBrandId, setPendingMediaId } = useAgencyStore()
   const studioData = useStudioData(activeBrandId)
-  const brandName = studioData.brand?.name ?? 'this brand'
   const isHealthBrand = !!(studioData.brand?.compliance_flags?.ahpra || studioData.brand?.compliance_flags?.tga)
 
   const [items, setItems] = useState<MediaItemWithUsage[]>([])
@@ -181,6 +179,23 @@ export function MediaLibrary() {
   useEffect(() => { fetchMedia() }, [fetchMedia])
   useEffect(() => { fetchTags() }, [fetchTags])
   useEffect(() => { fetchCollections() }, [fetchCollections])
+
+  useEffect(() => {
+    if (!activeBrandId) {
+      useComposeDeskStore.getState().setSnapshot(null)
+      return
+    }
+    useComposeDeskStore.getState().setSnapshot({
+      screen: 'media_library',
+      brandId: activeBrandId,
+      mediaItemIds: [],
+      mediaLabels: [],
+      mediaTypes: [],
+      platforms: [],
+      updatedAt: Date.now(),
+    })
+    return () => useComposeDeskStore.getState().setSnapshot(null)
+  }, [activeBrandId])
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -443,66 +458,50 @@ export function MediaLibrary() {
     }
   }
 
-  return (
-    <div className="space-y-4 overflow-y-auto p-6">
-      <DirectorAssistBar
-        brandName={brandName}
-        buttons={[
-          {
-            label: 'Organise my library',
-            prompt: `Review ${brandName}'s media library. Suggest tags, collections (carousels, campaigns), and organisation improvements based on the brand's content strategy and proforma.${isHealthBrand ? ' Flag any media that may need AHPRA/TGA compliance review.' : ''}`,
-          },
-          {
-            label: "What content am I missing?",
-            prompt: `Review ${brandName}'s media library against the marketing strategy pillars and connected social accounts. What types of content are missing — product shots, behind-the-scenes, testimonials, educational content, short-form video? Suggest what to create or upload next.${isHealthBrand ? ' Consider AHPRA/TGA content requirements.' : ''}`,
-          },
-        ]}
-      />
+  const sourceTabs: { id: SourceTab; label: string; icon: typeof Images }[] = [
+    { id: 'library', label: 'Library', icon: Images },
+    { id: 'gifs', label: 'GIFs', icon: Film },
+    { id: 'stock', label: 'Stock photos', icon: ImageIcon },
+  ]
 
-      {/* Source tabs */}
-      <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-        <button
-          type="button"
-          onClick={() => setSourceTab('library')}
-          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-            sourceTab === 'library'
-              ? 'bg-[oklch(0.55_0.1_240)] text-white'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
-        >
-          <Images className="h-3.5 w-3.5" />
-          Library
-        </button>
-        <button
-          type="button"
-          onClick={() => setSourceTab('gifs')}
-          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-            sourceTab === 'gifs'
-              ? 'bg-[oklch(0.55_0.1_240)] text-white'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
-        >
-          <Film className="h-3.5 w-3.5" />
-          GIFs
-        </button>
-        <button
-          type="button"
-          onClick={() => setSourceTab('stock')}
-          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-            sourceTab === 'stock'
-              ? 'bg-[oklch(0.55_0.1_240)] text-white'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
-        >
-          <ImageIcon className="h-3.5 w-3.5" />
-          Stock Photos
-        </button>
-        {savingExternal && (
-          <span className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground">
+  return (
+    <div
+      className="space-y-3 overflow-y-auto px-[26px] py-[18px]"
+      style={{ color: 'var(--ink, oklch(0.20 0.014 240))' }}
+    >
+      {/* Source tabs + saving indicator — mockup .filters in .toolrow */}
+      <div className="flex flex-wrap items-center gap-2 border-b pb-0" style={{ borderColor: 'var(--line, oklch(0.915 0.007 240))' }}>
+        <div className="flex flex-wrap items-center gap-0.5">
+          {sourceTabs.map(({ id, label, icon: Icon }) => {
+            const active = sourceTab === id
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSourceTab(id)}
+                className="-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-[12.5px] font-semibold transition-colors"
+                style={{
+                  borderBottomColor: active ? 'var(--brand, oklch(0.545 0.115 240))' : 'transparent',
+                  color: active
+                    ? 'var(--brand-deep, oklch(0.33 0.08 240))'
+                    : 'var(--ink-2, oklch(0.46 0.012 240))',
+                }}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+                {label}
+              </button>
+            )
+          })}
+        </div>
+        {savingExternal ? (
+          <span
+            className="ml-auto inline-flex items-center gap-1 text-[12px]"
+            style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+          >
             <Loader2 className="h-3 w-3 animate-spin" />
-            Saving to library...
+            Saving to library…
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* GIF Picker */}
@@ -518,40 +517,71 @@ export function MediaLibrary() {
       {/* Library view */}
       {sourceTab === 'library' && (
         <>
-      <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} />
+      <MediaLibraryFilters
+        search={search}
+        onSearchChange={setSearch}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
+        selectedTags={selectedTags}
+        onSelectedTagsChange={setSelectedTags}
+        availableTags={availableTags}
+        sort={sort}
+        onSortChange={setSort}
+        showArchived={showArchived}
+        onShowArchivedChange={setShowArchived}
+      />
 
-      {/* Actions row */}
+      <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} compact />
+
+      {/* Secondary actions — quiet, same paper family */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={toggleSelectMode}
           aria-pressed={selectMode}
-          className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-medium transition-colors ${
-            selectMode
-              ? 'border-[oklch(0.55_0.1_240)] bg-[oklch(0.55_0.1_240)]/10 text-foreground'
-              : 'border-border bg-card text-foreground hover:bg-muted'
-          }`}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-[7px] text-[12.5px] font-semibold transition-colors hover:border-[var(--brand,oklch(0.545_0.115_240))] hover:text-[var(--brand-deep,oklch(0.33_0.08_240))]"
+          style={{
+            borderColor: selectMode
+              ? 'var(--brand-deep, oklch(0.33 0.08 240))'
+              : 'var(--line, oklch(0.915 0.007 240))',
+            background: selectMode
+              ? 'var(--brand-wash, oklch(0.966 0.026 240))'
+              : 'var(--panel, oklch(1 0 0))',
+            color: selectMode
+              ? 'var(--brand-deep, oklch(0.33 0.08 240))'
+              : 'var(--ink, oklch(0.20 0.014 240))',
+          }}
         >
-          {selectMode ? <CheckSquare className="h-4 w-4 text-[oklch(0.65_0.12_240)]" /> : <Square className="h-4 w-4" />}
+          {selectMode ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
           {selectMode ? 'Selecting' : 'Select'}
         </button>
 
-        {selectMode && items.length > 0 && (
+        {selectMode && items.length > 0 ? (
           <button
             type="button"
             onClick={handleSelectAll}
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-[7px] text-[12.5px] font-semibold transition-colors hover:border-[var(--brand,oklch(0.545_0.115_240))] hover:text-[var(--brand-deep,oklch(0.33_0.08_240))]"
+            style={{
+              borderColor: 'var(--line, oklch(0.915 0.007 240))',
+              background: 'var(--panel, oklch(1 0 0))',
+              color: 'var(--ink-2, oklch(0.46 0.012 240))',
+            }}
           >
             {selectedIds.size === items.length ? 'Clear all' : 'Select all'}
           </button>
-        )}
+        ) : null}
 
         <button
           type="button"
           onClick={() => setShowCanvaImport(true)}
-          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-[7px] text-[12.5px] font-semibold transition-colors hover:border-[var(--brand,oklch(0.545_0.115_240))] hover:text-[var(--brand-deep,oklch(0.33_0.08_240))]"
+          style={{
+            borderColor: 'var(--line, oklch(0.915 0.007 240))',
+            background: 'var(--panel, oklch(1 0 0))',
+            color: 'var(--ink-2, oklch(0.46 0.012 240))',
+          }}
         >
-          <Palette className="h-4 w-4 text-purple-400" />
+          <Palette className="h-3.5 w-3.5" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }} />
           Import from Canva
         </button>
 
@@ -559,24 +589,36 @@ export function MediaLibrary() {
           type="button"
           onClick={handleSmartRetag}
           disabled={retagging}
-          className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-[7px] text-[12.5px] font-semibold transition-colors hover:border-[var(--brand,oklch(0.545_0.115_240))] hover:text-[var(--brand-deep,oklch(0.33_0.08_240))] disabled:opacity-50"
+          style={{
+            borderColor: 'var(--line, oklch(0.915 0.007 240))',
+            background: 'var(--panel, oklch(1 0 0))',
+            color: 'var(--ink-2, oklch(0.46 0.012 240))',
+          }}
         >
-          {retagging ? <Loader2 className="h-4 w-4 animate-spin text-amber-400" /> : <Sparkles className="h-4 w-4 text-amber-400" />}
-          {retagging ? 'Smart tagging...' : 'Smart Retag All'}
+          {retagging ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }} />
+          )}
+          {retagging ? 'Smart tagging…' : 'Smart retag all'}
         </button>
 
-        {retagResult && (
-          <span className="text-xs text-muted-foreground">{retagResult}</span>
-        )}
-      </div>
+        {retagResult ? (
+          <span className="text-[12px]" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
+            {retagResult}
+          </span>
+        ) : null}
 
-      {/* Tag Manager */}
-      <TagManager
-        brandId={activeBrandId}
-        selectedTags={selectedTags}
-        onSelectedTagsChange={setSelectedTags}
-        onTagsUpdated={fetchTags}
-      />
+        {selectMode && selectedIds.size > 0 ? (
+          <span
+            className="ml-auto text-[12px] tabular-nums"
+            style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+          >
+            {selectedIds.size} selected
+          </span>
+        ) : null}
+      </div>
 
       {/* Collections section */}
       {collections.length > 0 && (
@@ -604,20 +646,6 @@ export function MediaLibrary() {
           )}
         </div>
       )}
-
-      <MediaLibraryFilters
-        search={search}
-        onSearchChange={setSearch}
-        typeFilter={typeFilter}
-        onTypeFilterChange={setTypeFilter}
-        selectedTags={selectedTags}
-        onSelectedTagsChange={setSelectedTags}
-        availableTags={availableTags}
-        sort={sort}
-        onSortChange={setSort}
-        showArchived={showArchived}
-        onShowArchivedChange={setShowArchived}
-      />
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
@@ -761,9 +789,11 @@ export function MediaLibrary() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading media...</p>
+        <p className="text-[13px]" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
+          Loading media…
+        </p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px]" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
           No media found. Upload some files above.
         </p>
       ) : (

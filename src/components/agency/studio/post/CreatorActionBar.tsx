@@ -86,7 +86,13 @@ export function CreatorActionBar({
   const blockedByHealth = compliancePassed === false
 
   return (
-    <div className="flex-shrink-0 border-t border-[var(--border)] bg-[var(--card,oklch(1_0_0))]">
+    <div
+      className="shrink-0 border-t"
+      style={{
+        borderColor: 'var(--line, oklch(0.915 0.007 240))',
+        background: 'var(--panel, oklch(1 0 0))',
+      }}
+    >
       {/* ── Health gate ────────────────────────────────────────────────── */}
       {blockedByHealth && (
         <div

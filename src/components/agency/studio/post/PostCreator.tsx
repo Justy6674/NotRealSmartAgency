@@ -5,6 +5,7 @@ import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb, Aler
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
+import { useComposeDeskStore } from '@/stores/compose-desk-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 
@@ -398,6 +399,38 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const selectedMedia = selectedMediaIds
     .map(id => mediaItems.find(m => m.id === id))
     .filter((m): m is MediaItem => !!m)
+
+  // Publish live desk snapshot for the Director rail
+  useEffect(() => {
+    if (!activeBrandId) {
+      useComposeDeskStore.getState().setSnapshot(null)
+      return
+    }
+
+    const captionPreview = caption.trim().slice(0, 240) || undefined
+    useComposeDeskStore.getState().setSnapshot({
+      screen: 'compose',
+      brandId: activeBrandId,
+      contentType,
+      mediaItemIds: selectedMediaIds,
+      mediaLabels: selectedMedia.map((m) => m.file_name),
+      mediaTypes: selectedMedia.map((m) => m.file_type),
+      platforms: selectedPlatforms,
+      captionPreview,
+      updatedAt: Date.now(),
+    })
+
+    return () => {
+      useComposeDeskStore.getState().setSnapshot(null)
+    }
+  }, [
+    activeBrandId,
+    contentType,
+    selectedMediaIds,
+    selectedMedia,
+    selectedPlatforms,
+    caption,
+  ])
 
   // ── AI Generation — CAPTION ONLY ──────────────────────────────────────────
   // This button lives in the Caption card and writes the caption TEXT for
@@ -892,70 +925,107 @@ If any items have no AI description or transcription yet, name them and offer to
           onAddClick={() => setShowMediaLibrary(!showMediaLibrary)}
         />
 
-        {/* Source buttons (Scent Sell "Search Database / Enter Manually" pattern) */}
-        <div className="flex flex-wrap gap-2 mt-3">
+        {/* Source buttons — outline/copper family, not competing primaries */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(
+            [
+              {
+                key: 'library',
+                active: showMediaLibrary,
+                onClick: () => setShowMediaLibrary(!showMediaLibrary),
+                icon: ImageIcon,
+                label: 'Library',
+              },
+              {
+                key: 'upload',
+                active: showComposeUpload,
+                onClick: () => {
+                  setShowComposeUpload((open) => !open)
+                  setShowMediaLibrary(false)
+                },
+                icon: Upload,
+                label: 'Upload',
+              },
+            ] as const
+          ).map(({ key, active, onClick, icon: Icon, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={onClick}
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
+              style={
+                active
+                  ? {
+                      borderColor: 'var(--brand-deep, oklch(0.33 0.08 240))',
+                      background: 'var(--brand-wash, oklch(0.965 0.018 240))',
+                      color: 'var(--brand-deep, oklch(0.33 0.08 240))',
+                    }
+                  : {
+                      borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                      color: 'var(--ink-2, oklch(0.46 0.012 240))',
+                    }
+              }
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
           <button
             type="button"
-            onClick={() => setShowMediaLibrary(!showMediaLibrary)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all',
-              showMediaLibrary
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-foreground/80 hover:border-primary/50'
-            )}
-          >
-            <ImageIcon className="h-3.5 w-3.5" />
-            Library
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShowComposeUpload((open) => !open)
-              setShowMediaLibrary(false)
+            onClick={() =>
+              sendToDirector(
+                `Import designs from Canva for ${brandName}. Show me my recent Canva designs so I can pick ones for this ${contentType.replace('_', ' ')}.`,
+              )
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
+            style={{
+              borderColor: 'var(--line, oklch(0.915 0.007 240))',
+              color: 'var(--ink-2, oklch(0.46 0.012 240))',
             }}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all',
-              showComposeUpload
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-foreground/80 hover:border-primary/50',
-            )}
-          >
-            <Upload className="h-3.5 w-3.5" />
-            Upload
-          </button>
-          <button
-            type="button"
-            onClick={() => sendToDirector(`Import designs from Canva for ${brandName}. Show me my recent Canva designs so I can pick ones for this ${contentType.replace('_', ' ')}.`)}
-            className="inline-flex items-center gap-1.5 rounded-lg border-2 border-border px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50 transition-all"
           >
             <Palette className="h-3.5 w-3.5" />
             Canva
           </button>
-          {/* Image generation — hidden for video-only content types */}
           {contentType !== 'short_video' && contentType !== 'long_video' && (
             <button
               type="button"
-              onClick={() => sendToDirector(`Generate an image for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}. Make it eye-catching and on-brand.`)}
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-border px-3 py-1.5 text-xs font-medium text-foreground/80 hover:border-primary/50 transition-all"
+              onClick={() =>
+                sendToDirector(
+                  `Generate an image for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}. Make it eye-catching and on-brand.`,
+                )
+              }
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
+              style={{
+                borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                color: 'var(--ink-2, oklch(0.46 0.012 240))',
+              }}
             >
               <Wand2 className="h-3.5 w-3.5" />
               AI Generate
             </button>
           )}
-          {/* Video planning — shown for any content type that accepts video */}
           {['short_video', 'long_video', 'story', 'ad'].includes(contentType) && (
             <button
               type="button"
               onClick={() => {
-                const aspectHint = contentType === 'short_video' ? '9:16 for Reels/TikTok/Shorts' : contentType === 'long_video' ? '16:9 long-form' : '9:16'
+                const aspectHint =
+                  contentType === 'short_video'
+                    ? '9:16 for Reels/TikTok/Shorts'
+                    : contentType === 'long_video'
+                      ? '16:9 long-form'
+                      : '9:16'
                 sendToDirector(
                   `Prepare a ${contentType.replace('_', ' ')} production brief for ${brandName}. Format: ${aspectHint}. Use Video & Scripting to write the script, timed shot list, captions, asset checklist, and compliance review. Use NRS-owned video tooling only where it is configured; otherwise return the brief ready for recording or editing.`,
                 )
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-all"
+              className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
+              style={{
+                borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                color: 'var(--ink-2, oklch(0.46 0.012 240))',
+              }}
             >
               <Film className="h-3.5 w-3.5" />
-              Build Video Plan
+              Build video plan
             </button>
           )}
         </div>
@@ -978,7 +1048,13 @@ If any items have no AI description or transcription yet, name them and offer to
             mediaItems as the source of truth so the slot card and the picker
             never go out of sync. */}
         {showMediaLibrary && (
-          <div className="mt-3 rounded-lg border border-border bg-background p-3">
+          <div
+            className="mt-3 rounded-lg border p-3"
+            style={{
+              borderColor: 'var(--line, oklch(0.915 0.007 240))',
+              background: 'var(--panel, oklch(1 0 0))',
+            }}
+          >
             <MediaSelector
               brandId={activeBrandId}
               selectedIds={selectedMediaIds}
@@ -1009,7 +1085,11 @@ If any items have no AI description or transcription yet, name them and offer to
                   `I've selected ${mediaCount} media item${mediaCount === 1 ? '' : 's'} for a ${contentType.replace('_', ' ')} on ${platformList} for ${brandName}.\n\nMedia IDs: ${mediaIdList}\n\nUse propose_post_from_media (platform="${platformForTool}", media_ids=[${selectedMediaIds.map((id) => `"${id}"`).join(', ')}]) to give me a proposal — hook, caption, hashtags, post type, rationale. Don't write anything yourself — that's Content & Copy's job. Read the visual_analysis already stored on each media item; don't re-analyse. When I respond with feedback, iterate by calling propose_post_from_media again with the previous JSON + my feedback.`,
                 )
               }}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border-2 border-primary bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all"
+              style={{
+                background: 'var(--brand-deep, oklch(0.33 0.08 240))',
+                color: 'var(--brand-ink, oklch(1 0 0))',
+              }}
             >
               <Lightbulb className="h-4 w-4" />
               Ask Director for an idea ({selectedMediaIds.length} {selectedMediaIds.length === 1 ? 'item' : 'items'})
@@ -1032,7 +1112,13 @@ If any items have no AI description or transcription yet, name them and offer to
 
           {/* Template picker (shows when template mode) */}
           {creatorMode === 'template' && (
-            <div className="rounded-lg border border-border bg-background p-3">
+            <div
+              className="rounded-lg border p-3"
+              style={{
+                borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                background: 'var(--panel-2, oklch(0.975 0.004 240))',
+              }}
+            >
               <PostTemplatePicker
                 brandId={activeBrandId}
                 brandName={brandName}
@@ -1049,14 +1135,23 @@ If any items have no AI description or transcription yet, name them and offer to
               onChange={e => setAiPrompt(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleAiGenerate() }}
               placeholder={strategyContext?.suggestion ?? 'What should this post be about?'}
-              className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary transition-colours"
+              className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none transition-colours"
+              style={{
+                borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                background: 'var(--panel, oklch(1 0 0))',
+                color: 'var(--ink, oklch(0.20 0.014 240))',
+              }}
             />
             <button
               type="button"
               onClick={handleAiGenerate}
               disabled={selectedPlatforms.length === 0}
               title="Director writes the caption text only — never generates new media"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colours"
+              className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colours disabled:opacity-40"
+              style={{
+                background: 'var(--brand-deep, oklch(0.33 0.08 240))',
+                color: 'var(--brand-ink, oklch(1 0 0))',
+              }}
             >
               <Sparkles className="h-4 w-4" />
               Write caption

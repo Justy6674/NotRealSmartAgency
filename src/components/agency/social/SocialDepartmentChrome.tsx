@@ -111,6 +111,7 @@ function SocialDepartmentChromeInner({ children }: { children: React.ReactNode }
       id: 'waiting',
       label: 'Waiting on you',
       count: waitingCount,
+      attention: true,
       care: isHealthBrand && waitingCount !== undefined,
     },
     { id: 'calendar', label: 'Calendar' },
@@ -139,8 +140,12 @@ function SocialDepartmentChromeInner({ children }: { children: React.ReactNode }
       <header className="shrink-0 px-6 pt-5 pb-0">
         <div className="flex items-end gap-4">
           <div>
-            <h1 className="text-[19px] font-semibold tracking-tight">Social media</h1>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
+            <h1 className="text-[19px] font-semibold tracking-tight" style={{ color: 'var(--ink, oklch(0.20 0.014 240))' }}>
+              Social media
+            </h1>
+            <p className="mt-0.5 text-[13px]" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
+              {description}
+            </p>
           </div>
           {isHealthBrand ? (
             <span

@@ -9,33 +9,37 @@ interface ComposerLayoutProps {
 }
 
 /**
- * Professional split-pane composer layout.
- * Left: editor (scrollable). Right: preview (sticky). Bottom: action bar (sticky).
- * Stacks vertically on mobile.
+ * Split-pane composer — editor scrolls, preview sits on the same paper family,
+ * action bar pinned. Matches dept-social.html density (26px gutters).
  */
 export function ComposerLayout({ editor, preview, actionBar }: ComposerLayoutProps) {
   return (
-    <div className="flex h-full flex-col">
-      {/* Split pane */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left — Editor pane (scrollable) */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+    <div className="flex h-full flex-col" style={{ background: 'var(--bg, oklch(0.985 0.002 240))' }}>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto px-[26px] py-[18px]"
+          style={{ background: 'var(--bg, oklch(0.985 0.002 240))' }}
+        >
           {editor}
         </div>
 
-        {/* Right — Preview pane (sticky, hidden on mobile) */}
         <div
-          className="hidden lg:block flex-1 overflow-y-auto border-l border-border bg-muted/50"
+          className="hidden min-h-0 flex-1 overflow-y-auto border-l lg:block"
+          style={{
+            borderColor: 'var(--line, oklch(0.915 0.007 240))',
+            background: 'var(--panel-2, oklch(0.975 0.004 240))',
+          }}
         >
-          <div className="sticky top-0 p-4 lg:p-6">
-            {preview}
-          </div>
+          <div className="sticky top-0 px-[26px] py-[18px]">{preview}</div>
         </div>
       </div>
 
-      {/* Bottom — Action bar (sticky) */}
       <div
-        className="flex-shrink-0 border-t border-border px-4 py-3 lg:px-6 bg-card/95 backdrop-blur-sm"
+        className="shrink-0 border-t"
+        style={{
+          borderColor: 'var(--line, oklch(0.915 0.007 240))',
+          background: 'var(--panel, oklch(1 0 0))',
+        }}
       >
         {actionBar}
       </div>
