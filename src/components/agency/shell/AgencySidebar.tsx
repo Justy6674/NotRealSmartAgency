@@ -13,10 +13,21 @@
  *
  * Two decisions here are deliberate and should not be "tidied":
  *
- * 1. NOTHING IS FETCHED IN THIS FILE. Brand name, compliance flags and counts
- *    all arrive as props. The old header fetched /api/brands for itself, and so
- *    did ChatPanel, and so did ChatInterface — three round-trips for one brand.
- *    Adding a fourth here would make the retint flash on every navigation.
+ * 1. THE BUSINESS IS NEVER FETCHED IN THIS FILE. Brand name and compliance
+ *    flags arrive as props. The old header fetched /api/brands for itself, and
+ *    so did ChatPanel, and so did ChatInterface — three round-trips for one
+ *    brand. Adding a fourth here would make the retint flash on every
+ *    navigation.
+ *
+ *    COUNTS are the one exception, and it is a deliberate amendment rather than
+ *    a slip. Which business is selected lives in localStorage, so the server
+ *    layout cannot know it: it counts for the business it guessed first. For an
+ *    owner with one business — almost everybody — that guess is right and the
+ *    props are the first paint. For an owner with eight, showing the first
+ *    business's "12 waiting" beside the seventh business's name is worse than
+ *    showing nothing, so the counts are re-read for whichever business is
+ *    actually selected. `loadNavCounts` memoises per business, so the sidebar,
+ *    the business selector and the department tab strip share one round-trip.
  *
  * 2. THE HEALTHCARE ROW IS AN INDICATOR, NOT A TOGGLE. The mockup draws a
  *    switch and it is tempting to wire it up. AHPRA/TGA applicability is a fact
@@ -44,6 +55,7 @@ import {
   CREATE_POST_HREF,
   isHealthcareBusiness,
   isSectionActive,
+  loadNavCounts,
   NAV_DIM_UNREADY_LEGACY_KEY,
   NAV_SECTION_OFF_KEY,
   parseNavOffIds,
@@ -127,6 +139,12 @@ export interface AgencySidebarProps {
    */
   counts?: NavCounts
   /**
+   * WHICH business `counts` was measured for. Without it a stale number is
+   * indistinguishable from a current one, and the sidebar would happily badge
+   * one business's approval queue beside another business's name.
+   */
+  countsBrandId?: string | null
+  /**
    * What is currently on the URL's query string — pass `useSearchParams()`.
    *
    * Only needed to tell "Waiting on you" apart from "Posts", which share a
@@ -155,6 +173,7 @@ export function AgencySidebar({
   complianceFlags,
   brands,
   counts,
+  countsBrandId,
   activeFilters,
   userName,
   onSelectBusiness,
@@ -171,6 +190,29 @@ export function AgencySidebar({
   const healthcare = isHealthcareBusiness(liveFlags)
   const sections = visibleSections(healthcare)
   const [offIds, setOffIds] = useState<Set<NavSectionId>>(() => parseNavOffIds(null))
+
+  /**
+   * Counts for the business that is actually selected. See rule 1 at the top.
+   * `null` means "not read yet"; the seed from the server is used until then,
+   * and only while it is about the same business.
+   */
+  const [liveCounts, setLiveCounts] = useState<NavCounts | null>(null)
+
+  useEffect(() => {
+    if (!activeBrandId) return
+    let cancelled = false
+    void loadNavCounts(activeBrandId).then((payload) => {
+      if (cancelled || !payload) return
+      setLiveCounts(payload.counts)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeBrandId])
+
+  const seedIsForThisBusiness =
+    !activeBrandId || !countsBrandId || countsBrandId === activeBrandId
+  const effectiveCounts = liveCounts ?? (seedIsForThisBusiness ? counts : undefined)
 
   useEffect(() => {
     try {
@@ -240,7 +282,7 @@ export function AgencySidebar({
             section={section}
             pathname={pathname}
             healthcare={healthcare}
-            counts={counts}
+            counts={effectiveCounts}
             activeFilters={filters}
             onNavigate={onNavigate}
             dimmed={offIds.has(section.id)}

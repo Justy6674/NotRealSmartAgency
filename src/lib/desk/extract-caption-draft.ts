@@ -7,7 +7,15 @@ export interface CaptionDraftExtract {
   platforms: PostPlatform[]
   /** True when hashtags came from Director prose, not hashtag groups or process_media */
   hashtagsAreSuggested: true
-  source: 'post_preview_card' | 'message_sections' | 'prose_and_tags'
+  source: 'post_preview_card' | 'message_sections' | 'prose_and_tags' | 'per_platform_blocks'
+  /** Per-network copy. Empty when the Director only wrote one caption. */
+  copies?: Array<{
+    platform: PostPlatform
+    caption: string
+    hashtags: string[]
+    title?: string
+  }>
+  youtubeTitle?: string
 }
 
 const PLATFORM_ALIASES: Record<string, PostPlatform> = {
@@ -81,6 +89,108 @@ function extractPlatforms(text: string): PostPlatform[] {
   return [...found]
 }
 
+const PLATFORM_HEADING: Array<{ label: RegExp; platform: PostPlatform }> = [
+  { label: /instagram|ig\b/i, platform: 'instagram' },
+  { label: /tiktok/i, platform: 'tiktok' },
+  { label: /youtube|yt\b/i, platform: 'youtube' },
+  { label: /facebook|fb\b/i, platform: 'facebook' },
+  { label: /linkedin/i, platform: 'linkedin' },
+  { label: /\bx\b|twitter/i, platform: 'twitter' },
+]
+
+function headingPlatform(line: string): PostPlatform | null {
+  const cleaned = line.replace(/[*#_]/g, '').trim()
+  if (!cleaned || cleaned.length > 40) return null
+  for (const row of PLATFORM_HEADING) {
+    if (row.label.test(cleaned) && /^(instagram|tiktok|youtube|facebook|linkedin|twitter|x|ig|yt|fb)\b/i.test(cleaned)) {
+      return row.platform
+    }
+  }
+  return null
+}
+
+function extractYoutubeTitle(block: string): string | undefined {
+  const match =
+    block.match(/\*\*Title(?: suggestion)?:\*\*\s*([^\n]+)/i) ??
+    block.match(/(?:^|\n)Title(?: suggestion)?:\s*([^\n]+)/i)
+  const title = match?.[1]?.trim()
+  return title || undefined
+}
+
+function extractBlockCaption(block: string, platform: PostPlatform): string {
+  const description =
+    block.match(/\*\*Description(?:\/caption)?:\*\*\s*\n?([\s\S]*?)(?=\n\*\*|\n(?:Suggested )?Hashtags?:|\n---|$)/i) ??
+    block.match(/(?:^|\n)Description(?:\/caption)?:\s*\n?([\s\S]*?)(?=\n(?:Suggested )?Hashtags?:|\n\*\*|$)/i)
+  if (description?.[1]?.trim()) return description[1].trim()
+
+  const caption = extractCaptionSection(block)
+  if (caption) return caption
+
+  const quoted = extractQuotedCaption(block)
+  if (quoted) return quoted
+
+  let body = block
+    .replace(/\*\*Title(?: suggestion)?:\*\*\s*[^\n]+/i, '')
+    .replace(/(?:^|\n)Title(?: suggestion)?:\s*[^\n]+/i, '')
+    .replace(/\*\*Hashtags?:\*\*[\s\S]*$/i, '')
+    .replace(/(?:^|\n)(#[\w\u00C0-\u024F]+(?:\s+#[\w\u00C0-\u024F]+)*)\s*$/g, '')
+    .replace(/^\s*\*?\*?[A-Za-z][A-Za-z /]*\*?\*?\s*\n/, '')
+    .trim()
+
+  if (platform === 'youtube') {
+    body = body.replace(/^(Suggested )?Hashtags?:[\s\S]*/i, '').trim()
+  }
+  return body
+}
+
+/**
+ * Director often writes Instagram, TikTok and YouTube as separate blocks.
+ * One caption extractor would steal a fragment and leave the rest in chat.
+ */
+function extractPerPlatformBlocks(text: string): CaptionDraftExtract | null {
+  const lines = text.split('\n')
+  const starts: Array<{ index: number; platform: PostPlatform }> = []
+  for (let i = 0; i < lines.length; i++) {
+    const platform = headingPlatform(lines[i] ?? '')
+    if (platform && !starts.some((row) => row.platform === platform)) {
+      starts.push({ index: i, platform })
+    }
+  }
+  if (starts.length < 2) return null
+
+  const copies: NonNullable<CaptionDraftExtract['copies']> = []
+  for (let i = 0; i < starts.length; i++) {
+    const start = starts[i]!
+    const end = starts[i + 1]?.index ?? lines.length
+    const block = lines.slice(start.index, end).join('\n')
+    const caption = extractBlockCaption(block, start.platform)
+    if (caption.length < 12) continue
+    const copy: NonNullable<CaptionDraftExtract['copies']>[number] = {
+      platform: start.platform,
+      caption,
+      hashtags: extractHashtagBlock(block),
+    }
+    if (start.platform === 'youtube') {
+      const title = extractYoutubeTitle(block)
+      if (title) copy.title = title
+    }
+    copies.push(copy)
+  }
+  if (copies.length < 2) return null
+
+  const youtube = copies.find((copy) => copy.platform === 'youtube')
+  const master = copies[0]!
+  return {
+    caption: master.caption,
+    hashtags: master.hashtags.length ? master.hashtags : (youtube?.hashtags ?? []),
+    platforms: copies.map((copy) => copy.platform),
+    copies,
+    youtubeTitle: youtube?.title,
+    hashtagsAreSuggested: true,
+    source: 'per_platform_blocks',
+  }
+}
+
 function extractQuotedCaption(text: string): string | null {
   const match = text.match(/"([^"\n]{20,})"/) ?? text.match(/"([\s\S]{20,}?)"/)
   if (match?.[1]?.trim()) return match[1].trim()
@@ -140,6 +250,9 @@ function extractFromProse(text: string): { caption: string; hashtags: string[] }
  */
 export function extractCaptionDraftFromMessage(content: string): CaptionDraftExtract | null {
   if (!content?.trim()) return null
+
+  const perPlatform = extractPerPlatformBlocks(content)
+  if (perPlatform) return perPlatform
 
   for (const segment of parseInlineCards(content)) {
     if (segment.type === 'post_preview' && segment.data.caption?.trim()) {

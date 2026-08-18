@@ -13,6 +13,8 @@ import {
 } from '@/lib/zernio/client'
 import type { PublishMedia, PublishResult, PublisherPlatform } from '@/lib/publishers/types'
 import { platformOptionsOf } from '@/lib/publishers/zernio-platform-data'
+import { altTextOf } from '@/lib/media/alt-text'
+import { isCronAuthorised, CRON_UNAUTHORISED_BODY } from '@/lib/security/cron-auth'
 
 /**
  * Raised when the publisher could not be reached at all — not when it rejected
@@ -86,6 +88,8 @@ interface MediaRow {
   file_type?: string | null
   file_size_bytes?: number | null
   duration_seconds?: number | null
+  /** Carries `alt_text` — the description for screen readers. See altTextOf(). */
+  metadata?: unknown
 }
 
 function toPublishMedia(row: MediaRow): PublishMedia {
@@ -100,6 +104,9 @@ function toPublishMedia(row: MediaRow): PublishMedia {
     mime_type: row.file_type ?? (kind === 'video' ? 'video/mp4' : 'image/jpeg'),
     ...(typeof row.file_size_bytes === 'number' ? { size_bytes: row.file_size_bytes } : {}),
     ...(typeof row.duration_seconds === 'number' ? { duration_seconds: row.duration_seconds } : {}),
+    // The description for screen readers, if the owner wrote one. It was
+    // captured and then dropped here for months — see src/lib/media/alt-text.ts.
+    ...(altTextOf(row.metadata) ? { alt_text: altTextOf(row.metadata) as string } : {}),
   }
 }
 
@@ -129,10 +136,10 @@ function publisherWasUnreachable(result: PublishResult): boolean {
 }
 
 export async function GET(request: Request) {
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it got in.
+  if (!isCronAuthorised(request)) {
+    return NextResponse.json(CRON_UNAUTHORISED_BODY, { status: 401 })
   }
 
   const supabase = createAdminClient()
@@ -237,7 +244,7 @@ export async function GET(request: Request) {
   // Find posts due for publishing
   const { data: duePosts, error } = await supabase
     .from('scheduled_posts')
-    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(file_url, file_name, file_type, file_size_bytes, duration_seconds)')
+    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(file_url, file_name, file_type, file_size_bytes, duration_seconds, thumbnail_url, metadata)')
     .eq('status', 'scheduled')
     .lte('scheduled_at', new Date().toISOString())
     .limit(20)
@@ -340,7 +347,7 @@ export async function GET(request: Request) {
       if (mediaItemIds?.length) {
         const { data: carousel } = await supabase
           .from('media_items')
-          .select('id, file_url, file_type, file_size_bytes, duration_seconds')
+          .select('id, file_url, file_type, file_size_bytes, duration_seconds, metadata')
           .in('id', mediaItemIds)
         const byId = new Map(
           (carousel ?? []).map((m: MediaRow & { id: string }) => [m.id, m]),

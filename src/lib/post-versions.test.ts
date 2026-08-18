@@ -84,7 +84,7 @@ test('a platform with no entry at all resolves to the master, never to undefined
 })
 
 test('no versions object at all resolves to the master', () => {
-  // MultiPlatformPreview takes `versions` as optional and the save handler can
+  // The composer takes `versions` as optional and the save handler can
   // reach the publish loop before the user ever opens the per-platform editor.
   assert.equal(resolvePublishCaption(undefined, 'instagram', MASTER, MASTER_TAGS).caption, MASTER)
   assert.equal(resolvePublishCaption(null, 'instagram', MASTER, MASTER_TAGS).caption, MASTER)

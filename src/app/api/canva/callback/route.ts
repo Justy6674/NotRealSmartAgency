@@ -22,30 +22,30 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     console.error('[canva/callback] OAuth error:', error)
-    return NextResponse.redirect(new URL('/agency/studio?canva_error=' + error, req.url))
+    return NextResponse.redirect(new URL('/agency/connections/canva?canva_error=' + error, req.url))
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL('/agency/studio?canva_error=no_code', req.url))
+    return NextResponse.redirect(new URL('/agency/connections/canva?canva_error=no_code', req.url))
   }
 
   // Verify state
   const storedState = req.cookies.get('canva_oauth_state')?.value
   if (!storedState || storedState !== state) {
-    return NextResponse.redirect(new URL('/agency/studio?canva_error=state_mismatch', req.url))
+    return NextResponse.redirect(new URL('/agency/connections/canva?canva_error=state_mismatch', req.url))
   }
 
   // Get code_verifier from cookie
   const codeVerifier = req.cookies.get('canva_code_verifier')?.value
   if (!codeVerifier) {
-    return NextResponse.redirect(new URL('/agency/studio?canva_error=no_verifier', req.url))
+    return NextResponse.redirect(new URL('/agency/connections/canva?canva_error=no_verifier', req.url))
   }
 
   const clientId = process.env.CANVA_CLIENT_ID
   const clientSecret = process.env.CANVA_CLIENT_SECRET
   if (!clientId || !clientSecret) {
     console.error('[canva/callback] Missing CANVA_CLIENT_ID or CANVA_CLIENT_SECRET')
-    return NextResponse.redirect(new URL('/agency/studio?canva_error=config', req.url))
+    return NextResponse.redirect(new URL('/agency/connections/canva?canva_error=config', req.url))
   }
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'https://notrealsmart.com.au'}/api/canva/callback`
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
     if (!tokenRes.ok) {
       const err = await tokenRes.text()
       console.error('[canva/callback] Token exchange failed:', tokenRes.status, err)
-      return NextResponse.redirect(new URL('/agency/studio?canva_error=token_exchange', req.url))
+      return NextResponse.redirect(new URL('/agency/connections/canva?canva_error=token_exchange', req.url))
     }
 
     const tokenData = await tokenRes.json()
@@ -106,12 +106,12 @@ export async function GET(req: NextRequest) {
     console.log('[canva/callback] Canva connected successfully for user:', user.id)
 
     // Clean up cookies and redirect to studio
-    const response = NextResponse.redirect(new URL('/agency/studio?canva=connected', req.url))
+    const response = NextResponse.redirect(new URL('/agency/connections/canva?canva=connected', req.url))
     response.cookies.delete('canva_code_verifier')
     response.cookies.delete('canva_oauth_state')
     return response
   } catch (err) {
     console.error('[canva/callback] Error:', err)
-    return NextResponse.redirect(new URL('/agency/studio?canva_error=unknown', req.url))
+    return NextResponse.redirect(new URL('/agency/connections/canva?canva_error=unknown', req.url))
   }
 }

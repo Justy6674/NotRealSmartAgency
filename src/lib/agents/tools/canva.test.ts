@@ -68,17 +68,20 @@ test('does not manufacture a design receipt while an Autofill job is still runni
 })
 
 test('refuses an Autofill request when the template has no configured fields', () => {
-  assert.match(
-    validateCanvaAutofillData({ HEADLINE: 'Price it for today' }, {}),
-    /no published Autofill fields/i,
-  )
+  // `null` is the "this is fine" answer, so asserting it is a string first is
+  // part of the test, not a cast to get past the compiler.
+  const refusal = validateCanvaAutofillData({ HEADLINE: 'Price it for today' }, {})
+  assert.ok(refusal, 'expected a refusal, got a pass')
+  assert.match(refusal, /no published Autofill fields/i)
 })
 
 test('refuses an Autofill request that invents a field not in the Canva template', () => {
-  assert.match(
-    validateCanvaAutofillData({ HEADLINE: 'Price it for today' }, { BODY: { type: 'text' } }),
-    /not a field/i,
+  const refusal = validateCanvaAutofillData(
+    { HEADLINE: 'Price it for today' },
+    { BODY: { type: 'text' } },
   )
+  assert.ok(refusal, 'expected a refusal, got a pass')
+  assert.match(refusal, /not a field/i)
 })
 
 test('brand-template reads and writes are fenced to the active NRS brand', () => {

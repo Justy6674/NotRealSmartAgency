@@ -106,10 +106,13 @@ const CONTENT_ITEMS: SidebarItem[] = [
 
 const ANALYTICS_ITEMS: SidebarItem[] = [
   {
+    // Performance lives under Social now (DESIGN.md: Analytics nests under
+    // Social, not on its own). `/agency/studio/analytics` is a redirect to it,
+    // so pointing straight at the real screen saves a bounce.
     label: 'Analytics',
-    href: '/agency/studio/analytics',
+    href: '/agency/social/analytics',
     icon: <BarChart3 className="h-4 w-4" />,
-    matchPrefixes: ['/agency/studio/analytics'],
+    matchPrefixes: ['/agency/studio/analytics', '/agency/social/analytics'],
   },
   {
     label: 'Hashtags',

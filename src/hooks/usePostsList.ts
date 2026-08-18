@@ -1,20 +1,94 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ScheduledPost, PostPlatform, ScheduledPostStatus } from '@/types/database'
+import type { PostLabel } from '@/lib/posts/post-labels'
+import type { PublisherRunReceipt } from '@/lib/publishers/receipts'
 
 /**
- * Sort key supported by the Posts Index page. Maps to a column on
- * scheduled_posts plus an explicit direction. We sort client-side because
- * /api/scheduled-posts only sorts by scheduled_at ascending.
+ * The Posts list — one feed, two origins.
+ *
+ * A post on this desk is one of two things and the list has to show both:
+ *
+ *   `desk`    — a row this app made. Editable, labellable, schedulable, and the
+ *               only kind that can sit in Drafts, Waiting on you or Trash.
+ *   `history` — something published on an account before it was connected here,
+ *               or from a phone. Read-only, and by far the larger half: a live
+ *               brand carries 210 of these against a handful of desk rows.
+ *
+ * They arrive merged from `/api/scheduled-posts?history=1`, which also decides
+ * the status word (the derivation lives there so the tab counts, the sidebar
+ * badge and the row dot cannot disagree). Filtering, sorting and paging stay on
+ * the client: the whole feed is a few hundred rows, and paging two collections
+ * with two different pagination models server-side produces a list where "page
+ * 3" means nothing.
  */
+
+export type PostOrigin = 'desk' | 'history'
+
+/**
+ * Eight states. Six are `scheduled_posts.status`; `partial` is the publisher's
+ * own — some accounts on a multi-account post took it and some did not, which
+ * our enum has no word for and used to render as nothing at all; and
+ * `needs_approval` is a draft an assistant wrote that the owner has not yet
+ * said yes to.
+ */
+export type DeskPostStatus =
+  | 'draft'
+  | 'needs_approval'
+  | 'scheduled'
+  | 'publishing'
+  | 'published'
+  | 'partial'
+  | 'failed'
+  | 'cancelled'
+
+export interface SocialPostAccount {
+  id: string
+  platform: string
+  name: string
+}
+
+export interface SocialPostRow {
+  id: string
+  origin: PostOrigin
+  brand_id: string | null
+  /** First platform, kept for the many places that still assume one. */
+  platform: string
+  /** Every platform this post went to. A history row can carry several. */
+  platforms: string[]
+  caption: string
+  hashtags: string[]
+  scheduled_at: string | null
+  published_at: string | null
+  status: DeskPostStatus
+  media_item_ids: string[]
+  media_count: number
+  /** Set on history rows, which have no media_items row to look up. */
+  thumbnail_url: string | null
+  external_post_id: string | null
+  permalinks: string[]
+  labels: PostLabel[]
+  accounts: SocialPostAccount[]
+  post_type: string | null
+  error: string | null
+  metadata: Record<string, unknown>
+  receipts: PublisherRunReceipt[]
+}
+
+export interface HistoryMeta {
+  total: number
+  shown: number
+  truncated: boolean
+  unavailable: string | null
+}
+
 export type PostsSortKey = 'created_at' | 'scheduled_at' | 'published_at'
 export type PostsSortDir = 'asc' | 'desc'
 
 export interface PostsListFilters {
-  /** Free-text search across caption + hashtags. Server route doesn't
-   *  support this so we apply it client-side after fetch. */
   search?: string
-  statuses?: ScheduledPostStatus[]
-  platforms?: PostPlatform[]
+  statuses?: DeskPostStatus[]
+  platforms?: string[]
+  labelIds?: string[]
+  accountIds?: string[]
   /** ISO date strings — inclusive lower / upper bound on scheduled_at. */
   from?: string
   to?: string
@@ -28,18 +102,20 @@ interface UsePostsListArgs extends PostsListFilters {
   pageSize?: number
 }
 
-/** Count of posts per status, computed from the full (unfiltered) dataset. */
-export type StatusCounts = Record<ScheduledPostStatus, number>
+export type StatusCounts = Record<DeskPostStatus, number>
 
 interface UsePostsListResult {
-  /** The current visible page after filter + sort + pagination. */
-  posts: ScheduledPost[]
-  /** Total matching post count after filtering, before pagination. */
+  posts: SocialPostRow[]
+  /** Matching rows after filtering, before paging. */
   total: number
-  /** Total post count before any filters (the "All" count). */
+  /** Every row before any filter — the "All" count. */
   allCount: number
-  /** Per-status counts computed from the full unfiltered dataset. */
   statusCounts: StatusCounts
+  /** Labels defined for this business, for the picker and the filter. */
+  labels: PostLabel[]
+  /** Every account seen on the feed, for the account filter. */
+  accounts: SocialPostAccount[]
+  history: HistoryMeta | null
   loading: boolean
   error: string | null
   page: number
@@ -49,20 +125,28 @@ interface UsePostsListResult {
   setFilters: (next: PostsListFilters) => void
   setPage: (page: number) => void
   refetch: () => Promise<void>
+  refetchLabels: () => Promise<void>
 }
 
-/**
- * Posts Index data hook — fetches every scheduled_post row for a brand
- * (optionally bounded by date range), then applies search / status /
- * platform / sort / pagination on the client.
- *
- * Why client-side: the existing /api/scheduled-posts GET only supports
- * `brandId`, `from`, `to` and a single `status`. Extending it to support
- * multi-status, search, multi-platform and pagination would touch shared
- * code that other Phase 4 streams already build against. Client-side
- * filtering is fine for this surface — even very active brands rarely
- * exceed a few hundred scheduled posts at a time.
- */
+const EMPTY_COUNTS: StatusCounts = {
+  draft: 0,
+  needs_approval: 0,
+  scheduled: 0,
+  publishing: 0,
+  published: 0,
+  partial: 0,
+  failed: 0,
+  cancelled: 0,
+}
+
+function sortValue(row: SocialPostRow, key: PostsSortKey): string {
+  if (key === 'published_at') return row.published_at ?? ''
+  if (key === 'scheduled_at') return row.scheduled_at ?? row.published_at ?? ''
+  // History rows have no created_at of their own; the moment they went out is
+  // the closest true thing, and inventing one would sort them into the future.
+  return (row.metadata.createdAt as string | undefined) ?? row.published_at ?? row.scheduled_at ?? ''
+}
+
 export function usePostsList(args: UsePostsListArgs): UsePostsListResult {
   const {
     brandId,
@@ -71,45 +155,68 @@ export function usePostsList(args: UsePostsListArgs): UsePostsListResult {
     ...initialFilters
   } = args
 
-  const [allPosts, setAllPosts] = useState<ScheduledPost[]>([])
+  const [allPosts, setAllPosts] = useState<SocialPostRow[]>([])
+  const [labels, setLabels] = useState<PostLabel[]>([])
+  const [history, setHistory] = useState<HistoryMeta | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFiltersState] = useState<PostsListFilters>(initialFilters)
   const [page, setPageState] = useState(initialPage)
 
-  // Stash the latest filters in a ref so the fetcher only re-runs when the
-  // filters that actually hit the server change (brandId / from / to).
+  // The latest filters, stashed so the fetcher only re-runs when a filter that
+  // actually reaches the server changes (brandId / from / to).
   const filtersRef = useRef(filters)
   filtersRef.current = filters
+
+  const refetchLabels = useCallback(async () => {
+    if (!brandId) {
+      setLabels([])
+      return
+    }
+    try {
+      const res = await fetch(`/api/scheduled-posts?brandId=${brandId}&labels=1`)
+      if (!res.ok) return
+      const data = await res.json()
+      setLabels(Array.isArray(data) ? data : [])
+    } catch {
+      // A missing label list makes the picker empty, not the page broken.
+    }
+  }, [brandId])
 
   const refetch = useCallback(async () => {
     if (!brandId) {
       setAllPosts([])
+      setHistory(null)
       return
     }
     setLoading(true)
     setError(null)
     try {
-      const qs = new URLSearchParams({ brandId })
+      const qs = new URLSearchParams({ brandId, history: '1' })
       if (filtersRef.current.from) qs.set('from', filtersRef.current.from)
       if (filtersRef.current.to) qs.set('to', filtersRef.current.to)
       const res = await fetch(`/api/scheduled-posts?${qs.toString()}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setAllPosts(Array.isArray(data) ? data : [])
+      if (!res.ok) throw new Error('Your posts could not be loaded just now.')
+      const data = (await res.json()) as { posts?: SocialPostRow[]; history?: HistoryMeta }
+      setAllPosts(Array.isArray(data.posts) ? data.posts : [])
+      setHistory(data.history ?? null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'fetch failed')
+      setError(err instanceof Error ? err.message : 'Your posts could not be loaded just now.')
       setAllPosts([])
+      setHistory(null)
     } finally {
       setLoading(false)
     }
   }, [brandId])
 
-  // Re-fetch only when brandId or the *server-affecting* filters change.
   useEffect(() => {
     void refetch()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId, filters.from, filters.to])
+
+  useEffect(() => {
+    void refetchLabels()
+  }, [refetchLabels])
 
   const filtered = useMemo(() => {
     let rows = allPosts
@@ -117,55 +224,75 @@ export function usePostsList(args: UsePostsListArgs): UsePostsListResult {
     if (filters.statuses && filters.statuses.length > 0) {
       const set = new Set(filters.statuses)
       rows = rows.filter((p) => set.has(p.status))
+    } else {
+      // "All" is everything except the bin, the way Mixpost has it. A deleted
+      // post reappearing in the default view is the reason people stop trusting
+      // a delete button.
+      rows = rows.filter((p) => p.status !== 'cancelled')
     }
 
     if (filters.platforms && filters.platforms.length > 0) {
       const set = new Set(filters.platforms)
-      rows = rows.filter((p) => set.has(p.platform))
+      rows = rows.filter((p) => p.platforms.some((platform) => set.has(platform)))
+    }
+
+    if (filters.labelIds && filters.labelIds.length > 0) {
+      const set = new Set(filters.labelIds)
+      rows = rows.filter((p) => p.labels.some((label) => set.has(label.id)))
+    }
+
+    if (filters.accountIds && filters.accountIds.length > 0) {
+      const set = new Set(filters.accountIds)
+      rows = rows.filter((p) => p.accounts.some((account) => set.has(account.id)))
     }
 
     if (filters.search && filters.search.trim().length > 0) {
       const needle = filters.search.trim().toLowerCase()
       rows = rows.filter((p) => {
-        if (p.caption?.toLowerCase().includes(needle)) return true
-        if (p.hashtags?.some((h) => h.toLowerCase().includes(needle))) return true
+        if (p.caption.toLowerCase().includes(needle)) return true
+        if (p.hashtags.some((h) => h.toLowerCase().includes(needle))) return true
+        if (p.labels.some((l) => l.name.toLowerCase().includes(needle))) return true
         return false
       })
     }
 
     const sortKey: PostsSortKey = filters.sortKey ?? 'scheduled_at'
     const sortDir: PostsSortDir = filters.sortDir ?? 'desc'
-    const sorted = [...rows].sort((a, b) => {
-      const av = (a[sortKey] as string | null) ?? ''
-      const bv = (b[sortKey] as string | null) ?? ''
-      // Empty values sort last regardless of direction
+    return [...rows].sort((a, b) => {
+      const av = sortValue(a, sortKey)
+      const bv = sortValue(b, sortKey)
       if (!av && !bv) return 0
       if (!av) return 1
       if (!bv) return -1
       const cmp = av.localeCompare(bv)
       return sortDir === 'asc' ? cmp : -cmp
     })
-
-    return sorted
   }, [allPosts, filters])
 
   const statusCounts = useMemo<StatusCounts>(() => {
-    const counts: StatusCounts = {
-      draft: 0, scheduled: 0, publishing: 0,
-      published: 0, failed: 0, cancelled: 0,
-    }
+    const counts: StatusCounts = { ...EMPTY_COUNTS }
     for (const p of allPosts) {
       if (p.status in counts) counts[p.status]++
     }
     return counts
   }, [allPosts])
 
-  const allCount = allPosts.length
+  const accounts = useMemo<SocialPostAccount[]>(() => {
+    const byId = new Map<string, SocialPostAccount>()
+    for (const post of allPosts) {
+      for (const account of post.accounts) {
+        if (account.id && !byId.has(account.id)) byId.set(account.id, account)
+      }
+    }
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [allPosts])
+
+  // The number beside "All", which must agree with what All actually shows.
+  const allCount = allPosts.filter((post) => post.status !== 'cancelled').length
   const total = filtered.length
   const pageSize = initialPageSize
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  // Clamp page when filtering shrinks the result set
   useEffect(() => {
     if (page > totalPages) setPageState(totalPages)
   }, [page, totalPages])
@@ -189,6 +316,9 @@ export function usePostsList(args: UsePostsListArgs): UsePostsListResult {
     total,
     allCount,
     statusCounts,
+    labels,
+    accounts,
+    history,
     loading,
     error,
     page,
@@ -198,5 +328,6 @@ export function usePostsList(args: UsePostsListArgs): UsePostsListResult {
     setFilters,
     setPage,
     refetch,
+    refetchLabels,
   }
 }

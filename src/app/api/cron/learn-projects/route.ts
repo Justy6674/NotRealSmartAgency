@@ -6,6 +6,7 @@ import { runAgentWorker } from '@/lib/agents/worker'
 import { planLearningRun } from '@/lib/proforma/learning-plan'
 import { loadProjectBrief } from '@/lib/projects/load-brief'
 import type { Brand } from '@/types/database'
+import { isCronAuthorised, CRON_UNAUTHORISED_BODY } from '@/lib/security/cron-auth'
 
 /**
  * GET /api/cron/learn-projects
@@ -21,9 +22,11 @@ import type { Brand } from '@/types/database'
  * in the response, so a partial run never looks like a complete one.
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it reached the
+  // service-role client below.
+  if (!isCronAuthorised(request)) {
+    return NextResponse.json(CRON_UNAUTHORISED_BODY, { status: 401 })
   }
 
   const supabase = createAdminClient()

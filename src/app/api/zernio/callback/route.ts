@@ -67,7 +67,7 @@ interface Handshake {
 }
 
 export async function GET(request: Request) {
-  const accountsPage = new URL('/agency/studio/accounts', request.url)
+  const accountsPage = new URL('/agency/social/accounts', request.url)
 
   try {
     const { searchParams } = new URL(request.url)
@@ -115,7 +115,7 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       const login = new URL('/login', request.url)
-      login.searchParams.set('redirect', '/agency/studio/accounts')
+      login.searchParams.set('redirect', '/agency/social/accounts')
       return NextResponse.redirect(login)
     }
 

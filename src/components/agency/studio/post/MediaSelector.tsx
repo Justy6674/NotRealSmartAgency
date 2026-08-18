@@ -129,7 +129,7 @@ interface MediaSelectorProps {
    * that the MediaSelector had already loaded.
    *
    * If `items` is not provided, MediaSelector falls back to its own
-   * internal fetch so existing callers (e.g. MediaSection) keep working.
+   * internal fetch so a caller that has no list of its own keeps working.
    */
   items?: MediaItem[]
 }

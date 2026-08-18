@@ -72,8 +72,13 @@ const MECHANISMS: readonly Mechanism[] = [
     pattern: /\bresolveApiKey\s*\(/,
   },
   {
-    name: 'the cron secret (CRON_SECRET)',
-    pattern: /\bCRON_SECRET\b/,
+    name: 'the cron secret, checked fail-closed (isCronAuthorised)',
+    // `isCronAuthorised` (src/lib/security/cron-auth.ts) is the correct form.
+    // A bare CRON_SECRET reference still counts as *a* mechanism here — such a
+    // route does check a secret — but WHETHER that check fails open is a
+    // separate and stricter test, below. Both matter: this list answers "is
+    // anyone asked?", the fail-open test answers "can the answer be forged?".
+    pattern: /\bisCronAuthorised\s*\(|\bCRON_SECRET\b/,
   },
   {
     name: 'a verified webhook signature',
@@ -279,4 +284,184 @@ test('each mechanism still matches a real route', () => {
     [],
     `\nThese mechanisms match no route, so they are excusing nothing:\n${unused.join('\n')}\n`,
   )
+})
+
+/**
+ * ─── The cron secret must fail closed ───────────────────────────────────────
+ *
+ * The test above asks whether a route establishes its caller at all. This one
+ * asks a harder question of the routes that answer "the cron secret": can that
+ * answer be forged?
+ *
+ * Every one of these routes was written as
+ *
+ *     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) return 401
+ *
+ * which is fail-OPEN. With CRON_SECRET unset — a preview deployment, a renamed
+ * variable, a value missing from one Vercel environment — the template
+ * interpolates to the literal `"Bearer undefined"`, and every caller who sends
+ * that header is authorised. /api/cron/publish-posts then took a service-role
+ * client and published every due scheduled_posts row, ACROSS ALL TENANTS, to
+ * real connected accounts. Four brands on this platform advertise regulated
+ * health services under AHPRA/TGA, so that is a compliance exposure at up to
+ * $60K per offence, not merely a bug.
+ *
+ * The earlier version of this file only grepped for the string CRON_SECRET,
+ * which is exactly why it could not see the difference between the safe form
+ * and the unsafe one. It now reads the shape of the check.
+ *
+ * The safe forms, in order of preference:
+ *   1. `isCronAuthorised(request)` from src/lib/security/cron-auth.ts.
+ *   2. Reading the secret into a local and refusing when it is missing —
+ *      `const secret = process.env.CRON_SECRET; if (!secret) return false`.
+ */
+
+/** Routes still on the fail-open form, each awaiting its own fix. */
+const CRON_FAIL_OPEN_QUARANTINE: Record<string, string> = {
+  // Empty, and it must stay empty. Every route that checks the cron secret now
+  // does it through `isCronAuthorised`. Adding an entry here is declaring that
+  // a route anyone can trigger is acceptable for now — which on this codebase
+  // means a stranger reaching a service-role client, so it needs a reason
+  // written down and an owner, not a quiet exemption.
+}
+
+/**
+ * Does this source check CRON_SECRET in a way a stranger can satisfy?
+ *
+ * Returns null when the file has nothing to say about the cron secret.
+ */
+function cronCheckIsForgeable(file: string): string | null {
+  // Comments go first. cron-auth.ts documents the exact broken form it exists
+  // to replace, and a detector that cannot tell code from prose would flag the
+  // fix as the bug.
+  const source = file
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^[ \t]*\/\/[^\n]*$/gm, '')
+
+  if (!/\bCRON_SECRET\b/.test(source) && !/\bisCronAuthorised\s*\(/.test(source)) return null
+
+  // Direct interpolation of the env var into the compared string. This is the
+  // whole bug: unset becomes the string "undefined" and the compare succeeds.
+  if (/\$\{\s*process\.env\.CRON_SECRET\s*\}/.test(source)) {
+    return 'interpolates process.env.CRON_SECRET straight into the compared string, ' +
+      'so an unset secret authorises anyone sending `Bearer undefined`'
+  }
+
+  // Read into a local instead — safe only if the missing case is refused.
+  const local = source.match(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*process\.env\.CRON_SECRET\b/)
+  if (local) {
+    const name = local[1]
+    const guarded = new RegExp(`if\\s*\\(\\s*!\\s*${name}\\b`).test(source)
+    if (!guarded) {
+      return `reads the secret into \`${name}\` but never refuses when it is missing`
+    }
+  }
+
+  return null
+}
+
+/** Every .ts/.tsx file under src, excluding tests. */
+function sourceFiles(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry)
+    if (statSync(path).isDirectory()) out.push(...sourceFiles(path))
+    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(path)
+  }
+  return out
+}
+
+test('the cron secret is never checked in a way a stranger can satisfy', () => {
+  const offenders: string[] = []
+
+  for (const file of sourceFiles(resolve(ROOT, 'src'))) {
+    const path = relative(file)
+    if (CRON_FAIL_OPEN_QUARANTINE[path]) continue
+
+    const problem = cronCheckIsForgeable(readFileSync(file, 'utf8'))
+    if (problem) offenders.push(`${path}\n    ${problem}.`)
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    '\n' +
+      'These check CRON_SECRET in a form that authorises a stranger whenever the\n' +
+      'secret is unset or blank:\n\n' +
+      `${offenders.join('\n\n')}\n\n` +
+      'Fix by importing isCronAuthorised from @/lib/security/cron-auth and\n' +
+      'writing `if (!isCronAuthorised(request)) return 401`. It fails closed: no\n' +
+      'secret configured means nobody is authorised. A cron that stops running is\n' +
+      'loud and recoverable; a cron anyone can trigger is neither.\n\n' +
+      'Do not add an entry to CRON_FAIL_OPEN_QUARANTINE to make this pass — that\n' +
+      'list may only ever shrink.\n',
+  )
+})
+
+test('a quarantined fail-open cron check is still real', () => {
+  // The list is a record of work outstanding, not an exemption. An entry whose
+  // file has been fixed, moved or deleted must go, or it will quietly excuse
+  // whatever later takes that path.
+  const stale: string[] = []
+
+  for (const [path, reason] of Object.entries(CRON_FAIL_OPEN_QUARANTINE)) {
+    const full = resolve(ROOT, path)
+
+    if (!existsSync(full)) {
+      stale.push(`${path} — no such file. Delete this entry.`)
+      continue
+    }
+
+    assert.ok(reason.trim().length > 40, `${path} — the entry needs a real reason, not a note`)
+
+    if (!cronCheckIsForgeable(readFileSync(full, 'utf8'))) {
+      stale.push(`${path} — now checks the secret safely. Delete this entry; it is fixed.`)
+    }
+  }
+
+  assert.deepEqual(stale, [], `\n${stale.join('\n')}\n`)
+})
+
+test('the fail-open guard is not vacuously passing', () => {
+  // A detector that matches nothing would let the original bug straight back in.
+  const unsafe = 'if (h !== `Bearer ${process.env.CRON_SECRET}`) return unauthorised()'
+  assert.ok(cronCheckIsForgeable(unsafe), 'the exact shape this test exists to catch must be caught')
+
+  const unguardedLocal =
+    'const secret = process.env.CRON_SECRET\nif (h !== `Bearer ${secret}`) return unauthorised()'
+  assert.ok(cronCheckIsForgeable(unguardedLocal), 'an unguarded local read is the same hole')
+
+  const guardedLocal =
+    'const secret = process.env.CRON_SECRET\nif (!secret) return false\nreturn h === `Bearer ${secret}`'
+  assert.equal(cronCheckIsForgeable(guardedLocal), null, 'the guarded local form is safe')
+
+  assert.equal(
+    cronCheckIsForgeable('if (!isCronAuthorised(request)) return unauthorised()'),
+    null,
+    'the shared helper is the safe form',
+  )
+  assert.equal(cronCheckIsForgeable('const x = 1'), null, 'unrelated files are not implicated')
+
+  // The helper itself must exist and must refuse an unset secret.
+  const helper = readFileSync(resolve(ROOT, 'src/lib/security/cron-auth.ts'), 'utf8')
+  assert.match(
+    helper,
+    /if\s*\(\s*!\s*secret\s*\)\s*return false/,
+    'src/lib/security/cron-auth.ts must fail closed when CRON_SECRET is unset',
+  )
+
+  // And the routes that publish to live accounts must be on it, by name. These
+  // are the ones where a forged trigger reaches a real audience.
+  for (const path of [
+    'src/app/api/cron/publish-posts/route.ts',
+    'src/app/api/heartbeat/route.ts',
+    'src/app/api/cron/daily-intel/route.ts',
+    'src/app/api/cron/recover-director-jobs/route.ts',
+    'src/app/api/cron/monitor-alerts/route.ts',
+    'src/app/api/diagnostics/telegram/route.ts',
+  ]) {
+    const source = readFileSync(resolve(ROOT, path), 'utf8')
+    assert.match(source, /\bisCronAuthorised\s*\(request\)/, `${path} must use the shared helper`)
+    assert.ok(!CRON_FAIL_OPEN_QUARANTINE[path], `${path} is fixed and must not be quarantined`)
+  }
 })

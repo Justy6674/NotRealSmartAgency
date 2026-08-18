@@ -3,11 +3,26 @@ import { z } from 'zod/v3'
 import { createClient } from '@/lib/supabase/server'
 
 /**
- * Phase 9 of the Mixpost UI port — Account Entities CRUD.
+ * The saved shortlist of hashtags, handles and stock phrases kept against one
+ * connected account. Table schema in
+ * supabase/migrations/038_account_entities.sql.
  *
- * Per-account hashtags, mentions, and variable defaults that get
- * injected into every post published from that specific social
- * account. Table schema in supabase/migrations/038_account_entities.sql.
+ * ── What this is NOT, corrected 2026-08-18 ─────────────────────────────
+ * This comment used to say these values "get injected into every post
+ * published from that specific social account", and the accounts screen said
+ * the same thing to the owner. Neither was true, and neither had ever been
+ * true. `account_entities` is written by this route and read by this route.
+ * Searching `src/lib/publishers`, `src/app/api/scheduled-posts` and
+ * `src/app/api/cron` for the table returns nothing: the publish path has never
+ * seen a single row of it.
+ *
+ * That shape — a feature that stores faithfully, reads back faithfully, and
+ * does nothing — is the hardest kind to notice, because every screen agrees it
+ * works. The words came out rather than being softened, on both surfaces.
+ *
+ * Injecting at compose time is the honest fix and it belongs in the composer,
+ * where the owner can see what is being added before it goes anywhere near a
+ * live account. That is not this file, and it is not this slice.
  *
  * RLS is in force on the table — we use the user-auth client
  * (`createClient()`), not the admin client, so writes are gated by

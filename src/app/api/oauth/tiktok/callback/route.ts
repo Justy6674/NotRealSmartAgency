@@ -24,13 +24,13 @@ export async function GET(request: Request) {
   if (errorParam) {
     const errorDesc = searchParams.get('error_description') ?? 'User denied access'
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent(errorDesc)}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=${encodeURIComponent(errorDesc)}`,
     )
   }
 
   if (!code || !state) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=Missing+code+or+state`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=Missing+code+or+state`,
     )
   }
 
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
   const storedCookie = cookieStore.get('tiktok_oauth_state')?.value
   if (!storedCookie) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=Invalid+state+(cookie+missing)`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=Invalid+state+(cookie+missing)`,
     )
   }
 
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
 
   if (storedState !== state) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=Invalid+state+parameter`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=Invalid+state+parameter`,
     )
   }
 
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
     })
 
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?success=${encodeURIComponent(
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?success=${encodeURIComponent(
         `Connected TikTok: @${username || displayName}`,
       )}`,
     )
@@ -135,7 +135,7 @@ export async function GET(request: Request) {
     console.error('[tiktok/callback] Error:', error)
     const msg = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent(msg)}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=${encodeURIComponent(msg)}`,
     )
   }
 }

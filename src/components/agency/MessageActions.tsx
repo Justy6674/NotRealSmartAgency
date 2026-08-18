@@ -52,7 +52,13 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
       const platformName = platform
         ? platform.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
         : null
-      const doneLabel = platformName ? `Added to ${platformName} caption` : 'Added to caption'
+      const doneLabel = captionDraft.copies && captionDraft.copies.length > 1
+        ? 'Put each account\'s words on the post'
+        : captionDraft.youtubeTitle
+          ? 'Put the YouTube title and description on the post'
+        : platformName
+          ? `Added to ${platformName} caption`
+          : 'Added to caption'
 
       useComposeDeskStore.getState().enqueueDeskActions({
         brandId: activeBrandId,
@@ -60,6 +66,8 @@ export function MessageActions({ content, onRegenerate, variant = 'default' }: M
           caption: captionDraft.caption,
           hashtags: captionDraft.hashtags,
           platforms: captionDraft.platforms.length ? captionDraft.platforms : undefined,
+          copies: captionDraft.copies,
+          youtubeTitle: captionDraft.youtubeTitle,
         }),
         hashtagsAreSuggested: captionDraft.hashtagsAreSuggested,
       })

@@ -9,6 +9,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { buildDailyIntelHtml } from '@/lib/email/templates/daily-intel'
 import type { Brand, Competitor } from '@/types/database'
 import crypto from 'crypto'
+import { isCronAuthorised, CRON_UNAUTHORISED_BODY } from '@/lib/security/cron-auth'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -48,10 +49,10 @@ function hashContent(text: string): string {
 // ─── Main Route ──────────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it got in.
+  if (!isCronAuthorised(request)) {
+    return NextResponse.json(CRON_UNAUTHORISED_BODY, { status: 401 })
   }
 
   const supabase = createAdminClient()

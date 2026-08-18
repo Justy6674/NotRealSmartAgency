@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
@@ -8,176 +8,133 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import type { EventInput, EventDropArg, EventClickArg, EventContentArg } from '@fullcalendar/core'
 import type { DateClickArg } from '@fullcalendar/interaction'
-import { X, ExternalLink } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ChevronDown } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
 import { useScheduledPosts } from '@/hooks/useScheduledPosts'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from '@/components/ui/dropdown-menu'
 import { DirectorAssistBar } from './DirectorAssistBar'
 import { CalendarPostPill } from './calendar/CalendarPostPill'
-import {
-  PLATFORM_BRAND_COLOURS,
-  POST_STATUS_COLOURS,
-  PLATFORM_LABELS,
-  type PlatformKey,
-  type PostStatusKey,
-} from '@/lib/mixpost/ui-tokens'
-import type { ScheduledPost } from '@/types/database'
+import { PostsFilters } from './posts/PostsFilters'
+import { PostPreviewModal } from './posts/PostPreviewModal'
+import { CONTENT_TYPES, type ContentTypeFilter } from './CalendarActions'
+import type { PostsListFilters, SocialPostRow } from '@/hooks/usePostsList'
 
-// ─── Platform + status lookups ──────────────────────────────────────────────
+type CalendarView = 'dayGridMonth' | 'timeGridWeek'
 
-function getPlatformColour(platform: string): string {
-  return PLATFORM_BRAND_COLOURS[platform as PlatformKey] ?? '#6366f1'
+const VIEW_LABELS: Record<CalendarView, string> = {
+  dayGridMonth: 'Month',
+  timeGridWeek: 'Week',
 }
 
-function getStatusStyle(status: ScheduledPost['status']) {
-  return POST_STATUS_COLOURS[status as PostStatusKey] ?? POST_STATUS_COLOURS.draft
-}
-
-// ─── Post detail modal ───────────────────────────────────────────────────────
-
-function PostDetail({
-  post,
-  onClose,
-}: {
-  post: ScheduledPost
-  onClose: () => void
-}) {
-  const platformColour = getPlatformColour(post.platform)
-  const statusStyle = getStatusStyle(post.status)
-  const platformLabel = PLATFORM_LABELS[post.platform as PlatformKey] ?? post.platform
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative mx-4 w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute right-3 top-3 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
-
-        {/* Platform + status badges */}
-        <div className="mb-4 flex items-center gap-2 flex-wrap">
-          <span
-            className="rounded-full px-3 py-1 text-xs font-semibold"
-            style={{ backgroundColor: platformColour, color: '#fff' }}
-          >
-            {platformLabel}
-          </span>
-          <span
-            className="rounded-full px-2.5 py-0.5 text-xs font-medium capitalize"
-            style={{ backgroundColor: statusStyle.bg, color: statusStyle.fg }}
-          >
-            {post.status}
-          </span>
-          {post.content_type && (
-            <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground capitalize">
-              {post.content_type}
-            </span>
-          )}
-        </div>
-
-        {/* Caption */}
-        <div className="mb-4 space-y-1.5">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Caption
-          </h3>
-          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-            {post.caption.length > 400
-              ? post.caption.slice(0, 400) + '...'
-              : post.caption}
-          </p>
-        </div>
-
-        {/* Scheduled time */}
-        <div className="mb-4 space-y-1">
-          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Scheduled for
-          </h3>
-          <p className="text-sm text-foreground">
-            {new Date(post.scheduled_at).toLocaleString('en-AU', {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </p>
-        </div>
-
-        {/* Hashtags */}
-        {post.hashtags && post.hashtags.length > 0 && (
-          <div className="mb-4 space-y-1">
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Hashtags
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {post.hashtags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* External link */}
-        {post.external_post_id && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span>External ID: {post.external_post_id}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Enhanced Calendar ───────────────────────────────────────────────────────
-
+/**
+ * The calendar.
+ *
+ * Two views and one toolbar, matching Mixpost — and the toolbar is literally
+ * the Posts page's filter component rather than a second one that drifts. The
+ * view switch is a dropdown, not a segmented toggle, for the same reason
+ * Mixpost's is: two options do not earn a permanent row of buttons.
+ *
+ * Drag to reschedule stays, and it is the one thing here Mixpost genuinely
+ * cannot do — `grep -rn 'draggable\|dragstart' Components/Calendar/` in its own
+ * source returns nothing. "Exactly Mixpost" was never an instruction to remove
+ * something better that already works. Posts published before the account was
+ * connected here are not draggable, because there is nothing on the other end
+ * to move.
+ */
 export function EnhancedCalendar() {
   const router = useRouter()
   const { activeBrandId } = useAgencyStore()
   const studioData = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(studioData.brand, studioData.posts, studioData.accounts)
 
-  // Phase 1 — Mixpost UI port: posts now come from the shared
-  // useScheduledPosts hook so every surface (Calendar, Posts Index,
-  // Review, Dashboard) shares the same fetch + optimistic mutate path.
   const { posts, loading, reschedulePost } = useScheduledPosts({ brandId: activeBrandId })
-  const [selectedPost, setSelectedPost] = useState<ScheduledPost | null>(null)
+  const [selectedPost, setSelectedPost] = useState<SocialPostRow | null>(null)
+  const [view, setView] = useState<CalendarView>('dayGridMonth')
+  const [filters, setFilters] = useState<PostsListFilters>({})
+  const [contentTypes, setContentTypes] = useState<ContentTypeFilter[]>([])
+  const calendarRef = useRef<FullCalendar | null>(null)
 
-  // Convert posts to FullCalendar events. Background/border colours are
-  // stripped here because we render each event as a React CalendarPostPill
-  // via the eventContent prop — FullCalendar's default box becomes a
-  // pass-through container.
-  const events: EventInput[] = useMemo(() => {
-    return posts.map((post) => ({
-      id: post.id,
-      title: post.caption.slice(0, 50), // fallback for printing/accessibility
-      start: post.scheduled_at,
-      allDay: false,
-      backgroundColor: 'transparent',
-      borderColor: 'transparent',
-      textColor: 'inherit',
-      extendedProps: { post },
-    }))
+  const labels = useMemo(() => {
+    const byId = new Map(posts.flatMap((post) => post.labels.map((label) => [label.id, label])))
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [posts])
 
-  // Drag-and-drop reschedule — delegates to the hook's optimistic path.
-  // On failure, FullCalendar reverts and the hook rolls back its own state.
+  const accounts = useMemo(() => {
+    const byId = new Map(posts.flatMap((post) => post.accounts.map((account) => [account.id, account])))
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [posts])
+
+  const visible = useMemo(() => {
+    let rows = posts
+
+    if (filters.platforms?.length) {
+      const set = new Set(filters.platforms)
+      rows = rows.filter((post) => post.platforms.some((platform) => set.has(platform)))
+    }
+    if (filters.labelIds?.length) {
+      const set = new Set(filters.labelIds)
+      rows = rows.filter((post) => post.labels.some((label) => set.has(label.id)))
+    }
+    if (filters.accountIds?.length) {
+      const set = new Set(filters.accountIds)
+      rows = rows.filter((post) => post.accounts.some((account) => set.has(account.id)))
+    }
+    if (filters.search?.trim()) {
+      const needle = filters.search.trim().toLowerCase()
+      rows = rows.filter((post) => post.caption.toLowerCase().includes(needle))
+    }
+    if (filters.from) {
+      rows = rows.filter((post) => (post.scheduled_at ?? post.published_at ?? '') >= filters.from!)
+    }
+    if (filters.to) {
+      // The bound is a date, so it has to reach the end of that day or a post at
+      // 4pm on the closing date disappears from its own range.
+      const end = `${filters.to}T23:59:59`
+      rows = rows.filter((post) => (post.scheduled_at ?? post.published_at ?? '') <= end)
+    }
+    if (contentTypes.length > 0) {
+      const set = new Set<string>(contentTypes)
+      rows = rows.filter((post) => {
+        const type = post.metadata.content_type
+        return typeof type === 'string' && set.has(type)
+      })
+    }
+
+    return rows
+  }, [posts, filters, contentTypes])
+
+  const events: EventInput[] = useMemo(
+    () =>
+      visible.map((post) => ({
+        id: post.id,
+        title: post.caption.slice(0, 50),
+        start: post.scheduled_at ?? post.published_at ?? undefined,
+        allDay: false,
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        textColor: 'inherit',
+        // History has no row here to move, so it is not draggable. A drag that
+        // silently snaps back is a worse answer than one that never starts.
+        editable: post.origin === 'desk',
+        extendedProps: { post },
+      })),
+    [visible],
+  )
+
   const handleEventDrop = useCallback(
     async (info: EventDropArg) => {
-      const post = info.event.extendedProps.post as ScheduledPost
+      const post = info.event.extendedProps.post as SocialPostRow
       const newDate = info.event.start
-      if (!newDate) {
+      if (!newDate || post.origin !== 'desk') {
         info.revert()
         return
       }
@@ -190,86 +147,169 @@ export function EnhancedCalendar() {
     [reschedulePost],
   )
 
-  // Click on an event → open the detail modal
   const handleEventClick = useCallback((info: EventClickArg) => {
-    const post = info.event.extendedProps.post as ScheduledPost
-    setSelectedPost(post)
+    setSelectedPost(info.event.extendedProps.post as SocialPostRow)
   }, [])
 
-  // Click on an empty time slot → navigate to Creator with pre-filled date/time
-  const handleDateClick = useCallback((info: DateClickArg) => {
-    const d = info.date
-    const dateStr = d.toISOString().slice(0, 10) // YYYY-MM-DD
-    const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    router.push(`/agency/studio/create?date=${dateStr}&time=${timeStr}`)
-  }, [router])
+  // An empty cell prefills the composer. It used to push /agency/studio/create,
+  // which drops the whole Social chrome the owner was standing in.
+  const handleDateClick = useCallback(
+    (info: DateClickArg) => {
+      const d = info.date
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+      router.push(`/agency/social/compose?date=${dateStr}&time=${timeStr}`)
+    },
+    [router],
+  )
 
-  // Custom event renderer — replaces FullCalendar's default event box with
-  // our CalendarPostPill React component. FullCalendar mounts the returned
-  // node inside its own event wrapper, giving us full control over the
-  // visual while keeping drag-drop / keyboard accessibility intact.
   const renderEventContent = useCallback((arg: EventContentArg) => {
-    const post = arg.event.extendedProps.post as ScheduledPost | undefined
+    const post = arg.event.extendedProps.post as SocialPostRow | undefined
     if (!post) return null
-    const isCompact = arg.view.type !== 'dayGridMonth' ? false : true
-    return <CalendarPostPill post={post} onClick={() => setSelectedPost(post)} compact={isCompact} />
+    return (
+      <CalendarPostPill
+        post={post}
+        onClick={() => setSelectedPost(post)}
+        compact={arg.view.type === 'dayGridMonth'}
+      />
+    )
+  }, [])
+
+  const changeView = useCallback((next: CalendarView) => {
+    setView(next)
+    calendarRef.current?.getApi().changeView(next)
+  }, [])
+
+  const toggleContentType = useCallback((type: ContentTypeFilter) => {
+    setContentTypes((prev) =>
+      prev.includes(type) ? prev.filter((entry) => entry !== type) : [...prev, type],
+    )
   }, [])
 
   if (!activeBrandId) {
     return (
       <div className="flex items-center justify-center p-12">
         <p className="text-sm text-muted-foreground">
-          Select a brand first to view the calendar.
+          Pick a business first to see its calendar.
         </p>
       </div>
     )
   }
 
-  const brandName = studioData.brand?.name ?? 'this brand'
-  const isHealthBrand = !!(studioData.brand?.compliance_flags?.ahpra || studioData.brand?.compliance_flags?.tga)
+  const brandName = studioData.brand?.name ?? 'this business'
+  const isHealthBrand = !!(
+    studioData.brand?.compliance_flags?.ahpra || studioData.brand?.compliance_flags?.tga
+  )
 
   return (
     <div className="space-y-3">
-      {/* Director Assist */}
       <DirectorAssistBar
         brandName={brandName}
         buttons={[
           {
             label: 'Fill my week',
-            prompt: `Review ${brandName}'s marketing proforma, past posts, and connected social accounts. Then fill every empty day this week with draft posts in ${brandName}'s brand voice.${isHealthBrand ? ' Ensure all content is AHPRA/TGA compliant.' : ''} Use the fill_calendar tool.`,
+            prompt: `Review ${brandName}'s marketing proforma, past posts, and connected social accounts. Then fill every empty day this week with draft posts in ${brandName}'s brand voice.${
+              isHealthBrand ? ' Ensure all content is AHPRA/TGA compliant.' : ''
+            } Use the fill_calendar tool.`,
           },
           {
             label: "What's missing?",
-            prompt: `Review ${brandName}'s content calendar for the next 14 days against the strategy pillars in the proforma and the connected social accounts. Identify gaps — which platforms are under-served, which content pillars are missing, and which days have no posts scheduled.${isHealthBrand ? ' Flag any compliance risks.' : ''}`,
+            prompt: `Review ${brandName}'s content calendar for the next 14 days against the strategy pillars in the proforma and the connected social accounts. Identify gaps — which platforms are under-served, which content pillars are missing, and which days have no posts scheduled.${
+              isHealthBrand ? ' Flag any compliance risks.' : ''
+            }`,
           },
         ]}
       />
 
-      {/* Strategy overlay */}
+      {/* Toolbar: view switch + the same filter component the Posts list uses. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={(props) => (
+              <Button {...props} variant="outline" size="sm">
+                {VIEW_LABELS[view]}
+                <ChevronDown className="ml-1" />
+              </Button>
+            )}
+          />
+          <DropdownMenuContent align="start" className="w-36">
+            <DropdownMenuRadioGroup
+              value={view}
+              onValueChange={(value) => changeView(value as CalendarView)}
+            >
+              <DropdownMenuRadioItem value="dayGridMonth">Month</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="timeGridWeek">Week</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <PostsFilters
+          filters={filters}
+          onChange={setFilters}
+          labels={labels}
+          accounts={accounts}
+          compact
+        />
+      </div>
+
+      {/* Content-type chips. These used to be rendered with no handler at all —
+          four buttons that could never highlight and never filter. They are
+          wired to the same list the calendar draws from now. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {CONTENT_TYPES.map((type) => {
+          const active = contentTypes.includes(type.id)
+          return (
+            <button
+              key={type.id}
+              type="button"
+              onClick={() => toggleContentType(type.id)}
+              aria-pressed={active}
+              className="rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={
+                active
+                  ? {
+                      background: 'var(--brand-wash, oklch(0.966 0.0068 240))',
+                      color: 'var(--brand-deep, currentColor)',
+                      fontWeight: 600,
+                    }
+                  : { background: 'var(--panel-2, transparent)', color: 'var(--ink-2, inherit)' }
+              }
+            >
+              {type.label}
+            </button>
+          )
+        })}
+        {contentTypes.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setContentTypes([])}>
+            Show all kinds
+          </Button>
+        )}
+      </div>
+
       {strategyContext && (
         <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-4 py-2.5">
           <p className="text-sm text-foreground/80">
-            <span className="font-semibold text-foreground">
+            <span className="font-semibold tabular-nums text-foreground">
               {strategyContext.postsThisWeek}/{strategyContext.postsTarget}
             </span>{' '}
             posts this week
           </p>
-          <p className="text-xs text-muted-foreground max-w-md truncate">
+          <p className="max-w-md truncate text-xs text-muted-foreground">
             {strategyContext.suggestion}
           </p>
         </div>
       )}
 
-      {/* Calendar */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <p className="text-sm text-muted-foreground">Loading calendar...</p>
+          <p className="text-sm text-muted-foreground">Loading your calendar…</p>
         </div>
       ) : (
         <div className="enhanced-calendar rounded-xl border border-border bg-card p-4">
           <FullCalendar
+            ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="dayGridMonth"
+            initialView={view}
             events={events}
             editable={true}
             droppable={true}
@@ -277,44 +317,31 @@ export function EnhancedCalendar() {
             eventClick={handleEventClick}
             dateClick={handleDateClick}
             eventContent={renderEventContent}
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay',
-            }}
+            headerToolbar={{ left: 'prev,next today', center: 'title', right: '' }}
             height="auto"
             dayMaxEvents={4}
             eventDisplay="block"
-            // Week/day view settings — matches Mixpost's CalendarWeek.vue
-            // 30-minute slots with now indicator, 24-hour scroll lock
             slotDuration="00:30:00"
             slotLabelInterval="01:00"
-            slotLabelFormat={{
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            }}
+            slotLabelFormat={{ hour: '2-digit', minute: '2-digit', hour12: true }}
             nowIndicator={true}
             scrollTime="08:00:00"
             allDaySlot={false}
-            eventTimeFormat={{
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true,
-            }}
+            eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: true }}
           />
         </div>
       )}
 
-      {/* Post detail modal */}
-      {selectedPost && (
-        <PostDetail
-          post={selectedPost}
-          onClose={() => setSelectedPost(null)}
-        />
-      )}
+      <PostPreviewModal
+        post={selectedPost}
+        brandName={brandName}
+        onClose={() => setSelectedPost(null)}
+        onEdit={(id) => {
+          setSelectedPost(null)
+          router.push(`/agency/social/compose?draft=${id}`)
+        }}
+      />
 
-      {/* FullCalendar theme overrides */}
       <style jsx global>{`
         .enhanced-calendar .fc {
           --fc-border-color: var(--line);
@@ -348,11 +375,11 @@ export function EnhancedCalendar() {
 
         .enhanced-calendar .fc .fc-event {
           border-radius: 6px;
-          padding: 2px 6px;
+          padding: 0;
           font-size: 12px;
           cursor: pointer;
           border-width: 0;
-          border-left-width: 3px;
+          background: transparent;
         }
 
         .enhanced-calendar .fc .fc-button {

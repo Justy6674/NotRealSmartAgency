@@ -30,6 +30,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { buildAss } from '@/lib/video/subtitles'
 import { FONTS_DIR } from '@/lib/video/burn-subtitles'
+import { isCronAuthorised, CRON_UNAUTHORISED_BODY } from '@/lib/security/cron-auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -43,8 +44,10 @@ interface Check {
 }
 
 export async function GET(request: Request) {
-  if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it got the probe.
+  if (!isCronAuthorised(request)) {
+    return NextResponse.json(CRON_UNAUTHORISED_BODY, { status: 401 })
   }
 
   const checks: Record<string, Check> = {}

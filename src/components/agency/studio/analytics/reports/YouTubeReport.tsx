@@ -2,16 +2,26 @@
 
 import { Play, Clock, Users, ThumbsUp } from 'lucide-react'
 import { PlatformReportShell } from './PlatformReportShell'
+import type { AnalyticsPeriod } from '../analytics-desk'
 
 export interface YouTubeReportProps {
   brandId: string
+  /** Passed through so the Director's advice names the business. */
+  brandName?: string
+  /** How far back to measure — one choice governs the whole screen. */
+  period?: AnalyticsPeriod
+  /** The account being read, when one is selected in the row above. */
+  accountId?: string | null
 }
 
-export function YouTubeReport({ brandId }: YouTubeReportProps) {
+export function YouTubeReport({ brandId, brandName, period, accountId }: YouTubeReportProps) {
   return (
     <PlatformReportShell
       platform="youtube"
       brandId={brandId}
+      brandName={brandName}
+      period={period}
+      accountId={accountId}
       timeseriesSeries={['videoViews', 'followers']}
       metrics={[
         {

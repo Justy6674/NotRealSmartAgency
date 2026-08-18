@@ -55,6 +55,8 @@ interface MediaDetailPanelProps {
   onRepurpose: (id: string) => void
   availableTags: string[]
   onItemUpdated?: (item: MediaItemWithUsage) => void
+  /** Re-read the library after a change this panel made to the row. */
+  onRefresh?: () => void
 }
 
 export function MediaDetailPanel({
@@ -66,6 +68,7 @@ export function MediaDetailPanel({
   onRepurpose,
   availableTags,
   onItemUpdated,
+  onRefresh,
 }: MediaDetailPanelProps) {
   const [copied, setCopied] = useState(false)
   const [showTagInput, setShowTagInput] = useState(false)
@@ -89,6 +92,36 @@ export function MediaDetailPanel({
     typeof (item.metadata as { alt_text?: unknown } | null)?.alt_text === 'string'
       ? ((item.metadata as { alt_text: string }).alt_text)
       : ''
+
+  const [makingCover, setMakingCover] = useState(false)
+  const [coverError, setCoverError] = useState<string | null>(null)
+
+  /**
+   * Ask for a cover frame. Every `media_items` write goes through the one
+   * pipeline, so this posts the stage rather than touching the row — a direct
+   * update here would be the second place media rows are written, and the
+   * first thing to drift.
+   */
+  const handleMakeCover = async () => {
+    setMakingCover(true)
+    setCoverError(null)
+    try {
+      const res = await fetch('/api/media/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mediaItemId: item.id, runStages: ['thumbnail'] }),
+      })
+      if (!res.ok) {
+        setCoverError('A cover could not be made just now. Nothing has been changed.')
+        return
+      }
+      onRefresh?.()
+    } catch {
+      setCoverError('A cover could not be made just now. Nothing has been changed.')
+    } finally {
+      setMakingCover(false)
+    }
+  }
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(item.file_url)
@@ -242,11 +275,20 @@ export function MediaDetailPanel({
             </div>
           )}
 
-          {/* Alt text — accessibility text used by every platform that supports it */}
+          {/*
+            The description that travels with the picture.
+
+            "Alt text" is a web developer's phrase and this owner is not one, so
+            the heading says what it is for. Where it lands is stated too:
+            Instagram feed posts, Facebook, Threads, X, LinkedIn, Bluesky and
+            Pinterest read it; Reels and Stories have no field for it and
+            quietly drop it, which is worth knowing BEFORE writing 400 words
+            for a Reel.
+          */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Alt text
+                Description for screen readers
               </h4>
               <button
                 type="button"
@@ -254,17 +296,71 @@ export function MediaDetailPanel({
                 className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 <PenLine className="h-3 w-3" />
-                {altText ? 'Edit alt text' : 'Add alt text'}
+                {altText ? 'Edit' : 'Add one'}
               </button>
             </div>
             {altText ? (
               <p className="text-xs text-foreground/80 leading-relaxed">{altText}</p>
             ) : (
               <p className="text-xs italic text-muted-foreground">
-                No alt text yet — describe this media for screen readers and AI search.
+                Nothing yet. Without it, anyone using a screen reader hears silence where this picture is.
               </p>
             )}
+            <p className="text-[10px] text-muted-foreground">
+              Goes out on Instagram feed posts, Facebook, Threads, X, LinkedIn, Bluesky and Pinterest.
+            </p>
           </div>
+
+          {/*
+            The cover frame.
+
+            A video published with no cover gets whatever frame the platform
+            grabs, which on a talking-head clip is reliably a blink. The frame
+            is stored on the row as `thumbnail_url` and the publishing path
+            already carries it through as the video and Reel cover, so the only
+            thing missing was somewhere to SEE whether one exists, and one
+            button to make one when it does not.
+          */}
+          {isVideo && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Cover picture
+                </h4>
+                <button
+                  type="button"
+                  onClick={handleMakeCover}
+                  disabled={makingCover}
+                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  <PenLine className="h-3 w-3" />
+                  {makingCover ? 'Working…' : item.thumbnail_url ? 'Take a fresh one' : 'Make one'}
+                </button>
+              </div>
+              {item.thumbnail_url ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.thumbnail_url}
+                    alt=""
+                    className="h-24 w-auto rounded-md border border-border object-cover"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Shown as the still frame before anyone presses play.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs italic text-muted-foreground">
+                  None yet — the platform will pick a frame for you, and it is usually a bad one.
+                </p>
+              )}
+              {coverError ? (
+                <p className="text-[10px]" style={{ color: 'var(--stop, oklch(0.55 0.17 27))' }}>
+                  {coverError}
+                </p>
+              ) : null}
+            </div>
+          )}
 
           {/* Transcription */}
           {item.transcription && (

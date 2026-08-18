@@ -33,6 +33,17 @@ const CONTENT_TYPES = [
 
 const VISIBLE_TAG_COUNT = 2
 
+/**
+ * The description saved against a file, kept in `metadata.alt_text` so that
+ * shipping it needed no migration. Read through one helper rather than three
+ * inline casts, because three casts is how one of them ends up spelt
+ * differently.
+ */
+function altTextOf(item: MediaItemWithUsage): string {
+  const raw = (item.metadata as { alt_text?: unknown } | null)?.alt_text
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
 interface MediaLibraryCardProps {
   item: MediaItemWithUsage
   selected: boolean
@@ -207,7 +218,10 @@ export function MediaLibraryCard({
         ) : item.file_type.startsWith('image/') ? (
           <img
             src={item.thumbnail_url || item.file_url}
-            alt={item.file_name}
+            /* The saved description when there is one. A file name is not a
+               description, and a screen reader announcing "img_4471.jpg" is
+               worse than announcing nothing at all. */
+            alt={altTextOf(item) || ''}
             className="h-40 w-full object-cover"
             onError={() => setDecodeFailed(true)}
           />
@@ -235,6 +249,24 @@ export function MediaLibraryCard({
             />
           </div>
         )}
+
+        {/* An image with no description reaches every platform that reads one
+            with nothing to say. It is invisible until publish time and then it
+            is too late, so the gap is shown here, on the file, where it can be
+            filled in one click. Videos are exempt: the field is for stills. */}
+        {item.file_type.startsWith('image/') && !altTextOf(item) && !decodeFailed ? (
+          <span
+            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{
+              background: 'var(--panel, oklch(1 0 0))',
+              border: '1px solid var(--line, oklch(0.915 0.007 240))',
+              color: 'var(--ink-3, oklch(0.615 0.011 240))',
+            }}
+            title="No description yet — open this file to add one"
+          >
+            No description
+          </span>
+        ) : null}
 
         <div className="absolute bottom-2 right-2 flex items-center gap-1">
           {item.duration_seconds != null && (

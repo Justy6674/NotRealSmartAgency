@@ -28,7 +28,25 @@ const ROOT = process.cwd()
 
 const SHARED = 'src/lib/post-versions.ts'
 const CREATOR = 'src/components/agency/studio/post/PostCreator.tsx'
-const PREVIEW = 'src/components/agency/studio/preview/MultiPlatformPreview.tsx'
+const PREVIEW = 'src/components/agency/studio/preview/ComposerPreviewPane.tsx'
+
+/**
+ * REPOINTED 19 Aug 2026, when the composer moved to Mixpost's split pane.
+ *
+ * This contract used to read MultiPlatformPreview.tsx, which rendered a grid of
+ * platform frames and called resolvePublishCaption itself. The split pane
+ * previews one ACCOUNT version at a time — two Instagram accounts publishing
+ * different words are two previews — so the pane holds no opinion about which
+ * caption wins; it is handed a resolver by the composer. Pointing this file at
+ * a component the app had stopped rendering would have left the original bug
+ * unguarded while the suite stayed green, which is worse than having no test.
+ *
+ * The rule is therefore checked one link further back, and is now STRONGER than
+ * it was: the pane must take its words from the caller, the composer's resolver
+ * must delegate to resolvePublishCaption per platform, and the same resolver
+ * must be the one handed to the pane. The old file could satisfy its contract
+ * while the save handler disagreed with it; this one cannot.
+ */
 
 /**
  * Comments are stripped before anything is matched. House style is to record
@@ -84,14 +102,21 @@ test('the rule lives in one function, and the old preview helper defers to it', 
   )
 })
 
-test('both composer surfaces import the shared resolver', () => {
-  for (const file of [CREATOR, PREVIEW]) {
-    assert.match(
-      read(file),
-      /import\s*\{[^}]*\bresolvePublishCaption\b[^}]*\}\s*from\s*'@\/lib\/post-versions'/,
-      `${file} must take the caption rule from @/lib/post-versions rather than deciding for itself`,
-    )
-  }
+test('the composer imports the shared resolver, and the preview is handed it', () => {
+  // Only one surface is allowed to import the rule now. The pane taking a
+  // resolver as a prop is not a weaker check than importing one — it is a
+  // stricter one, because a prop can only come from the composer, and the
+  // composer's is pinned to resolvePublishCaption above.
+  assert.match(
+    read(CREATOR),
+    /import\s*\{[^}]*\bresolvePublishCaption\b[^}]*\}\s*from\s*'@\/lib\/post-versions'/,
+    `${CREATOR} must take the caption rule from @/lib/post-versions rather than deciding for itself`,
+  )
+  assert.match(
+    read(PREVIEW),
+    /captionFor:\s*\(/,
+    `${PREVIEW} must declare the resolver it is handed, rather than growing a caption rule of its own`,
+  )
 })
 
 const RESOLVE = /resolvePublishCaption\s*\(([\s\S]*?)\)/g
@@ -176,18 +201,69 @@ test('the save handler no longer posts the master caption under the caption key'
   )
 })
 
+/**
+ * The composer's per-account resolver. Sliced out for the same reason
+ * handleSave is: an unrelated resolvePublishCaption call elsewhere in a
+ * 1500-line component must not be able to make this contract pass.
+ */
+function captionResolver(source: string): string {
+  const start = source.indexOf('const captionForAccountId')
+  assert.ok(
+    start !== -1,
+    `${CREATOR}: the per-account caption resolver is gone or renamed. Whatever replaced it must still delegate to resolvePublishCaption, and must still be what the preview is handed — update this contract deliberately, do not delete it.`,
+  )
+  const end = source.indexOf('\n  )', start)
+  assert.ok(end !== -1, `${CREATOR}: could not find the end of captionForAccountId`)
+  return source.slice(start, end)
+}
+
 test('the preview renders what the save handler will send', () => {
+  const creator = read(CREATOR)
+  const resolver = captionResolver(creator)
+
+  // One resolver, called per platform. This is where the master caption used to
+  // win on one half of the screen.
+  assert.match(
+    resolver,
+    /resolvePublishCaption\s*\(/,
+    `${CREATOR}: the per-account resolver must delegate to resolvePublishCaption, not re-decide the rule`,
+  )
+  const args = resolver.match(/resolvePublishCaption\s*\(([\s\S]*?)\)/)
+  assert.ok(args, `${CREATOR}: could not read the arguments to resolvePublishCaption`)
+  assert.match(
+    args[1],
+    /\bplatform\b/,
+    `${CREATOR}: the resolver was given no platform — every account would show the same caption again`,
+  )
+
+  // …and the preview must be handed THAT resolver, not one of its own. The old
+  // contract could not see this: both surfaces called the shared function and
+  // still disagreed, because nothing said it had to be the same call.
+  assert.match(
+    creator,
+    /<ComposerPreviewPane[\s\S]{0,400}?captionFor=\{captionForAccountId\}/,
+    `${CREATOR}: the preview is not being given the same resolver the save handler uses. The phone frame can then show one caption while another publishes.`,
+  )
+})
+
+test('the preview holds no opinion about which caption wins', () => {
   const preview = read(PREVIEW)
 
   assert.match(
     preview,
-    /resolvePublishCaption\s*\(/,
-    `${PREVIEW}: the preview must show the caption the publish path resolves, not one it works out separately`,
+    /captionFor\s*\(/,
+    `${PREVIEW}: the pane must take its words from the resolver it was handed`,
   )
-
-  const args = preview.match(/resolvePublishCaption\s*\(([\s\S]*?)\)/)
-  assert.ok(args, `${PREVIEW}: could not read the arguments to resolvePublishCaption`)
-  assert.match(args[1], /\bplatform\b/, `${PREVIEW}: each phone frame must resolve for its own platform`)
+  assert.doesNotMatch(
+    preview,
+    /resolvePublishCaption\s*\(/,
+    `${PREVIEW}: the pane is resolving captions itself. That is a second copy of the rule — take the words from captionFor.`,
+  )
+  assert.doesNotMatch(
+    preview,
+    /versions\s*\??\.?\s*\[[^\]]*\]/,
+    `${PREVIEW}: the pane is reading the stored versions object directly rather than the resolved caption.`,
+  )
 })
 
 test('the customised badge reports the resolution, not the stored flag', () => {
@@ -223,12 +299,20 @@ test('the contract is not vacuously passing', () => {
   const creator = read(CREATOR)
   assert.ok(creator.length > 10_000, `${CREATOR} is suspiciously small — is this still the composer?`)
   assert.ok(read(PREVIEW).includes('PlatformMockupPreview'), `${PREVIEW} is no longer the phone-frame preview`)
+  assert.ok(
+    creator.includes('<ComposerPreviewPane'),
+    `${CREATOR} no longer renders ${PREVIEW} — this contract would be guarding a component nobody shows, which is how it came to guard MultiPlatformPreview.`,
+  )
 
   // Comment stripping must remove comments and nothing else. If it ate the
   // code as well, every doesNotMatch above would pass on an empty string.
   const stripped = readFileSync(join(ROOT, PREVIEW), 'utf8').length - read(PREVIEW).length
   assert.ok(stripped > 0, `${PREVIEW}: comment stripping removed nothing — is it still working?`)
-  assert.ok(read(PREVIEW).includes('export function MultiPlatformPreview'), 'comment stripping ate the code')
+  assert.ok(read(PREVIEW).includes('export function ComposerPreviewPane'), 'comment stripping ate the code')
+
+  const resolver = captionResolver(creator)
+  assert.ok(resolver.length > 100, 'the caption-resolver slice came back empty')
+  assert.ok(resolver.length < creator.length, 'the caption-resolver slice is the whole file, so it proves nothing')
 
   const handler = saveHandler(creator)
   assert.ok(handler.length > 200, 'the save-handler slice came back empty')

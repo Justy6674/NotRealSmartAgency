@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Search, X, ChevronDown, Tag } from 'lucide-react'
+import { Search, X, ChevronDown, Tag, EyeOff } from 'lucide-react'
 
 type TypeFilter = 'all' | 'image' | 'video' | 'audio'
 type SortOption = 'newest' | 'oldest' | 'name' | 'most_used'
@@ -18,6 +18,19 @@ interface MediaLibraryFiltersProps {
   onSortChange: (value: SortOption) => void
   showArchived: boolean
   onShowArchivedChange: (value: boolean) => void
+  /**
+   * Show only pictures with no description saved.
+   *
+   * A picture with no description reaches Instagram, Facebook, Threads, X,
+   * LinkedIn, Bluesky and Pinterest with nothing for a screen reader to say,
+   * and there is no moment at which anyone is told. The library is the only
+   * place the gap is visible across the whole collection, so it is the only
+   * place it can be cleared in one sitting.
+   */
+  missingAltOnly?: boolean
+  onMissingAltOnlyChange?: (value: boolean) => void
+  /** How many are missing one right now. Never badged when zero. */
+  missingAltCount?: number
 }
 
 const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
@@ -176,6 +189,9 @@ export function MediaLibraryFilters({
   onSortChange,
   showArchived,
   onShowArchivedChange,
+  missingAltOnly = false,
+  onMissingAltOnlyChange,
+  missingAltCount = 0,
 }: MediaLibraryFiltersProps) {
   const [localSearch, setLocalSearch] = useState(search)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -254,6 +270,32 @@ export function MediaLibraryFilters({
         selectedTags={selectedTags}
         onSelectedTagsChange={onSelectedTagsChange}
       />
+
+      {onMissingAltOnlyChange && (missingAltCount > 0 || missingAltOnly) ? (
+        <button
+          type="button"
+          aria-pressed={missingAltOnly}
+          onClick={() => onMissingAltOnlyChange(!missingAltOnly)}
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition-colors"
+          style={{
+            borderColor: missingAltOnly ? brandDeep : line,
+            background: missingAltOnly ? brandWash : panel,
+            color: missingAltOnly ? brandDeep : ink2,
+          }}
+        >
+          <EyeOff className="h-3.5 w-3.5" aria-hidden />
+          Needs a description
+          {/* Quiet inventory badge, never shown at zero. */}
+          {missingAltCount > 0 ? (
+            <span
+              className="rounded-full border px-1.5 text-[11px] font-semibold tabular-nums"
+              style={{ borderColor: line, background: panel2, color: ink3 }}
+            >
+              {missingAltCount}
+            </span>
+          ) : null}
+        </button>
+      ) : null}
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <select

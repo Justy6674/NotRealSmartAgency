@@ -1,79 +1,140 @@
 'use client'
 
+import { AlertTriangle } from 'lucide-react'
 import { usePostCharacterLimit } from '@/hooks/usePostCharacterLimit'
 import type { PlatformKey } from '@/lib/mixpost/ui-tokens'
-import { PlatformCharacterRing } from './PlatformCharacterRing'
-import { AlertTriangle } from 'lucide-react'
+import { PlatformCharacterCount } from './PlatformCharacterRing'
+
+export interface ValidationIssue {
+  platform: string
+  message: string
+}
 
 interface PostContentValidatorProps {
   caption: string
   platforms: PlatformKey[]
+  /** Ceilings the publisher reported, keyed by platform. Empty until pre-flight answers. */
+  publisherLimits?: Partial<Record<PlatformKey, number>>
+  /** Refusals the publisher itself returned for this exact post. */
+  errors?: ValidationIssue[]
+  /** Things the publisher will accept but warns about. */
+  warnings?: ValidationIssue[]
+  /** True while the pre-flight request is in the air. */
+  checking?: boolean
+  /**
+   * False when the pre-flight could not run at all — so this panel says the
+   * numbers are our own estimate rather than showing a confident all-clear.
+   */
+  checked?: boolean
 }
 
 /**
- * Real-time per-platform caption validator — shows one character ring
- * per selected platform plus aggregated warnings.
+ * What the publisher will refuse, said before anyone presses a button.
  *
- * Phase 3 of the Mixpost UI port. Matches the intent of Mixpost's
- * PostContentValidator.vue (560 LOC) but scopes to character counts
- * for the initial port. Platform-specific rules (URL weighting,
- * hashtag counts, media constraints) are layered on in follow-up
- * tasks as we confirm which rules each platform actually enforces.
+ * ── Two sources, deliberately not merged ──────────────────────────────────
+ * The band at the top carries the publisher's OWN refusals for this exact post
+ * — its words, not a paraphrase, because a paraphrase is a second copy of a
+ * rule and copies drift. The list below is the local character count, which
+ * updates on every keystroke where a network call cannot.
+ *
+ * When the pre-flight has not run — the backup connection, or an unreachable
+ * check — this says so out loud. A green screen that was never checked is the
+ * failure mode this whole panel exists to prevent.
  */
-export function PostContentValidator({ caption, platforms }: PostContentValidatorProps) {
-  const limits = usePostCharacterLimit(caption, platforms)
+export function PostContentValidator({
+  caption,
+  platforms,
+  publisherLimits,
+  errors = [],
+  warnings = [],
+  checking = false,
+  checked = true,
+}: PostContentValidatorProps) {
+  const limits = usePostCharacterLimit(caption, platforms, publisherLimits)
 
   if (platforms.length === 0) {
     return (
       <div
-        className="rounded-lg border border-dashed px-3 py-2 text-[11px]"
+        className="rounded-[10px] border border-dashed px-3 py-2 text-[11.5px]"
         style={{
           borderColor: 'var(--line)',
           background: 'var(--panel-2)',
           color: 'var(--ink-3)',
         }}
       >
-        Select at least one platform to see character limits.
+        Tick an account above to see how long this post may be.
       </div>
     )
   }
 
   const overLimit = limits.filter((l) => l.state === 'over')
-  const atWarning = limits.filter((l) => l.state === 'warning')
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-4 flex-wrap">
+      {/* Publisher's own refusals — full-width band, above everything. */}
+      {errors.length > 0 && (
+        <div className="rounded-[10px] border border-[oklch(0.55_0.2_25/0.3)] bg-[oklch(0.55_0.2_25/0.08)] px-3 py-2 text-[11.5px] text-[oklch(0.55_0.2_25)]">
+          <p className="mb-1 flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            This cannot go out as written.
+          </p>
+          <ul className="ml-[22px] list-disc space-y-[2px]">
+            {errors.map((issue, index) => (
+              <li key={`${issue.platform}-${index}`}>
+                {issue.platform ? `${issue.platform}: ` : ''}
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {errors.length === 0 && warnings.length > 0 && (
+        <div className="rounded-[10px] border border-[oklch(0.65_0.15_75/0.3)] bg-[oklch(0.65_0.15_75/0.08)] px-3 py-2 text-[11.5px] text-[oklch(0.55_0.15_75)]">
+          <ul className="ml-[16px] list-disc space-y-[2px]">
+            {warnings.map((issue, index) => (
+              <li key={`${issue.platform}-${index}`}>
+                {issue.platform ? `${issue.platform}: ` : ''}
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div
+        className="rounded-[10px] border px-[13px] py-[9px]"
+        style={{ borderColor: 'var(--line)', background: 'var(--panel-2)' }}
+      >
+        <div className="mb-[5px] flex items-baseline justify-between gap-3">
+          <span
+            className="text-[10.5px] font-semibold uppercase tracking-[0.08em]"
+            style={{ color: 'var(--ink-3)' }}
+          >
+            Characters left
+          </span>
+          <span className="text-[10.5px]" style={{ color: 'var(--ink-3)' }}>
+            {checking ? 'Checking…' : checked ? '' : 'Our own estimate'}
+          </span>
+        </div>
         {limits.map((l) => (
-          <PlatformCharacterRing
+          <PlatformCharacterCount
             key={l.platform}
             platform={l.platform}
             used={l.used}
             limit={l.limit}
             state={l.state}
-            size={40}
+            fromPublisher={l.fromPublisher}
           />
         ))}
       </div>
 
-      {overLimit.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-[oklch(0.55_0.2_25/0.3)] bg-[oklch(0.55_0.2_25/0.08)] px-3 py-2 text-[11px] text-[oklch(0.55_0.2_25)]">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+      {errors.length === 0 && overLimit.length > 0 && (
+        <div className="flex items-start gap-2 rounded-[10px] border border-[oklch(0.55_0.2_25/0.3)] bg-[oklch(0.55_0.2_25/0.08)] px-3 py-2 text-[11.5px] text-[oklch(0.55_0.2_25)]">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-[2px]" />
           <span>
-            Over the limit on {overLimit.length} platform{overLimit.length === 1 ? '' : 's'}:{' '}
-            {overLimit
-              .map((l) => `${l.platform} (${l.remaining})`)
-              .join(', ')}
-            . Trim the caption or deselect {overLimit.length === 1 ? 'that platform' : 'those platforms'} before scheduling.
-          </span>
-        </div>
-      )}
-
-      {overLimit.length === 0 && atWarning.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-[oklch(0.65_0.15_75/0.3)] bg-[oklch(0.65_0.15_75/0.08)] px-3 py-2 text-[11px] text-[oklch(0.55_0.15_75)]">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span>
-            Approaching the limit on {atWarning.length} platform{atWarning.length === 1 ? '' : 's'}.
+            Too long for {overLimit.map((l) => l.platform).join(', ')}. Shorten the caption, or
+            untick {overLimit.length === 1 ? 'that account' : 'those accounts'}.
           </span>
         </div>
       )}

@@ -1,9 +1,24 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { runMediaProcessingPipeline } from '@/lib/media/process-pipeline'
 
 /**
- * POST /api/media — save an external URL (Giphy, Pexels, etc.) as a media item.
- * No re-upload to storage; the external URL is stored directly.
+ * POST /api/media — file a picture or GIF that lives somewhere else.
+ *
+ * No re-upload to storage; the supplier's URL is stored directly.
+ *
+ * Two things this used to drop on the floor:
+ *
+ *   1. **The credit.** A stock picture arrives with a photographer's name
+ *      attached and terms that say it travels with the file. Storing the file
+ *      and not the credit meant the only place it existed was the grid he
+ *      picked from, which he then navigated away from.
+ *   2. **The processing.** Every other way a `media_items` row is born hands it
+ *      to `runMediaProcessingPipeline`, which owns every mutation of that table
+ *      — tags, description, thumbnail. This path inserted and stopped, so an
+ *      imported picture had no description and no tags and was invisible to
+ *      every search the owner would think to run.
  */
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -11,7 +26,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const body = await request.json()
-  const { brandId, file_url, file_name, file_type, source, metadata } = body
+  const { brandId, file_url, file_name, file_type, source, metadata, attribution, alt_text } = body
 
   if (!brandId || !file_url) {
     return NextResponse.json({ error: 'brandId and file_url are required' }, { status: 400 })
@@ -30,12 +45,32 @@ export async function POST(request: Request) {
       metadata: {
         ...(metadata ?? {}),
         external_source: source ?? null,
+        ...(typeof attribution === 'string' && attribution.trim()
+          ? { attribution: attribution.trim() }
+          : {}),
+        ...(typeof alt_text === 'string' && alt_text.trim()
+          ? { alt_text: alt_text.trim() }
+          : {}),
       },
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Same pipeline as an upload, and for the same reason: one function owns
+  // every write to this table. Failure is logged, never surfaced — the picture
+  // is already in the library and a missing description is not his problem to
+  // act on. Note there is no `status` column here; an update carrying one is
+  // rejected wholesale by PostgREST and takes the rest of the statement with it.
+  after(async () => {
+    const result = await runMediaProcessingPipeline({
+      supabase: createAdminClient(),
+      mediaItemId: data.id,
+    })
+    if (!result.success) console.error(`[media:${data.id}] processing failed: ${result.error}`)
+  })
+
   return NextResponse.json(data)
 }
 
@@ -280,32 +315,41 @@ export async function DELETE(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
+  // Choosing eight files and deleting them is one action to the person doing
+  // it. Eight round trips is how the fifth one fails silently and the grid
+  // comes back with a file he watched himself delete.
+  const ids = (searchParams.get('ids') ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 100)
 
-  if (!id) return NextResponse.json({ error: 'No id provided' }, { status: 400 })
+  const targets = id ? [id] : ids
+  if (targets.length === 0) return NextResponse.json({ error: 'No id provided' }, { status: 400 })
 
-  // Fetch item to get storage path
-  const { data: item } = await supabase
+  // Fetch the rows first, for their storage paths. Scoped by user_id so an id
+  // belonging to somebody else selects nothing rather than deleting something.
+  const { data: rows } = await supabase
     .from('media_items')
-    .select('file_url')
-    .eq('id', id)
+    .select('id, file_url')
+    .in('id', targets)
     .eq('user_id', user.id)
-    .single()
 
-  if (item?.file_url) {
-    // Extract storage path from public URL
-    const urlParts = item.file_url.split('/storage/v1/object/public/media/')
-    if (urlParts[1]) {
-      await supabase.storage.from('media').remove([urlParts[1]])
-    }
+  const storagePaths = (rows ?? [])
+    .map((row) => row.file_url?.split('/storage/v1/object/public/media/')[1])
+    .filter((path): path is string => Boolean(path))
+
+  if (storagePaths.length) {
+    await supabase.storage.from('media').remove(storagePaths)
   }
 
   const { error } = await supabase
     .from('media_items')
     .delete()
-    .eq('id', id)
+    .in('id', targets)
     .eq('user_id', user.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ deleted: true })
+  return NextResponse.json({ deleted: true, count: rows?.length ?? 0 })
 }

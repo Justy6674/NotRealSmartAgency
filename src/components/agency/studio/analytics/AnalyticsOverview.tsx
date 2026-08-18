@@ -16,22 +16,34 @@ import {
   type PlatformKey,
 } from '@/lib/mixpost/ui-tokens'
 import type { PlatformMetrics } from '@/lib/analytics/platform-metrics'
+import Link from 'next/link'
 import { MetricCard } from './MetricCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { periodRange, spokenPeriod, type AnalyticsPeriod } from './analytics-desk'
 
 export interface AnalyticsOverviewProps {
   brandId: string
   brandName?: string
-  /** Optional ISO date range. Defaults to last 28 days. */
+  /**
+   * How far back to measure. One choice at the top of the screen governs the
+   * summary and every channel below it, so two panels can never quietly be
+   * showing different lengths of time.
+   */
+  period?: AnalyticsPeriod
+  /** Explicit range, when something other than the picker decides it. */
   from?: string
   to?: string
 }
 
+/**
+ * X is not part of this product. It is left out of the list rather than
+ * rendered as a channel with nothing in it — a permanently empty tile reads as
+ * a channel that failed, not as one nobody uses.
+ */
 const ALL_PLATFORMS: PlatformKey[] = [
   'facebook',
   'instagram',
   'linkedin',
-  'twitter',
   'tiktok',
   'youtube',
   'pinterest',
@@ -49,7 +61,7 @@ const initialReports: Record<PlatformKey, PlatformMetrics | null> = {
   facebook: null,
   instagram: null,
   linkedin: null,
-  twitter: null,
+  twitter: null, // never read — kept only so the record covers the key type
   tiktok: null,
   youtube: null,
   pinterest: null,
@@ -68,11 +80,21 @@ const initialReports: Record<PlatformKey, PlatformMetrics | null> = {
  * Empty platforms (no connected account) are silently skipped, not errored.
  * We never print the name of any publishing or analytics vendor to the user.
  */
-export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOverviewProps) {
+export function AnalyticsOverview({
+  brandId,
+  brandName,
+  period = '30_days',
+  from,
+  to,
+}: AnalyticsOverviewProps) {
   const [state, setState] = useState<OverviewState>({
     loading: true,
     reports: { ...initialReports },
   })
+
+  const range = periodRange(period)
+  const fromDate = from ?? range.from
+  const toDate = to ?? range.to
 
   useEffect(() => {
     let cancelled = false
@@ -83,26 +105,18 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
         ALL_PLATFORMS.map(async (platform) => {
           try {
             const params = new URLSearchParams({ brandId, platform })
-            if (from) params.set('from', from)
-            if (to) params.set('to', to)
+            params.set('from', fromDate)
+            params.set('to', toDate)
 
-            // Primary endpoint (studio analytics — uses Zernio or Mixpost
-            // depending on how the brand is configured server-side)
+            // One endpoint, which already chooses the right source for this
+            // brand server-side. There used to be a second call here that read
+            // a completely different route and cast its answer to this shape —
+            // that response has no `totals` and no `empty`, so every field came
+            // back undefined and the summary quietly counted zeroes as results.
             const res = await fetch(`/api/studio/analytics?${params.toString()}`)
             if (res.ok) {
               const data = (await res.json()) as PlatformMetrics
-              if (!data.empty) return [platform, data] as const
-            }
-
-            // Fallback: direct Zernio analytics route (exists when backend
-            // agent has landed it; returns 404 otherwise — handled gracefully)
-            const zernioParams = new URLSearchParams({ brandId, platform })
-            if (from) zernioParams.set('from', from)
-            if (to) zernioParams.set('to', to)
-            const zRes = await fetch(`/api/zernio/analytics?${zernioParams.toString()}`)
-            if (zRes.ok) {
-              const zData = (await zRes.json()) as PlatformMetrics
-              return [platform, zData] as const
+              return [platform, data] as const
             }
 
             return [platform, null] as const
@@ -125,7 +139,7 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
     return () => {
       cancelled = true
     }
-  }, [brandId, from, to])
+  }, [brandId, fromDate, toDate])
 
   const summary = useMemo(() => {
     let totalReach = 0
@@ -134,9 +148,12 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
     let totalFollowers = 0
     let topPlatform: { platform: PlatformKey; engagement: number } | null = null
     let connectedPlatforms = 0
+    let unreadable = 0
 
     for (const platform of ALL_PLATFORMS) {
       const report = state.reports[platform]
+      // "Could not read" is counted, never folded into "nothing happened".
+      if (report?.problem) unreadable += 1
       if (!report || report.empty) continue
       connectedPlatforms += 1
       const t = report.totals
@@ -157,6 +174,7 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
       totalFollowers,
       topPlatform,
       connectedPlatforms,
+      unreadable,
     }
   }, [state.reports])
 
@@ -174,6 +192,23 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
     )
   }
 
+  if (summary.connectedPlatforms === 0 && summary.unreadable > 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center gap-[10px] py-12 text-center">
+          <Trophy className="h-6 w-6" style={{ color: 'oklch(0.615 0.011 240)' }} />
+          <p className="text-[14px] font-[600]" style={{ color: 'var(--brand-deep, oklch(0.33 0.0209 240))' }}>
+            Your figures could not be read
+          </p>
+          <p className="text-[12.5px] max-w-md" style={{ color: 'oklch(0.615 0.011 240)' }}>
+            Nothing has changed and nothing is missing — the numbers just could not be fetched this
+            time. Try again in a moment.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (summary.connectedPlatforms === 0) {
     return (
       <Card>
@@ -186,10 +221,19 @@ export function AnalyticsOverview({ brandId, brandName, from, to }: AnalyticsOve
             No accounts connected yet
           </p>
           <p className="text-[12.5px] max-w-md" style={{ color: 'oklch(0.615 0.011 240)' }}>
-            Connect a social account under Social → Accounts to start collecting
-            results. Once a channel is connected, its metrics appear here
-            automatically.
+            Nothing is connected for this business, so there is nothing to measure over{' '}
+            {spokenPeriod(period)}. Connect an account and the numbers start arriving on their own.
           </p>
+          <Link
+            href="/agency/social/accounts"
+            className="rounded-[8px] px-[12px] py-[7px] text-[12.5px] font-[600]"
+            style={{
+              background: 'var(--brand-deep, oklch(0.33 0.0209 240))',
+              color: 'var(--brand-ink, oklch(1 0 0))',
+            }}
+          >
+            Connect an account
+          </Link>
         </CardContent>
       </Card>
     )

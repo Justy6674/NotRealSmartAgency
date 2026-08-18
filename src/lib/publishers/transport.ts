@@ -21,6 +21,34 @@ export function publisherTransportOf(socialUrls: unknown): PublisherTransport {
   return zernioProfileIdFromSocialUrls(urls) ? 'zernio' : 'mixpost'
 }
 
+/**
+ * Can this business actually deliver the publisher-only fields?
+ *
+ * The composer used to answer this its OWN way — "does the business have a
+ * profile id" — while the publisher answered it with `publisherTransportOf`,
+ * which honours the explicit `social_urls.publisher_transport` override the
+ * accounts page exposes. So a business with a profile whose owner had chosen
+ * the backup connection was shown every publisher-only field as a live input,
+ * filled them in, and watched them be dropped silently at send time. That is
+ * exactly the failure the option panels were written to prevent.
+ *
+ * One function, used by both. Depended on by the composer (S3) and by
+ * `composerFieldStatusForTransport`.
+ */
+export function zernioFieldsDeliverable(socialUrls: unknown): boolean {
+  return publisherTransportOf(socialUrls) === 'zernio'
+}
+
+/**
+ * How to describe the delivery route to the owner.
+ *
+ * Never the vendor's name. The owner is a business owner, not an integrator,
+ * and "Mixpost" is a word they have never had to learn.
+ */
+export function transportOwnerLabel(transport: PublisherTransport): string {
+  return transport === 'zernio' ? 'your main posting connection' : 'the backup posting connection'
+}
+
 export function postingPausedOf(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== 'object') return false
   return (metadata as Record<string, unknown>).posting_paused === true

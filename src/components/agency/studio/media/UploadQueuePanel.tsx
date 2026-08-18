@@ -13,13 +13,12 @@ import {
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { uploadQueue, useUploadQueue, type UploadQueueItem } from './uploadQueueStore'
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
+import {
+  uploadQueue,
+  useUploadQueue,
+  type UploadQueueItem,
+} from './uploadQueueStore'
+import { formatBytes, platformsThatWillRefuse, tooLargeSentence } from './platform-limits'
 
 function statusLabel(item: UploadQueueItem): string {
   switch (item.status) {
@@ -54,6 +53,29 @@ function StatusIcon({ item }: { item: UploadQueueItem }) {
     default:
       return <Loader2 className={cn(className, 'text-muted-foreground')} />
   }
+}
+
+/**
+ * The accounts that will not take this file, named while it is still in front
+ * of him.
+ *
+ * Rendered only once the upload has landed, so it never competes with a moving
+ * progress bar, and never at all for a file that is under every ceiling. The
+ * library keeps the file either way — this is a heads-up, not a refusal.
+ */
+function TooBigFor({ item }: { item: UploadQueueItem }) {
+  if (item.status !== 'completed') return null
+  const sentence = tooLargeSentence({
+    fileType: item.fileType,
+    refusedBy: platformsThatWillRefuse(item.fileSize),
+  })
+  if (!sentence) return null
+
+  return (
+    <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--warn, oklch(0.63 0.13 75))' }}>
+      {sentence} It is safely in your library either way.
+    </p>
+  )
 }
 
 export function UploadQueuePanel() {
@@ -160,6 +182,13 @@ export function UploadQueuePanel() {
                     {statusLabel(item)}
                   </span>
                 </div>
+
+                {/* Named while the file is still in front of him, not at the
+                    appointed publishing hour. Nothing is blocked — the library
+                    is ours and keeps whatever it is given — but a picture that
+                    Bluesky will refuse should not be a surprise three weeks
+                    later on a scheduled post. */}
+                <TooBigFor item={item} />
               </div>
 
               {/* Actions */}

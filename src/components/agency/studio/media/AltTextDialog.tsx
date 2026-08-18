@@ -20,6 +20,28 @@ interface AltTextDialogProps {
   onSaved?: (item: MediaItem) => void
 }
 
+/**
+ * Alt text, with the ceiling the platforms actually enforce.
+ *
+ * The limit here was a flat 1000 for everything. Pinterest cuts at 500, so a
+ * 700-character description written in this box saved cleanly, looked right on
+ * every screen, and was truncated mid-sentence on the one platform where the
+ * description is doing the most work. The counter now warns from the SHORTEST
+ * limit among the platforms that read alt text, and states which one that is,
+ * so the number in the corner means something.
+ *
+ * Where alt text is used at all, measured against the publisher's own field
+ * documentation rather than recalled: Instagram FEED images (not Reels, not
+ * Stories), Facebook, Threads, X (1000), LinkedIn, Bluesky, and Pinterest
+ * (500). Everywhere else it is accepted and ignored. Saying that plainly is
+ * the difference between the owner writing alt text once and writing it
+ * carefully.
+ */
+
+/** The tightest ceiling among the platforms that read this field. */
+const ALT_TEXT_TIGHTEST = 500
+const ALT_TEXT_TIGHTEST_ON = 'Pinterest'
+/** The loosest, and therefore the hard stop on the input. */
 const ALT_TEXT_MAX = 1000
 
 /**
@@ -59,13 +81,21 @@ export function AltTextDialog({ item, open, onOpenChange, onSaved }: AltTextDial
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? 'Failed to save alt text')
+        throw new Error(
+          typeof body.error === 'string'
+            ? body.error
+            : 'That description could not be saved just now. Nothing has been changed.',
+        )
       }
       const updated = (await res.json()) as MediaItem
       onSaved?.(updated)
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save alt text')
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'That description could not be saved just now. Nothing has been changed.',
+      )
     } finally {
       setSaving(false)
     }
@@ -74,27 +104,28 @@ export function AltTextDialog({ item, open, onOpenChange, onSaved }: AltTextDial
   const handleSuggest = () => {
     if (!item) return
     setGenerating(true)
-    // For now, seed from existing AI description if any. The Director's
-    // generate-captions endpoint can later be wired here for live suggestions.
+    // Seeded from the description already worked out for this file. The
+    // Director's caption endpoint can be wired here later for a live pass.
     const seed = item.ai_description?.trim() ?? ''
     if (seed) {
       setValue(seed.slice(0, ALT_TEXT_MAX))
     } else {
-      setError('No AI description available yet — try Smart Retag from the library.')
+      setError('Nothing has been worked out about this file yet — run Smart retag from the library first.')
     }
     setGenerating(false)
   }
 
+  const overTightest = value.length > ALT_TEXT_TIGHTEST
   const remaining = ALT_TEXT_MAX - value.length
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit alt text</DialogTitle>
+          <DialogTitle>Describe this picture</DialogTitle>
           <DialogDescription>
-            Describe what&apos;s in this media for screen readers and AI search. Used on every
-            platform that supports accessibility text.
+            What someone would need told if they could not see it. Screen readers read it aloud, and
+            search engines read it too.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,14 +143,14 @@ export function AltTextDialog({ item, open, onOpenChange, onSaved }: AltTextDial
                 htmlFor="alt-text-input"
                 className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
               >
-                Alt text
+                Description
               </label>
               <textarea
                 id="alt-text-input"
                 value={value}
                 onChange={(e) => setValue(e.target.value.slice(0, ALT_TEXT_MAX))}
                 rows={4}
-                placeholder="A short description of what is shown..."
+                placeholder="A short description of what is shown…"
                 className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-[oklch(0.65_0.12_240)]/40"
               />
               <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
@@ -134,14 +165,46 @@ export function AltTextDialog({ item, open, onOpenChange, onSaved }: AltTextDial
                   ) : (
                     <Sparkles className="h-3 w-3" />
                   )}
-                  Suggest from AI description
+                  Start from what we know about this file
                 </button>
-                <span className={remaining < 50 ? 'text-amber-400' : ''}>{remaining} left</span>
+                <span
+                  className="tabular-nums"
+                  style={overTightest ? { color: 'var(--warn, oklch(0.63 0.13 75))' } : undefined}
+                >
+                  {remaining} left
+                </span>
               </div>
             </div>
 
+            {/* Stated rather than left to be discovered at publish time. */}
+            {overTightest ? (
+              <p
+                className="rounded-md border px-3 py-2 text-[11.5px] leading-relaxed"
+                style={{
+                  borderColor: 'var(--warn, oklch(0.63 0.13 75))',
+                  background: 'var(--warn-wash, oklch(0.964 0.052 80))',
+                  color: 'var(--ink, oklch(0.20 0.014 240))',
+                }}
+              >
+                Over {ALT_TEXT_TIGHTEST} characters, {ALT_TEXT_TIGHTEST_ON} cuts the rest off. Put the
+                important part first, or trim it back.
+              </p>
+            ) : (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Used on Instagram feed posts, Facebook, Threads, X, LinkedIn, Bluesky and Pinterest.
+                Reels and Stories do not carry a description, so it is quietly ignored there.
+              </p>
+            )}
+
             {error && (
-              <p className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-400">
+              <p
+                className="rounded-md border px-3 py-2 text-xs"
+                style={{
+                  borderColor: 'oklch(0.55 0.17 27 / 0.3)',
+                  background: 'oklch(0.55 0.17 27 / 0.07)',
+                  color: 'var(--ink, oklch(0.20 0.014 240))',
+                }}
+              >
                 {error}
               </p>
             )}
@@ -154,7 +217,7 @@ export function AltTextDialog({ item, open, onOpenChange, onSaved }: AltTextDial
           </Button>
           <Button onClick={handleSave} disabled={saving || !item}>
             {saving && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-            Save alt text
+            Save description
           </Button>
         </DialogFooter>
       </DialogContent>

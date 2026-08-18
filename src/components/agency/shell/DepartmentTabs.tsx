@@ -108,6 +108,16 @@ export function DepartmentTabs({
 }: DepartmentTabsProps) {
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
 
+  /**
+   * Where the single tab stop sits. Normally it is the selected tab. When
+   * nothing is selected — a department route that is a real place with no tab
+   * of its own, such as Social accounts — it falls to the first tab, because a
+   * strip where every button is `tabIndex={-1}` cannot be reached from the
+   * keyboard at all and the owner is stranded in the panel.
+   */
+  const selectedIndex = tabs.findIndex((tab) => tab.id === value)
+  const stopIndex = selectedIndex === -1 ? 0 : selectedIndex
+
   // Arrow keys move between tabs, which is what a tab strip is expected to do
   // and what Tab alone will not give you — Tab has to keep leaving the strip
   // and entering the panel, or a keyboard user is trapped in seven stops
@@ -156,7 +166,7 @@ export function DepartmentTabs({
             aria-selected={isActive}
             aria-controls={departmentPanelId(group, tab.id)}
             // Roving focus: the strip is one stop, not one per tab.
-            tabIndex={isActive ? 0 : -1}
+            tabIndex={index === stopIndex ? 0 : -1}
             onClick={() => onValueChange(tab.id)}
             style={isActive ? ACTIVE_STYLE : tab.care ? CARE_STYLE : undefined}
             className={cn(
@@ -184,7 +194,7 @@ export function DepartmentTabs({
                       : undefined
                 }
                 className={cn(
-                  'rounded-sm border px-1.5 py-px text-[10px] font-semibold tabular-nums',
+                  'rounded-[5px] border px-[5px] py-px text-[10px] font-[650] tabular-nums',
                   isActive || tab.attention
                     ? ''
                     : 'border-[var(--line,oklch(0.915_0.007_240))] bg-[var(--panel-2,oklch(0.975_0.004_240))] text-[var(--ink-3,oklch(0.615_0.011_240))]',

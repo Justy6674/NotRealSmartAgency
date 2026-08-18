@@ -1,45 +1,42 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ScheduledPost } from '@/types/database'
+import type { SocialPostRow } from '@/hooks/usePostsList'
 
 interface UseScheduledPostsArgs {
   brandId: string | null
-  /** ISO date string — filter posts scheduled on or after this date */
+  /** ISO date string — only posts on or after this date. */
   from?: string
-  /** ISO date string — filter posts scheduled on or before this date */
+  /** ISO date string — only posts on or before this date. */
   to?: string
-  /** Filter by status */
-  status?: ScheduledPost['status']
 }
 
 interface UseScheduledPostsResult {
-  posts: ScheduledPost[]
+  posts: SocialPostRow[]
   loading: boolean
   error: string | null
-  /** Refetch from the server, bypassing local optimistic state */
   refetch: () => Promise<void>
   /**
-   * Reschedule a post optimistically and persist to the server.
-   * On failure, rolls back by refetching from the server.
-   * Throws on failure so the caller can react (e.g., FullCalendar.revert()).
+   * Move a post to a new time, optimistically, and put it back exactly where it
+   * was if the server refuses. Throws so the caller can revert its own view —
+   * FullCalendar needs `info.revert()` called from inside the failure.
    */
   reschedulePost: (id: string, scheduledAt: string) => Promise<void>
 }
 
 /**
- * Shared fetch + optimistic-mutate hook for scheduled_posts.
+ * The calendar's feed.
  *
- * Phase 1 of the Mixpost UI port — used by EnhancedCalendar to replace
- * its inline fetch logic. Subsequent phases (Posts Index, Review,
- * Dashboard, Analytics) will reuse this same hook so every surface
- * reading scheduled_posts shares cache-busting and optimistic update
- * semantics.
+ * It reads the same merged list the Posts page does — desk rows and published
+ * history together — for one reason: a month view that shows only what this app
+ * made is a month view with holes in it, and the owner cannot tell a quiet week
+ * from a week whose posts went out from a phone.
  *
- * The server route is /api/scheduled-posts which accepts brandId, from,
- * to, and status query params (see src/app/api/scheduled-posts/route.ts).
+ * Rescheduling goes through `/api/social/posts/[postId]`, which moves the time
+ * on the publisher as well as here. Moving ours alone is how a post goes out at
+ * the old time while the calendar shows the new one.
  */
 export function useScheduledPosts(args: UseScheduledPostsArgs): UseScheduledPostsResult {
-  const { brandId, from, to, status } = args
-  const [posts, setPosts] = useState<ScheduledPost[]>([])
+  const { brandId, from, to } = args
+  const [posts, setPosts] = useState<SocialPostRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,52 +48,55 @@ export function useScheduledPosts(args: UseScheduledPostsArgs): UseScheduledPost
     setLoading(true)
     setError(null)
     try {
-      const qs = new URLSearchParams({ brandId })
+      const qs = new URLSearchParams({ brandId, history: '1' })
       if (from) qs.set('from', from)
       if (to) qs.set('to', to)
-      if (status) qs.set('status', status)
       const res = await fetch(`/api/scheduled-posts?${qs.toString()}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setPosts(Array.isArray(data) ? data : [])
+      if (!res.ok) throw new Error('Your calendar could not be loaded just now.')
+      const data = (await res.json()) as { posts?: SocialPostRow[] }
+      setPosts(Array.isArray(data.posts) ? data.posts : [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'fetch failed')
+      setError(err instanceof Error ? err.message : 'Your calendar could not be loaded just now.')
       setPosts([])
     } finally {
       setLoading(false)
     }
-  }, [brandId, from, to, status])
+  }, [brandId, from, to])
 
-  useEffect(() => { refetch() }, [refetch])
+  useEffect(() => {
+    void refetch()
+  }, [refetch])
 
   const reschedulePost = useCallback(
     async (id: string, scheduledAt: string) => {
-      const previous = posts.find((p) => p.id === id)
-      // Optimistic update
-      setPosts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, scheduled_at: scheduledAt } : p)),
-      )
+      let previous: SocialPostRow | undefined
+      setPosts((prev) => {
+        previous = prev.find((p) => p.id === id)
+        return prev.map((p) => (p.id === id ? { ...p, scheduled_at: scheduledAt } : p))
+      })
       try {
-        const res = await fetch('/api/scheduled-posts', {
+        const res = await fetch(`/api/social/posts/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, scheduled_at: scheduledAt }),
+          body: JSON.stringify({ action: 'reschedule', scheduledFor: scheduledAt, brandId }),
         })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? 'That time could not be saved.')
+        }
       } catch (err) {
-        // Rollback the specific row using the captured previous value,
-        // avoiding a full refetch to preserve any concurrent updates
+        // Roll back the one row from the captured value rather than refetching,
+        // so a concurrent change to another row is not thrown away with it.
         if (previous) {
-          setPosts((prev) =>
-            prev.map((p) => (p.id === id ? previous : p)),
-          )
+          const restore = previous
+          setPosts((prev) => prev.map((p) => (p.id === id ? restore : p)))
         } else {
           await refetch()
         }
         throw err
       }
     },
-    [posts, refetch],
+    [brandId, refetch],
   )
 
   return { posts, loading, error, refetch, reschedulePost }

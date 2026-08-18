@@ -6,6 +6,7 @@ import { Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -13,17 +14,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
-import type { PostingScheduleSlot } from '@/types/database'
+import { ownerFacingPlatformLabel } from '@/lib/studio/social-read-source'
 
-const PLATFORM_OPTIONS: PlatformKey[] = [
-  'facebook',
-  'instagram',
-  'linkedin',
-  'twitter',
-  'tiktok',
-  'youtube',
-]
+const PLATFORM_OPTIONS = ['facebook', 'instagram', 'linkedin', 'twitter', 'tiktok', 'youtube']
 
 const TIMEZONE_OPTIONS = [
   'Australia/Brisbane',
@@ -40,20 +33,25 @@ const DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Fri
 
 export interface SlotEditorValue {
   id?: string
-  platform: PlatformKey
   day_of_week: number
-  /** "HH:MM" */
+  /** "HH:MM". */
   time: string
   timezone: string
+  /** Null on a business whose schedule is the real queue — it is not per network. */
+  platform: string | null
 }
 
 export interface SlotEditorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   initial: SlotEditorValue | null
-  /** Called with the new value (id is undefined for create). */
+  /**
+   * True when this business's schedule is the real queue. The queue belongs to
+   * the business rather than to one network, so the platform field is hidden
+   * rather than shown and ignored.
+   */
+  queueBacked: boolean
   onSave: (value: SlotEditorValue) => Promise<void> | void
-  /** Called when the user clicks delete on an existing slot. */
   onDelete?: (id: string) => Promise<void> | void
   saving?: boolean
   error?: string | null
@@ -63,23 +61,23 @@ export function SlotEditor({
   open,
   onOpenChange,
   initial,
+  queueBacked,
   onSave,
   onDelete,
   saving = false,
   error = null,
 }: SlotEditorProps) {
-  const [platform, setPlatform] = React.useState<PlatformKey>(initial?.platform ?? 'facebook')
   const [dayOfWeek, setDayOfWeek] = React.useState<number>(initial?.day_of_week ?? 1)
   const [time, setTime] = React.useState<string>(initial?.time ?? '09:00')
   const [timezone, setTimezone] = React.useState<string>(initial?.timezone ?? 'Australia/Brisbane')
+  const [platform, setPlatform] = React.useState<string>(initial?.platform ?? 'facebook')
 
-  // Reset form whenever the editor opens with a new slot
   React.useEffect(() => {
     if (!open) return
-    setPlatform(initial?.platform ?? 'facebook')
     setDayOfWeek(initial?.day_of_week ?? 1)
     setTime(toHHMM(initial?.time ?? '09:00'))
     setTimezone(initial?.timezone ?? 'Australia/Brisbane')
+    setPlatform(initial?.platform ?? 'facebook')
   }, [open, initial])
 
   const isEditing = Boolean(initial?.id)
@@ -88,16 +86,19 @@ export function SlotEditor({
     e.preventDefault()
     await onSave({
       id: initial?.id,
-      platform,
       day_of_week: dayOfWeek,
       time,
       timezone,
+      platform: queueBacked ? null : platform,
     })
   }
 
   async function handleDelete() {
     if (!initial?.id || !onDelete) return
-    if (typeof window !== 'undefined' && !window.confirm('Delete this slot? Drafts already in this slot will be unscheduled.')) {
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm('Remove this time? Anything already booked into it keeps its own time.')
+    ) {
       return
     }
     await onDelete(initial.id)
@@ -107,28 +108,35 @@ export function SlotEditor({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit posting slot' : 'Add posting slot'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Change this time' : 'Add a posting time'}</DialogTitle>
+          <DialogDescription>
+            {queueBacked
+              ? 'Posts added to the queue go out at these times, in order.'
+              : 'These times are offered to you when you schedule a post.'}
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSave} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="slot-platform">Platform</Label>
-            <select
-              id="slot-platform"
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value as PlatformKey)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {PLATFORM_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {PLATFORM_LABELS[p]}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!queueBacked && (
+            <div className="space-y-2">
+              <Label htmlFor="slot-platform">Where</Label>
+              <select
+                id="slot-platform"
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {PLATFORM_OPTIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {ownerFacingPlatformLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="space-y-2">
-            <Label htmlFor="slot-day">Day of week</Label>
+            <Label htmlFor="slot-day">Day</Label>
             <select
               id="slot-day"
               value={dayOfWeek}
@@ -156,7 +164,7 @@ export function SlotEditor({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="slot-tz">Timezone</Label>
+            <Label htmlFor="slot-tz">Time zone</Label>
             <select
               id="slot-tz"
               value={timezone}
@@ -165,10 +173,13 @@ export function SlotEditor({
             >
               {TIMEZONE_OPTIONS.map((tz) => (
                 <option key={tz} value={tz}>
-                  {tz}
+                  {tz.replace('Australia/', '')}
                 </option>
               ))}
             </select>
+            <p className="text-[11.5px] text-muted-foreground">
+              One zone for the whole week. Changing it here moves every time on the grid.
+            </p>
           </div>
 
           {error ? (
@@ -187,7 +198,7 @@ export function SlotEditor({
                 disabled={saving}
               >
                 <Trash2 className="mr-1 size-4" />
-                Delete
+                Remove
               </Button>
             ) : (
               <span />
@@ -197,7 +208,7 @@ export function SlotEditor({
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : isEditing ? 'Save' : 'Add slot'}
+                {saving ? 'Saving…' : isEditing ? 'Save' : 'Add it'}
               </Button>
             </div>
           </DialogFooter>
@@ -208,7 +219,6 @@ export function SlotEditor({
 }
 
 function toHHMM(value: string): string {
-  // Postgres `time` returns "HH:MM:SS"; <input type="time"> wants "HH:MM"
   const [h = '00', m = '00'] = value.split(':')
   return `${h}:${m}`
 }

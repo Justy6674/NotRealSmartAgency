@@ -1,10 +1,14 @@
 import { Suspense } from 'react'
 import type { CSSProperties } from 'react'
+import { unstable_cache } from 'next/cache'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { CircleHelp, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
+import { listZernioAccounts } from '@/lib/zernio/accounts'
+import { zernioProfileIdFromSocialUrls } from '@/lib/studio/overview-accounts'
+import type { NavCounts } from '@/components/agency/shell/nav-sections'
 import { AgencySidebar } from '@/components/agency/shell/AgencySidebar'
 import { BusinessSelector } from '@/components/agency/shell/BusinessSelector'
 import { DirectorRailConnected } from '@/components/agency/shell/DirectorRailConnected'
@@ -12,6 +16,7 @@ import { UserMenu } from '@/components/agency/UserMenu'
 import { BrandThemeSync } from '@/components/agency/shell/BrandThemeSync'
 import { ReloadAppButton } from '@/components/agency/shell/ReloadAppButton'
 import { brandThemeVars } from '@/components/agency/shell/brand-theme'
+import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import type { Brand } from '@/types/database'
 
 /**
@@ -53,6 +58,26 @@ import type { Brand } from '@/types/database'
 
 /** The shell root. Everything below it reads `var(--brand)` and retints free. */
 const SHELL = '[data-nrs-shell]'
+
+/**
+ * The scrim behind the phone drawer.
+ *
+ * The drawer opens on `:target` so this file can stay a Server Component (see
+ * the sidebar block below). The dimming behind it therefore has to key off the
+ * same thing, and "the element AFTER the one that is :target" is a sibling
+ * relationship Tailwind has no variant for — so it is one hand-written rule
+ * rather than a client component and a piece of state.
+ *
+ * Without it the drawer floats over a fully lit screen with no indication that
+ * the rest of the page is now behind something, and — worse on a phone — no
+ * obvious way back out other than finding the small close button. Tapping the
+ * scrim navigates to `#`, which stops `:target` matching and shuts the drawer.
+ */
+const NAV_SCRIM = `
+#nrs-nav ~ [data-nrs-nav-scrim]{opacity:0;pointer-events:none;transition:opacity .2s}
+#nrs-nav:target ~ [data-nrs-nav-scrim]{opacity:1;pointer-events:auto}
+@media (min-width:1024px){#nrs-nav ~ [data-nrs-nav-scrim]{display:none}}
+`.trim()
 
 function cssDecls(vars: CSSProperties): string {
   return Object.entries(vars)
@@ -132,6 +157,70 @@ const TINT_SYNC = `
 })()
 `.trim()
 
+// ─── First-paint counts ──────────────────────────────────────────────────────
+
+/**
+ * The numbers the sidebar draws, for the business the server can see.
+ *
+ * `AgencySidebar` has taken a `counts` prop since it was written and this file
+ * has never passed one, so not a single badge in the product could render —
+ * including "Waiting on you", the number the whole approval flow depends on the
+ * owner noticing. That is fixed here for the FIRST PAINT; the sidebar re-reads
+ * them for whichever business is actually selected, because the selection lives
+ * in localStorage and a Server Component cannot see it. `countsBrandId` travels
+ * with them so a stale number is never drawn beside another business's name.
+ *
+ * Only the approval queue is counted here. It is one indexed query on our own
+ * table, which is cheap enough to sit in a layout that re-runs on navigation.
+ */
+async function waitingCountFor(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  brandId: string,
+): Promise<number | undefined> {
+  const { count, error } = await supabase
+    .from('scheduled_posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .in('status', ['draft', 'failed'])
+
+  if (error) {
+    console.error('[agency-layout] approval queue could not be counted', error)
+    return undefined
+  }
+  return typeof count === 'number' ? count : undefined
+}
+
+/**
+ * "3 accounts connected", under the business name.
+ *
+ * Cached for five minutes per profile on purpose: it is the one figure here
+ * that costs a call to the publisher, this layout re-runs on navigation, and
+ * how many accounts a business has connected does not change between two
+ * clicks. The business selector reads the live figure for the SELECTED business
+ * through /api/social/nav-counts; this is only what the page opens with.
+ */
+const connectedAccounts = unstable_cache(
+  async (profileId: string): Promise<number | null> => {
+    try {
+      const accounts = await listZernioAccounts({ profileId, status: 'connected' })
+      return accounts.length
+    } catch (err) {
+      // Silence, not a zero. "No accounts connected" is a claim about the
+      // business; a failed lookup is a claim about us.
+      console.error('[agency-layout] connected accounts could not be counted', err)
+      return null
+    }
+  },
+  ['nrs-agency-connected-accounts'],
+  { revalidate: 300 },
+)
+
+function accountsLine(count: number | null): string | null {
+  if (count === null) return null
+  if (count === 0) return 'No accounts connected'
+  return count === 1 ? '1 account connected' : `${count} accounts connected`
+}
+
 // ─── The shell ───────────────────────────────────────────────────────────────
 
 export default async function AgencyLayout({
@@ -174,6 +263,28 @@ export default async function AgencyLayout({
    */
   const primaryBrand = brands[0] ?? null
 
+  const zernioProfileId = zernioProfileIdFromSocialUrls(primaryBrand?.social_urls)
+  const [waiting, accountCount] = primaryBrand
+    ? await Promise.all([
+        waitingCountFor(supabase, primaryBrand.id),
+        zernioProfileId ? connectedAccounts(zernioProfileId) : Promise.resolve(null),
+      ])
+    : [undefined, null]
+
+  const counts: NavCounts = waiting === undefined ? {} : { 'social-waiting': waiting }
+  const businessSubtitle = accountsLine(accountCount)
+
+  /**
+   * Hand the selector the server's figure ONLY when there is one business,
+   * because that is the only case where "the business the server guessed" and
+   * "the business the owner has selected" are provably the same. With several,
+   * the selector reads the live figure for whichever one is selected — the
+   * alternative is describing one business's accounts under another's name,
+   * which is the exact fault the unscoped account fetch used to have.
+   */
+  const seedAccountCount =
+    brands.length === 1 && accountCount !== null ? accountCount : undefined
+
   return (
     <div
       data-nrs-shell=""
@@ -187,9 +298,15 @@ export default async function AgencyLayout({
         // work gets the full width and the rail sizes itself to nothing.
         'grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)]',
         'lg:grid-cols-[236px_minmax(0,1fr)_auto]',
+        // Landscape on a notched phone puts the camera cutout beside the
+        // content, not above it. Handled once on the grid rather than in every
+        // column; on anything without a cutout env() is 0 and this is inert.
+        // Top and bottom are NOT done here — a fixed drawer ignores its
+        // parent's padding, so those insets are applied where they land.
+        'pr-[env(safe-area-inset-right)] lg:pl-[env(safe-area-inset-left)]',
       ].join(' ')}
     >
-      <style dangerouslySetInnerHTML={{ __html: brandThemeStyles(brands) }} />
+      <style dangerouslySetInnerHTML={{ __html: `${brandThemeStyles(brands)}\n${NAV_SCRIM}` }} />
       <script dangerouslySetInnerHTML={{ __html: TINT_SYNC }} />
       <BrandThemeSync brands={brands} />
 
@@ -207,7 +324,15 @@ export default async function AgencyLayout({
           'z-50 flex w-[236px] flex-col overflow-y-auto border-r bg-[var(--panel)]',
           'fixed inset-y-0 left-0 shadow-2xl',
           '-translate-x-full transition-transform duration-200 [&:target]:translate-x-0',
-          'lg:static lg:z-auto lg:translate-x-0 lg:shadow-none lg:transition-none',
+          // A fixed element is positioned against the viewport, so the grid's
+          // padding above does not reach it and it has to carry its own insets:
+          // under the notch at the top, under the home indicator at the bottom,
+          // and clear of the left cutout in landscape.
+          'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]',
+          // Momentum scrolling inside the drawer must not drag the page behind
+          // it once the list bottoms out.
+          'overscroll-contain',
+          'lg:static lg:z-auto lg:translate-x-0 lg:p-0 lg:shadow-none lg:transition-none',
         ].join(' ')}
       >
         {/* Product chrome: the things that belong to the account rather than to
@@ -223,7 +348,11 @@ export default async function AgencyLayout({
             href="https://help.notrealsmart.com.au"
             target="_blank"
             title="Help centre"
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            // 44px square on a phone, the smallest thing a thumb hits
+            // reliably; back to the 28px chrome square at lg where there is a
+            // pointer. A 16px icon in 6px of padding is a 28px target, which is
+            // under every touch guideline there is.
+            className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:h-auto lg:w-auto lg:p-1.5"
           >
             <CircleHelp className="h-4 w-4" />
           </Link>
@@ -231,7 +360,7 @@ export default async function AgencyLayout({
             href="#"
             aria-label="Hide the menu"
             title="Hide the menu"
-            className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
           >
             <PanelLeftClose className="h-4 w-4" />
           </a>
@@ -245,25 +374,45 @@ export default async function AgencyLayout({
         */}
         <Suspense fallback={<div className="min-h-0 flex-1" />}>
           <AgencySidebar
-            businessSelector={<BusinessSelector brands={brands} />}
+            businessSelector={<BusinessSelector brands={brands} accountCount={seedAccountCount} />}
             brands={brands}
             businessName={primaryBrand?.name ?? null}
+            businessSubtitle={businessSubtitle}
             businessCount={brands.length}
+            counts={counts}
+            countsBrandId={primaryBrand?.id ?? null}
             complianceFlags={primaryBrand?.compliance_flags ?? null}
             className="w-full border-r-0"
           />
         </Suspense>
       </div>
 
+      {/*
+        The scrim. Must stay the NEXT SIBLING of #nrs-nav — the rule that shows
+        it is `#nrs-nav:target ~ [data-nrs-nav-scrim]`, so moving this anywhere
+        above the drawer silently stops it working, with no error anywhere.
+        `href="#"` is the whole close mechanism: it drops the hash, `:target`
+        stops matching, and the drawer slides away.
+      */}
+      <a
+        href="#"
+        data-nrs-nav-scrim=""
+        aria-label="Close the menu"
+        tabIndex={-1}
+        // --ink at 45%, not bg-black/40. The house has no black in it; a true
+        // black scrim under paper-white chrome reads as a different product.
+        className="fixed inset-0 z-40 bg-[oklch(0.20_0.014_240/.45)] lg:hidden"
+      />
+
       {/* THE WORK. Law 1: complete and usable with the Director collapsed. */}
-      <main className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-        <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1.5 lg:hidden">
+      <main className="flex min-h-0 min-w-0 flex-col overflow-hidden pb-[env(safe-area-inset-bottom)] lg:pb-0">
+        <div className="flex shrink-0 items-center gap-2 border-b px-2 py-1 pt-[calc(0.25rem+env(safe-area-inset-top))] lg:hidden">
           {/* The only thing here is the way back to the menu. The business is
               named in the sidebar and on the screen itself; saying it a third
               time on the one viewport with no room for it earns nothing. */}
           <a
             href="#nrs-nav"
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex min-h-11 items-center gap-2 rounded-md px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <PanelLeftOpen className="h-4 w-4" />
             Menu
@@ -282,6 +431,15 @@ export default async function AgencyLayout({
       <div className="flex min-h-0">
         <DirectorRailConnected brandName={primaryBrand?.name ?? null} brands={brands} />
       </div>
+
+      {/*
+        "Keep this on your home screen" — once, then never again. Mounted on the
+        desk rather than in the root layout on purpose: the only person for whom
+        installing this means anything is someone who has signed in, and asking
+        a first-time visitor on the marketing site to install an app they have
+        not seen is how install banners earned their reputation.
+      */}
+      <InstallPrompt />
     </div>
   )
 }

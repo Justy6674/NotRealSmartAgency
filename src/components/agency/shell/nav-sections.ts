@@ -29,8 +29,14 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Building2,
+  CalendarDays,
+  ChartColumn,
+  Clock,
   Globe,
+  Images,
   LayoutDashboard,
+  LayoutTemplate,
+  List,
   Megaphone,
   MessageCircle,
   Palette,
@@ -40,6 +46,7 @@ import {
   Settings,
   Share2,
   Sparkles,
+  SquarePen,
   Swords,
 } from 'lucide-react'
 
@@ -149,7 +156,7 @@ export interface NavSection {
  * queue. It is a closed union so a typo in a fetcher is a type error rather
  * than a badge that silently never appears.
  */
-export type NavCountId = NavSectionId | 'social-waiting'
+export type NavCountId = NavSectionId | 'social-waiting' | 'social-accounts'
 
 /**
  * Attention counts, supplied by whoever fetched them. Deliberately partial and
@@ -160,9 +167,14 @@ export type NavCountId = NavSectionId | 'social-waiting'
  * Three are live today and they come from three different places, so this stays
  * one flat bag the caller fills in as far as it can rather than a shape that
  * has to be complete:
- *   blogging       — drafts not yet published
- *   engagement     — comments, messages and reviews not yet answered
- *   social-waiting — posts sitting in the approval queue (Scent Sell: 59)
+ *   blogging        — drafts not yet published
+ *   engagement      — comments, messages and reviews not yet answered
+ *   social-waiting  — posts sitting in the approval queue (Scent Sell: 59)
+ *   social-accounts — connected accounts that have stopped being able to post.
+ *                     Measured live on 2026-08-18: ten accounts, two in
+ *                     warning, and the desk said everything was fine. An
+ *                     expiring token is only fixable BEFORE it fails a publish,
+ *                     so it is a queue, not inventory.
  */
 export type NavCounts = Partial<Record<NavCountId, number>>
 
@@ -204,7 +216,13 @@ export const NAV_SECTIONS: NavSection[] = [
       { kind: 'link', id: 'social-media', label: 'Media library', href: '/agency/social/media' },
       { kind: 'link', id: 'social-templates', label: 'Templates', href: '/agency/social/templates' },
       { kind: 'group', id: 'social-grp-setup', label: 'Setup' },
-      { kind: 'link', id: 'social-accounts', label: 'Social accounts', href: '/agency/social/accounts' },
+      {
+        kind: 'link',
+        id: 'social-accounts',
+        label: 'Social accounts',
+        href: '/agency/social/accounts',
+        countId: 'social-accounts',
+      },
       { kind: 'link', id: 'social-schedule', label: 'Posting schedule', href: '/agency/social/schedule' },
       { kind: 'group', id: 'social-grp-results', label: 'Results' },
       { kind: 'link', id: 'social-analytics', label: 'Analytics', href: '/agency/social/analytics' },
@@ -553,4 +571,162 @@ export function sectionForPath(pathname: string): NavSection | undefined {
   return [...NAV_SECTIONS]
     .sort((a, b) => b.href.length - a.href.length)
     .find((section) => isSectionActive(section, pathname))
+}
+
+// ─── The Social department's inner tabs ───────────────────────────────────────
+
+/**
+ * The tab strip inside the Social department, declared here rather than in the
+ * component for one reason: the union and the rendered list have to be the same
+ * thing.
+ *
+ * They were not. `SocialTabId` carried `accounts` and `waiting`; the array the
+ * chrome rendered carried neither. Standing on /agency/social/accounts the panel
+ * therefore announced `aria-labelledby="social-tab-accounts"` — pointing at a
+ * button that has never existed in the document — so a screen reader had a panel
+ * with no name at all. Deriving the union FROM the list makes that
+ * unrepresentable: there is one array, and the type is read off it.
+ *
+ * Social accounts and Posting schedule stay sidebar destinations (Setup), not
+ * tabs. They are set up once and forgotten, which is exactly the distinction the
+ * sidebar's own group headings exist to draw.
+ */
+export const SOCIAL_TAB_IDS = [
+  'compose',
+  'posts',
+  'calendar',
+  'media',
+  'templates',
+  'schedule',
+  'analytics',
+] as const
+
+export type SocialTabId = (typeof SOCIAL_TAB_IDS)[number]
+
+/**
+ * Which inventory number belongs on which tab. Only three tabs carry one, and
+ * all three are QUIET badges: "how much is in there", never "how much is
+ * waiting for you". The queue lives in the sidebar as "Waiting on you", where
+ * it takes the attention colour. Two different claims, two different badges —
+ * a 59 that reads like "59 templates" is a 59 nobody clears.
+ */
+export type SocialTabCountId = Extract<SocialTabId, 'posts' | 'media' | 'templates'>
+
+export interface SocialTab {
+  id: SocialTabId
+  /** Plain language. The owner reads this — "Media library", never "Assets". */
+  label: string
+  icon: LucideIcon
+  href: string
+  countId?: SocialTabCountId
+}
+
+export const SOCIAL_TABS: readonly SocialTab[] = [
+  { id: 'compose', label: 'Compose', icon: SquarePen, href: '/agency/social' },
+  { id: 'posts', label: 'Posts', icon: List, href: '/agency/social/posts', countId: 'posts' },
+  { id: 'calendar', label: 'Calendar', icon: CalendarDays, href: '/agency/social/calendar' },
+  {
+    id: 'media',
+    label: 'Media library',
+    icon: Images,
+    href: '/agency/social/media',
+    countId: 'media',
+  },
+  {
+    id: 'templates',
+    label: 'Templates',
+    icon: LayoutTemplate,
+    href: '/agency/social/templates',
+    countId: 'templates',
+  },
+  { id: 'schedule', label: 'Schedule', icon: Clock, href: '/agency/social/schedule' },
+  { id: 'analytics', label: 'Analytics', icon: ChartColumn, href: '/agency/social/analytics' },
+]
+
+/**
+ * Which tab a Social URL is standing on, or `null` for the Social routes that
+ * are sidebar destinations rather than tabs.
+ *
+ * `null` is the load-bearing part. It is what lets the panel decline to name a
+ * tab that is not there, instead of naming one that does not exist.
+ */
+export function socialTabIdFromPath(pathname: string): SocialTabId | null {
+  if (!pathname.startsWith('/agency/social')) return null
+
+  const slug = pathname.split('/').filter(Boolean).at(-1) ?? ''
+  // /agency/social itself is Compose — the department opens on the work.
+  if (slug === 'social' || slug === 'compose') return 'compose'
+
+  const match = SOCIAL_TABS.find((tab) => tab.href.split('/').filter(Boolean).at(-1) === slug)
+  return match ? match.id : null
+}
+
+// ─── Counts, fetched once and shared ──────────────────────────────────────────
+
+/**
+ * Rule 3 at the top of this file still holds: the LIST knows nothing about
+ * counts. What lives here is the shape of the answer and one loader, because
+ * three different components need the same numbers for the same business — the
+ * sidebar's badges, the business selector's "3 accounts", and the department's
+ * tab strip. Three components fetching the same URL is three round-trips and
+ * three chances to disagree with each other on screen.
+ *
+ * There is no server import in this module and there must never be one: it is
+ * pulled into the client bundle by every screen that draws the sidebar.
+ */
+export const NAV_COUNTS_ENDPOINT = '/api/social/nav-counts'
+
+export interface NavCountsPayload {
+  /** Echoed back so a late answer for the previous business can be discarded. */
+  brandId: string
+  /** Sidebar badges. See NavCounts — absent means unmeasured, never zero. */
+  counts: NavCounts
+  /** Quiet inventory numbers for the department's tab strip. */
+  tabCounts: Partial<Record<SocialTabCountId, number>>
+  /** "3 accounts connected", or null when nobody could count them. */
+  businessSubtitle: string | null
+  /** Posts this business has already published, however they were published. */
+  publishedTotal?: number
+}
+
+const navCountsCache = new Map<string, Promise<NavCountsPayload | null>>()
+
+/**
+ * The counts for one business, fetched at most once per business per page life.
+ *
+ * A failure resolves to `null` rather than throwing, and a `null` is NOT
+ * cached: every badge in the product renders bare when the number is unknown,
+ * which is the honest answer, and a transient failure must not freeze the
+ * sidebar bare for the rest of the session.
+ */
+export async function loadNavCounts(brandId: string): Promise<NavCountsPayload | null> {
+  const cached = navCountsCache.get(brandId)
+  if (cached) return cached
+
+  const pending = (async (): Promise<NavCountsPayload | null> => {
+    try {
+      const res = await fetch(`${NAV_COUNTS_ENDPOINT}?brandId=${encodeURIComponent(brandId)}`)
+      if (!res.ok) throw new Error(`nav counts request failed: ${res.status}`)
+      const data = (await res.json()) as NavCountsPayload
+      if (!data || typeof data !== 'object' || data.brandId !== brandId) {
+        throw new Error('nav counts request answered for a different business')
+      }
+      return data
+    } catch (err) {
+      // Logged, never rendered. Nothing in this product reads an error message
+      // out to the owner, least of all beside a number.
+      console.error('[nav-counts] could not be read', err)
+      navCountsCache.delete(brandId)
+      return null
+    }
+  })()
+
+  navCountsCache.set(brandId, pending)
+  return pending
+}
+
+/** Drop the memo — used after something changes that a badge counts. */
+export function forgetNavCounts(brandId?: string): void {
+  if (brandId) navCountsCache.delete(brandId)
+  else navCountsCache.clear()
 }

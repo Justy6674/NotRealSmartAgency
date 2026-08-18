@@ -274,6 +274,8 @@ Grid (from the mockup `body` and `src/app/agency/layout.tsx`):
 
 Collapsed rail: **52px** strip, visible control to bring it back. Collapsing removes nothing from the work column. That is the test of every screen.
 
+**The composer is the one documented exception to the single work column.** `/agency/social/compose` splits into the form and a fixed **750px** right pane carrying two tabs, Preview and Activity — the owner chose Mixpost's shape over the single-column mockup on 19 Aug 2026. Below 1280px the pane leaves the flow, the form takes the full width and the preview opens as a sheet from one button; the open/closed choice is remembered. Nothing else in any department gets a second column. See `src/components/agency/studio/post/ComposerLayout.tsx`.
+
 ### Twelve sections, in order
 
 Source: `src/components/agency/shell/nav-sections.ts` `NAV_SECTIONS`, matching the mockup sidebar. Flat. Always expanded. Sub-items visible without a click. Labels are what a non-technical owner would say out loud.

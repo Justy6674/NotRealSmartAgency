@@ -24,6 +24,8 @@ export interface UploadQueueItem {
   id: string
   fileName: string
   fileSize: number
+  /** So a refusal can say "this video" rather than "this file". */
+  fileType?: string
   progress: number
   status: QueueItemStatus
   error?: string
@@ -35,6 +37,21 @@ export interface UploadQueueItem {
   resume?: () => void
   abort?: () => void
 }
+
+/**
+ * Which platforms will refuse a file this size, and the size table behind it,
+ * now live in `platform-limits.ts` — the API route that asks the publisher the
+ * same question for a landed file needs them too, and two copies of a size
+ * table is how one of them goes stale without anybody noticing.
+ *
+ * Re-exported here because the upload panel and its callers already import
+ * from this module, and moving the file should not move their imports.
+ */
+export {
+  PLATFORM_SIZE_CEILINGS,
+  platformsThatWillRefuse,
+  tooLargeSentence,
+} from './platform-limits'
 
 type Listener = () => void
 

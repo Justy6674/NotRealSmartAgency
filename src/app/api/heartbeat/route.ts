@@ -16,6 +16,7 @@ import {
   resolveGoalReviewOutcome,
   type GoalReviewOwnerReviewCode,
 } from '@/lib/agents/goal-review-controller'
+import { isCronAuthorised } from '@/lib/security/cron-auth'
 
 // Fluid Compute — allow up to 5 minutes for processing multiple agents
 export const maxDuration = 300
@@ -303,9 +304,9 @@ async function enqueueDueGoalReviews(
 }
 
 export async function GET(request: Request) {
-  // Verify cron secret (Vercel injects this)
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it got in.
+  if (!isCronAuthorised(request)) {
     return new Response('Unauthorised', { status: 401 })
   }
 

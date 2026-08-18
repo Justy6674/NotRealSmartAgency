@@ -21,6 +21,7 @@ import { getNRSTelegramConfig } from '@/lib/telegram/nrs-telegram-config'
 import { SUBSCRIBED_UPDATES, missingUpdates } from '@/lib/telegram/subscribed-updates'
 import { fullCommandList, invalidCommands } from '@/lib/telegram/command-suite'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isCronAuthorised, CRON_UNAUTHORISED_BODY } from '@/lib/security/cron-auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -37,8 +38,10 @@ export const dynamic = 'force-dynamic'
  * an unsubscribed update looks exactly like nobody having reacted.
  */
 export async function POST(request: Request) {
-  if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it got in.
+  if (!isCronAuthorised(request)) {
+    return NextResponse.json(CRON_UNAUTHORISED_BODY, { status: 401 })
   }
 
   const config = getNRSTelegramConfig()
@@ -134,8 +137,10 @@ interface Check {
 }
 
 export async function GET(request: Request) {
-  if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it got in.
+  if (!isCronAuthorised(request)) {
+    return NextResponse.json(CRON_UNAUTHORISED_BODY, { status: 401 })
   }
 
   const config = getNRSTelegramConfig()

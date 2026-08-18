@@ -150,3 +150,61 @@ export function absoluteTime(dateStr: string): string {
     return dateStr
   }
 }
+
+/* ── The Engagement desk's wire shapes ──────────────────────────────────────
+ *
+ * One declaration per shape, read by BOTH the route that produces it and the
+ * hook that consumes it. They were written out twice, field for field, on the
+ * server and again in `useEngagement.ts`. Nothing kept the two copies in step:
+ * adding a field to a route left the client silently blind to it, and renaming
+ * one on the client left a compiler that agreed with itself and a screen that
+ * showed nothing. A wire contract has to be one object or it is not a contract.
+ */
+
+/** One comment under one of this business's posts. */
+export interface DeskComment {
+  id: string
+  authorName: string | null
+  message: string
+  createdAt: string | null
+  likeCount: number
+  replyCount: number
+  hidden: boolean
+  /** True when this is the brand's own comment rather than somebody else's. */
+  fromUs: boolean
+}
+
+/** One message inside a conversation thread. */
+export interface DeskMessage {
+  id: string
+  text: string
+  incoming: boolean
+  at: string | null
+  attachmentUrl: string | null
+}
+
+/** Somebody naming this business somewhere other than under its own post. */
+export interface DeskMention {
+  id: string
+  authorName: string | null
+  message: string
+  createdAt: string | null
+  url: string | null
+  accountId: string | null
+  /** Needed to reply. Absent on rows that cannot be answered from here. */
+  mediaId: string | null
+}
+
+/** A review left on a listing — Google or Facebook. */
+export interface DeskReview {
+  id: string
+  authorName: string | null
+  rating: number | null
+  comment: string
+  createdAt: string | null
+  accountId: string | null
+  platform: string | null
+  /** The brand's existing reply, when there is one. */
+  reply: string | null
+  url: string | null
+}

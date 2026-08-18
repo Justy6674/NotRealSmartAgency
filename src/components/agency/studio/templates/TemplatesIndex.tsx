@@ -1,105 +1,167 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Copy, Trash2, FileText, Pencil, AlertCircle, Sparkles } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { AlertCircle, FileText, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 import { DirectorAssistBar } from '@/components/agency/studio/DirectorAssistBar'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useTemplates } from '@/hooks/useTemplates'
-import { useRouter } from 'next/navigation'
+import { useComposeDeskStore } from '@/stores/compose-desk-store'
+import { extractVariables, resolveTemplate } from '@/lib/template-variables'
 import type { PostTemplate } from '@/types/database'
 
 interface TemplatesIndexProps {
   brandId: string | null
   brandName?: string
+  /**
+   * The route family this index and its editor live in.
+   *
+   * Every link here used to be hard-coded to `/agency/studio/templates/{id}`,
+   * so pressing Edit or New template from inside the Social department threw
+   * the owner out of it — different sidebar, different tab strip, no way back
+   * except the browser's Back button. Templates belong to Social now, so that
+   * is the default.
+   */
+  basePath?: string
+  /** Where "Use" takes the caption. Same reasoning as `basePath`. */
+  composePath?: string
 }
 
 /**
- * Grid/list of post templates for the active brand. Used on
- * `/agency/studio/templates` as the landing page.
+ * The templates index.
  *
- * Phase 6 of the Mixpost UI port. Mirrors the behaviour of
- * `Workspace/Templates/Index.vue` from Mixpost Pro but adapted to
- * NRS's single-workspace model (one brand at a time via the agency
- * store).
+ * Mixpost's card carries **Use** and a dropdown holding exactly Edit and
+ * Delete — no duplicate. Duplicate came out for the same reason it is absent
+ * there: a copied template that is then edited is a new template, and the
+ * shortest route to one is New template with the words already in the clipboard.
+ * Keeping it meant three ways to end up with "Untitled template (copy) (copy)".
+ *
+ * **Use** is the action this page existed for and did not have. It resolves the
+ * template's variables, then hands the words to the composer through the same
+ * desk-action queue the Director uses, so the caption arrives in the editor
+ * with an undo behind it rather than being pasted somewhere the owner then has
+ * to find.
  */
-export function TemplatesIndex({ brandId, brandName }: TemplatesIndexProps) {
+export function TemplatesIndex({
+  brandId,
+  brandName,
+  basePath = '/agency/social/templates',
+  composePath = '/agency/social/compose',
+}: TemplatesIndexProps) {
   const router = useRouter()
-  const { templates, loading, error, deleteTemplate, duplicateTemplate, createTemplate } = useTemplates(brandId)
+  const { templates, loading, error, deleteTemplate, createTemplate } = useTemplates(brandId)
   const [search, setSearch] = useState('')
   const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [menuId, setMenuId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  // Unique platforms for the filter dropdown.
+  useEffect(() => {
+    if (!menuId) return
+    const away = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuId(null)
+    }
+    document.addEventListener('mousedown', away)
+    return () => document.removeEventListener('mousedown', away)
+  }, [menuId])
+
   const platforms = useMemo(() => {
     const set = new Set<string>()
     for (const t of templates) if (t.platform) set.add(t.platform)
     return Array.from(set).sort()
   }, [templates])
 
-  // Filtered list — search by name + caption, filter by platform.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return templates.filter(t => {
+    return templates.filter((t) => {
       if (platformFilter !== 'all') {
         if (platformFilter === 'all_platforms' && t.platform !== null) return false
         if (platformFilter !== 'all_platforms' && t.platform !== platformFilter) return false
       }
       if (!q) return true
-      return (
-        t.name.toLowerCase().includes(q) ||
-        t.caption_template.toLowerCase().includes(q)
-      )
+      return t.name.toLowerCase().includes(q) || t.caption_template.toLowerCase().includes(q)
     })
   }, [templates, search, platformFilter])
 
   const handleCreate = async () => {
-    if (!brandId) return
-    const created = await createTemplate({
-      brandId,
-      name: 'Untitled template',
-      captionTemplate: '',
-      defaultHashtags: [],
-      platform: null,
-      variables: [],
-    })
-    if (created) router.push(`/agency/studio/templates/${created.id}`)
+    if (!brandId || creating) return
+    setCreating(true)
+    try {
+      const created = await createTemplate({
+        brandId,
+        name: 'Untitled template',
+        captionTemplate: '',
+        defaultHashtags: [],
+        platform: null,
+        variables: [],
+      })
+      if (created) router.push(`${basePath}/${created.id}`)
+    } finally {
+      setCreating(false)
+    }
   }
 
-  const handleDuplicate = async (template: PostTemplate) => {
-    const copy = await duplicateTemplate(template)
-    if (copy) router.push(`/agency/studio/templates/${copy.id}`)
+  /**
+   * Put this template's words into the composer.
+   *
+   * Variables that are still unfilled are left as they are rather than being
+   * silently emptied — `{offer}` in the box is a visible thing to replace,
+   * whereas a gap in a sentence is something to miss. The brand's own name is
+   * the one substitution made here, because it is the one we can be sure of.
+   */
+  const handleUse = (template: PostTemplate) => {
+    if (!brandId) return
+    const unresolved: Record<string, string> = {}
+    for (const key of extractVariables(template.caption_template)) {
+      unresolved[key] = `{${key}}`
+    }
+    const caption = resolveTemplate(template.caption_template, unresolved, brandName ?? '')
+
+    useComposeDeskStore.getState().enqueueDeskActions({
+      brandId,
+      actions: [
+        { type: 'set_master_caption', caption },
+        ...(template.default_hashtags.length > 0
+          ? [{ type: 'set_hashtags' as const, hashtags: template.default_hashtags }]
+          : []),
+      ],
+      hashtagsAreSuggested: true,
+    })
+    router.push(composePath)
   }
 
   const handleDelete = async (id: string) => {
     setDeletingId(id)
     const ok = await deleteTemplate(id)
     setDeletingId(null)
-    setConfirmId(null)
-    if (!ok) {
-      // keep confirm open so user can retry
-      setConfirmId(id)
-    }
+    setConfirmId(ok ? null : id)
   }
 
   if (!brandId) {
     return (
       <div className="flex h-full items-center justify-center p-12">
-        <div className="text-center space-y-3">
-          <AlertCircle className="h-10 w-10 mx-auto text-muted-foreground" />
-          <h3 className="text-base font-medium">Select a brand</h3>
-          <p className="text-sm text-muted-foreground">
-            Choose a brand from the sidebar to manage its templates.
+        <div className="space-y-3 text-center">
+          <AlertCircle className="mx-auto h-9 w-9" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }} />
+          <h3 className="text-[14px] font-semibold">Choose a business</h3>
+          <p className="text-[12.5px]" style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))' }}>
+            Templates are kept per business. Pick one from the sidebar.
           </p>
         </div>
       </div>
     )
   }
 
+  const quiet = {
+    borderColor: 'var(--line, oklch(0.915 0.007 240))',
+    background: 'var(--panel, oklch(1 0 0))',
+    color: 'var(--ink, oklch(0.20 0.014 240))',
+  }
+
   return (
-    <div className="space-y-5 px-6 py-4">
-      {/* Director Assist */}
+    <div className="space-y-5" style={{ color: 'var(--ink, oklch(0.20 0.014 240))' }}>
       <DirectorAssistBar
         brandName={brandName ?? null}
         buttons={[
@@ -114,207 +176,282 @@ export function TemplatesIndex({ brandId, brandName }: TemplatesIndexProps) {
         ]}
       />
 
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Post templates</h2>
-          <p className="text-xs text-muted-foreground">
-            Reusable caption templates with variables for {brandName ?? 'this brand'}.
+          <h2 className="text-[17px] font-semibold tracking-[-0.01em]">Templates</h2>
+          <p className="mt-0.5 text-[12.5px]" style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))' }}>
+            Captions you reuse, with the bits that change left as blanks.
           </p>
         </div>
         <button
           type="button"
           onClick={handleCreate}
-          className="inline-flex items-center gap-1.5 rounded-md bg-[oklch(0.55_0.1_240)] px-3 py-2 text-xs font-medium text-white hover:bg-[oklch(0.50_0.1_240)] transition-colors"
+          disabled={creating}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-[7px] text-[12.5px] font-semibold disabled:opacity-60"
+          style={{
+            background: 'var(--brand-deep, oklch(0.33 0.08 240))',
+            color: 'var(--brand-ink, oklch(1 0 0))',
+          }}
         >
           <Plus className="h-3.5 w-3.5" />
           New template
         </button>
       </div>
 
-      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <div className="relative min-w-[200px] max-w-md flex-1">
+          <Search
+            className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2"
+            style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+          />
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search templates..."
-            className="h-8 w-full rounded-md border border-input bg-background pl-8 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search templates"
+            aria-label="Search templates"
+            className="h-8 w-full rounded-lg border pl-8 pr-2 text-[12.5px] focus:outline-none"
+            style={quiet}
           />
         </div>
         <select
           value={platformFilter}
-          onChange={e => setPlatformFilter(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          onChange={(e) => setPlatformFilter(e.target.value)}
+          aria-label="Filter by platform"
+          className="h-8 rounded-lg border px-2 text-[12.5px] focus:outline-none"
+          style={quiet}
         >
           <option value="all">All platforms</option>
-          <option value="all_platforms">Cross-platform only</option>
-          {platforms.map(p => (
-            <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+          <option value="all_platforms">Works anywhere</option>
+          {platforms.map((p) => (
+            <option key={p} value={p}>
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </option>
           ))}
         </select>
       </div>
 
-      {/* Error state */}
       {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <div
+          className="rounded-lg border px-3 py-2 text-[12.5px]"
+          style={{ borderColor: 'oklch(0.55 0.17 27 / 0.3)', background: 'oklch(0.55 0.17 27 / 0.07)' }}
+        >
           {error}
         </div>
       )}
 
-      {/* Loading state */}
       {loading && templates.length === 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-lg border border-border bg-muted/20" />
+            <div
+              key={i}
+              className="h-40 animate-pulse rounded-xl border"
+              style={{ borderColor: 'var(--line)', background: 'var(--panel-2)' }}
+            />
           ))}
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && templates.length === 0 && (
-        <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border text-center space-y-3">
-          <FileText className="h-8 w-8 text-muted-foreground" />
+        <div
+          className="flex h-64 flex-col items-center justify-center space-y-3 rounded-xl border border-dashed text-center"
+          style={{ borderColor: 'var(--line, oklch(0.915 0.007 240))' }}
+        >
+          <FileText className="h-7 w-7" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }} />
           <div>
-            <h3 className="text-sm font-medium">No templates yet</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Create your first reusable caption template.
+            <h3 className="text-[13.5px] font-semibold">No templates yet</h3>
+            <p className="mt-0.5 text-[12px]" style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))' }}>
+              Write a caption once, leave the changing bits blank, reuse it forever.
             </p>
           </div>
           <button
             type="button"
             onClick={handleCreate}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[oklch(0.55_0.1_240)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[oklch(0.50_0.1_240)]"
+            disabled={creating}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-[6px] text-[12px] font-semibold disabled:opacity-60"
+            style={{
+              background: 'var(--brand-deep, oklch(0.33 0.08 240))',
+              color: 'var(--brand-ink, oklch(1 0 0))',
+            }}
           >
             <Plus className="h-3 w-3" />
-            Create template
+            Create one
           </button>
         </div>
       )}
 
-      {/* Filtered empty */}
       {!loading && templates.length > 0 && filtered.length === 0 && (
-        <div className="rounded-md border border-border bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
-          No templates match your filters.
+        <div
+          className="rounded-lg border px-4 py-6 text-center text-[12.5px]"
+          style={{
+            borderColor: 'var(--line, oklch(0.915 0.007 240))',
+            background: 'var(--panel-2, oklch(0.975 0.004 240))',
+            color: 'var(--ink-2, oklch(0.46 0.012 240))',
+          }}
+        >
+          Nothing matches that.
         </div>
       )}
 
-      {/* Grid */}
+      {/* Mixpost's masonry at three columns — cards are different heights
+          because captions are, and forcing a row height crops the one useful
+          thing on the card. */}
       {filtered.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map(template => {
-            const snippet = template.caption_template.slice(0, 120)
+        <div className="columns-1 gap-3 md:columns-2 lg:columns-3">
+          {filtered.map((template) => {
+            const snippet = template.caption_template.slice(0, 160)
             const isConfirming = confirmId === template.id
             const isDeleting = deletingId === template.id
+            const variableCount = Array.isArray(template.variables) ? template.variables.length : 0
             return (
               <div
                 key={template.id}
-                className="group flex flex-col rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/20"
+                className="mb-3 flex break-inside-avoid flex-col rounded-xl border p-3 transition-shadow hover:shadow-sm"
+                style={{
+                  borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                  background: 'var(--panel, oklch(1 0 0))',
+                }}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <Link
-                    href={`/agency/studio/templates/${template.id}`}
-                    className="flex-1 min-w-0"
-                  >
-                    <h3 className="text-sm font-medium truncate">{template.name}</h3>
-                    {template.platform && (
-                      <span className="inline-block mt-0.5 text-[10px] text-muted-foreground capitalize">
-                        {template.platform}
-                      </span>
-                    )}
+                  <Link href={`${basePath}/${template.id}`} className="min-w-0 flex-1">
+                    <h3 className="truncate text-[13.5px] font-semibold">{template.name}</h3>
+                    <span
+                      className="mt-0.5 block text-[11px] capitalize"
+                      style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+                    >
+                      {template.platform ?? 'Works anywhere'}
+                      {variableCount > 0 ? ` · ${variableCount} blank${variableCount === 1 ? '' : 's'}` : ''}
+                    </span>
                   </Link>
                   <button
                     type="button"
-                    title="Improve with Director"
+                    title="Ask the Director to improve this"
+                    aria-label="Ask the Director to improve this"
                     onClick={() =>
                       sendToDirector(
-                        `Improve this post template called "${template.name}" for ${brandName ?? 'this brand'}. Current caption: "${template.caption_template.slice(0, 200)}". Hashtags: ${template.default_hashtags.map(t => `#${t}`).join(' ') || 'none'}. Suggest a better caption, stronger hashtags, and any missing {variables}. Keep our brand voice.`
+                        `Improve this post template called "${template.name}" for ${brandName ?? 'this brand'}. Current caption: "${template.caption_template.slice(0, 200)}". Hashtags: ${template.default_hashtags.map((t) => `#${t}`).join(' ') || 'none'}. Suggest a better caption, stronger hashtags, and any missing {variables}. Keep our brand voice.`,
                       )
                     }
-                    className="shrink-0 rounded-full bg-amber-500/10 p-1 text-amber-400 hover:bg-amber-500/20 transition-colours"
+                    className="shrink-0 rounded-full p-1"
+                    style={{ background: 'var(--brand-wash, oklch(0.966 0.026 240))', color: 'var(--brand-deep, oklch(0.33 0.08 240))' }}
                   >
                     <Sparkles className="h-3 w-3" />
                   </button>
                 </div>
 
-                <p className="mt-2 text-xs text-muted-foreground/80 line-clamp-3 whitespace-pre-wrap">
-                  {snippet || <span className="italic">Empty caption</span>}
-                  {template.caption_template.length > 120 && '...'}
+                <p
+                  className="mt-2 line-clamp-4 whitespace-pre-wrap text-[12px]"
+                  style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))' }}
+                >
+                  {snippet || <span className="italic">No words yet</span>}
+                  {template.caption_template.length > 160 && '…'}
                 </p>
 
                 {template.default_hashtags.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {template.default_hashtags.slice(0, 4).map(tag => (
+                    {template.default_hashtags.slice(0, 4).map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground"
+                        className="rounded-full px-1.5 py-0.5 text-[10px]"
+                        style={{
+                          background: 'var(--panel-2, oklch(0.975 0.004 240))',
+                          color: 'var(--ink-3, oklch(0.615 0.011 240))',
+                        }}
                       >
                         #{tag}
                       </span>
                     ))}
                     {template.default_hashtags.length > 4 && (
-                      <span className="text-[9px] text-muted-foreground/60">
+                      <span className="text-[10px]" style={{ color: 'var(--ink-3)' }}>
                         +{template.default_hashtags.length - 4} more
                       </span>
                     )}
                   </div>
                 )}
 
-                {Array.isArray(template.variables) && template.variables.length > 0 && (
-                  <p className="mt-2 text-[10px] text-muted-foreground">
-                    {template.variables.length} variable{template.variables.length === 1 ? '' : 's'}
-                  </p>
-                )}
-
-                {/* Actions */}
-                <div className="mt-3 flex items-center justify-between border-t border-border pt-2">
+                <div
+                  className="mt-3 flex items-center justify-between gap-2 border-t pt-2"
+                  style={{ borderColor: 'var(--line, oklch(0.915 0.007 240))' }}
+                >
                   {isConfirming ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-destructive">Delete?</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px]" style={{ color: 'var(--stop, oklch(0.55 0.17 27))' }}>
+                        Delete this template?
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleDelete(template.id)}
                         disabled={isDeleting}
-                        className="rounded bg-destructive/20 px-2 py-0.5 text-[10px] font-medium text-destructive hover:bg-destructive/30 disabled:opacity-60"
+                        className="rounded px-2 py-0.5 text-[11px] font-semibold disabled:opacity-60"
+                        style={{ background: 'oklch(0.55 0.17 27 / 0.12)', color: 'var(--stop, oklch(0.55 0.17 27))' }}
                       >
-                        {isDeleting ? 'Deleting...' : 'Yes'}
+                        {isDeleting ? 'Deleting…' : 'Yes, delete'}
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmId(null)}
-                        className="text-[10px] text-muted-foreground hover:text-foreground"
+                        className="text-[11px]"
+                        style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))' }}
                       >
-                        Cancel
+                        Keep it
                       </button>
                     </div>
                   ) : (
                     <>
-                      <Link
-                        href={`/agency/studio/templates/${template.id}`}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+                      <button
+                        type="button"
+                        onClick={() => handleUse(template)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-[6px] text-[12px] font-semibold"
+                        style={{
+                          background: 'var(--brand-deep, oklch(0.33 0.08 240))',
+                          color: 'var(--brand-ink, oklch(1 0 0))',
+                        }}
                       >
-                        <Pencil className="h-3 w-3" />
-                        Edit
-                      </Link>
-                      <div className="flex items-center gap-1">
+                        Use
+                      </button>
+
+                      <div className="relative" ref={menuId === template.id ? menuRef : undefined}>
                         <button
                           type="button"
-                          onClick={() => handleDuplicate(template)}
-                          title="Duplicate"
-                          className="p-1 text-muted-foreground hover:text-foreground"
+                          aria-haspopup="menu"
+                          aria-expanded={menuId === template.id}
+                          aria-label={`Options for ${template.name}`}
+                          onClick={() => setMenuId((id) => (id === template.id ? null : template.id))}
+                          className="rounded-md p-1.5"
+                          style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
                         >
-                          <Copy className="h-3 w-3" />
+                          <MoreHorizontal className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmId(template.id)}
-                          title="Delete"
-                          className="p-1 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                        {menuId === template.id ? (
+                          <div
+                            role="menu"
+                            className="absolute right-0 top-full z-30 mt-1 w-40 overflow-hidden rounded-lg border py-1 shadow-lg"
+                            style={{
+                              borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                              background: 'var(--panel, oklch(1 0 0))',
+                            }}
+                          >
+                            <Link
+                              href={`${basePath}/${template.id}`}
+                              role="menuitem"
+                              className="flex items-center gap-2 px-3 py-[7px] text-[12.5px] hover:bg-[var(--panel-2,oklch(0.975_0.004_240))]"
+                              onClick={() => setMenuId(null)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--ink-3)' }} />
+                              Edit
+                            </Link>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => { setMenuId(null); setConfirmId(template.id) }}
+                              className="flex w-full items-center gap-2 px-3 py-[7px] text-left text-[12.5px] hover:bg-[var(--panel-2,oklch(0.975_0.004_240))]"
+                              style={{ color: 'var(--stop, oklch(0.55 0.17 27))' }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </>
                   )}

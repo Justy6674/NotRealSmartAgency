@@ -16,10 +16,28 @@ const connect = readFileSync(join(root, 'src/app/api/zernio/connect/route.ts'), 
 const bar = readFileSync(join(root, 'src/components/agency/studio/post/CreatorActionBar.tsx'), 'utf8')
 const processRoute = readFileSync(join(root, 'src/app/api/media/process/route.ts'), 'utf8')
 const socialRead = readFileSync(join(root, 'src/lib/studio/social-read-source.ts'), 'utf8')
+const navCounts = readFileSync(join(root, 'src/app/api/social/nav-counts/route.ts'), 'utf8')
+const shellLayout = readFileSync(join(root, 'src/app/agency/layout.tsx'), 'utf8')
 
+/**
+ * The rule is unchanged: "Waiting on you" counts THIS brand's drafts and
+ * failures, never a global approvals feed. Where it is counted moved in S2 —
+ * the department chrome used to fetch `/api/scheduled-posts?status=draft,failed`
+ * itself and badge the Posts tab with it, which put a queue number in the one
+ * place the owner only sees while already inside the department. The queue is
+ * now an attention badge in the sidebar, counted server-side for the brand, so
+ * the assertion follows it rather than pinning a fetch that no longer exists.
+ */
 test('waiting badge uses this brand draft+failed, not global approvals', () => {
-  assert.match(chrome, /status=draft,failed/)
+  for (const source of [navCounts, shellLayout]) {
+    assert.match(source, /'scheduled_posts'/)
+    assert.match(source, /\.eq\('brand_id', brandId\)/)
+    assert.match(source, /\['draft', 'failed'\]/)
+    assert.doesNotMatch(source, /\/api\/approvals/)
+  }
+  // The chrome must not grow a second, disagreeing count of the same queue.
   assert.doesNotMatch(chrome, /\/api\/approvals/)
+  assert.doesNotMatch(chrome, /scheduled-posts\?/)
 })
 
 test('ReviewRoom lists this brand draft+failed and hides vendor chrome when linked', () => {

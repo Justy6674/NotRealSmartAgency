@@ -23,7 +23,7 @@ export interface UseAnalyticsReportResult {
 }
 
 /**
- * Fetch a single platform's analytics report for a brand.
+ * Fetch a single platform's results for a brand.
  *
  * Delegates to `/api/studio/analytics` which in turn delegates to the
  * `getMetricsSource()` factory in `lib/analytics/platform-metrics.ts`. This
@@ -64,16 +64,19 @@ export function useAnalyticsReport({
 
       if (!res.ok) {
         // 404 (brand not found) and 401 are real errors. Anything else,
-        // we degrade gracefully to an empty report.
+        // we degrade — but we say so rather than rendering an empty report,
+        // because "nothing happened this month" and "we could not look" are
+        // different sentences and only one of them is safe to act on.
         if (res.status === 401 || res.status === 404) {
           throw new Error(`Failed to fetch report: ${res.status}`)
         }
-        // Empty fallback so the page renders.
         setMetrics({
           platform,
           from: from ?? '',
           to: to ?? '',
           empty: true,
+          problem:
+            'These figures could not be read just now. Nothing has been changed — try again in a moment.',
           totals: {},
           timeseries: {},
           topPosts: [],

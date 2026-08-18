@@ -2,17 +2,27 @@
 
 import { Star, Repeat2, MessageCircle, Users } from 'lucide-react'
 import { PlatformReportShell } from './PlatformReportShell'
+import type { AnalyticsPeriod } from '../analytics-desk'
 
 export interface MastodonReportProps {
   brandId: string
+  /** Passed through so the Director's advice names the business. */
+  brandName?: string
+  /** How far back to measure — one choice governs the whole screen. */
+  period?: AnalyticsPeriod
+  /** The account being read, when one is selected in the row above. */
+  accountId?: string | null
 }
 
-export function MastodonReport({ brandId }: MastodonReportProps) {
+export function MastodonReport({ brandId, brandName, period, accountId }: MastodonReportProps) {
   return (
     <PlatformReportShell
       platform="mastodon"
       brandId={brandId}
-      emptyHint="Mastodon analytics depend on the instance — boosts, favourites and replies only. Coming soon — instance-aware reach when supported."
+      brandName={brandName}
+      period={period}
+      accountId={accountId}
+      emptyHint="What Mastodon reports depends on the server your account is on: favourites, boosts and replies, and not always reach."
       timeseriesSeries={['engagement', 'followers']}
       metrics={[
         {

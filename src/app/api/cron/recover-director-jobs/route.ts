@@ -11,6 +11,7 @@ import {
   withRecoveryAttempt,
 } from '@/lib/mcp/director-job-recovery'
 import { logAudit } from '@/lib/agents/audit'
+import { isCronAuthorised, CRON_UNAUTHORISED_BODY } from '@/lib/security/cron-auth'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -64,8 +65,10 @@ async function oldestRecoverableJob(
 }
 
 export async function GET(request: Request) {
-  if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it got in.
+  if (!isCronAuthorised(request)) {
+    return NextResponse.json(CRON_UNAUTHORISED_BODY, { status: 401 })
   }
 
   const supabase = createAdminClient()

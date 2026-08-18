@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@supabase/supabase-js'
 import { memoryStore } from '@/lib/ruflo/client'
+import { isCronAuthorised, CRON_UNAUTHORISED_BODY } from '@/lib/security/cron-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -21,8 +22,10 @@ const SCENTSELL_URL = 'https://dejjxzdgahtfzakkceby.supabase.co'
 const SCENTSELL_ANON_KEY = process.env.SCENTSELL_ANON_KEY ?? ''
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization')
-  const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`
+  // Fail closed: with CRON_SECRET unset the old inline compare matched the
+  // literal string 'Bearer undefined', so anyone sending it was treated as the
+  // cron — and a service-role client is taken immediately below.
+  const isCron = isCronAuthorised(request)
 
   const nrs = createAdminClient()
 

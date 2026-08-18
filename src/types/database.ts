@@ -967,3 +967,31 @@ export interface ApiKey {
   revoked_at: string | null
   created_at: string
 }
+
+/**
+ * Which brand a Zernio account belongs to. Ours, not Zernio's.
+ *
+ * The table has existed since `20260818000000_zernio_publisher_spine.sql` and
+ * carries live rows, but it was never declared here — so every reader worked
+ * off `any` and the compiler could not catch a misspelled column. Declared now
+ * because the headless connect flow writes it.
+ *
+ * The primary key is (account_id, brand_id): one account can in principle be
+ * mapped by more than one brand, and the webhook handler treats two LIVE rows
+ * for one account id as an error rather than picking one.
+ *
+ * `disconnected_at` is set instead of deleting the row. The row is the only
+ * record that this account was ever this brand's; deleting it orphans every
+ * `publisher_runs` row that names the account, and inbox events for it are
+ * dropped with no trace of why.
+ */
+export interface ZernioAccountMap {
+  account_id: string
+  brand_id: string
+  profile_id: string
+  platform: string
+  username: string | null
+  disconnected_at: string | null
+  created_at: string
+  updated_at: string
+}

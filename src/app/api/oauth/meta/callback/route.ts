@@ -54,13 +54,13 @@ export async function GET(request: Request) {
   if (errorParam) {
     const errorDesc = searchParams.get('error_description') ?? 'User denied access'
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent(errorDesc)}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=${encodeURIComponent(errorDesc)}`,
     )
   }
 
   if (!code || !state) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=Missing+code+or+state`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=Missing+code+or+state`,
     )
   }
 
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
   const storedState = cookieStore.get('meta_oauth_state')?.value
   if (!storedState || storedState !== state) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=Invalid+state+parameter`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=Invalid+state+parameter`,
     )
   }
 
@@ -98,7 +98,7 @@ export async function GET(request: Request) {
 
   if (!user) {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/login?redirect=${encodeURIComponent('/agency/studio/accounts')}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/login?redirect=${encodeURIComponent('/agency/social/accounts')}`,
     )
   }
 
@@ -107,7 +107,7 @@ export async function GET(request: Request) {
     ;({ brandId } = JSON.parse(state) as { brandId: string })
   } catch {
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=Invalid+state+parameter`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=Invalid+state+parameter`,
     )
   }
 
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
   } catch (err) {
     if (err instanceof BrandWorkspaceAccessError) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent('That project is not yours to connect')}`,
+        `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=${encodeURIComponent('That project is not yours to connect')}`,
       )
     }
     throw err
@@ -194,7 +194,7 @@ export async function GET(request: Request) {
 
     if (pages.length === 0) {
       return NextResponse.redirect(
-        `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=No+Facebook+Pages+found`,
+        `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=No+Facebook+Pages+found`,
       )
     }
 
@@ -273,7 +273,7 @@ export async function GET(request: Request) {
       : `No account matched this project. Skipped: ${skippedAccounts.join(', ')}. Connect each Page from its own project.`
 
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?${savedAccounts.length ? 'success' : 'error'}=${encodeURIComponent(message)}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?${savedAccounts.length ? 'success' : 'error'}=${encodeURIComponent(message)}`,
     )
   } catch (error) {
     // This message is redirected into the browser's address bar, so it was
@@ -285,7 +285,7 @@ export async function GET(request: Request) {
       'Those accounts could not be connected just now. Nothing has been changed. Try connecting them again from the accounts page.',
     )
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/agency/studio/accounts?error=${encodeURIComponent(msg)}`,
+      `${process.env.NEXT_PUBLIC_APP_URL}/agency/social/accounts?error=${encodeURIComponent(msg)}`,
     )
   }
 }

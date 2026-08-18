@@ -12,6 +12,13 @@ interface PostTemplate {
   platform: string | null
 }
 
+/**
+ * The picker that drops a saved caption into whatever is being written.
+ *
+ * The empty state used to send the owner to Settings, where templates have
+ * never lived. They are under Social → Templates, which is also where the
+ * editor now opens, so the sentence points at the place that exists.
+ */
 interface PostTemplatePickerProps {
   brandId: string
   brandName: string
@@ -74,7 +81,7 @@ export function PostTemplatePicker({ brandId, brandName, onApply }: PostTemplate
               <div className="space-y-1">
                 {templates.length === 0 && (
                   <p className="px-2 py-3 text-center text-[10px] text-muted-foreground">
-                    No templates yet. Create templates in Settings or ask the Director.
+                    No templates yet. Make one under Social → Templates, or ask the Director.
                   </p>
                 )}
                 {templates.map(t => (

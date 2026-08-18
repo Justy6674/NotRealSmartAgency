@@ -20,6 +20,8 @@ import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
 export async function GET(request: Request) {
   const supabase = await createClient()
   const {
@@ -42,7 +44,10 @@ export async function GET(request: Request) {
     const ids = countsParam
       .split(',')
       .map((s) => s.trim())
-      .filter((s) => s.length > 0)
+      // Non-uuids are history ids, which have no rows here. Passing one to
+      // `.in()` makes Postgres reject the whole query, so every badge on the
+      // page would disappear because of one row that was never ours.
+      .filter((s) => UUID_PATTERN.test(s))
     if (ids.length === 0) {
       return NextResponse.json({})
     }
@@ -66,6 +71,15 @@ export async function GET(request: Request) {
       { error: 'scheduled_post_id is required' },
       { status: 400 },
     )
+  }
+
+  // The Posts list now shows history published outside this app alongside the
+  // desk's own rows, and those carry the publisher's id, not a uuid. Postgres
+  // rejects a non-uuid comparison outright, so the row's Activity tab would
+  // show a database error where the honest answer is "there is nothing here" —
+  // that post has no activity on this desk because it never happened here.
+  if (!UUID_PATTERN.test(scheduledPostId)) {
+    return NextResponse.json([])
   }
 
   // RLS does the access check — we don't need to pre-verify the post.

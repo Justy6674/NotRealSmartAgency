@@ -15,33 +15,48 @@ import { Plus, Trash2 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { PLATFORM_BRAND_COLOURS, PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
-import type { PostingScheduleSlot } from '@/types/database'
+import { ownerFacingPlatformLabel } from '@/lib/studio/social-read-source'
 
 const DAY_LABELS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const DAY_LABELS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+/**
+ * One time on the weekly grid.
+ *
+ * `platform` is null on a business whose schedule is the real queue: the queue
+ * belongs to the business, not to one network, and pretending otherwise would
+ * invite the owner to build a Facebook-only grid the queue would ignore.
+ */
+export interface DeskScheduleSlot {
+  id: string
+  day_of_week: number
+  /** "HH:MM". */
+  time: string
+  platform: string | null
+  /** Posts the queue says are actually going out at this time. */
+  upcoming: number
+}
+
 export interface WeeklySlotGridProps {
-  slots: PostingScheduleSlot[]
-  /** Map of slotId → number of scheduled posts queued at that slot. */
-  queuedCounts?: Record<string, number>
+  slots: DeskScheduleSlot[]
+  /** True when the counts come from the real queue and mean something. */
+  countsAreReal: boolean
   onAddSlot: (dayOfWeek: number) => void
-  onEditSlot: (slot: PostingScheduleSlot) => void
+  onEditSlot: (slot: DeskScheduleSlot) => void
   onMoveSlot: (slotId: string, newDayOfWeek: number) => void
   onDeleteSlot: (slotId: string) => void
 }
 
 export function WeeklySlotGrid({
   slots,
-  queuedCounts = {},
+  countsAreReal,
   onAddSlot,
   onEditSlot,
   onMoveSlot,
   onDeleteSlot,
 }: WeeklySlotGridProps) {
-  // Group slots by day
   const slotsByDay = React.useMemo(() => {
-    const map: PostingScheduleSlot[][] = [[], [], [], [], [], [], []]
+    const map: DeskScheduleSlot[][] = [[], [], [], [], [], [], []]
     for (const slot of slots) {
       const day = clampDay(slot.day_of_week)
       map[day]!.push(slot)
@@ -57,14 +72,14 @@ export function WeeklySlotGrid({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over) return
-    const slotId = String(active.id)
+    const id = String(active.id)
     const overId = String(over.id)
     if (!overId.startsWith('day-')) return
     const newDay = parseInt(overId.replace('day-', ''), 10)
     if (Number.isNaN(newDay)) return
-    const slot = slots.find((s) => s.id === slotId)
+    const slot = slots.find((s) => s.id === id)
     if (!slot || slot.day_of_week === newDay) return
-    onMoveSlot(slotId, newDay)
+    onMoveSlot(id, newDay)
   }
 
   return (
@@ -77,7 +92,7 @@ export function WeeklySlotGrid({
             label={label}
             shortLabel={DAY_LABELS_SHORT[dayIdx]!}
             slots={slotsByDay[dayIdx]!}
-            queuedCounts={queuedCounts}
+            countsAreReal={countsAreReal}
             onAddSlot={onAddSlot}
             onEditSlot={onEditSlot}
             onDeleteSlot={onDeleteSlot}
@@ -92,10 +107,10 @@ interface DayColumnProps {
   dayOfWeek: number
   label: string
   shortLabel: string
-  slots: PostingScheduleSlot[]
-  queuedCounts: Record<string, number>
+  slots: DeskScheduleSlot[]
+  countsAreReal: boolean
   onAddSlot: (dayOfWeek: number) => void
-  onEditSlot: (slot: PostingScheduleSlot) => void
+  onEditSlot: (slot: DeskScheduleSlot) => void
   onDeleteSlot: (slotId: string) => void
 }
 
@@ -104,7 +119,7 @@ function DayColumn({
   label,
   shortLabel,
   slots,
-  queuedCounts,
+  countsAreReal,
   onAddSlot,
   onEditSlot,
   onDeleteSlot,
@@ -124,7 +139,7 @@ function DayColumn({
           <span className="hidden md:inline">{label}</span>
           <span className="md:hidden">{shortLabel}</span>
         </h3>
-        <span className="text-xs text-muted-foreground">{slots.length}</span>
+        <span className="text-xs tabular-nums text-muted-foreground">{slots.length}</span>
       </div>
 
       <div className="flex flex-1 flex-col gap-2">
@@ -132,7 +147,7 @@ function DayColumn({
           <SlotChip
             key={slot.id}
             slot={slot}
-            queued={queuedCounts[slot.id] ?? 0}
+            countsAreReal={countsAreReal}
             onEdit={() => onEditSlot(slot)}
             onDelete={() => onDeleteSlot(slot.id)}
           />
@@ -140,7 +155,7 @@ function DayColumn({
 
         {slots.length === 0 ? (
           <p className="rounded-md border border-dashed border-border/70 px-2 py-3 text-center text-xs text-muted-foreground">
-            No slots
+            No times
           </p>
         ) : null}
       </div>
@@ -153,29 +168,25 @@ function DayColumn({
         onClick={() => onAddSlot(dayOfWeek)}
       >
         <Plus className="mr-1 size-3" />
-        Add slot
+        Add a time
       </Button>
     </div>
   )
 }
 
 interface SlotChipProps {
-  slot: PostingScheduleSlot
-  queued: number
+  slot: DeskScheduleSlot
+  countsAreReal: boolean
   onEdit: () => void
   onDelete: () => void
 }
 
-function SlotChip({ slot, queued, onEdit, onDelete }: SlotChipProps) {
+function SlotChip({ slot, countsAreReal, onEdit, onDelete }: SlotChipProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: slot.id })
 
   const style: React.CSSProperties = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : {}
-
-  const platformKey = slot.platform as PlatformKey
-  const colour = PLATFORM_BRAND_COLOURS[platformKey] ?? '#888'
-  const label = PLATFORM_LABELS[platformKey] ?? slot.platform
 
   return (
     <div
@@ -186,7 +197,6 @@ function SlotChip({ slot, queued, onEdit, onDelete }: SlotChipProps) {
         isDragging ? 'opacity-60 shadow-md' : 'hover:border-foreground/30 hover:shadow',
       )}
     >
-      {/* Drag handle: the body */}
       <button
         type="button"
         {...listeners}
@@ -194,16 +204,24 @@ function SlotChip({ slot, queued, onEdit, onDelete }: SlotChipProps) {
         onClick={onEdit}
         className="flex flex-1 cursor-grab items-center gap-2 text-left active:cursor-grabbing"
       >
-        <span
-          aria-hidden
-          className="inline-block h-2 w-2 shrink-0 rounded-full"
-          style={{ backgroundColor: colour }}
-        />
-        <span className="font-mono tabular-nums">{formatTime(slot.time)}</span>
-        <span className="truncate text-muted-foreground">{label}</span>
-        {queued > 0 ? (
-          <span className="ml-auto rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-            {queued}
+        <span className="font-mono tabular-nums">{slot.time}</span>
+        {slot.platform && (
+          <span className="truncate text-muted-foreground">
+            {ownerFacingPlatformLabel(slot.platform)}
+          </span>
+        )}
+        {/* The count only appears when it is a measurement. It used to be a
+            permanent 0 because nothing ever wrote a queue assignment. */}
+        {countsAreReal && slot.upcoming > 0 ? (
+          <span
+            className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+            style={{
+              background: 'var(--brand-wash, oklch(0.966 0.0068 240))',
+              color: 'var(--brand-deep, currentColor)',
+            }}
+            title={`${slot.upcoming} coming up at this time`}
+          >
+            {slot.upcoming}
           </span>
         ) : null}
       </button>
@@ -215,7 +233,7 @@ function SlotChip({ slot, queued, onEdit, onDelete }: SlotChipProps) {
           onDelete()
         }}
         className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-destructive group-hover:opacity-100"
-        aria-label="Delete slot"
+        aria-label="Remove this time"
       >
         <Trash2 className="size-3" />
       </button>
@@ -227,10 +245,4 @@ function clampDay(day: number): number {
   if (day < 0) return 0
   if (day > 6) return 6
   return Math.floor(day)
-}
-
-function formatTime(time: string): string {
-  // Postgres returns "HH:MM:SS"; trim to "HH:MM"
-  const [h = '00', m = '00'] = time.split(':')
-  return `${h}:${m}`
 }

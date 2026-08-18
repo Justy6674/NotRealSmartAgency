@@ -4,14 +4,20 @@ import { useState } from 'react'
 import { X, Plus, Sparkles, Hash } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { HashtagGroupPicker } from '../hashtags/HashtagGroupPicker'
-import { PLATFORM_CHAR_LIMITS } from '@/lib/post-versions'
 import type { PostPlatform } from '@/types/database'
 
+/**
+ * How many tags each network will carry before it starts working against you.
+ *
+ * Keyed by network rather than derived, because these are editorial ceilings —
+ * what performs — not limits the posting connection reports. X is absent
+ * because the composer no longer offers it; its old ceiling of 3 was the
+ * tightest here, and with it gone the tightest a post can face is LinkedIn's 5.
+ */
 const PLATFORM_HASHTAG_LIMITS: Record<string, number> = {
   instagram: 30,
   facebook: 30,
   linkedin: 5,
-  twitter: 3,
   tiktok: 5,
   youtube: 15,
 }

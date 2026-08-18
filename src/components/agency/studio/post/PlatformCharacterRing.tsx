@@ -1,105 +1,69 @@
 'use client'
 
-import { PLATFORM_BRAND_COLOURS, PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
+import { PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
 
-interface PlatformCharacterRingProps {
+interface PlatformCharacterCountProps {
   platform: PlatformKey
   used: number
   limit: number
   /** 'ok' | 'warning' | 'over' from usePostCharacterLimit */
   state: 'ok' | 'warning' | 'over'
-  /** Ring diameter in px (default 36) */
-  size?: number
+  /** False when the ceiling is our local fallback rather than the publisher's. */
+  fromPublisher?: boolean
 }
 
 /**
- * Circular progress ring that shows remaining characters for one
- * platform inside the composer. Matches Mixpost's inline per-platform
- * character indicator but uses SVG circles + NRS oklch tokens.
+ * One platform's character count, as a number.
  *
- * Phase 3 of the Mixpost UI port. Rendered as part of
- * PostContentValidator alongside one ring per selected platform.
+ * ── Why this is not a ring any more ───────────────────────────────────────
+ * It used to be a 40px SVG donut per platform. Two problems. A ring encodes a
+ * proportion, and a proportion is the one thing nobody composing a post needs:
+ * "72% of Instagram" is not actionable, "140 over" is. And DESIGN.md is
+ * explicit — monospace, tabular numerals, right-aligned, for anything the owner
+ * is meant to compare as a number. Six donuts in a row compared nothing and
+ * took the width of the column to say it.
  *
- * State-based colour:
- *   ok      -> platform brand colour (solid progress)
- *   warning -> orange/amber (oklch warning tone)
- *   over    -> red (oklch destructive tone)
+ * The number shown is characters REMAINING, negative when over, which is the
+ * number the owner acts on. The ceiling sits beside it in quiet ink so the
+ * remaining count can never be read as a total.
  */
-export function PlatformCharacterRing({
+const TONE: Record<PlatformCharacterCountProps['state'], string> = {
+  ok: 'var(--ink-2)',
+  warning: 'oklch(0.55 0.15 75)',
+  over: 'oklch(0.55 0.2 25)',
+}
+
+export function PlatformCharacterCount({
   platform,
   used,
   limit,
   state,
-  size = 36,
-}: PlatformCharacterRingProps) {
-  const stroke = 4
-  const radius = (size - stroke) / 2
-  const circumference = 2 * Math.PI * radius
-  const percent = Math.min((used / limit) * 100, 100)
-  const dash = (percent / 100) * circumference
-
-  const colour =
-    state === 'over'
-      ? 'oklch(0.55 0.2 25)'   // destructive red
-      : state === 'warning'
-        ? 'oklch(0.65 0.15 75)' // warning orange
-        : PLATFORM_BRAND_COLOURS[platform]
-
+  fromPublisher = true,
+}: PlatformCharacterCountProps) {
   const remaining = limit - used
-  const label = PLATFORM_LABELS[platform]
-
   return (
-    <div className="inline-flex items-center gap-2">
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="shrink-0"
-        role="img"
-        aria-label={`${label}: ${used} of ${limit} characters used`}
+    <div className="flex items-baseline justify-between gap-4 py-[3px]">
+      <span className="text-[11.5px]" style={{ color: 'var(--ink-3)' }}>
+        {PLATFORM_LABELS[platform] ?? platform}
+        {!fromPublisher && (
+          <span
+            className="ml-[6px] text-[10px]"
+            style={{ color: 'var(--ink-3)' }}
+            title="This ceiling is our own conservative figure — the posting connection was not reachable to confirm it."
+          >
+            approx
+          </span>
+        )}
+      </span>
+      <span
+        className="shrink-0 text-right font-mono text-[12px] tabular-nums"
+        style={{ color: TONE[state], fontWeight: state === 'ok' ? 400 : 600 }}
       >
-        {/* Track */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="oklch(0.92 0.00 0)"
-          strokeWidth={stroke}
-        />
-        {/* Progress */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={colour}
-          strokeWidth={stroke}
-          strokeDasharray={`${dash} ${circumference}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: 'stroke-dasharray 200ms ease-out, stroke 150ms ease' }}
-        />
-      </svg>
-      <div className="flex flex-col leading-tight">
-        <span
-          className="text-[10px] font-semibold uppercase tracking-wide"
-          style={{ color: state === 'over' ? 'oklch(0.55 0.2 25)' : colour }}
-        >
-          {label}
+        {remaining.toLocaleString('en-AU')}
+        <span className="ml-[5px] font-normal" style={{ color: 'var(--ink-3)' }}>
+          / {limit.toLocaleString('en-AU')}
         </span>
-        <span
-          className={`text-[10px] tabular-nums ${
-            state === 'over'
-              ? 'text-[oklch(0.55_0.2_25)] font-semibold'
-              : state === 'warning'
-                ? 'text-[oklch(0.55_0.15_75)]'
-                : 'text-muted-foreground'
-          }`}
-        >
-          {remaining < 0 ? `${remaining}` : `${remaining} left`}
-        </span>
-      </div>
+      </span>
     </div>
   )
 }

@@ -2,17 +2,27 @@
 
 import { Eye, MessageCircle, Repeat2, Heart } from 'lucide-react'
 import { PlatformReportShell } from './PlatformReportShell'
+import type { AnalyticsPeriod } from '../analytics-desk'
 
 export interface ThreadsReportProps {
   brandId: string
+  /** Passed through so the Director's advice names the business. */
+  brandName?: string
+  /** How far back to measure — one choice governs the whole screen. */
+  period?: AnalyticsPeriod
+  /** The account being read, when one is selected in the row above. */
+  accountId?: string | null
 }
 
-export function ThreadsReport({ brandId }: ThreadsReportProps) {
+export function ThreadsReport({ brandId, brandName, period, accountId }: ThreadsReportProps) {
   return (
     <PlatformReportShell
       platform="threads"
       brandId={brandId}
-      emptyHint="Threads analytics are limited via public APIs. Once Meta exposes more metrics, we'll surface them here automatically."
+      brandName={brandName}
+      period={period}
+      accountId={accountId}
+      emptyHint="Threads shares far fewer figures with outside tools than Instagram does, so this stays thinner than the rest. Anything it does share appears here on its own."
       timeseriesSeries={['impressions', 'engagement']}
       metrics={[
         {

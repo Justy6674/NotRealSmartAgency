@@ -7,6 +7,7 @@ import { createDraftPost } from '@/lib/posts/create-draft'
 import { publishTickedAccounts } from '@/lib/publishers/publish-ticked'
 import { OWNER_NO_TICK, resolveDirectorAccountIds } from '@/lib/publishers/transport'
 import type { PublishMedia, PublisherPlatform } from '@/lib/publishers/types'
+import { altTextOf } from '@/lib/media/alt-text'
 import { relayIfSafe, userSafeError } from '@/lib/errors/user-safe'
 
 /**
@@ -192,7 +193,7 @@ export function createPublishToSocialTool(
         if (media_ids?.length) {
           const { data: items } = await supabase
             .from('media_items')
-            .select('id, file_url, file_name, file_type, file_size_bytes, duration_seconds, thumbnail_url, mixpost_media_id')
+            .select('id, file_url, file_name, file_type, file_size_bytes, duration_seconds, thumbnail_url, mixpost_media_id, metadata')
             .in('id', media_ids)
             .eq('brand_id', brandId)
 
@@ -234,6 +235,9 @@ export function createPublishToSocialTool(
               media_item_id: row.id as string,
               ...(Number.isFinite(cachedId) && cachedId > 0 ? { mixpost_media_id: cachedId } : {}),
               ...(row.thumbnail_url ? { thumbnail_url: row.thumbnail_url as string } : {}),
+              // The description for screen readers, if the owner wrote one. It
+              // was captured and then dropped here — see lib/media/alt-text.ts.
+              ...(altTextOf(row.metadata) ? { alt_text: altTextOf(row.metadata) as string } : {}),
             })
             mediaItemIds.push(row.id as string)
           }

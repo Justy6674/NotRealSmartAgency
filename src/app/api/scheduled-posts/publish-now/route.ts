@@ -31,6 +31,7 @@ import { checkPublishAllowed } from '@/lib/agents/publish-gate'
 import { publishTickedAccounts } from '@/lib/publishers/publish-ticked'
 import { asPublisherPlatform, type PublishMedia } from '@/lib/publishers/types'
 import { platformOptionsOf } from '@/lib/publishers/zernio-platform-data'
+import { altTextOf } from '@/lib/media/alt-text'
 import { relayIfSafe, userSafeError } from '@/lib/errors/user-safe'
 
 const Schema = z.object({
@@ -68,6 +69,8 @@ interface MediaRow {
   duration_seconds?: number | null
   thumbnail_url?: string | null
   mixpost_media_id?: unknown
+  /** Carries `alt_text` — the description for screen readers. See altTextOf(). */
+  metadata?: unknown
 }
 
 /**
@@ -101,6 +104,9 @@ function toPublishMedia(row: MediaRow): PublishMedia {
     ...(row.id ? { media_item_id: row.id } : {}),
     ...(cached ? { mixpost_media_id: cached } : {}),
     ...(row.thumbnail_url ? { thumbnail_url: row.thumbnail_url } : {}),
+    // The description for screen readers, if the owner wrote one. It was
+    // captured and then dropped here for months — see src/lib/media/alt-text.ts.
+    ...(altTextOf(row.metadata) ? { alt_text: altTextOf(row.metadata) as string } : {}),
   }
 }
 
@@ -124,7 +130,7 @@ export async function POST(request: Request) {
   // the call, before anything is sent.
   const { data: posts, error } = await admin
     .from('scheduled_posts')
-    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(id, file_url, file_name, file_type, file_size_bytes, duration_seconds, thumbnail_url, mixpost_media_id)')
+    .select('*, brands(id, name, slug, social_urls, post_signature, compliance_flags, brand_dna_constraints), media_items(id, file_url, file_name, file_type, file_size_bytes, duration_seconds, thumbnail_url, mixpost_media_id, metadata)')
     .in('id', ids)
     .eq('user_id', user.id)
 
@@ -265,7 +271,7 @@ export async function POST(request: Request) {
       if (mediaItemIds?.length) {
         const { data: carousel } = await admin
           .from('media_items')
-          .select('id, file_url, file_type, file_size_bytes, duration_seconds, thumbnail_url, mixpost_media_id')
+          .select('id, file_url, file_type, file_size_bytes, duration_seconds, thumbnail_url, mixpost_media_id, metadata')
           .in('id', mediaItemIds)
         const byId = new Map(
           (carousel ?? []).map((m: MediaRow & { id: string }) => [m.id, m]),

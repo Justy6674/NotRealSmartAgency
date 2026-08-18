@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, Loader2 } from 'lucide-react'
+import { Search } from 'lucide-react'
 
 export interface GifSelection {
   url: string
@@ -11,6 +11,8 @@ export interface GifSelection {
   preview: string
   width: number
   height: number
+  /** Travels with the file into the library — the terms require the credit. */
+  attribution: string
 }
 
 interface GifResult {
@@ -20,6 +22,7 @@ interface GifResult {
   preview: string
   width: number
   height: number
+  attribution?: string
 }
 
 interface GifPickerProps {
@@ -37,19 +40,27 @@ export function GifPicker({ onSelect }: GifPickerProps) {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ limit: '20' })
+      const params = new URLSearchParams({ source: 'giphy', limit: '24' })
       if (q.trim()) params.set('q', q.trim())
-      const res = await fetch(`/api/giphy/search?${params}`)
-      if (!res.ok) throw new Error('Failed to fetch GIFs')
-      const data = await res.json()
-      if (data.error) {
-        setError(data.error)
+      // Behind the sign-in: the search quota is ours, and an open proxy is a
+      // stranger's loop away from a dark tab with no visible cause.
+      const res = await fetch(`/api/media/stock?${params}`)
+      // The body carries the owner-facing sentence on BOTH branches. Throwing
+      // on !res.ok and printing a generic line here is how "this is switched
+      // off" used to reach the screen as "No GIFs found" — a sentence about
+      // his search terms rather than about our configuration.
+      const data = await res.json().catch(() => null)
+      const message = data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : null
+      if (!res.ok || message) {
+        setError(message ?? 'The GIF library could not be reached just now. Nothing has been changed.')
         setResults([])
       } else {
-        setResults(data)
+        setResults(Array.isArray(data) ? data : [])
       }
     } catch {
-      setError('Could not load GIFs. Try again.')
+      setError('The GIF library could not be reached just now. Nothing has been changed. Try again in a moment.')
       setResults([])
     } finally {
       setLoading(false)
@@ -97,7 +108,16 @@ export function GifPicker({ onSelect }: GifPickerProps) {
           ))}
         </div>
       ) : error ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{error}</p>
+        <p
+          className="rounded-lg border px-4 py-3 text-[12.5px] leading-relaxed"
+          style={{
+            borderColor: 'var(--warn, oklch(0.63 0.13 75))',
+            background: 'var(--warn-wash, oklch(0.964 0.052 80))',
+            color: 'var(--ink, oklch(0.20 0.014 240))',
+          }}
+        >
+          {error}
+        </p>
       ) : results.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No GIFs found
@@ -117,6 +137,7 @@ export function GifPicker({ onSelect }: GifPickerProps) {
                   preview: gif.preview,
                   width: gif.width,
                   height: gif.height,
+                  attribution: gif.attribution ?? 'GIPHY',
                 })
               }
               className="group relative overflow-hidden rounded-lg border border-border bg-card transition-all hover:border-[oklch(0.55_0.1_240)] hover:ring-1 hover:ring-[oklch(0.55_0.1_240)]"

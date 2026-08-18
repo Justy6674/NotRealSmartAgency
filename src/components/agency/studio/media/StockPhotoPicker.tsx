@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, Loader2 } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type PhotoSource = 'pexels' | 'unsplash'
@@ -9,12 +9,15 @@ type PhotoSource = 'pexels' | 'unsplash'
 export interface StockPhotoSelection {
   url: string
   photographer: string
+  photographerUrl: string | null
   id: number | string
   source: PhotoSource
   preview: string
   alt: string
   width: number
   height: number
+  /** "Photo by X on Unsplash" — stored with the file, shown wherever it is. */
+  attribution: string
 }
 
 interface PhotoResult {
@@ -22,10 +25,12 @@ interface PhotoResult {
   url: string
   preview: string
   photographer: string
+  photographer_url?: string | null
   alt: string
   width: number
   height: number
   download_url?: string
+  attribution?: string
 }
 
 interface StockPhotoPickerProps {
@@ -44,20 +49,26 @@ export function StockPhotoPicker({ onSelect }: StockPhotoPickerProps) {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ per_page: '20' })
+      const params = new URLSearchParams({ source: src, limit: '24' })
       if (q.trim()) params.set('q', q.trim())
-      const endpoint = src === 'unsplash' ? '/api/unsplash/search' : '/api/pexels/search'
-      const res = await fetch(`${endpoint}?${params}`)
-      if (!res.ok) throw new Error('Failed to fetch photos')
-      const data = await res.json()
-      if (data.error) {
-        setError(data.error)
+      // Behind the sign-in: the search quota is ours, and an open proxy is a
+      // stranger's loop away from a dark tab with no visible cause.
+      const res = await fetch(`/api/media/stock?${params}`)
+      // Read the BODY on both branches: the route answers a switched-off
+      // library with a real status code AND an owner-facing sentence, and
+      // throwing here would replace that sentence with a generic one.
+      const data = await res.json().catch(() => null)
+      const message = data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string'
+        ? (data as { error: string }).error
+        : null
+      if (!res.ok || message) {
+        setError(message ?? 'The stock photo library could not be reached just now. Nothing has been changed.')
         setResults([])
       } else {
-        setResults(data)
+        setResults(Array.isArray(data) ? data : [])
       }
     } catch {
-      setError('Could not load photos. Try again.')
+      setError('The stock photo library could not be reached just now. Nothing has been changed. Try again in a moment.')
       setResults([])
     } finally {
       setLoading(false)
@@ -82,20 +93,31 @@ export function StockPhotoPicker({ onSelect }: StockPhotoPickerProps) {
   }, [query, source, fetchPhotos])
 
   const handleSelect = (photo: PhotoResult) => {
-    // Unsplash TOS: trigger download endpoint when photo is used
+    // The terms require a download to be registered when a picture is actually
+    // taken, and that call carries our credential — so it is made on the server.
+    // Fired from the browser it could not attach the header and 401'd every
+    // time, invisibly, which looked exactly like compliance and was not.
     if (source === 'unsplash' && photo.download_url) {
-      fetch(photo.download_url, { mode: 'no-cors' }).catch(() => {})
+      fetch('/api/media/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ download_url: photo.download_url }),
+      }).catch(() => {})
     }
 
     onSelect({
       url: photo.url,
       photographer: photo.photographer,
+      photographerUrl: photo.photographer_url ?? null,
       id: photo.id,
       source,
       preview: photo.preview,
       alt: photo.alt,
       width: photo.width,
       height: photo.height,
+      attribution:
+        photo.attribution
+        ?? `Photo by ${photo.photographer} on ${source === 'unsplash' ? 'Unsplash' : 'Pexels'}`,
     })
   }
 
@@ -143,7 +165,16 @@ export function StockPhotoPicker({ onSelect }: StockPhotoPickerProps) {
           ))}
         </div>
       ) : error ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{error}</p>
+        <p
+          className="rounded-lg border px-4 py-3 text-[12.5px] leading-relaxed"
+          style={{
+            borderColor: 'var(--warn, oklch(0.63 0.13 75))',
+            background: 'var(--warn-wash, oklch(0.964 0.052 80))',
+            color: 'var(--ink, oklch(0.20 0.014 240))',
+          }}
+        >
+          {error}
+        </p>
       ) : results.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No photos found

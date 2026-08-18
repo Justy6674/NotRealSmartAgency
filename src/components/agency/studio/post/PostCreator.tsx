@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, Palette, Wand2, Film, Lightbulb, AlertTriangle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { AlertTriangle } from 'lucide-react'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useComposeDeskStore } from '@/stores/compose-desk-store'
 import { DIRECTOR_HASHTAG_DISCLAIMER } from '@/lib/desk/extract-caption-draft'
 import { applyDeskActionsToCompose } from '@/lib/social/apply-desk-actions'
-import { composerOptionsToDeskActions } from '@/lib/social/fill-payload'
-import { SOCIAL_PLATFORMS, type SocialPlatform } from '@/lib/social/model'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
+import { useSocialAccounts } from '@/hooks/useSocialAccounts'
+import { canonicalSocialPlatform } from '@/lib/studio/social-read-source'
+import { isComposerPlatform } from '@/lib/social/capabilities'
 
 // Layout
 import { ComposerLayout } from './ComposerLayout'
@@ -27,20 +27,48 @@ import { PlatformSection } from './PlatformSection'
 import { RichCaptionEditor } from './RichCaptionEditor'
 import { PostContentValidator } from './PostContentValidator'
 import { PLATFORM_CHAR_LIMITS, PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
-import { isCaptionWithinAllLimits } from '@/hooks/usePostCharacterLimit'
+import { isCaptionWithinAllLimits, limitFor, limitsFromPublisher } from '@/hooks/usePostCharacterLimit'
 import { PlatformVersionEditor } from './PlatformVersionEditor'
 import { HashtagSection } from './HashtagSection'
 import { PostTemplatePicker } from '../templates/PostTemplatePicker'
 import { ComplianceSection } from './ComplianceSection'
-import { MultiPlatformPreview } from '../preview/MultiPlatformPreview'
+import { ComposerPreviewPane } from '../preview/ComposerPreviewPane'
+import { ComposerActivityPane } from './activity/ComposerActivityPane'
 import { MediaSelector } from './MediaSelector'
 import { ComposeMediaUpload } from './ComposeMediaUpload'
+import { CanvaImportModal } from '../CanvaImportModal'
 
-import { PlatformOptions } from './PlatformOptions'
-import { createVersionsFromMaster, customisePlatform, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
-import { brandIsPublisherLinked } from '@/lib/studio/social-read-source'
+import { createVersionsFromMaster, resolvePublishCaption, updateMasterCaption, type PostVersions } from '@/lib/post-versions'
 import { earliestNextSlot } from '@/lib/posting-queue/assign-to-slot'
 import type { PostPlatform, PostType, PostingScheduleSlot } from '@/types/database'
+import type { ZernioTikTokCreatorInfo } from '@/lib/zernio/accounts'
+
+/** One of the four places a picture or video can come from. */
+function MediaSourceButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className="rounded-[8px] border px-[12px] py-[7px] text-[12.5px] font-medium transition-colors duration-150"
+      style={{
+        borderColor: active ? 'var(--brand)' : 'var(--line)',
+        background: active ? 'var(--brand-wash)' : 'var(--panel-2)',
+        color: active ? 'var(--brand-deep)' : 'var(--ink-2)',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
 
 // ── Content type → Post type mapping ──────────────────────────────────────────
 const CONTENT_TO_POST_TYPE: Record<ContentType, PostType> = {
@@ -149,10 +177,13 @@ function describeSaveOutcome(saved: readonly PostPlatform[], failed: readonly Sa
 import type { MediaSelectorItem as MediaItem } from './MediaSelector'
 
 /**
- * PostCreator — the main single-screen post creation experience.
- * Uses ComposerLayout for split-pane (editor left, preview right, action bar bottom).
- * Each section wrapped in StudioCard with DirectorAssist pills.
- * Scent Sell visual quality throughout.
+ * PostCreator — the whole compose experience, in one scrolling column.
+ *
+ * It IS a split pane, as of 19 August 2026. The single-column rule in DESIGN.md
+ * held here for months and the owner overrode it for this screen specifically —
+ * Mixpost's shape, a form on the left and a fixed 750px Preview/Activity pane on
+ * the right. The reasoning, and the fact that it is deliberate, is recorded in
+ * `ComposerLayout`; do not restore the column without reading it.
  */
 interface PostCreatorProps {
   /** Load existing draft for editing */
@@ -167,9 +198,15 @@ interface PostCreatorProps {
   deskConversationId?: string
   /** Restore one exact saved Desk proposal into the editor */
   deskOutputId?: string
+  /**
+   * `department` inside the Social shell (it owns the scroller and the pinned
+   * action bar), `standalone` on `/agency/studio/create`, which has neither.
+   * See `ComposerLayout`.
+   */
+  chrome?: 'department' | 'standalone'
 }
 
-export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, deskConversationId, deskOutputId }: PostCreatorProps = {}) {
+export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, deskConversationId, deskOutputId, chrome = 'standalone' }: PostCreatorProps = {}) {
   const { activeBrandId, setPendingDraftId, setPendingMediaId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
@@ -208,8 +245,15 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [captionEditorKey, setCaptionEditorKey] = useState(0)
   const captionEditorRef = useRef<HTMLDivElement>(null)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
+  // Words belonging to ONE account. This is the state that makes two Instagram
+  // accounts on one post possible: it travels as metadata.captions_by_account_id
+  // and the publisher reads it back per account (publish-ticked.ts), so each
+  // account is sent its own words rather than a flattened per-platform copy.
+  const [captionsByAccountId, setCaptionsByAccountId] = useState<Record<string, string>>({})
+  const [showCanvaImport, setShowCanvaImport] = useState(false)
   const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
+  const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const [scheduledWhen, setScheduledWhen] = useState<string>(() => {
     if (!initialScheduleDate) return ''
     return initialScheduleDate.length === 16 ? initialScheduleDate : initialScheduleDate.slice(0, 16)
@@ -239,7 +283,33 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const postType = CONTENT_TO_POST_TYPE[contentType]
   const complianceFlags = data.brand?.compliance_flags as unknown as Record<string, boolean> | null
   const isHealthBrand = !!complianceFlags?.ahpra || !!complianceFlags?.tga
-  const publisherTransport = brandIsPublisherLinked(data.brand?.social_urls) ? 'zernio' : 'mixpost'
+  const { accounts: connectedAccounts } = useSocialAccounts(activeBrandId)
+
+  // ── Pre-flight: the publisher's own answers, not ours ────────────────────
+  //
+  // THE HONESTY GAP THIS CLOSES. The composer used to decide deliverability
+  // with `brandIsPublisherLinked(social_urls)` — true whenever a publisher
+  // profile exists — while the publisher decides with `publisherTransportOf`,
+  // which FIRST honours the explicit `social_urls.publisher_transport` override
+  // that the accounts page exposes as "Post through the self-hosted backup".
+  // A business with a profile whose owner had clicked that was shown every
+  // main-connection-only field as a live input, filled them in, and watched
+  // them dropped in silence at send time. That is exactly the failure the
+  // option panels were written to prevent, reached by a different door.
+  //
+  // `publisherTransportOf` now answers for both. It runs server-side, in
+  // /api/social/validate, because the module it lives in reaches for the
+  // publishing SDKs and those must never be built into a page bundle.
+  //
+  // Character ceilings and refusals come back on the same call, so the number
+  // the composer shows and the rule the send enforces cannot drift apart.
+  const [publisherTransport, setPublisherTransport] = useState<'zernio' | 'mixpost'>('mixpost')
+  const [publisherLimits, setPublisherLimits] = useState<Partial<Record<PlatformKey, number>>>({})
+  const [preflightErrors, setPreflightErrors] = useState<Array<{ platform: string; message: string }>>([])
+  const [preflightWarnings, setPreflightWarnings] = useState<Array<{ platform: string; message: string }>>([])
+  const [preflightChecking, setPreflightChecking] = useState(false)
+  const [preflightChecked, setPreflightChecked] = useState(false)
+  const [tiktokCreatorInfo, setTiktokCreatorInfo] = useState<ZernioTikTokCreatorInfo | null>(null)
 
   // ── Auto-save / restore draft from localStorage ────────────────────────
   // Storage key bumped to v2 on 2026-04-10 to invalidate any drafts saved
@@ -310,6 +380,94 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     }
   }, [activeBrandId])
 
+  /**
+   * Ticked accounts, with the words each one is actually publishing.
+   *
+   * The pre-flight, the version tabs, the preview and the save all read this
+   * one list. Two Instagram accounts appear as two entries with two captions —
+   * which is the whole point, and is why nothing here collapses to a platform.
+   */
+  const selectedAccounts = connectedAccounts
+    .filter((account) => selectedAccountIds.includes(account.id))
+    .map((account) => ({
+      id: account.id,
+      name: account.name,
+      platform: canonicalSocialPlatform(account.platform),
+    }))
+
+  /** An account's own words, else its network's version, else the master. */
+  const captionForAccountId = useCallback(
+    (accountId: string, platform: string): { caption: string; hashtags: string[] } => {
+      const own = captionsByAccountId[accountId]
+      if (typeof own === 'string') return { caption: own, hashtags }
+      const publish = resolvePublishCaption(versions, platform as PostPlatform, caption, hashtags)
+      return { caption: publish.caption, hashtags: publish.hashtags }
+    },
+    [captionsByAccountId, versions, caption, hashtags],
+  )
+
+  // Debounced pre-flight. Read-only, free, and the exact rules the send
+  // applies. 300ms so a fast typist makes one call, not thirty.
+  const preflightKey = JSON.stringify({
+    activeBrandId,
+    caption,
+    hashtags,
+    accounts: selectedAccounts.map((a) => [a.id, a.platform, captionForAccountId(a.id, a.platform).caption]),
+  })
+
+  useEffect(() => {
+    if (!activeBrandId) return
+    const parsed = JSON.parse(preflightKey) as {
+      caption: string
+      hashtags: string[]
+      accounts: Array<[string, string, string]>
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setPreflightChecking(true)
+      fetch('/api/social/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          brandId: activeBrandId,
+          content: composePublishBody(parsed.caption, parsed.hashtags),
+          targets: parsed.accounts.map(([accountId, platform, accountCaption]) => ({
+            platform,
+            accountId,
+            customContent: composePublishBody(accountCaption, parsed.hashtags),
+          })),
+          tiktokAccountId: parsed.accounts.find(([, platform]) => platform === 'tiktok')?.[0],
+        }),
+      })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((body: {
+          transport?: 'zernio' | 'mixpost'
+          length?: Record<string, { limit: number }> | null
+          validation?: { errors?: Array<{ platform: string; message: string }>; warnings?: Array<{ platform: string; message: string }> } | null
+          tiktok?: ZernioTikTokCreatorInfo | null
+          checked?: boolean
+        } | null) => {
+          if (!body) return
+          if (body.transport) setPublisherTransport(body.transport)
+          setPublisherLimits(limitsFromPublisher(body.length))
+          setPreflightErrors(body.validation?.errors ?? [])
+          setPreflightWarnings(body.validation?.warnings ?? [])
+          setTiktokCreatorInfo(body.tiktok ?? null)
+          setPreflightChecked(Boolean(body.checked))
+        })
+        .catch(() => {
+          // A check that could not run must not read as a clean bill of health.
+          setPreflightChecked(false)
+        })
+        .finally(() => setPreflightChecking(false))
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [activeBrandId, preflightKey])
+
   // ── Load existing draft for editing ──────────────────────────────────────
   const [editMode, setEditMode] = useState(false)
   const [editDraftId, setEditDraftId] = useState<string | null>(null)
@@ -370,10 +528,14 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         if (!data) return
         if (data.context?.media_item_ids?.length) setSelectedMediaIds(data.context.media_item_ids)
         if (data.context?.platforms?.length) {
-          const validPlatforms = new Set<PostPlatform>(['instagram', 'facebook', 'linkedin', 'twitter', 'tiktok', 'youtube', 'bluesky', 'mastodon', 'pinterest', 'threads', 'google_business'])
+          // The Desk hands back whatever it recorded, which may predate a
+          // network being retired from the composer. Filtering through
+          // isComposerPlatform rather than a hand-kept list here is the whole
+          // point of that helper: a locally-written Set was how 'twitter' got
+          // back in past the account strip, straight into selectedPlatforms.
           const restored = data.context.platforms
             .map((platform) => platform.toLowerCase() as PostPlatform)
-            .filter((platform) => validPlatforms.has(platform))
+            .filter((platform) => isComposerPlatform(platform))
           if (restored.length) setSelectedPlatforms(restored)
         }
 
@@ -405,7 +567,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
 
   // Fetch media items to populate slots + drive the embedded MediaSelector.
   // The Creator owns the fetch — MediaSelector receives items via prop. This
-  // way the MediaSlots card and the picker are guaranteed to see the same
+  // way the media strip and the picker are guaranteed to see the same
   // data, eliminating the race where a freshly-picked item wasn't found in
   // the parent's local cache.
   const fetchMedia = useCallback(() => {
@@ -622,16 +784,39 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   // ever written, so Save would have switched off permanently and the owner
   // would have had no idea why. Platforms with no published limit are left
   // alone rather than blocked on a number nobody has.
-  const overLimitPlatforms = selectedPlatforms.flatMap((platform) => {
-    if (!(platform in PLATFORM_CHAR_LIMITS)) return []
-    const key = platform as PlatformKey
-    const publish = resolvePublishCaption(versions, platform, caption, hashtags)
-    const body = composePublishBody(publish.caption, publish.hashtags)
-    if (isCaptionWithinAllLimits(body, [key])) return []
-    const limit = PLATFORM_CHAR_LIMITS[key]
-    // Same grapheme approximation usePostCharacterLimit counts with, so the
-    // overage quoted here can never contradict the ring above it.
-    return [{ label: PLATFORM_LABELS[key], limit, over: Array.from(body).length - limit }]
+  //
+  // Measured per ACCOUNT rather than per platform, now that two accounts on one
+  // network can carry different words: checking the platform's version would
+  // wave through an account whose own caption is 400 characters longer.
+  // The ceiling itself comes from the publisher when the pre-flight has
+  // answered, and from our local table before that — never from two places at
+  // once, which is how a composer ends up disagreeing with the send.
+  const overLimitPlatforms = (
+    selectedAccounts.length > 0
+      ? selectedAccounts.map((account) => ({
+          platform: account.platform,
+          label: account.name,
+          body: composePublishBody(
+            captionForAccountId(account.id, account.platform).caption,
+            hashtags,
+          ),
+        }))
+      : selectedPlatforms.map((platform) => {
+          const publish = resolvePublishCaption(versions, platform, caption, hashtags)
+          return {
+            platform: platform as string,
+            label: platformLabel(platform),
+            body: composePublishBody(publish.caption, publish.hashtags),
+          }
+        })
+  ).flatMap((target) => {
+    if (!(target.platform in PLATFORM_CHAR_LIMITS)) return []
+    const key = target.platform as PlatformKey
+    if (isCaptionWithinAllLimits(target.body, [key], publisherLimits)) return []
+    const { limit } = limitFor(key, publisherLimits)
+    // Same grapheme approximation the counts above use, so the overage quoted
+    // here can never contradict the number beside the box.
+    return [{ label: target.label, limit, over: Array.from(target.body).length - limit }]
   })
 
   // Plain language, named platform, real number. "Validation failed" tells the
@@ -666,11 +851,26 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   // six paid model calls for one answer, plus six chances to disagree.
   const complianceTargets: Array<{ caption: string; platforms: PostPlatform[] }> = (() => {
     const byCaption = new Map<string, { caption: string; platforms: PostPlatform[] }>()
-    for (const platform of selectedPlatforms) {
-      const publish = resolvePublishCaption(versions, platform, caption, hashtags)
-      const existing = byCaption.get(publish.caption)
-      if (existing) existing.platforms.push(platform)
-      else byCaption.set(publish.caption, { caption: publish.caption, platforms: [platform] })
+    // Per ACCOUNT, because an account with its own words is words nobody has
+    // checked. A tick earned by the master sitting over a rewritten account is
+    // exactly the misleading green this section exists to stop, and on an
+    // AHPRA/TGA brand a tick is what people trust instead of reading it.
+    const targets = selectedAccounts.length > 0
+      ? selectedAccounts.map((account) => ({
+          platform: account.platform as PostPlatform,
+          caption: captionForAccountId(account.id, account.platform).caption,
+        }))
+      : selectedPlatforms.map((platform) => ({
+          platform,
+          caption: resolvePublishCaption(versions, platform, caption, hashtags).caption,
+        }))
+    for (const target of targets) {
+      const existing = byCaption.get(target.caption)
+      if (existing) {
+        if (!existing.platforms.includes(target.platform)) existing.platforms.push(target.platform)
+      } else {
+        byCaption.set(target.caption, { caption: target.caption, platforms: [target.platform] })
+      }
     }
     // Nothing ticked yet: still check what is on screen, the way this card
     // always has, rather than leaving the owner writing blind until he picks.
@@ -729,13 +929,22 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   )
 
   // ── Save / Schedule / Publish ──────────────────────────────────────────────
-  const handleSave = useCallback(async (mode: 'draft' | 'schedule' | 'now', scheduledAt?: string) => {
+  const handleSave = useCallback(async (mode: 'draft' | 'schedule' | 'now' | 'autosave', scheduledAt?: string) => {
     if (!activeBrandId || !caption.trim()) return
     // Belt and braces. The button is disabled below, but a save handler is the
     // last place that should trust its caller.
     if (hasOverLimit) return
-    setSaving(true)
-    setSaveProblem(null)
+    // Autosave lives in here rather than in its own fetch on purpose:
+    // post-versions.contract.test.ts refuses any write to /api/scheduled-posts
+    // outside this handler, because a second write path is exactly how the
+    // preview and the saved row came to disagree about which caption a platform
+    // gets. Autosave has to obey the same resolution as a press, so it goes
+    // through the same door.
+    const isAutosave = mode === 'autosave'
+    if (isAutosave && !(editMode && editDraftId)) return
+    if (isAutosave) setAutosaveState('saving')
+    else setSaving(true)
+    if (!isAutosave) setSaveProblem(null)
 
     const persistStatus = mode === 'schedule' ? 'scheduled' : 'draft'
 
@@ -781,6 +990,18 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
           // Offline, or the tab lost the network mid-request. Nothing changed.
           editResponse = null
         }
+        if (isAutosave) {
+          if (editResponse?.ok) {
+            setAutosaveState('saved')
+            setSavedAt(new Date().toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }))
+          } else {
+            // A failed autosave that looked like a saved one is worse than no
+            // autosave at all — the owner walks away believing the words are
+            // kept. The dot goes red and says so.
+            setAutosaveState('failed')
+          }
+          return
+        }
         if (!editResponse?.ok) {
           // Same fault as the loop below: this navigated back to Review and
           // reported success without ever looking at the reply, so an update
@@ -819,6 +1040,23 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         // the whole fault: the editor wrote the LinkedIn version, the preview
         // drew the LinkedIn version, and LinkedIn received the master.
         const publish = resolvePublishCaption(versions, platform, caption, hashtags)
+        const rowAccounts = selectedAccounts.filter((account) => account.platform === platform)
+        const rowAccountIds = rowAccounts.length > 0
+          ? rowAccounts.map((account) => account.id)
+          : selectedAccountIds
+        const rowCaptions: Record<string, string> = {}
+        for (const account of rowAccounts) {
+          const own = captionsByAccountId[account.id]
+          // Only a genuine override is written. Storing every account's resolved
+          // caption would freeze the master into the row, so a later edit to the
+          // caption would stop reaching accounts that never had their own words.
+          if (typeof own === 'string' && own !== publish.caption) {
+            rowCaptions[account.id] = composePublishBody(
+              own,
+              publish.hashtags.map((h) => h.replace(/^#/, '')),
+            )
+          }
+        }
         let response: Response | null = null
         try {
           response = await fetch('/api/scheduled-posts', {
@@ -849,7 +1087,17 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
                 ...(platformOptions[platform] && Object.keys(platformOptions[platform]).length > 0
                   ? { platform_options: platformOptions[platform] }
                   : {}),
-                ...(selectedAccountIds.length > 0 ? { account_ids: selectedAccountIds } : {}),
+                // Only THIS network's accounts. Sending every ticked id on
+                // every row told the Instagram row to publish to the LinkedIn
+                // account as well; publish-ticked.ts walks this list literally.
+                ...(rowAccountIds.length > 0 ? { account_ids: rowAccountIds } : {}),
+                // The account-by-account words. `captionForAccount` in
+                // transport.ts reads exactly this key, per account, on the way
+                // to the wire — which is what lets two Instagram accounts on
+                // one post carry different words and both arrive.
+                ...(Object.keys(rowCaptions).length > 0
+                  ? { captions_by_account_id: rowCaptions }
+                  : {}),
               },
             }),
           })
@@ -913,10 +1161,64 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       setSelectedPlatforms([])
       setSelectedAccountIds([])
       setPlatformOptions({})
+      setCaptionsByAccountId({})
     } finally {
-      setSaving(false)
+      if (!isAutosave) setSaving(false)
     }
-  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, captionsByAccountId, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+
+  /**
+   * 300ms debounced autosave, in place of a Save-draft button.
+   *
+   * ── What it does and, more importantly, what it will not do ──────────────
+   * The reference desk watches the whole form and saves 300ms after typing
+   * stops, with a dot and "Saved" in the header. Two rules make that safe here
+   * rather than a way to fill the owner's Review queue with rubbish:
+   *
+   *  1. It never CREATES a row. Autosave only updates a draft that already
+   *     exists, which is the case the reference composer is actually in — it
+   *     creates the post record when the screen opens. Ours cannot, because
+   *     /api/scheduled-posts writes one row per network and has no delete verb
+   *     for a post: unticking a network after an autosave would strand a draft
+   *     nobody asked for and nothing on this screen could clear. The first row
+   *     is still born from a press, through `createDraftPost()`.
+   *  2. It refuses while the health check has explicitly failed, or while the
+   *     post is over a platform's ceiling. An AHPRA/TGA brand's flagged wording
+   *     should not be quietly written down; the outputs library is imitated by
+   *     later work, which is the whole reason `save-gate.ts` exists.
+   *
+   * The write itself goes through `handleSave`, never its own fetch — see the
+   * note at the top of that function.
+   *
+   * Words are never lost either way: the local snapshot above keeps every
+   * keystroke on this device regardless of what the server has.
+   */
+  const autosaveBodyKey = JSON.stringify({
+    caption,
+    hashtags,
+    selectedMediaIds,
+    postType,
+    versions,
+  })
+  const autosaveSkip = useRef(true)
+
+  useEffect(() => {
+    if (!editMode || !editDraftId || !activeBrandId) return
+    if (!caption.trim()) return
+    if (compliancePassed === false) return
+    if (hasOverLimit) return
+    // The first run after a draft loads is the load itself, not an edit.
+    if (autosaveSkip.current) {
+      autosaveSkip.current = false
+      return
+    }
+    const timer = setTimeout(() => { void handleSave('autosave') }, 300)
+    return () => clearTimeout(timer)
+  // autosaveBodyKey is the whole watched form; listing its parts again would
+  // restart the debounce on every render and never let it fire.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosaveBodyKey, editMode, editDraftId, activeBrandId, compliancePassed, hasOverLimit])
 
   // ── No brand selected ──────────────────────────────────────────────────────
   if (!activeBrandId) {
@@ -974,6 +1276,58 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         }}
       />
 
+      {/* Where the picture or video comes from. Four sources, named the way the
+          owner names them — never the vendor behind any of them. */}
+      <ComposeDeskCard header="Add media">
+        <div className="flex flex-wrap gap-[7px]">
+          <MediaSourceButton
+            label="Library"
+            active={showMediaLibrary}
+            onClick={() => {
+              setShowComposeUpload(false)
+              setShowCanvaImport(false)
+              setShowMediaLibrary((open) => !open)
+            }}
+          />
+          <MediaSourceButton
+            label="Upload"
+            active={showComposeUpload}
+            onClick={() => {
+              setShowMediaLibrary(false)
+              setShowCanvaImport(false)
+              setShowComposeUpload((open) => !open)
+            }}
+          />
+          <MediaSourceButton
+            label="Canva"
+            active={showCanvaImport}
+            onClick={() => {
+              setShowMediaLibrary(false)
+              setShowComposeUpload(false)
+              setShowCanvaImport(true)
+            }}
+          />
+          <MediaSourceButton
+            label="AI Generate"
+            active={false}
+            onClick={() => {
+              // The Director owns image generation — it holds the brand look,
+              // the compliance rules and the spend budget. A second generator
+              // wired straight into this screen would have none of them.
+              sendToDirector(
+                [
+                  `Make an image for a ${contentType.replace('_', ' ')} post for ${brandName}.`,
+                  caption.trim() ? `The caption is: ${caption.trim()}` : '',
+                  'Put it in the media library for this business when it is ready, and tell me when it is there.',
+                ]
+                  .filter(Boolean)
+                  .join('\n\n'),
+              )
+            }}
+          />
+        </div>
+      </ComposeDeskCard>
+
       {showComposeUpload && activeBrandId && (
         <ComposeDeskCard header="Upload">
           <ComposeMediaUpload
@@ -990,8 +1344,19 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         </ComposeDeskCard>
       )}
 
+      {showCanvaImport && (
+        <CanvaImportModal
+          onClose={() => setShowCanvaImport(false)}
+          onImported={() => {
+            void fetchMedia()
+            setShowCanvaImport(false)
+            setShowMediaLibrary(true)
+          }}
+        />
+      )}
+
       {showMediaLibrary && (
-        <ComposeDeskCard header="Media Library">
+        <ComposeDeskCard header="Library">
           <MediaSelector
             brandId={activeBrandId}
             selectedIds={selectedMediaIds}
@@ -1029,120 +1394,46 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
             platforms={selectedPlatforms}
           />
           </div>
-
-          <div
-            className="flex flex-wrap items-center gap-2 border-t px-[11px] py-2"
-            style={{ borderColor: 'var(--line-soft)', background: 'var(--panel-2)' }}
-          >
-            <button
-              type="button"
-              onClick={() =>
-                sendToDirector(
-                  `Write a CAPTION (text only) for a ${contentType.replace('_', ' ')} for ${brandName} on ${selectedPlatforms.join(', ') || 'social media'}.`,
-                )
-              }
-              className="inline-flex items-center gap-1.5 rounded-[8px] px-[11px] py-1.5 text-[12px] font-semibold"
-              style={{ color: 'var(--brand-deep)' }}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Ask the Director
-            </button>
-            <button
-              type="button"
-              onClick={handleAiGenerate}
-              disabled={selectedPlatforms.length === 0}
-              className="rounded-[8px] px-2 py-1.5 text-[12px] font-semibold disabled:opacity-40"
-              style={{ color: 'var(--brand-deep)' }}
-            >
-              Write caption
-            </button>
-          </div>
         </div>
       </ComposeDeskCard>
 
       {selectedPlatforms.length > 0 && (
-        <PostContentValidator
-          caption={caption}
-          platforms={selectedPlatforms as PlatformKey[]}
-        />
+        <ComposeDeskCard header="How each account will read it">
+          <PlatformVersionEditor
+            platforms={selectedPlatforms}
+            accounts={selectedAccounts}
+            captionsByAccountId={captionsByAccountId}
+            onCaptionsByAccountIdChange={setCaptionsByAccountId}
+            publisherLimits={publisherLimits}
+            tiktokCreatorInfo={tiktokCreatorInfo}
+            masterCaption={caption}
+            masterHashtags={hashtags}
+            versions={versions}
+            onMasterChange={(c, h) => {
+              setCaption(c)
+              setHashtags(h)
+            }}
+            onVersionsChange={(next) => {
+              setVersions(next)
+              setShowPerPlatformVersions(true)
+            }}
+            platformOptions={platformOptions}
+            onPlatformOptionsChange={setPlatformOptions}
+            transport={publisherTransport}
+          />
+        </ComposeDeskCard>
       )}
 
-      <ComposeDeskCard
-        header="How it will look"
-        headerRight={
-          <span className="text-[12.5px]" style={{ color: 'var(--ink-3)' }}>
-            {selectedAccountIds.length > 0
-              ? `${selectedAccountIds.length} account${selectedAccountIds.length === 1 ? '' : 's'} ticked`
-              : 'Tick accounts above'}
-          </span>
-        }
-        bodyClassName="p-[13px_15px]"
-      >
-        <MultiPlatformPreview
-          platforms={selectedPlatforms}
-          masterCaption={caption}
-          masterHashtags={hashtags}
-          versions={versions}
-          mediaUrl={mediaUrl}
-          mediaUrls={mediaUrls}
-          brandName={brandName}
-        />
-      </ComposeDeskCard>
-
       {selectedPlatforms.length > 0 && (
-        <ComposeDeskCard header="Account options">
-          {selectedPlatforms.map((platform) => (
-            <PlatformOptions
-              key={platform}
-              platform={platform}
-              transport={publisherTransport}
-              options={platformOptions[platform] ?? {}}
-              onChange={(opts) => {
-                if (!(SOCIAL_PLATFORMS as readonly string[]).includes(platform)) {
-                  setPlatformOptions((current) => ({ ...current, [platform]: opts }))
-                  return
-                }
-                if (!activeBrandId) return
-                const mediaById = new Map(
-                  mediaItems.map((item) => [
-                    item.id,
-                    {
-                      mediaItemId: item.id,
-                      position: 0,
-                      type: (item.file_type?.startsWith('video')
-                        ? 'video'
-                        : item.file_type === 'image/gif'
-                          ? 'gif'
-                          : 'image') as 'image' | 'video' | 'gif',
-                    },
-                  ]),
-                )
-                const actions = composerOptionsToDeskActions(platform as SocialPlatform, opts)
-                if (actions.length === 0) {
-                  setPlatformOptions((current) => ({ ...current, [platform]: opts }))
-                  return
-                }
-                try {
-                  const applied = applyDeskActionsToCompose(actions, {
-                    brandId: activeBrandId,
-                    caption: composeStateRef.current.caption,
-                    hashtags: composeStateRef.current.hashtags,
-                    selectedPlatforms: composeStateRef.current.selectedPlatforms,
-                    selectedMediaIds: composeStateRef.current.selectedMediaIds,
-                    selectedAccountIds: composeStateRef.current.selectedAccountIds,
-                    versions: composeStateRef.current.versions,
-                    platformOptions: composeStateRef.current.platformOptions,
-                    mediaById,
-                  })
-                  setPlatformOptions(applied.platformOptions)
-                  useComposeDeskStore.getState().setUndoActions(applied.inverseActions)
-                } catch {
-                  setPlatformOptions((current) => ({ ...current, [platform]: opts }))
-                }
-              }}
-            />
-          ))}
-        </ComposeDeskCard>
+        <PostContentValidator
+          caption={composePublishBody(caption, hashtags)}
+          platforms={selectedPlatforms.filter((p) => p in PLATFORM_CHAR_LIMITS) as PlatformKey[]}
+          publisherLimits={publisherLimits}
+          errors={preflightErrors}
+          warnings={preflightWarnings}
+          checking={preflightChecking}
+          checked={preflightChecked}
+        />
       )}
 
       <ComposeDeskCard header="Hashtags">
@@ -1168,38 +1459,6 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         />
       </ComposeDeskCard>
 
-      {selectedPlatforms.length >= 2 && (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => setShowPerPlatformVersions((open) => !open)}
-            className="bg-transparent p-0 text-[12.5px] font-semibold"
-            style={{ color: 'var(--brand-deep)' }}
-          >
-            {showPerPlatformVersions ? 'Hide per-account versions' : 'Write a different version per account'}
-          </button>
-        </div>
-      )}
-
-      {showPerPlatformVersions && selectedPlatforms.length >= 2 && (
-        <ComposeDeskCard header="Per-account captions">
-          <PlatformVersionEditor
-            platforms={selectedPlatforms}
-            masterCaption={caption}
-            masterHashtags={hashtags}
-            versions={versions}
-            onMasterChange={(c, h) => {
-              setCaption(c)
-              setHashtags(h)
-            }}
-            onVersionsChange={setVersions}
-            platformOptions={platformOptions}
-            onPlatformOptionsChange={setPlatformOptions}
-            transport={publisherTransport}
-          />
-        </ComposeDeskCard>
-      )}
-
       {isHealthBrand && (
         <div
           className="rounded-[11px] border border-l-[3px] px-[14px] py-3"
@@ -1224,74 +1483,6 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
               />
             </div>
           ))}
-        </div>
-      )}
-
-      {selectedMediaIds.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              const mediaCount = selectedMediaIds.length
-              const platformList = selectedPlatforms.length > 0 ? selectedPlatforms.join(', ') : 'instagram'
-              const platformForTool = selectedPlatforms[0] ?? 'instagram'
-              const mediaIdList = selectedMediaIds.join(', ')
-              sendToDirector(
-                `I've selected ${mediaCount} media item${mediaCount === 1 ? '' : 's'} for a ${contentType.replace('_', ' ')} on ${platformList} for ${brandName}.\n\nMedia IDs: ${mediaIdList}\n\nUse propose_post_from_media (platform="${platformForTool}", media_ids=[${selectedMediaIds.map((id) => `"${id}"`).join(', ')}]) to give me a proposal — hook, caption, hashtags, post type, rationale.`,
-              )
-            }}
-            className="inline-flex items-center gap-2 rounded-[8px] px-4 py-2 text-[12.5px] font-semibold"
-            style={{
-              background: 'var(--brand-deep)',
-              color: 'var(--brand-ink)',
-            }}
-          >
-            <Lightbulb className="h-4 w-4" />
-            Ask Director for an idea
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              sendToDirector(
-                `Import designs from Canva for ${brandName}. Show me recent designs I can use for this ${contentType.replace('_', ' ')}.`,
-              )
-            }
-            className="inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12px] font-medium"
-            style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
-          >
-            <Palette className="h-3.5 w-3.5" />
-            Canva
-          </button>
-          {contentType !== 'short_video' && contentType !== 'long_video' && (
-            <button
-              type="button"
-              onClick={() =>
-                sendToDirector(
-                  `Generate an image for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}.`,
-                )
-              }
-              className="inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12px] font-medium"
-              style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
-            >
-              <Wand2 className="h-3.5 w-3.5" />
-              AI Generate
-            </button>
-          )}
-          {['short_video', 'long_video', 'story', 'ad'].includes(contentType) && (
-            <button
-              type="button"
-              onClick={() =>
-                sendToDirector(
-                  `Prepare a ${contentType.replace('_', ' ')} production brief for ${brandName}. Use Video & Scripting for script, shot list, and compliance review.`,
-                )
-              }
-              className="inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12px] font-medium"
-              style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
-            >
-              <Film className="h-3.5 w-3.5" />
-              Video plan
-            </button>
-          )}
         </div>
       )}
     </div>
@@ -1336,6 +1527,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       )}
       <CreatorActionBar
         platforms={selectedPlatforms}
+        autosaveState={autosaveState}
         captionEmpty={!caption.trim() || hasOverLimit}
         compliancePassed={compliancePassed}
         saving={saving}
@@ -1349,7 +1541,32 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
     </div>
   )
 
+  // The right pane. Preview draws ONE ticked account at a time — the words that
+  // account is actually publishing, resolved by the same `captionForAccountId`
+  // the save handler and the pre-flight read, so the phone cannot show one
+  // caption while another goes out.
+  const previewPane = (
+    <ComposerPreviewPane
+      accounts={selectedAccounts}
+      captionFor={captionForAccountId}
+      mediaUrl={mediaUrl}
+      mediaUrls={mediaUrls}
+      brandName={brandName}
+    />
+  )
+
+  // History belongs to a saved post. A brand-new post has no row to hang an
+  // event or a note on yet, and the pane says exactly that rather than taking a
+  // comment it cannot store.
+  const activityPane = <ComposerActivityPane scheduledPostId={editDraftId} />
+
   return (
-    <ComposerLayout editor={editorPane} actionBar={actionBar} />
+    <ComposerLayout
+      editor={editorPane}
+      preview={previewPane}
+      activity={activityPane}
+      actionBar={actionBar}
+      chrome={chrome}
+    />
   )
 }

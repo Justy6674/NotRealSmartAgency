@@ -2,17 +2,27 @@
 
 import { Heart, Repeat2, MessageCircle, Users } from 'lucide-react'
 import { PlatformReportShell } from './PlatformReportShell'
+import type { AnalyticsPeriod } from '../analytics-desk'
 
 export interface BlueskyReportProps {
   brandId: string
+  /** Passed through so the Director's advice names the business. */
+  brandName?: string
+  /** How far back to measure — one choice governs the whole screen. */
+  period?: AnalyticsPeriod
+  /** The account being read, when one is selected in the row above. */
+  accountId?: string | null
 }
 
-export function BlueskyReport({ brandId }: BlueskyReportProps) {
+export function BlueskyReport({ brandId, brandName, period, accountId }: BlueskyReportProps) {
   return (
     <PlatformReportShell
       platform="bluesky"
       brandId={brandId}
-      emptyHint="Bluesky's public API exposes basic engagement only. Coming soon — deeper metrics once the AT Protocol stabilises analytics endpoints."
+      brandName={brandName}
+      period={period}
+      accountId={accountId}
+      emptyHint="Bluesky reports engagement only — no reach or impressions — so this page stays to what it actually tells us."
       timeseriesSeries={['engagement', 'followers']}
       metrics={[
         {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Trash2, Plus, X } from 'lucide-react'
-import { PLATFORM_BRAND_COLOURS, PLATFORM_LABELS, type PlatformKey } from '@/lib/mixpost/ui-tokens'
+import { PlatformMark, presentationFor } from './PlatformMark'
 import type { SocialAccount } from '@/hooks/useSocialAccounts'
 
 interface AccountEntity {
@@ -40,9 +40,7 @@ export function AccountEntitiesEditor({ brandId, account, onClose }: AccountEnti
   const [newName, setNewName] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const platformKey = account.platform as PlatformKey
-  const platformColour = PLATFORM_BRAND_COLOURS[platformKey] ?? '#6366f1'
-  const platformLabel = PLATFORM_LABELS[platformKey] ?? account.platform
+  const platform = presentationFor(account.platform)
 
   const refetch = useCallback(async () => {
     setLoading(true)
@@ -98,15 +96,17 @@ export function AccountEntitiesEditor({ brandId, account, onClose }: AccountEnti
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="relative w-full max-w-lg max-h-[85vh] rounded-xl border border-border bg-card shadow-2xl flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 border-b border-border px-5 py-3">
-          <div
-            className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-sm font-semibold"
-            style={{ backgroundColor: `color-mix(in oklch, ${platformColour} 15%, transparent)`, color: platformColour }}
-          >
-            {account.name.charAt(0).toUpperCase()}
-          </div>
+          {/* The same mark the grid draws, so the panel is plainly about the
+              card that opened it. `color-mix()` in oklch used to tint this
+              circle — DESIGN.md forbids it, because it interpolates through
+              pink. */}
+          <PlatformMark platform={account.platform} size={32} />
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: platformColour }}>
-              {platformLabel}
+            <div
+              className="text-[10px] font-semibold uppercase tracking-[0.08em]"
+              style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
+            >
+              {platform.label}
             </div>
             <div className="text-sm font-medium text-foreground truncate">{account.name}</div>
           </div>
@@ -121,8 +121,24 @@ export function AccountEntitiesEditor({ brandId, account, onClose }: AccountEnti
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {/*
+            WHAT THIS SENTENCE USED TO SAY, and why it is gone:
+            "automatically injected into every post published from this
+            account". It was not true and had never been true. `account_entities`
+            is written here and read back here, and by nothing else — no
+            publisher, no scheduled-posts route, no cron reads the table. The
+            owner was told his hashtags went out on every post and they went out
+            on none of them, which is the worst shape a feature can take:
+            silently absent while the interface confirms it is working.
+
+            Injection at compose time is the right fix and it belongs in the
+            composer, which is not this slice's file. Until that lands, the copy
+            says what the list actually is — a shortlist he keeps here and drops
+            in himself. A promise the code does not honour does not ship.
+          */}
           <p className="text-xs text-muted-foreground">
-            These hashtags, mentions, and variables are automatically injected into every post published from this account.
+            A shortlist for this account — the hashtags, handles and stock phrases you reuse on it.
+            Keep them here so they are to hand while writing. They are not added to posts on their own.
           </p>
 
           {loading ? (

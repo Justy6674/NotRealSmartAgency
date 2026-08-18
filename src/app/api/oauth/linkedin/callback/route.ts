@@ -3,7 +3,7 @@
  *
  * Exchanges the authorisation code for tokens, fetches the user's
  * LinkedIn profile (for display name), and saves the token to
- * social_oauth_tokens. Redirects to /agency/studio/accounts on success.
+ * social_oauth_tokens. Redirects to /agency/social/accounts on success.
  */
 
 import { NextResponse, type NextRequest } from 'next/server'
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   if (!clientId || !clientSecret) {
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_not_configured`,
+      `${appUrl}/agency/social/accounts?error=linkedin_not_configured`,
     )
   }
 
@@ -36,13 +36,13 @@ export async function GET(req: NextRequest) {
   // LinkedIn sends error param if user denied access
   if (errorParam) {
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_denied&detail=${encodeURIComponent(errorParam)}`,
+      `${appUrl}/agency/social/accounts?error=linkedin_denied&detail=${encodeURIComponent(errorParam)}`,
     )
   }
 
   if (!code || !state) {
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_missing_params`,
+      `${appUrl}/agency/social/accounts?error=linkedin_missing_params`,
     )
   }
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
   if (!stateCookie) {
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_csrf_expired`,
+      `${appUrl}/agency/social/accounts?error=linkedin_csrf_expired`,
     )
   }
 
@@ -61,13 +61,13 @@ export async function GET(req: NextRequest) {
     storedState = JSON.parse(stateCookie.value)
   } catch {
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_csrf_invalid`,
+      `${appUrl}/agency/social/accounts?error=linkedin_csrf_invalid`,
     )
   }
 
   if (storedState.state !== state) {
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_csrf_mismatch`,
+      `${appUrl}/agency/social/accounts?error=linkedin_csrf_mismatch`,
     )
   }
 
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     const errText = await tokenRes.text().catch(() => '')
     console.error('[linkedin-oauth] Token exchange failed:', tokenRes.status, errText)
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_token_failed`,
+      `${appUrl}/agency/social/accounts?error=linkedin_token_failed`,
     )
   }
 
@@ -146,12 +146,12 @@ export async function GET(req: NextRequest) {
   if (!saved) {
     console.error('[linkedin-oauth] Failed to save token to database')
     return NextResponse.redirect(
-      `${appUrl}/agency/studio?error=linkedin_save_failed`,
+      `${appUrl}/agency/social/accounts?error=linkedin_save_failed`,
     )
   }
 
   // Success — redirect to accounts page
   return NextResponse.redirect(
-    `${appUrl}/agency/studio?tab=accounts&linkedin=connected`,
+    `${appUrl}/agency/social/accounts?linkedin=connected`,
   )
 }

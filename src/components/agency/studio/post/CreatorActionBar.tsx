@@ -13,6 +13,10 @@ import { PLATFORM_BRAND_COLOURS } from '@/lib/mixpost/ui-tokens'
  */
 const ST_DRAFT   = 'oklch(0.62 0.012 240)'
 const ST_SENDING = 'oklch(0.72 0.15 70)'
+/** Autosave landed. The lime dot from the reference desk, at NRS's chroma. */
+const ST_SAVED   = 'oklch(0.68 0.16 145)'
+/** Autosave did not land. The one state that must never look like "Draft". */
+const ST_FAILED  = 'oklch(0.55 0.20 25)'
 
 /** Fallback if --brand-deep / --brand / --brand-ink are not yet in the cascade */
 const BD_FALLBACK  = 'oklch(0.33 0.08 240)'
@@ -21,6 +25,13 @@ const INK_FALLBACK = 'oklch(1 0 0)'
 
 interface CreatorActionBarProps {
   platforms: PostPlatform[]
+  /**
+   * Where the 300ms debounced autosave got to. This dot is the whole reason
+   * there is no "everything is saved, honest" claim anywhere else on the bar:
+   * an autosave that failed and a draft that has never been touched must not
+   * look the same, which is what a single grey dot used to do.
+   */
+  autosaveState?: 'idle' | 'saving' | 'saved' | 'failed'
   captionEmpty: boolean
   compliancePassed: boolean | null
   saving: boolean
@@ -67,6 +78,7 @@ function toLocalInputValue(iso: string): string {
  */
 export function CreatorActionBar({
   platforms,
+  autosaveState = 'idle',
   captionEmpty,
   compliancePassed,
   saving,
@@ -88,14 +100,12 @@ export function CreatorActionBar({
     setPickingTime(true)
   }, [scheduledWhen])
 
+  // No border and no panel fill here. Whatever pins this bar already draws
+  // both — the department's action-bar slot in Social, `ComposerLayout`'s foot
+  // on `/agency/studio/create` — and drawing them twice put two hairlines a
+  // pixel apart across the bottom of the composer.
   return (
-    <div
-      className="shrink-0 border-t"
-      style={{
-        borderColor: 'var(--line, oklch(0.915 0.007 240))',
-        background: 'var(--panel, oklch(1 0 0))',
-      }}
-    >
+    <div className="shrink-0">
       {/* ── Health gate ────────────────────────────────────────────────── */}
       {blockedByHealth && (
         <div
@@ -124,22 +134,30 @@ export function CreatorActionBar({
           className="flex flex-1 min-w-0 items-center gap-[8px] overflow-hidden whitespace-nowrap text-[12px]"
           style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
         >
-          {/* 9 px status dot — draft or sending */}
+          {/* 9 px status dot — the saved-state indicator, not decoration */}
           <span
             className="h-[9px] w-[9px] shrink-0 rounded-full"
             aria-hidden
-            style={{ background: saving ? ST_SENDING : ST_DRAFT }}
+            style={{
+              background:
+                saving || autosaveState === 'saving' ? ST_SENDING
+                : autosaveState === 'failed' ? ST_FAILED
+                : autosaveState === 'saved' ? ST_SAVED
+                : ST_DRAFT,
+            }}
           />
           <b style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))', fontWeight: 600 }}>
-            {saving ? 'Saving…' : 'Draft'}
+            {saving || autosaveState === 'saving' ? 'Saving…' : 'Draft'}
           </b>
-          {!saving && (
+          {!saving && autosaveState !== 'saving' && (
             <>
               <span aria-hidden>·</span>
               <span className="truncate">
-                {savedAt
-                  ? `Saved ${savedAt}. Nothing has gone out.`
-                  : 'Nothing has gone out.'}
+                {autosaveState === 'failed'
+                  ? 'That last change is not saved yet. Your words are still here.'
+                  : savedAt
+                    ? `Saved ${savedAt}. Nothing has gone out.`
+                    : 'Nothing has gone out.'}
               </span>
             </>
           )}
@@ -165,7 +183,8 @@ export function CreatorActionBar({
         {/* Right — buttons */}
         <div className="flex shrink-0 flex-wrap items-center gap-[9px]">
 
-          {/* Save draft */}
+          {/* Save draft — the press that CREATES the row. Everything after it
+              is autosaved, which is what the dot on the left reports. */}
           <button
             type="button"
             onClick={() => onSave('draft')}

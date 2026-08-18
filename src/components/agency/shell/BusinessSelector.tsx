@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Check, ChevronDown, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAgencyStore } from '@/stores/agency-store'
+import { loadNavCounts } from './nav-sections'
 import type { Brand } from '@/types/database'
 
 /**
@@ -43,11 +44,6 @@ export interface BusinessSelectorProps {
   /** Fired after a switch — the mobile sidebar uses it to close itself. */
   onSelect?: (brandId: string) => void
   className?: string
-}
-
-interface AccountsResponse {
-  configured?: boolean
-  brandMapping?: Record<string, Array<{ authorized?: boolean }>>
 }
 
 function initials(name: string): string {
@@ -89,7 +85,7 @@ export function BusinessSelector({
 
   const [loadedBrands, setLoadedBrands] = useState<Brand[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
-  const [countedAccounts, setCountedAccounts] = useState<number | null>(null)
+  const [countedLine, setCountedLine] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -156,32 +152,32 @@ export function BusinessSelector({
 
   // ── Connected accounts ─────────────────────────────────────────────────────
 
+  /**
+   * This used to ask `/api/mixpost/accounts` with no brand at all and count
+   * whatever came back for this id out of the whole fallback workspace. Two
+   * things were wrong with that and both reached the screen. The brand went
+   * unsent, so the browser was handed every account belonging to every business
+   * on the instance; and there was no Zernio branch, so a subscriber whose
+   * business publishes through Zernio was told how many accounts somebody
+   * else's publisher had. `/api/social/nav-counts` answers for ONE business the
+   * signed-in person is allowed to see, through whichever engine that business
+   * actually publishes on.
+   */
   useEffect(() => {
     if (providedAccountCount !== undefined) return
     if (!activeBrandId) return
     let cancelled = false
 
-    fetch('/api/mixpost/accounts')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: AccountsResponse | null) => {
-        if (cancelled || !data) return
-        const mapped = data.brandMapping?.[activeBrandId] ?? []
-        // `authorized` absent means it was not reported, which the mapping
-        // layer treats as working rather than as broken. Match it.
-        setCountedAccounts(mapped.filter((a) => a.authorized !== false).length)
-      })
-      .catch(() => {
-        // Unknown stays unknown. A failed lookup must not become "0 accounts".
-        if (!cancelled) setCountedAccounts(null)
-      })
+    void loadNavCounts(activeBrandId).then((payload) => {
+      if (cancelled) return
+      // Unknown stays unknown. A failed lookup must not become "0 accounts".
+      setCountedLine(payload?.businessSubtitle ?? null)
+    })
 
     return () => {
       cancelled = true
     }
   }, [activeBrandId, providedAccountCount])
-
-  const accountCount =
-    providedAccountCount !== undefined ? providedAccountCount : countedAccounts
 
   // ── Switching ──────────────────────────────────────────────────────────────
 
@@ -225,7 +221,8 @@ export function BusinessSelector({
   const flags = activeBrand?.compliance_flags
   const careLabel = complianceLabel(Boolean(flags?.ahpra), Boolean(flags?.tga))
   const isSwitcher = brands.length > 1
-  const subtitle = accountsLine(accountCount)
+  const subtitle =
+    providedAccountCount !== undefined ? accountsLine(providedAccountCount) : countedLine
 
   let title: string
   let titleIsQuiet = false

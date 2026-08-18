@@ -1,142 +1,20 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic'
-
-import { useState } from 'react'
-import { useAgencyStore } from '@/stores/agency-store'
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-  TabsContent,
-} from '@/components/ui/tabs'
-import {
-  PLATFORM_LABELS,
-  PLATFORM_BRAND_COLOURS,
-  type PlatformKey,
-} from '@/lib/mixpost/ui-tokens'
-import { AnalyticsOverview } from '@/components/agency/studio/analytics/AnalyticsOverview'
-import { FacebookReport } from '@/components/agency/studio/analytics/reports/FacebookReport'
-import { InstagramReport } from '@/components/agency/studio/analytics/reports/InstagramReport'
-import { LinkedInReport } from '@/components/agency/studio/analytics/reports/LinkedInReport'
-import { TwitterReport } from '@/components/agency/studio/analytics/reports/TwitterReport'
-import { TikTokReport } from '@/components/agency/studio/analytics/reports/TikTokReport'
-import { YouTubeReport } from '@/components/agency/studio/analytics/reports/YouTubeReport'
-import { PinterestReport } from '@/components/agency/studio/analytics/reports/PinterestReport'
-import { ThreadsReport } from '@/components/agency/studio/analytics/reports/ThreadsReport'
-import { BlueskyReport } from '@/components/agency/studio/analytics/reports/BlueskyReport'
-import { MastodonReport } from '@/components/agency/studio/analytics/reports/MastodonReport'
-import { SocialHangOffs } from '@/components/agency/social/SocialHangOffs'
-
-const PLATFORM_TABS: PlatformKey[] = [
-  'facebook',
-  'instagram',
-  'linkedin',
-  'twitter',
-  'tiktok',
-  'youtube',
-  'pinterest',
-  'threads',
-  'bluesky',
-  'mastodon',
-]
-
-export default function StudioAnalyticsPage() {
-  const { activeBrandId } = useAgencyStore()
-  const [tab, setTab] = useState<'overview' | PlatformKey>('overview')
-
-  if (!activeBrandId) {
-    return (
-      <div className="flex items-center justify-center p-12">
-        <p className="text-sm text-muted-foreground">
-          Select a brand from the sidebar to see analytics.
-        </p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-4">
-      <div className="space-y-[4px]">
-        {/* 19 px page title — DESIGN.md §Typography */}
-        <h1
-          style={{
-            fontSize: '19px',
-            fontWeight: 700,
-            lineHeight: 1.3,
-            color: 'var(--brand-deep, oklch(0.33 0.08 240))',
-            fontFamily: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
-          }}
-        >
-          Performance
-        </h1>
-        <p
-          className="text-[13px]"
-          style={{ color: 'oklch(0.615 0.011 240)' }}
-        >
-          Cross-channel results for the last 28 days. Click a channel to drill in.
-        </p>
-        <SocialHangOffs />
-      </div>
-
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as 'overview' | PlatformKey)}
-        className="space-y-4"
-      >
-        <div className="overflow-x-auto">
-          <TabsList variant="line" className="h-auto flex-wrap">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            {PLATFORM_TABS.map((platform) => (
-              <TabsTrigger
-                key={platform}
-                value={platform}
-                className="gap-1.5"
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: PLATFORM_BRAND_COLOURS[platform] }}
-                />
-                {PLATFORM_LABELS[platform]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-
-        <TabsContent value="overview">
-          <AnalyticsOverview brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="facebook">
-          <FacebookReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="instagram">
-          <InstagramReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="linkedin">
-          <LinkedInReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="twitter">
-          <TwitterReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="tiktok">
-          <TikTokReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="youtube">
-          <YouTubeReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="pinterest">
-          <PinterestReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="threads">
-          <ThreadsReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="bluesky">
-          <BlueskyReport brandId={activeBrandId} />
-        </TabsContent>
-        <TabsContent value="mastodon">
-          <MastodonReport brandId={activeBrandId} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
+/**
+ * Retired to a redirect.
+ *
+ * This was a second Performance screen — the same ten channel reports and the
+ * same overview, one revision behind. When Social gained the four figures a
+ * posting tool cannot answer (when to post, how long a post keeps earning, how
+ * often to post, whether the following is growing) this copy did not, so the
+ * same business could read two different answers depending on which door it
+ * came through. DESIGN.md is explicit that Analytics nests under Social rather
+ * than standing on its own, so Social is the one that survives.
+ *
+ * 307 rather than 308, for the reason spelled out in `studio/post/page.tsx`: a
+ * permanent redirect is cached forever and reversing it would mean sending a
+ * non-technical owner into his browser settings.
+ */
+export default function RetiredStudioAnalyticsPage() {
+  redirect('/agency/social/analytics')
 }

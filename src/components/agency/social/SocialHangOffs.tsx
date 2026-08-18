@@ -38,10 +38,10 @@ export function SocialHangOffs() {
     <div className="flex flex-wrap gap-2">
       {inboxCount != null && (
         <Link
-          href="/agency/inbox"
+          href="/agency/engagement"
           className="rounded-full border border-border bg-background px-3 py-1 text-[11px] text-foreground hover:bg-muted"
         >
-          {inboxCount} waiting in Inbox
+          {inboxCount} waiting on a reply
         </Link>
       )}
       {adsCount != null && (

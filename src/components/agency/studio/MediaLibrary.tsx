@@ -17,14 +17,33 @@ import { CanvaImportModal } from './CanvaImportModal'
 import { UploadQueuePanel } from './media/UploadQueuePanel'
 import { GifPicker, type GifSelection } from './media/GifPicker'
 import { StockPhotoPicker, type StockPhotoSelection } from './media/StockPhotoPicker'
+import { CanvaDesignPicker } from './media/CanvaDesignPicker'
 import type { MediaItemWithUsage, MediaCollection } from '@/types/database'
 
 type TypeFilter = 'all' | 'image' | 'video' | 'audio'
 type SortOption = 'newest' | 'oldest' | 'name' | 'most_used'
 type ViewMode = 'library' | 'collection'
-type SourceTab = 'library' | 'gifs' | 'stock'
+/**
+ * The four source tabs Mixpost has, with one substitution.
+ *
+ * Mixpost's fourth is "New design", shown only when Adobe Express is
+ * configured. Ours is `designs`, backed by the design tool this codebase
+ * already integrates end to end — brand kits, templates, export and import all
+ * exist and are exercised. Wiring a second design tool purely to match the
+ * label would have split the brand kit across two services.
+ */
+type SourceTab = 'library' | 'gifs' | 'stock' | 'designs'
 
-export function MediaLibrary() {
+interface MediaLibraryProps {
+  /**
+   * false when a department shell has already supplied the scrolling, padded
+   * pane. The Social chrome is the only scroller in its department; a screen
+   * that pads and scrolls again gets two scrollbars and 52px down one side.
+   */
+  padded?: boolean
+}
+
+export function MediaLibrary({ padded = true }: MediaLibraryProps = {}) {
   const router = useRouter()
   const pathname = usePathname() ?? ''
   const { activeBrandId, setPendingMediaId } = useAgencyStore()
@@ -57,6 +76,26 @@ export function MediaLibrary() {
   const [retagging, setRetagging] = useState(false)
   const [retagResult, setRetagResult] = useState<string | null>(null)
   const [sourceTab, setSourceTab] = useState<SourceTab>('library')
+  const [missingAltOnly, setMissingAltOnly] = useState(false)
+
+  /**
+   * Pictures with nothing saved for a screen reader to say.
+   *
+   * Counted in the browser rather than asked for, because the description lives
+   * in the `metadata` blob and there is no column to filter on. The collection
+   * is one brand's library, so the cost is a pass over a list already in hand.
+   * Videos are not counted: the field is for stills.
+   */
+  const missingAltIds = items
+    .filter((item) => {
+      if (!item.file_type?.startsWith('image/')) return false
+      const raw = (item.metadata as { alt_text?: unknown } | null)?.alt_text
+      return !(typeof raw === 'string' && raw.trim())
+    })
+    .map((item) => item.id)
+  const missingAltSet = new Set(missingAltIds)
+  const visibleItems = missingAltOnly ? items.filter((i) => missingAltSet.has(i.id)) : items
+
   const [savingExternal, setSavingExternal] = useState(false)
 
   const handleGifSelect = async (gif: GifSelection) => {
@@ -367,11 +406,16 @@ export function MediaLibrary() {
     }
   }
 
+  /**
+   * Select-all follows what is ON SCREEN, not what is in the library.
+   * With a filter applied, selecting rows the owner cannot see and then
+   * pressing Delete is the worst possible reading of one click.
+   */
   const handleSelectAll = () => {
-    if (selectedIds.size === items.length) {
+    if (selectedIds.size === visibleItems.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(items.map((i) => i.id)))
+      setSelectedIds(new Set(visibleItems.map((i) => i.id)))
     }
   }
 
@@ -462,11 +506,12 @@ export function MediaLibrary() {
     { id: 'library', label: 'Library', icon: Images },
     { id: 'gifs', label: 'GIFs', icon: Film },
     { id: 'stock', label: 'Stock photos', icon: ImageIcon },
+    { id: 'designs', label: 'Designs', icon: Palette },
   ]
 
   return (
     <div
-      className="space-y-3 overflow-y-auto px-[26px] py-[18px]"
+      className={padded ? 'space-y-3 overflow-y-auto px-[26px] py-[18px]' : 'space-y-3'}
       style={{ color: 'var(--ink, oklch(0.20 0.014 240))' }}
     >
       {/* Source tabs + saving indicator — mockup .filters in .toolrow */}
@@ -514,6 +559,12 @@ export function MediaLibrary() {
         <StockPhotoPicker onSelect={handleStockPhotoSelect} />
       )}
 
+      {/* Designs — the fourth tab. Importing writes an ordinary library row,
+          so `fetchMedia` is all that is needed to make it appear on Library. */}
+      {sourceTab === 'designs' && (
+        <CanvaDesignPicker brandId={activeBrandId} onImported={fetchMedia} />
+      )}
+
       {/* Library view */}
       {sourceTab === 'library' && (
         <>
@@ -529,6 +580,9 @@ export function MediaLibrary() {
         onSortChange={setSort}
         showArchived={showArchived}
         onShowArchivedChange={setShowArchived}
+        missingAltOnly={missingAltOnly}
+        onMissingAltOnlyChange={setMissingAltOnly}
+        missingAltCount={missingAltIds.length}
       />
 
       <MediaUploader brandId={activeBrandId} onUploadComplete={fetchMedia} compact />
@@ -556,7 +610,7 @@ export function MediaLibrary() {
           {selectMode ? 'Selecting' : 'Select'}
         </button>
 
-        {selectMode && items.length > 0 ? (
+        {selectMode && visibleItems.length > 0 ? (
           <button
             type="button"
             onClick={handleSelectAll}
@@ -567,7 +621,7 @@ export function MediaLibrary() {
               color: 'var(--ink-2, oklch(0.46 0.012 240))',
             }}
           >
-            {selectedIds.size === items.length ? 'Clear all' : 'Select all'}
+            {selectedIds.size === visibleItems.length ? 'Clear all' : 'Select all'}
           </button>
         ) : null}
 
@@ -792,13 +846,15 @@ export function MediaLibrary() {
         <p className="text-[13px]" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
           Loading media…
         </p>
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <p className="text-[13px]" style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}>
-          No media found. Upload some files above.
+          {missingAltOnly
+            ? 'Every picture here already has a description. Nothing left to write.'
+            : 'No media found. Upload some files above.'}
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <MediaLibraryCard
               key={item.id}
               item={item}
@@ -856,6 +912,7 @@ export function MediaLibrary() {
                 setDetailItem(updated)
                 setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)))
               }}
+              onRefresh={fetchMedia}
             />
           </div>
         </div>

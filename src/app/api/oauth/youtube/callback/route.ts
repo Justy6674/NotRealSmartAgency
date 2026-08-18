@@ -61,13 +61,13 @@ export async function GET(request: NextRequest) {
 
   if (!state || !storedState || state !== storedState) {
     return NextResponse.redirect(
-      new URL('/agency/studio/accounts?error=invalid_state', request.url)
+      new URL('/agency/social/accounts?error=invalid_state', request.url)
     )
   }
 
   if (!brandId) {
     return NextResponse.redirect(
-      new URL('/agency/studio/accounts?error=missing_brand', request.url)
+      new URL('/agency/social/accounts?error=missing_brand', request.url)
     )
   }
 
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
   if (oauthError) {
     return NextResponse.redirect(
       new URL(
-        `/agency/studio/accounts?error=${encodeURIComponent(oauthError)}`,
+        `/agency/social/accounts?error=${encodeURIComponent(oauthError)}`,
         request.url
       )
     )
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code')
   if (!code) {
     return NextResponse.redirect(
-      new URL('/agency/studio/accounts?error=no_code', request.url)
+      new URL('/agency/social/accounts?error=no_code', request.url)
     )
   }
 
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
 
   if (!clientId || !clientSecret) {
     return NextResponse.redirect(
-      new URL('/agency/studio/accounts?error=server_config', request.url)
+      new URL('/agency/social/accounts?error=server_config', request.url)
     )
   }
 
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
       const errBody = await tokenRes.text()
       console.error('[YouTube OAuth] Token exchange failed:', errBody)
       return NextResponse.redirect(
-        new URL('/agency/studio/accounts?error=token_exchange', request.url)
+        new URL('/agency/social/accounts?error=token_exchange', request.url)
       )
     }
 
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error('[YouTube OAuth] Token exchange network error:', err)
     return NextResponse.redirect(
-      new URL('/agency/studio/accounts?error=token_exchange', request.url)
+      new URL('/agency/social/accounts?error=token_exchange', request.url)
     )
   }
 
@@ -191,14 +191,14 @@ export async function GET(request: NextRequest) {
   if (upsertError) {
     console.error('[YouTube OAuth] Token storage failed:', upsertError)
     return NextResponse.redirect(
-      new URL('/agency/studio/accounts?error=storage_failed', request.url)
+      new URL('/agency/social/accounts?error=storage_failed', request.url)
     )
   }
 
   // Redirect back to accounts page with success
   return NextResponse.redirect(
     new URL(
-      `/agency/studio/accounts?connected=youtube&channel=${encodeURIComponent(channelName ?? channelId)}`,
+      `/agency/social/accounts?connected=youtube&channel=${encodeURIComponent(channelName ?? channelId)}`,
       request.url
     )
   )

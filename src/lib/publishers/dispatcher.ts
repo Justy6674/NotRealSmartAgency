@@ -10,7 +10,7 @@
  * Every attempt is logged to the publisher_runs table for audit.
  */
 
-import { checkPublishAllowed } from '@/lib/agents/publish-gate'
+import { checkPublishAllowed, outboundTextForReview } from '@/lib/agents/publish-gate'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { mapAccountsToBrandsRaw } from '@/lib/mixpost/brand-mapping'
 import {
@@ -28,6 +28,7 @@ import {
   type ZernioAccount,
 } from '@/lib/zernio/client'
 import { toZernioPlatformData } from './zernio-platform-data'
+import { toZernioMediaItem } from '@/lib/zernio/media'
 import {
   OWNER_ACCOUNT_MISSING,
   OWNER_NO_TICK,
@@ -165,7 +166,7 @@ export async function selectPublisherBackend(
  * already carries its own '#' is not given a second one, because the tags
  * column has both shapes in it.
  */
-function buildCaption(req: PublishRequest): string {
+export function buildCaption(req: Pick<PublishRequest, 'caption' | 'hashtags' | 'signature'>): string {
   const tags = (req.hashtags ?? [])
     .map((h) => h.trim())
     .filter((h) => h !== '')
@@ -175,6 +176,28 @@ function buildCaption(req: PublishRequest): string {
   if (tags.length > 0) caption += `\n\n${tags.join(' ')}`
   if (req.signature) caption += req.signature
   return caption
+}
+
+/**
+ * Everything this post puts in front of a reader, for the regulatory review.
+ *
+ * The caption is not the post. `platform_options` carries the first comment,
+ * the Facebook and YouTube titles, the LinkedIn document title and the X thread
+ * — all free text the owner typed, all of it published. On a thread it is the
+ * ONLY text published: when `threadItems` is present the top-level content is
+ * display-only (zernio-platform-data.ts), so reviewing the caption alone
+ * reviewed the one string that never reaches the account. `metadata` is here
+ * too because the Mixpost path reads `youtube_title` out of it.
+ *
+ * Exported so the same words can be compared against what actually went out —
+ * see publish-ticked.ts.
+ */
+export function outboundContentForReview(req: PublishRequest): string {
+  return outboundTextForReview({
+    caption: buildCaption(req),
+    platformOptions: req.platform_options,
+    metadata: req.metadata,
+  }).trim()
 }
 
 function nonEmptyString(value: unknown): string | undefined {
@@ -384,8 +407,9 @@ export async function publishToPlatform(
     const gate = await checkPublishAllowed({
       // The exact words that will be sent, signature included — not a
       // reconstruction of them. A review of something adjacent to the post is
-      // not a review of the post.
-      content: buildCaption(req).trim(),
+      // not a review of the post. That is why it is every outbound field and
+      // not just the caption: see outboundContentForReview above.
+      content: outboundContentForReview(req),
       complianceFlags: brand?.compliance_flags as never,
       brandDNA: brand?.brand_dna_constraints as never,
       brandSlug: brand?.slug as string | null | undefined,
@@ -495,15 +519,31 @@ export async function publishToPlatform(
         content: caption,
         accounts: [{ platform: req.platform, accountId: req.account_id }],
         requestId: req.idempotency_key,
-        // Public URLs, not an upload: Zernio fetches them, and its docs state it
-        // auto-proxies Supabase storage URLs, which is where this app's media
-        // lives. Note createZernioPost types each item by file extension alone,
-        // so a signed Supabase URL ending `?token=…` is typed as an image even
-        // when it is a video, and alt text is dropped — both belong to
-        // src/lib/zernio/client.ts, not to this file.
-        mediaUrls: req.media.map((m) => m.url),
+        /*
+         * Public URLs, not an upload: Zernio fetches them, and its docs state
+         * it auto-proxies Supabase storage URLs, which is where this app's
+         * media lives.
+         *
+         * Built through `toZernioMediaItem` rather than as bare URLs, which is
+         * what finally carries ALT TEXT and the video poster frame to the wire.
+         * Both were captured in the composer, stored on `media_items` and then
+         * dropped here: the owner wrote alt text, saw it saved, and it reached
+         * nobody. The type is worked out from the URL PATH, so a signed
+         * Supabase URL ending `?token=…` is no longer typed as an image when it
+         * is a video.
+         */
+        media: req.media.map((m) => toZernioMediaItem({
+          url: m.url,
+          altText: m.alt_text ?? null,
+          thumbnail: m.thumbnail_url ?? null,
+          mimeType: m.mime_type ?? null,
+          size: m.size_bytes ?? null,
+        })),
         publishNow: true,
         platformSpecificData,
+        // Stamp our row id on the post so a webhook or a reconciliation sweep
+        // can match it back without guessing from the caption.
+        nrsScheduledPostId: req.scheduled_post_id,
       })
 
       const outcome = readZernioOutcome(result)
@@ -527,6 +567,10 @@ export async function publishToPlatform(
           post_type: req.post_type ?? null,
           platform_options: req.platform_options ?? null,
           platformSpecificData: platformSpecificData ?? null,
+          // Every word this send put in front of a reader, in one field, so a
+          // later call can tell whether the row has been edited since without
+          // reassembling it from three keys. publish-ticked compares on this.
+          outbound_words: outboundContentForReview(req),
         },
         responsePayload: result,
         externalPostId: outcome.externalPostId,
@@ -708,7 +752,11 @@ export async function publishToPlatform(
         publisher: 'native',
         status: result.ok ? 'success' : 'failed',
         attempt,
-        requestPayload: { caption: req.caption, mediaCount: req.media.length },
+        requestPayload: {
+          caption: req.caption,
+          mediaCount: req.media.length,
+          outbound_words: outboundContentForReview(req),
+        },
         responsePayload: result,
         externalPostId: result.external_post_id,
         externalPermalink: result.external_permalink,
@@ -1063,6 +1111,7 @@ export async function publishToPlatform(
           mediaCount: mediaIds.length,
           post_type: req.post_type ?? null,
           platform_options: req.platform_options ?? null,
+          outbound_words: outboundContentForReview(req),
         },
         responsePayload: result,
         externalPostId: result.uuid,

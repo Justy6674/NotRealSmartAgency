@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAgencyStore } from '@/stores/agency-store'
 
 /**
  * Where the owner connects the services the agency uses.
@@ -14,61 +15,129 @@ import { cn } from '@/lib/utils'
  *
  * Each row says plainly whether the thing works, and the button does the one
  * action that fixes it.
+ *
+ * ── THE LEAK THIS CLOSES ───────────────────────────────────────────────
+ * The publishing row fetched `/api/mixpost/accounts` with no brand id at all.
+ * That route answers the unscoped call with the ENTIRE fallback workspace, so
+ * this panel counted every account belonging to every business and reported the
+ * total back as "Connected — 14 social accounts" no matter which business was
+ * open. For a business linked to its own publisher it was worse than a wrong
+ * number: the row described a completely different publisher's accounts, and
+ * said they were his.
+ *
+ * It now asks about the business that is actually selected, linked publisher
+ * first, and says so when nothing is selected rather than quietly counting
+ * everything.
  */
 
+interface RowState {
+  connected: boolean
+  detail: string
+}
+
 interface ConnectionState {
-  canva: { connected: boolean; detail: string } | null
-  mixpost: { connected: boolean; detail: string } | null
+  canva: RowState | null
+  publishing: RowState | null
   loading: boolean
 }
 
-export function ConnectionsPanel() {
-  const [state, setState] = useState<ConnectionState>({ canva: null, mixpost: null, loading: true })
+const COULD_NOT_CHECK = 'Could not be checked just now'
 
-  const check = async () => {
+export function ConnectionsPanel() {
+  const { activeBrandId } = useAgencyStore()
+  const [state, setState] = useState<ConnectionState>({ canva: null, publishing: null, loading: true })
+
+  const check = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }))
 
-    const [canva, mixpost] = await Promise.all([
-      // Read the BODY, not just whether the request succeeded. The route
-      // answers 200 with a state, so `r.ok` only ever meant "the server
-      // replied" — and a Canva connection that was rejecting every call
-      // rendered as "Connected — 0 brand kits" for weeks.
-      fetch('/api/canva/brand-kits', { cache: 'no-store' })
-        .then(async (r) => {
-          const data = await r.json().catch(() => ({}))
-          if (!r.ok || data.connected !== true) {
-            return {
-              connected: false,
-              detail: typeof data.message === 'string'
+    const canvaCheck = fetch('/api/canva/brand-kits', { cache: 'no-store' })
+      .then(async (r) => {
+        // Read the BODY, not just whether the request succeeded. The route
+        // answers 200 with a state, so `r.ok` only ever meant "the server
+        // replied" — and a Canva connection that was rejecting every call
+        // rendered as "Connected — 0 brand kits" for weeks.
+        const data = await r.json().catch(() => ({}))
+        if (!r.ok || data.connected !== true) {
+          return {
+            connected: false,
+            detail:
+              typeof data.message === 'string'
                 ? data.message
                 : 'Not connected — designs and brand templates are unavailable',
+          }
+        }
+        const count = Array.isArray(data.brand_kits) ? data.brand_kits.length : null
+        return {
+          connected: true,
+          detail:
+            count === null ? 'Connected' : `Connected — ${count} brand template${count === 1 ? '' : 's'}`,
+        }
+      })
+      .catch(() => ({ connected: false, detail: COULD_NOT_CHECK }))
+
+    const publishingCheck: Promise<RowState> = (async () => {
+      if (!activeBrandId) {
+        return {
+          connected: false,
+          detail: 'Choose a business first — accounts are connected to one business at a time',
+        }
+      }
+      try {
+        const linkedRes = await fetch(`/api/zernio/accounts?brandId=${activeBrandId}`, { cache: 'no-store' })
+        const linked = (await linkedRes.json().catch(() => null)) as {
+          linked?: boolean
+          accounts?: unknown[]
+          summary?: { total?: number; needsReconnect?: number; warning?: number }
+          error?: string
+        } | null
+
+        if (linkedRes.ok && linked?.linked) {
+          const total = linked.summary?.total ?? (linked.accounts?.length ?? 0)
+          const stopped = linked.summary?.needsReconnect ?? 0
+          const wobbly = linked.summary?.warning ?? 0
+          if (total === 0) {
+            return { connected: false, detail: 'No accounts connected to this business yet' }
+          }
+          if (stopped > 0) {
+            return {
+              connected: false,
+              detail: `${stopped} of ${total} account${total === 1 ? '' : 's'} ${stopped === 1 ? 'has' : 'have'} stopped posting — reconnect ${stopped === 1 ? 'it' : 'them'} on the Accounts screen`,
             }
           }
-          const count = Array.isArray(data.brand_kits) ? data.brand_kits.length : null
           return {
             connected: true,
-            detail: count === null ? 'Connected' : `Connected — ${count} brand template${count === 1 ? '' : 's'}`,
+            detail:
+              wobbly > 0
+                ? `Connected — ${total} account${total === 1 ? '' : 's'}, ${wobbly} needing attention soon`
+                : `Connected — ${total} account${total === 1 ? '' : 's'}`,
           }
-        })
-        .catch(() => ({ connected: false, detail: 'Could not be checked just now' })),
+        }
 
-      fetch('/api/mixpost/accounts', { cache: 'no-store' })
-        .then(async (r) => {
-          if (!r.ok) return { connected: false, detail: 'Not reachable — nothing can publish' }
-          const data = await r.json().catch(() => ({}))
-          const n = Array.isArray(data.accounts) ? data.accounts.length : null
-          return { connected: true, detail: n === null ? 'Connected' : `Connected — ${n} social account${n === 1 ? '' : 's'}` }
-        })
-        .catch(() => ({ connected: false, detail: 'Could not be checked just now' })),
-    ])
+        if (!linkedRes.ok) return { connected: false, detail: linked?.error ?? COULD_NOT_CHECK }
 
-    setState({ canva, mixpost, loading: false })
-  }
+        // Not linked to its own publisher: ask the backup, WITH the brand id so
+        // the answer is about this business and nothing else.
+        const res = await fetch(`/api/mixpost/accounts?brandId=${activeBrandId}`, { cache: 'no-store' })
+        if (!res.ok) return { connected: false, detail: 'Not reachable — nothing can publish' }
+        const data = await res.json().catch(() => ({}))
+        const n = Array.isArray(data.accounts) ? data.accounts.length : null
+        if (n === 0) return { connected: false, detail: 'No accounts connected to this business yet' }
+        return {
+          connected: true,
+          detail: n === null ? 'Connected' : `Connected — ${n} account${n === 1 ? '' : 's'}`,
+        }
+      } catch {
+        return { connected: false, detail: COULD_NOT_CHECK }
+      }
+    })()
+
+    const [canva, publishing] = await Promise.all([canvaCheck, publishingCheck])
+    setState({ canva, publishing, loading: false })
+  }, [activeBrandId])
 
   useEffect(() => {
     void check()
-     
-  }, [])
+  }, [check])
 
   return (
     <section className="rounded-lg border bg-card p-5">
@@ -100,8 +169,13 @@ export function ConnectionsPanel() {
           name="Social publishing"
           purpose="Where approved posts actually go out"
           loading={state.loading}
-          connected={state.mixpost?.connected ?? null}
-          detail={state.mixpost?.detail ?? ''}
+          connected={state.publishing?.connected ?? null}
+          detail={state.publishing?.detail ?? ''}
+          action={
+            activeBrandId
+              ? { label: 'Open accounts', href: '/agency/social/accounts' }
+              : undefined
+          }
         />
       </div>
 
@@ -134,9 +208,9 @@ function Row({
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         ) : connected ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--ok, oklch(0.55 0.13 155))' }} />
         ) : (
-          <AlertCircle className="h-4 w-4 text-amber-500" />
+          <AlertCircle className="h-4 w-4" style={{ color: 'var(--warn, oklch(0.63 0.13 75))' }} />
         )}
       </span>
 

@@ -1,6 +1,18 @@
 /**
  * Composer `platform_options` → Zernio `platformSpecificData`.
  *
+ * Depended on by: `dispatcher.ts` at the moment of publishing, and the
+ * composer's option panels (S3), which read `composerFieldStatus` to decide
+ * whether a control is a live input or a greyed one with a reason.
+ *
+ * Several of these fields are FREE TEXT that reaches a live account —
+ * `first_comment`, `title`, `document_title`, `thread_items`. They are words
+ * the reader sees, so they go through the AHPRA/TGA review with the caption;
+ * the gate reads the whole options object generically rather than a list of
+ * names (`outboundTextForReview`, src/lib/agents/publish-gate.ts), so a field
+ * added here is reviewed without anything being added there. Do not add a key
+ * to that file's deny-list unless its value could never carry a claim.
+ *
  * Field names come from `node_modules/@zernio/node/dist/index.d.ts`
  * (`InstagramPlatformData`, `TikTokPlatformData`, `YouTubePlatformData`, …).
  * A composer key that has no SDK name is dropped, never renamed by guess.
@@ -19,11 +31,16 @@ export const COMPOSER_FIELDS: Record<string, Record<string, FieldStatus>> = {
   instagram: {
     first_comment: { ships: true, zernioKey: 'firstComment' },
     cover_image_url: { ships: true, zernioKey: 'instagramThumbnail' },
+    share_to_feed: { ships: true, zernioKey: 'shareToFeed' },
+    collaborators: { ships: true, zernioKey: 'collaborators' },
+    ai_disclosure: { ships: true, zernioKey: 'isAiGenerated' },
   },
   facebook: {
+    first_comment: { ships: true, zernioKey: 'firstComment' },
+    title: { ships: true, zernioKey: 'title' },
     link_preview: {
       ships: false,
-      reason: 'Facebook has no link-preview switch on a Zernio post. The preview is decided by the link itself.',
+      reason: 'Facebook decides the link preview from the link itself. There is no switch for it on a post.',
     },
   },
   tiktok: {
@@ -36,6 +53,10 @@ export const COMPOSER_FIELDS: Record<string, Record<string, FieldStatus>> = {
     allow_duet: { ships: true, zernioKey: 'allowDuet' },
     allow_stitch: { ships: true, zernioKey: 'allowStitch' },
     ai_disclosure: { ships: true, zernioKey: 'videoMadeWithAi' },
+    commercial_content: { ships: true, zernioKey: 'commercialContentType' },
+    brand_partnership: { ships: true, zernioKey: 'brandPartnerPromote' },
+    auto_add_music: { ships: true, zernioKey: 'autoAddMusic' },
+    cover_image_url: { ships: true, zernioKey: 'videoCoverImageUrl' },
   },
   youtube: {
     title: { ships: true, zernioKey: 'title' },
@@ -46,18 +67,36 @@ export const COMPOSER_FIELDS: Record<string, Record<string, FieldStatus>> = {
       reason: 'YouTube detects Shorts from the video itself (under ~3 minutes, vertical). There is no Shorts switch on the post.',
     },
     made_for_kids: { ships: true, zernioKey: 'madeForKids' },
+    first_comment: { ships: true, zernioKey: 'firstComment' },
+    playlist: { ships: true, zernioKey: 'playlistId' },
+    ai_disclosure: { ships: true, zernioKey: 'containsSyntheticMedia' },
   },
   linkedin: {
+    first_comment: { ships: true, zernioKey: 'firstComment' },
+    document_title: { ships: true, zernioKey: 'documentTitle' },
+    link_preview: { ships: true, zernioKey: 'disableLinkPreview' },
     article_link: {
       ships: false,
-      reason: 'A LinkedIn article URL is not a Zernio post setting. Put the link in the caption, or reshare a LinkedIn post.',
+      reason: 'A LinkedIn article URL is not a post setting. Put the link in the caption, or reshare the article instead.',
     },
   },
   twitter: {
+    /*
+     * A thread ships — but only when the posts are written out.
+     *
+     * `TwitterPlatformData.threadItems[]` is a real field, so the old blanket
+     * refusal was wrong about the capability. It was right about the control:
+     * a yes/no switch still cannot invent the follow-up posts, so the SWITCH is
+     * refused and `thread_items` — the written-out list — is what ships.
+     */
     thread: {
       ships: false,
-      reason: 'Posting a thread needs each tweet written out. A yes/no switch cannot invent them.',
+      reason: 'A thread needs each post written out. Add them below and they go out in order.',
     },
+    thread_items: { ships: true, zernioKey: 'threadItems' },
+    reply_settings: { ships: true, zernioKey: 'replySettings' },
+    sensitive_media: { ships: true, zernioKey: 'sensitiveMedia' },
+    ai_disclosure: { ships: true, zernioKey: 'madeWithAi' },
   },
 }
 
@@ -93,7 +132,9 @@ export function composerFieldStatusForTransport(
   if (status.ships) {
     return {
       ships: false,
-      reason: 'This business posts through Mixpost, which does not take this setting.',
+      // Owner-facing copy names no vendor. The owner has never been told what
+      // "Mixpost" is and this is not the place to start.
+      reason: 'This business posts through the backup connection, which cannot take this setting.',
     }
   }
   return status
@@ -118,6 +159,16 @@ function bool(value: unknown): boolean | undefined {
   return typeof value === 'boolean' ? value : undefined
 }
 
+/** A list of non-empty strings, or nothing. An empty array is not a value. */
+function strList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out = value.flatMap((entry) => {
+    const text = str(entry)
+    return text ? [text] : []
+  })
+  return out.length > 0 ? out : undefined
+}
+
 /**
  * Only keys that exist on the matching *PlatformData type are returned.
  * Empty object means "send nothing extra" — callers must omit the field.
@@ -136,6 +187,12 @@ export function toZernioPlatformData(opts: {
       if (firstComment) out.firstComment = firstComment
       const cover = str(options.cover_image_url)
       if (cover) out.instagramThumbnail = cover
+      const shareToFeed = bool(options.share_to_feed)
+      if (shareToFeed !== undefined) out.shareToFeed = shareToFeed
+      const collaborators = strList(options.collaborators)
+      if (collaborators) out.collaborators = collaborators
+      const aiGenerated = bool(options.ai_disclosure)
+      if (aiGenerated !== undefined) out.isAiGenerated = aiGenerated
       break
     }
     case 'facebook': {
@@ -158,6 +215,14 @@ export function toZernioPlatformData(opts: {
       if (allowStitch !== undefined) out.allowStitch = allowStitch
       const ai = bool(options.ai_disclosure)
       if (ai !== undefined) out.videoMadeWithAi = ai
+      const commercial = str(options.commercial_content)
+      if (commercial) out.commercialContentType = commercial
+      const brandPartner = bool(options.brand_partnership)
+      if (brandPartner !== undefined) out.brandPartnerPromote = brandPartner
+      const autoMusic = bool(options.auto_add_music)
+      if (autoMusic !== undefined) out.autoAddMusic = autoMusic
+      const tiktokCover = str(options.cover_image_url)
+      if (tiktokCover) out.videoCoverImageUrl = tiktokCover
       break
     }
     case 'youtube': {
@@ -169,16 +234,45 @@ export function toZernioPlatformData(opts: {
       if (madeForKids !== undefined) out.madeForKids = madeForKids
       const categoryId = str(options.category)
       if (categoryId) out.categoryId = categoryId
+      const ytFirstComment = str(options.first_comment)
+      if (ytFirstComment) out.firstComment = ytFirstComment
+      const playlistId = str(options.playlist)
+      if (playlistId) out.playlistId = playlistId
+      const synthetic = bool(options.ai_disclosure)
+      if (synthetic !== undefined) out.containsSyntheticMedia = synthetic
       break
     }
     case 'linkedin': {
       const firstComment = str(options.first_comment)
       if (firstComment) out.firstComment = firstComment
+      const documentTitle = str(options.document_title)
+      if (documentTitle) out.documentTitle = documentTitle
+      const linkPreview = bool(options.link_preview)
+      // The composer asks "show a link preview?"; the SDK asks the opposite
+      // question. Sending the answer through unflipped would turn the preview
+      // off for everyone who asked for it.
+      if (linkPreview !== undefined) out.disableLinkPreview = !linkPreview
       break
     }
     case 'twitter': {
       const ai = bool(options.ai_disclosure)
       if (ai !== undefined) out.madeWithAi = ai
+      const replySettings = str(options.reply_settings)
+      if (replySettings) out.replySettings = replySettings
+      const sensitive = bool(options.sensitive_media)
+      if (sensitive !== undefined) out.sensitiveMedia = sensitive
+      /*
+       * A thread is the written-out posts, never the switch. `thread: true`
+       * with nothing written is dropped on purpose: publishing a one-post
+       * "thread" and calling it done is worse than saying it did not happen.
+       *
+       * threadItems[0] MUST be the first post. When threadItems is present the
+       * top-level content is used for display and search only and is never
+       * published — so a caller that puts only the follow-ups here loses the
+       * opening post entirely.
+       */
+      const threadItems = strList(options.thread_items)
+      if (threadItems) out.threadItems = threadItems.map((text) => ({ content: text }))
       break
     }
   }
@@ -191,23 +285,43 @@ const TIKTOK_PRIVACY_FROM_SDK: Record<string, string> = Object.fromEntries(
 )
 
 const COMPOSER_FROM_SDK: Record<string, Record<string, string>> = {
-  instagram: { firstComment: 'first_comment', instagramThumbnail: 'cover_image_url' },
+  instagram: {
+    firstComment: 'first_comment',
+    instagramThumbnail: 'cover_image_url',
+    shareToFeed: 'share_to_feed',
+    collaborators: 'collaborators',
+    isAiGenerated: 'ai_disclosure',
+  },
   tiktok: {
     privacyLevel: 'privacy',
     allowComment: 'allow_comments',
     allowDuet: 'allow_duet',
     allowStitch: 'allow_stitch',
     videoMadeWithAi: 'ai_disclosure',
+    commercialContentType: 'commercial_content',
+    brandPartnerPromote: 'brand_partnership',
+    autoAddMusic: 'auto_add_music',
+    videoCoverImageUrl: 'cover_image_url',
   },
   youtube: {
     title: 'title',
     visibility: 'privacy',
     madeForKids: 'made_for_kids',
     categoryId: 'category',
+    firstComment: 'first_comment',
+    playlistId: 'playlist',
+    containsSyntheticMedia: 'ai_disclosure',
   },
   facebook: { title: 'title', firstComment: 'first_comment' },
-  linkedin: { firstComment: 'first_comment' },
-  twitter: { madeWithAi: 'ai_disclosure' },
+  linkedin: {
+    firstComment: 'first_comment',
+    documentTitle: 'document_title',
+  },
+  twitter: {
+    madeWithAi: 'ai_disclosure',
+    replySettings: 'reply_settings',
+    sensitiveMedia: 'sensitive_media',
+  },
 }
 
 /**

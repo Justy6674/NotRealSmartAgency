@@ -17,7 +17,13 @@ const VARIABLE_TYPES: Array<{ value: NonNullable<TemplateVariableDef['type']>; l
 ]
 
 /**
- * Inline editor for a template's variable definitions. Variables are
+ * Inline editor for a template's blanks.
+ *
+ * The owner sees "blanks"; the code says variables, because that is what the
+ * stored field is called and renaming it would be a migration for a word. A
+ * non-technical person reading "variable" on a caption screen reads maths.
+ *
+ * Variables are
  * referenced in the caption via `{key}` single-brace syntax, matching
  * NRS's existing `resolveTemplate()` helper.
  *
@@ -94,7 +100,7 @@ export function VariableManager({ variables, onChange }: VariableManagerProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Variable className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium">Variables</span>
+          <span className="text-xs font-medium">Blanks</span>
           <span className="text-[10px] text-muted-foreground">
             ({variables.length})
           </span>
@@ -105,13 +111,13 @@ export function VariableManager({ variables, onChange }: VariableManagerProps) {
           className="inline-flex items-center gap-1 rounded bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
           <Plus className="h-3 w-3" />
-          Add variable
+          Add a blank
         </button>
       </div>
 
       {variables.length === 0 ? (
         <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-[10px] text-muted-foreground">
-          No variables defined. Add one to allow dynamic fields like <code className="text-foreground">{'{product}'}</code> in your caption.
+          No blanks yet. A blank is a bit of the caption that changes each time — write <code className="text-foreground">{'{product}'}</code> and you will be asked to fill it in whenever you use this template.
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -145,7 +151,7 @@ export function VariableManager({ variables, onChange }: VariableManagerProps) {
                     type="button"
                     onClick={() => removeVariable(index)}
                     className="text-muted-foreground/50 hover:text-destructive"
-                    title="Remove variable"
+                    title="Remove this blank"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>

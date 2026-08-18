@@ -133,7 +133,9 @@ function documentToPatch(
     platformOptions,
     showPerPlatformVersions,
     showDirectorHashtagNote: hashtagsAreSuggested && document.hashtags.length > 0,
-    successLabel: document.targets.length === 1
+    successLabel: document.targets.some((target) => target.captionOverride) && document.targets.length > 1
+      ? 'Put each account\'s words on the post'
+      : document.targets.length === 1
       ? `Added to ${document.targets[0]!.platform.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} caption`
       : 'Added to caption',
     scheduledAt: document.schedule.mode === 'at' ? document.schedule.scheduledAt : undefined,
@@ -165,14 +167,32 @@ export function captionDraftToDeskActions(draft: {
   caption: string
   hashtags: string[]
   platforms?: PostPlatform[]
+  copies?: Array<{
+    platform: PostPlatform
+    caption: string
+    hashtags: string[]
+    title?: string
+  }>
+  youtubeTitle?: string
 }): SocialDeskAction[] {
   const actions: SocialDeskAction[] = [
     { type: 'set_master_caption', caption: draft.caption },
     { type: 'set_hashtags', hashtags: draft.hashtags },
   ]
-  const platforms = asSocialPlatforms(draft.platforms ?? [])
+  const fromCopies = asSocialPlatforms((draft.copies ?? []).map((copy) => copy.platform))
+  const platforms = fromCopies.length > 0 ? fromCopies : asSocialPlatforms(draft.platforms ?? [])
   if (platforms.length > 0) {
     actions.push({ type: 'set_platforms', platforms })
+  }
+  for (const copy of draft.copies ?? []) {
+    if (!(SOCIAL_PLATFORMS as readonly string[]).includes(copy.platform)) continue
+    actions.push({ type: 'set_platform_caption', targetId: copy.platform, caption: copy.caption })
+    if (copy.platform === 'youtube' && copy.title) {
+      actions.push({ type: 'set_platform_title', targetId: 'youtube', title: copy.title })
+    }
+  }
+  if (draft.youtubeTitle && !(draft.copies ?? []).some((copy) => copy.platform === 'youtube' && copy.title)) {
+    actions.push({ type: 'set_platform_title', targetId: 'youtube', title: draft.youtubeTitle })
   }
   return actions
 }

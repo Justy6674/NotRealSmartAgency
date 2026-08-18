@@ -11,15 +11,15 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
  * The composer, reached from Create post, an empty calendar slot, Review, or
  * a restored Desk proposal. One screen so those entry points cannot drift.
  */
-export function ComposeScreen() {
+export function ComposeScreen({ chrome = 'standalone' }: { chrome?: 'department' | 'standalone' } = {}) {
   return (
     <Suspense fallback={<div className="h-full min-h-0" />}>
-      <ComposeScreenInner />
+      <ComposeScreenInner chrome={chrome} />
     </Suspense>
   )
 }
 
-function ComposeScreenInner() {
+function ComposeScreenInner({ chrome }: { chrome: 'department' | 'standalone' }) {
   const { pendingDraftId, pendingMediaId, setPendingDraftId, setPendingMediaId } = useAgencyStore()
   const searchParams = useSearchParams()
   const draftParam = searchParams.get('draft')
@@ -36,19 +36,24 @@ function ComposeScreenInner() {
   const timeParam = searchParams.get('time')
   const initialScheduleDate = dateParam ? `${dateParam}T${timeParam ?? '09:00'}` : undefined
 
-  return (
-    <div className="h-full min-h-0 overflow-hidden">
-      <PostCreator
-        draftId={exactDraftId ?? pendingDraftId ?? undefined}
-        mediaId={exactMediaId ?? pendingMediaId ?? undefined}
-        deskConversationId={deskConversationId}
-        deskOutputId={deskOutputId}
-        onDone={() => {
-          setPendingDraftId(null)
-          setPendingMediaId(null)
-        }}
-        initialScheduleDate={initialScheduleDate}
-      />
-    </div>
+  // In the department the shell is the frame: it scrolls, it pads, and it pins
+  // the action bar. A wrapper here would be a third box inside two others.
+  const composer = (
+    <PostCreator
+      chrome={chrome}
+      draftId={exactDraftId ?? pendingDraftId ?? undefined}
+      mediaId={exactMediaId ?? pendingMediaId ?? undefined}
+      deskConversationId={deskConversationId}
+      deskOutputId={deskOutputId}
+      onDone={() => {
+        setPendingDraftId(null)
+        setPendingMediaId(null)
+      }}
+      initialScheduleDate={initialScheduleDate}
+    />
   )
+
+  if (chrome === 'department') return composer
+
+  return <div className="h-full min-h-0 overflow-hidden">{composer}</div>
 }

@@ -9,7 +9,10 @@ const brand = {
   social_urls: { instagram: 'https://instagram.com/scentsell' },
   tone_of_voice: { keywords: ['fragrance', 'niche'], avoid_words: ['fake'], humour: 'moderate', formality: 'casual' },
   content_pillars: ['Fragrance reviews', 'Marketplace tips'],
-} as Brand
+  // A deliberate partial: these rules read five fields and the other twenty-nine
+  // on Brand would be noise in the fixture. Cast through `unknown` because that
+  // is what TypeScript asks for on a partial, not because the shape is unknown.
+} as unknown as Brand
 
 test('searchable social rules emphasise caption-body discovery and sparse hashtags', () => {
   const rules = buildSearchableSocialCopyRules(brand)

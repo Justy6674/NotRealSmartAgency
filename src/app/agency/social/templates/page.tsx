@@ -7,6 +7,12 @@ import { TemplatesIndex } from '@/components/agency/studio/templates/TemplatesIn
 import { useAgencyStore } from '@/stores/agency-store'
 import type { Brand } from '@/types/database'
 
+/**
+ * The department shell supplies the scrolling, padded pane, so nothing is
+ * wrapped around the index here. Creating or editing a template stays on
+ * `/agency/social/templates/[templateId]` — inside this chrome — rather than
+ * throwing the owner out to the Studio route the editor used to live on.
+ */
 export default function SocialTemplatesPage() {
   const { activeBrandId } = useAgencyStore()
   const [brand, setBrand] = useState<Brand | null>(null)
@@ -24,16 +30,12 @@ export default function SocialTemplatesPage() {
         setBrand(data.find((b) => b.id === activeBrandId) ?? null)
       })
       .catch(() => {
-        /* ignore */
+        /* the index renders its own empty state; a brand name is decoration */
       })
     return () => {
       cancelled = true
     }
   }, [activeBrandId])
 
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-6">
-      <TemplatesIndex brandId={activeBrandId} brandName={brand?.name} />
-    </div>
-  )
+  return <TemplatesIndex brandId={activeBrandId} brandName={brand?.name} />
 }

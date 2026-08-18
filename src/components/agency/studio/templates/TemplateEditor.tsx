@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Loader2, AlertCircle, Hash, X } from 'lucide-react'
 import { useTemplates, type TemplateDraft, type TemplateVariableDef } from '@/hooks/useTemplates'
@@ -15,6 +14,16 @@ interface TemplateEditorProps {
   brandId: string | null
   brandName?: string
   templateId: string
+  /**
+   * Where "Back" goes, and therefore which chrome the owner stays inside.
+   *
+   * This was hard-coded to `/agency/studio/templates`, so a template opened
+   * from the Social department ejected him out of it — the sidebar, the tab
+   * strip and the department he was working in all changed underneath him
+   * because he pressed Edit. Defaulting to the Social route rather than the
+   * Studio one, since Social is where templates now live.
+   */
+  basePath?: string
 }
 
 const PLATFORM_OPTIONS: Array<{ value: string | null; label: string }> = [
@@ -35,8 +44,12 @@ const PLATFORM_OPTIONS: Array<{ value: string | null; label: string }> = [
  *
  * Phase 6 of the Mixpost UI port.
  */
-export function TemplateEditor({ brandId, brandName, templateId }: TemplateEditorProps) {
-  const router = useRouter()
+export function TemplateEditor({
+  brandId,
+  brandName,
+  templateId,
+  basePath = '/agency/social/templates',
+}: TemplateEditorProps) {
   const { templates, getTemplate, updateTemplate, loading: listLoading } = useTemplates(brandId)
 
   const [template, setTemplate] = useState<PostTemplate | null>(null)
@@ -195,7 +208,7 @@ export function TemplateEditor({ brandId, brandName, templateId }: TemplateEdito
         <AlertCircle className="h-8 w-8 text-destructive" />
         <p className="text-sm text-destructive">{error}</p>
         <Link
-          href="/agency/studio/templates"
+          href={basePath}
           className="text-xs text-muted-foreground hover:text-foreground"
         >
           Back to templates
@@ -210,7 +223,7 @@ export function TemplateEditor({ brandId, brandName, templateId }: TemplateEdito
       <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <div className="flex items-center gap-3">
           <Link
-            href="/agency/studio/templates"
+            href={basePath}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
