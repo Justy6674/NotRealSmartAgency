@@ -16,6 +16,13 @@
  * into `scheduledFor` is explicitly warned against upstream for exactly that
  * reason: two posts land on the same minute.
  *
+ * `queue_slot_id` is no longer always null either. `fill-calendar.ts` reads the
+ * owner's CONFIGURED `posting_schedule_slots` and carries the slot id through
+ * `createDraftPost({ queueSlotId })`, so a post the Director writes into a slot
+ * keeps that slot on its row and the per-slot counts are real. That is the one
+ * writer, and it goes through the canonical draft pipeline — which is why the
+ * two functions below are not coming back as a second one.
+ *
  * ── What is left, and who uses it ──────────────────────────────────────
  * The date arithmetic, because the composer genuinely needs it: given the
  * week's times, when is the next one? That answer is shown as a hint beside
@@ -27,10 +34,16 @@ import type { PostingScheduleSlot } from '@/types/database'
 /**
  * The next concrete instant a weekly slot falls on, after `from`.
  *
- * The slot's time is wall-clock in the slot's own zone. Brisbane, Darwin and
- * Perth have no daylight saving so those are exact; the southern states are
- * approximated at standard time, which is fine for a hint and is the reason
- * this is a hint. The queue is the source of truth for an actual booking.
+ * The slot's time is wall-clock in the slot's own zone, converted to UTC
+ * through `Intl` rather than a hard-coded offset table. That table used to
+ * approximate the southern states at standard time, so every Sydney,
+ * Melbourne, Hobart or Adelaide slot read an hour wrong for the five months
+ * of daylight saving — an "8am" post the owner was shown as 8am. Pinned by
+ * the DST case in assign-to-slot.test.ts.
+ *
+ * It still never BOOKS anything: this answers "when does this come round
+ * next?" for a hint beside "next free time". The publisher's queue
+ * (`src/lib/zernio/queue.ts`) takes a lock when it assigns a real time.
  */
 export function nextOccurrence(
   slot: Pick<PostingScheduleSlot, 'day_of_week' | 'time' | 'timezone'>,
@@ -41,17 +54,23 @@ export function nextOccurrence(
   const minute = parseInt(mStr ?? '0', 10)
   const second = parseInt(sStr ?? '0', 10)
 
-  const offsetMinutes = timezoneOffsetMinutes(slot.timezone)
-
   for (let dayOffset = 0; dayOffset < 8; dayOffset++) {
-    const candidate = new Date(from.getTime())
-    candidate.setUTCDate(from.getUTCDate() + dayOffset)
-    candidate.setUTCHours(hour, minute, second, 0)
-    // Local wall clock → UTC.
-    candidate.setTime(candidate.getTime() - offsetMinutes * 60_000)
+    const probe = new Date(from.getTime() + dayOffset * 86_400_000)
+    const localDate = zonedParts(probe, slot.timezone)
+    const localDow = new Date(
+      Date.UTC(localDate.year, localDate.month - 1, localDate.day),
+    ).getUTCDay()
 
-    const local = new Date(candidate.getTime() + offsetMinutes * 60_000)
-    if (local.getUTCDay() !== slot.day_of_week) continue
+    if (localDow !== slot.day_of_week) continue
+    const candidate = zonedDateTimeToUtc(
+      localDate.year,
+      localDate.month,
+      localDate.day,
+      hour,
+      minute,
+      second,
+      slot.timezone,
+    )
     if (candidate.getTime() <= from.getTime()) continue
 
     return candidate
@@ -82,26 +101,64 @@ export function earliestNextSlot(
   return best
 }
 
-/** IANA zone → offset in minutes. Australian zones only; anything else is UTC+10. */
-function timezoneOffsetMinutes(tz: string): number {
-  switch (tz) {
-    case 'Australia/Brisbane':
-      return 600
-    case 'Australia/Darwin':
-      return 570 // UTC+9:30
-    case 'Australia/Perth':
-      return 480
-    // Daylight saving is approximated at standard time. See the docblock: this
-    // is a hint, and the queue books the real time.
-    case 'Australia/Sydney':
-    case 'Australia/Melbourne':
-    case 'Australia/Hobart':
-      return 600
-    case 'Australia/Adelaide':
-      return 570
-    case 'UTC':
-      return 0
-    default:
-      return 600
+interface ZonedParts {
+  year: number
+  month: number
+  day: number
+  hour: number
+  minute: number
+  second: number
+}
+
+function zonedParts(date: Date, timeZone: string): ZonedParts {
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0)
+  return {
+    year: value('year'),
+    month: value('month'),
+    day: value('day'),
+    hour: value('hour'),
+    minute: value('minute'),
+    second: value('second'),
   }
+}
+
+function offsetAt(date: Date, timeZone: string): number {
+  const local = zonedParts(date, timeZone)
+  const representedAsUtc = Date.UTC(
+    local.year,
+    local.month - 1,
+    local.day,
+    local.hour,
+    local.minute,
+    local.second,
+  )
+  return representedAsUtc - Math.floor(date.getTime() / 1000) * 1000
+}
+
+function zonedDateTimeToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timeZone: string,
+): Date {
+  const wallTime = Date.UTC(year, month - 1, day, hour, minute, second)
+  let candidate = new Date(wallTime)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    candidate = new Date(wallTime - offsetAt(candidate, timeZone))
+  }
+  return candidate
 }

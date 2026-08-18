@@ -75,6 +75,7 @@ interface PlatformSectionProps {
   onChange: (platforms: PostPlatform[]) => void
   selectedAccountIds?: string[]
   onAccountIdsChange?: (ids: string[]) => void
+  onAccountsChange?: (accounts: SocialAccount[]) => void
   brandName?: string
 }
 
@@ -84,11 +85,24 @@ export function PlatformSection({
   onChange,
   selectedAccountIds = [],
   onAccountIdsChange,
+  onAccountsChange,
   brandName,
 }: PlatformSectionProps) {
   const { activeBrandId } = useAgencyStore()
   const { accounts, loading, error } = useSocialAccounts(activeBrandId)
   const seededFor = useRef<string | null>(null)
+
+  /**
+   * Lift the live account list to the composer.
+   *
+   * The composer needs the accounts themselves, not just the ticked ids: a
+   * scheduled row must carry only the account ids that belong to ITS platform,
+   * and only this component has fetched them. Without it the composer wrote
+   * every ticked id onto every platform's row.
+   */
+  useEffect(() => {
+    onAccountsChange?.(accounts)
+  }, [accounts, onAccountsChange])
 
   /**
    * The accounts it is safe to tick without anyone choosing.

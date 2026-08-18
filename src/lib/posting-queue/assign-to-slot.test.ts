@@ -40,13 +40,42 @@ test('a weekly time lands on its own weekday in its own zone', () => {
 })
 
 /**
+ * Brisbane has no daylight saving, so the Brisbane case above passed against
+ * the old hard-coded offset table too. The southern states are where that
+ * table lied: it approximated them at standard time all year, so a Sydney
+ * "9am Monday" slot was read as 10am for the five months of DST — and the
+ * owner was shown the wrong hour with no hint anything was off. Two instants,
+ * one either side of the transition, is the whole guard.
+ */
+test('Sydney slots observe daylight saving time', () => {
+  const sydneyMondayNine: Pick<PostingScheduleSlot, 'day_of_week' | 'time' | 'timezone'> = {
+    day_of_week: 1,
+    time: '09:00',
+    timezone: 'Australia/Sydney',
+  }
+
+  // Summer: Sydney is UTC+11, so 09:00 Monday is 22:00 UTC the Sunday before.
+  assert.equal(
+    nextOccurrence(sydneyMondayNine, new Date('2026-01-04T00:00:00.000Z')).toISOString(),
+    '2026-01-04T22:00:00.000Z',
+  )
+  // Winter: UTC+10, so the same wall-clock slot is an hour later in UTC.
+  assert.equal(
+    nextOccurrence(sydneyMondayNine, new Date('2026-07-05T00:00:00.000Z')).toISOString(),
+    '2026-07-05T23:00:00.000Z',
+  )
+})
+
+/**
  * The rewrite this file guards.
  *
  * `assignToSlot` and `unassignFromSlot` wrote `queue_slot_id` and had zero
  * callers, which is why the posting-schedule page promised something no code
  * delivered. Queueing belongs to the publisher's own queue, which locks the
- * slot when it assigns it. If either name comes back here, the promise on that
- * page has quietly become a lie again.
+ * slot when it assigns it. The one legitimate writer is `fill-calendar.ts`,
+ * going through `createDraftPost({ queueSlotId })` — the canonical draft
+ * pipeline. If either name comes back HERE, there are two writers again and
+ * the promise on that page has quietly become a lie.
  */
 test('the dead slot-assignment writer stays gone', () => {
   const source = readFileSync(resolve(import.meta.dirname, 'assign-to-slot.ts'), 'utf8')

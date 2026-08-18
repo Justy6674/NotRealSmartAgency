@@ -9,9 +9,10 @@ import { DIRECTOR_HASHTAG_DISCLAIMER } from '@/lib/desk/extract-caption-draft'
 import { applyDeskActionsToCompose } from '@/lib/social/apply-desk-actions'
 import { useStudioData } from '@/hooks/useStudioData'
 import { useStrategyContext } from '@/hooks/useStrategyContext'
-import { useSocialAccounts } from '@/hooks/useSocialAccounts'
+import { useSocialAccounts, type SocialAccount } from '@/hooks/useSocialAccounts'
 import { canonicalSocialPlatform } from '@/lib/studio/social-read-source'
 import { isComposerPlatform } from '@/lib/social/capabilities'
+import { accountIdsForPlatform } from '@/lib/social/account-targets'
 
 // Layout
 import { ComposerLayout } from './ComposerLayout'
@@ -217,6 +218,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [contentType, setContentType] = useState<ContentType>('post')
   const [selectedPlatforms, setSelectedPlatforms] = useState<PostPlatform[]>([])
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([])
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([])
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [caption, setCaption] = useState('')
@@ -387,6 +389,17 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
    * one list. Two Instagram accounts appear as two entries with two captions —
    * which is the whole point, and is why nothing here collapses to a platform.
    */
+  /**
+   * The account list the per-row partition is decided against.
+   *
+   * Two components fetch it — this one, and the picker, which lifts its copy up
+   * through `onAccountsChange`. They are the same hook on the same business, so
+   * they agree; the fallback exists because an EMPTY list here would silently
+   * strip every `account_ids` off the save rather than fail loudly, and a
+   * targeting rule that quietly stops targeting is worse than no rule.
+   */
+  const targetAccounts = connectedAccounts.length > 0 ? connectedAccounts : socialAccounts
+
   const selectedAccounts = connectedAccounts
     .filter((account) => selectedAccountIds.includes(account.id))
     .map((account) => ({
@@ -1040,10 +1053,18 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         // the whole fault: the editor wrote the LinkedIn version, the preview
         // drew the LinkedIn version, and LinkedIn received the master.
         const publish = resolvePublishCaption(versions, platform, caption, hashtags)
-        const rowAccounts = selectedAccounts.filter((account) => account.platform === platform)
-        const rowAccountIds = rowAccounts.length > 0
-          ? rowAccounts.map((account) => account.id)
-          : selectedAccountIds
+        // Only THIS network's accounts, decided by `accountIdsForPlatform` —
+        // one partitioner, unit-tested in social/safety-slice.test.ts, rather
+        // than a second copy of the rule living in the composer.
+        //
+        // There is deliberately NO fallback to every ticked id when the filter
+        // comes back empty. That fallback was the leak: a post to Instagram
+        // with only a LinkedIn account ticked wrote the LinkedIn id onto the
+        // Instagram row, and publish-ticked.ts walks metadata.account_ids
+        // literally. An empty list is the honest answer — the row carries no
+        // account override and the publisher resolves the network itself.
+        const rowAccountIds = accountIdsForPlatform(selectedAccountIds, targetAccounts, platform)
+        const rowAccounts = selectedAccounts.filter((account) => rowAccountIds.includes(account.id))
         const rowCaptions: Record<string, string> = {}
         for (const account of rowAccounts) {
           const own = captionsByAccountId[account.id]
@@ -1166,7 +1187,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       if (!isAutosave) setSaving(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, captionsByAccountId, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
+  }, [activeBrandId, caption, hashtags, versions, hasOverLimit, reviewStamps, selectedPlatforms, selectedAccountIds, targetAccounts, captionsByAccountId, postType, selectedMediaIds, strategyContext, data, editMode, editDraftId, onDone, draftKey, platformOptions, initialScheduleDate])
 
   /**
    * 300ms debounced autosave, in place of a Save-draft button.
@@ -1256,6 +1277,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
         onChange={handlePlatformsChange}
         selectedAccountIds={selectedAccountIds}
         onAccountIdsChange={setSelectedAccountIds}
+        onAccountsChange={setSocialAccounts}
         brandName={brandName}
       />
 

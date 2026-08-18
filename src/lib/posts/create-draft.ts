@@ -73,6 +73,7 @@ export interface CreateDraftInput {
   status?: ScheduledPostStatus
   /** ISO datetime. Defaults to now, which is what a draft carries. */
   scheduledAt?: string
+  queueSlotId?: string
   metadata?: Record<string, unknown>
   contentType?: string | null
   contentPillar?: string | null
@@ -204,6 +205,7 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
     postType: postTypeOverride,
     status = 'draft',
     scheduledAt,
+    queueSlotId,
     metadata = {},
     contentType,
     contentPillar,
@@ -368,6 +370,7 @@ export async function createDraftPost(input: CreateDraftInput): Promise<CreateDr
   if (contentType) insertData.content_type = contentType
   if (contentPillar) insertData.content_pillar = contentPillar
   if (outputId) insertData.output_id = outputId
+  if (queueSlotId) insertData.queue_slot_id = queueSlotId
 
   const { data, error } = await supabase
     .from('scheduled_posts')

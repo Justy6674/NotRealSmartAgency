@@ -58,8 +58,14 @@ test('the creator wires one-or-all account ticks into the save', () => {
   // Per NETWORK, not per post. Sending every ticked id on every row told the
   // Instagram row to publish to the LinkedIn account too, because
   // publish-ticked.ts walks metadata.account_ids literally.
+  //
+  // The partition itself is `accountIdsForPlatform`, unit-tested in
+  // social/safety-slice.test.ts. The composer must CALL it rather than keep a
+  // second copy of the rule, and must never fall back to the whole ticked set.
+  assert.match(creator, /accountIdsForPlatform\(/)
   assert.match(creator, /account_ids: rowAccountIds/)
   assert.match(creator, /rowAccounts = selectedAccounts\.filter/)
+  assert.doesNotMatch(creator, /account_ids: selectedAccountIds/)
   assert.match(creator, /brandName=\{brandName\}/)
 })
 
