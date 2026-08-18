@@ -67,7 +67,10 @@ function TooBigFor({ item }: { item: UploadQueueItem }) {
   if (item.status !== 'completed') return null
   const sentence = tooLargeSentence({
     fileType: item.fileType,
-    refusedBy: platformsThatWillRefuse(item.fileSize),
+    // The type matters: a 23 MB picture is over most ceilings and a 23 MB
+    // video is over none of them. Judging both by one table is the fault this
+    // whole module was rebuilt to close.
+    refusedBy: platformsThatWillRefuse(item.fileSize, { fileType: item.fileType }),
   })
   if (!sentence) return null
 

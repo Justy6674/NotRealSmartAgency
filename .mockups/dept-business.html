@@ -243,6 +243,7 @@ tr:last-child td{border-bottom:0}
 .mark{width:74px;height:74px;border-radius:20px;background:var(--brand-deep);color:oklch(1 0 0);
   display:grid;place-items:center;font:650 26px/1 var(--sans);letter-spacing:-.03em}
 .logotile .fn{font-size:11.5px;color:var(--ink-3);font-family:var(--mono);word-break:break-all}
+.swnote{margin:0 0 9px;font-size:11.5px;color:var(--ink-3);line-height:1.45}
 .sw-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px}
 .sw-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 9px;background:var(--panel-2)}
 .sw-chip{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);flex-shrink:0}
@@ -388,6 +389,9 @@ body.railoff .reopen{display:flex}
 :root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
 @media (prefers-color-scheme:dark){
   :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+  /* In dark the accent fill inverts to a light teal, so white label text on
+     Create post drops to almost no contrast. The label has to invert with it. */
+  .side .cta{color:oklch(0.17 0.020 205)}
 }
 
 .side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
@@ -476,7 +480,7 @@ body.railoff .reopen{display:flex}
       <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
       <span class="chev">&#9662;</span>
     </button>
-    <button class="caretog on">
+    <button class="caretog on" id="caretog">
       <span class="sw"></span>
       <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
     </button>
@@ -843,6 +847,11 @@ body.railoff .reopen{display:flex}
       </div>
 
       <div>
+        <!-- The owner is not technical. The colour code is real and worth keeping,
+             but it is for whoever builds things for him — say so, rather than
+             leaving a line of notation with no explanation. -->
+        <p class="swnote">The name and the description are yours to change. The code underneath
+           each one is what a designer or printer needs &mdash; you never have to type one.</p>
         <div class="sw-list" id="swlist">
           <div class="sw-row">
             <span class="sw-chip" style="background:oklch(0.55 0.10 205)"></span>
@@ -1158,7 +1167,7 @@ body.railoff .reopen{display:flex}
     <button class="rtab">&#128065; Preview</button>
     <button class="rtab">&#9993; Activity</button>
     <button class="rtab">&#9650; Analytics</button>
-      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+      <span class="ctl"><button class="hide" id="hiderail" title="Collapse the Director">&#10530; Hide</button></span>
     </div>
 
   <div class="rbody">

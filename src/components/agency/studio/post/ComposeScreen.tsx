@@ -27,7 +27,19 @@ function ComposeScreenInner({ chrome }: { chrome: 'department' | 'standalone' })
   const conversationParam = searchParams.get('conversation')
   const outputParam = searchParams.get('output')
   const exactDraftId = draftParam && UUID_PATTERN.test(draftParam) ? draftParam : null
-  const exactMediaId = mediaParam && UUID_PATTERN.test(mediaParam) ? mediaParam : null
+  /**
+   * `?media=` carries one id or several, comma-separated.
+   *
+   * The media library lets him tick a handful of files and send the lot here,
+   * so this had to stop being a single id — but every existing link sends one,
+   * and one is simply a list of length one. Anything that is not a real id is
+   * dropped rather than passed on, so a mangled link opens an empty composer
+   * instead of asking for a file that cannot exist.
+   */
+  const exactMediaIds = (mediaParam ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => UUID_PATTERN.test(id))
   const deskConversationId =
     conversationParam && UUID_PATTERN.test(conversationParam) ? conversationParam : undefined
   const deskOutputId = outputParam && UUID_PATTERN.test(outputParam) ? outputParam : undefined
@@ -42,7 +54,8 @@ function ComposeScreenInner({ chrome }: { chrome: 'department' | 'standalone' })
     <PostCreator
       chrome={chrome}
       draftId={exactDraftId ?? pendingDraftId ?? undefined}
-      mediaId={exactMediaId ?? pendingMediaId ?? undefined}
+      mediaId={pendingMediaId ?? undefined}
+      mediaIds={exactMediaIds.length > 0 ? exactMediaIds : undefined}
       deskConversationId={deskConversationId}
       deskOutputId={deskOutputId}
       onDone={() => {

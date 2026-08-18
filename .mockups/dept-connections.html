@@ -277,6 +277,9 @@ h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
 :root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
 @media (prefers-color-scheme:dark){
   :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+  /* In dark the accent fill inverts to a light teal, so white label text on
+     Create post drops to almost no contrast. The label has to invert with it. */
+  .side .cta{color:oklch(0.17 0.020 205)}
 }
 
 .side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
@@ -365,7 +368,7 @@ h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
       <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
       <span class="chev">&#9662;</span>
     </button>
-    <button class="caretog on">
+    <button class="caretog on" id="caretog">
       <span class="sw"></span>
       <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
     </button>
@@ -665,7 +668,7 @@ h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
       <span class="rtab">&#128065; Preview</span>
       <span class="rtab">&#9993; Activity</span>
       <span class="rtab">&#9650; Analytics</span>
-      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+      <span class="ctl"><button class="hide" id="shut" title="Collapse the Director">&#10530; Hide</button></span>
     
   </div>
 
@@ -713,7 +716,22 @@ h1{font-size:19px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
       <span class="live"><i></i> 14 departments ready</span>
     </div>
   </div>
+
+  <!-- Collapsed state. The screen stands on its own; this is the way back. -->
+  <div class="strip">
+    <span class="d">ND</span>
+    <button id="open" title="Open the Director">&#10529;</button>
+    <span class="vt">Director</span>
+  </div>
 </aside>
 
+
+<script>
+  /* The Director is optional on this screen: everything here is a manual
+     control, so collapsing the rail must remove nothing but the rail. */
+  var b=document.body;
+  document.getElementById('shut').onclick=function(){b.classList.add('railshut')};
+  document.getElementById('open').onclick=function(){b.classList.remove('railshut')};
+</script>
 </body>
 </html>

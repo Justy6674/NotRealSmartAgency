@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Images, Film, ImageIcon, Palette, Upload, Loader2, X, Archive, Trash2 } from 'lucide-react'
+import { Images, Film, ImageIcon, Palette, Upload, Loader2, X, Archive, Trash2, Plus } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { runLibraryUpload, putFileWithProgress } from '@/lib/media/browser-upload'
 import { MediaCard } from '@/components/agency/media/MediaCard'
@@ -132,7 +132,7 @@ export function MediaLibraryPane() {
     // answer replaces it a moment later, once the file has a link to check.
     const early = tooLargeSentence({
       fileType: file.type,
-      refusedBy: platformsThatWillRefuse(file.size),
+      refusedBy: platformsThatWillRefuse(file.size, { fileType: file.type }),
     })
 
     const onProgress = (percent: number) => uploadQueue.update(queued.id, { progress: percent })
@@ -276,9 +276,33 @@ export function MediaLibraryPane() {
     await fetchMedia()
   }
 
-  const useInPost = (item: MediaItemWithUsage) => {
-    router.push(`/agency/social/compose?media=${item.id}`)
-  }
+  /**
+   * The only reason this screen exists: get the file onto a post.
+   *
+   * The owner ticked a video, the bar said "1 chosen", and the two things on
+   * offer were Put away and Delete — a library in a publishing tool that could
+   * file and destroy but not publish. So the way out is here, it is the first
+   * thing on the bar, and it is also on each card's menu so the tick-then-bar
+   * sequence never has to be discovered at all.
+   *
+   * Nothing is checked before leaving. A file some accounts will refuse is
+   * still a good file for the others, and the composer already says which ones
+   * will refuse it — deciding that here would make the library a second place
+   * where publishing rules live, and the two would drift apart within a month.
+   */
+  const openComposerWith = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    // One id or several, comma-separated. A single tick is a list of one, so
+    // the link the rest of the app already sends keeps working unchanged.
+    router.push(`/agency/social/compose?media=${ids.join(',')}`)
+    // Cleared on the way out, so coming back to the library is not a puzzle
+    // about which files are still ticked from ten minutes ago.
+    setSelectedIds(new Set())
+  }, [router])
+
+  const useInPost = (item: MediaItemWithUsage) => openComposerWith([item.id])
+
+  const useSelectedInPost = () => openComposerWith([...selectedIds])
 
   /**
    * The warning shown on a card.
@@ -291,7 +315,9 @@ export function MediaLibraryPane() {
     if (item.id in warnings) return warnings[item.id]
     return tooLargeSentence({
       fileType: item.file_type,
-      refusedBy: platformsThatWillRefuse(item.file_size_bytes ?? 0),
+      refusedBy: platformsThatWillRefuse(item.file_size_bytes ?? 0, {
+        fileType: item.file_type,
+      }),
     })
   }
 
@@ -472,6 +498,20 @@ export function MediaLibraryPane() {
               <span className="text-[12.5px] font-semibold" style={{ color: 'var(--brand-deep, oklch(0.33 0.07 55))' }}>
                 {selectedIds.size} chosen
               </span>
+              {/* First on the bar and the only filled button on it: choosing a
+                  file is a step towards a post, not towards the archive. */}
+              <button
+                type="button"
+                onClick={useSelectedInPost}
+                className="flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] font-semibold"
+                style={{
+                  background: 'var(--brand-deep, oklch(0.33 0.07 55))',
+                  color: 'var(--brand-ink, oklch(1 0 0))',
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                {selectedIds.size === 1 ? 'Use in a post' : `Use ${selectedIds.size} in a post`}
+              </button>
               <button
                 type="button"
                 onClick={bulkArchive}

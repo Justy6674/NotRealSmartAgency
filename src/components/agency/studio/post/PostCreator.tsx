@@ -235,8 +235,14 @@ import type { MediaSelectorItem as MediaItem } from './MediaSelector'
 interface PostCreatorProps {
   /** Load existing draft for editing */
   draftId?: string
-  /** Pre-load media item into slots */
+  /** Pre-load one media item into slots */
   mediaId?: string
+  /**
+   * Pre-load several, in the order they were ticked. The media library sends
+   * everything the owner chose; `mediaId` stays for the callers that only ever
+   * have one, and wins nothing over this when both arrive.
+   */
+  mediaIds?: string[]
   /** Called after save in edit mode — navigates back to Review */
   onDone?: () => void
   /** Pre-fill schedule date/time from calendar click (format: YYYY-MM-DDTHH:mm) */
@@ -253,7 +259,7 @@ interface PostCreatorProps {
   chrome?: 'department' | 'standalone'
 }
 
-export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, deskConversationId, deskOutputId, chrome = 'standalone' }: PostCreatorProps = {}) {
+export function PostCreator({ draftId, mediaId, mediaIds, onDone, initialScheduleDate, deskConversationId, deskOutputId, chrome = 'standalone' }: PostCreatorProps = {}) {
   const { activeBrandId, setPendingDraftId, setPendingMediaId } = useAgencyStore()
   const data = useStudioData(activeBrandId)
   const strategyContext = useStrategyContext(data.brand, data.posts, data.accounts)
@@ -667,12 +673,17 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   }, [draftId])
 
   // ── Pre-load media from Media Library entry ──────────────────────────────
+  // One file or a handful. The list is compared by its contents, not by the
+  // array's identity: a fresh array on every render of the parent would
+  // otherwise re-seed the slots on every keystroke and wipe anything he had
+  // added here since arriving.
+  const preloadMediaKey = (mediaIds?.length ? mediaIds : mediaId ? [mediaId] : []).join(',')
   useEffect(() => {
-    if (!mediaId) return
-    setSelectedMediaIds([mediaId])
+    if (!preloadMediaKey) return
+    setSelectedMediaIds(preloadMediaKey.split(','))
     setPendingMediaId(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mediaId])
+  }, [preloadMediaKey])
 
   // A Desk receipt must restore the exact work, never whichever media or
   // proposal happens to be newest. The server re-verifies conversation,

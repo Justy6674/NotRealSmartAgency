@@ -207,8 +207,11 @@ h2{font-size:18px;font-weight:650;letter-spacing:-.02em;margin:0}
   padding:3px 8px;border-radius:6px;background:var(--care-wash);color:var(--care-deep)}
 
 /* AI rows */
-.arow{display:grid;grid-template-columns:236px minmax(0,1fr) 380px auto;gap:14px;align-items:center;
-  padding:14px 0;border-top:1px solid var(--line-soft)}
+/* These are content columns, not the page shell. They were once 236/1fr/380 —
+   the shell's own template, pasted in — which starved the question column
+   until every question wrapped one word per line. */
+.arow{display:grid;grid-template-columns:104px minmax(220px,1fr) minmax(0,250px) auto;gap:14px;
+  align-items:center;padding:14px 0;border-top:1px solid var(--line-soft)}
 .arow:first-of-type{border-top:0;padding-top:4px}
 .arow .who{font-size:13.5px;font-weight:650;color:var(--ink)}
 .arow .qq{font-size:13px;color:var(--ink-2);min-width:0}
@@ -311,6 +314,9 @@ body:has(#railtoggle:checked) .reopen{display:inline-flex}
 :root{--nrs-knob:oklch(1 0 0);--nrs-care-line:oklch(0.89 0.050 25)}
 @media (prefers-color-scheme:dark){
   :root{--nrs-knob:oklch(0.20 0.040 25);--nrs-care-line:oklch(0.42 0.070 25)}
+  /* In dark the accent fill inverts to a light teal, so white label text on
+     Create post drops to almost no contrast. The label has to invert with it. */
+  .side .cta{color:oklch(0.17 0.020 205)}
 }
 
 .side{width:236px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);
@@ -401,7 +407,7 @@ body:has(#railtoggle:checked) .reopen{display:inline-flex}
       <span class="nm"><b>Downscale Weight Loss</b><span>3 accounts</span></span>
       <span class="chev">&#9662;</span>
     </button>
-    <button class="caretog on">
+    <button class="caretog on" id="caretog">
       <span class="sw"></span>
       <span class="tx">Healthcare business &mdash; AHPRA &amp; TGA rules on</span>
     </button>
@@ -760,7 +766,7 @@ body:has(#railtoggle:checked) .reopen{display:inline-flex}
     <span class="rtab">&#128065; Preview</span>
     <span class="rtab">&#9993; Activity</span>
     <span class="rtab">&#9650; Analytics</span>
-      <span class="ctl"><button class="hide" title="Collapse the Director">&#10530; Hide</button></span>
+      <span class="ctl"><label class="hide" for="railtoggle" title="Collapse the Director">&#10530; Hide</label></span>
     </div>
 
   <div class="rbody">
