@@ -166,7 +166,7 @@ test('every agent is told the brand palette and logo, not just its voice rules',
   const branded: Brand = {
     ...brand,
     logo_url: 'https://www.scentsell.com.au/scentsell-logo.png',
-    brand_colours: { primary: '#e4a968', accent: '#c28237', background: '#fff9f1' },
+    brand_colours: { primary: '#c37837', accent: '#8a5923', background: '#faf1e2' },
     brand_dna_constraints: {
       ...brand.brand_dna_constraints,
       typography: { display: 'Fraunces', body: 'Manrope' },
@@ -176,9 +176,9 @@ test('every agent is told the brand palette and logo, not just its voice rules',
 
   const prompt = buildSystemPrompt(branded, director)
 
-  assert.match(prompt, /#e4a968/)
-  assert.match(prompt, /#c28237/)
-  assert.match(prompt, /#fff9f1/)
+  assert.match(prompt, /#c37837/)
+  assert.match(prompt, /#8a5923/)
+  assert.match(prompt, /#faf1e2/)
   assert.match(prompt, /scentsell-logo\.png/)
   assert.match(prompt, /Fraunces/)
   assert.match(prompt, /Manrope/)

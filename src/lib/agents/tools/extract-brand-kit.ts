@@ -165,6 +165,115 @@ export function assignPaletteRoles(candidates: readonly string[]): Record<string
 }
 
 /**
+ * A frequency ranking over a compiled stylesheet will pick a mid-scale step
+ * (Scent Sell's `--copper-200` / `#e4a968`) because utility classes and the
+ * dark-theme accent repeat it. The colour the owner sees on the live site is
+ * the *named* light-theme token: `--primary` on buttons, `--accent` on the
+ * wordmark. Read those first. Frequency is the fallback when the sheet has
+ * no theme tokens at all.
+ */
+const LIGHT_THEME_SELECTOR = /(?:^|,)\s*(?::root|\[data-theme=light\])\s*(?:,|$)/i
+const DARK_THEME_SELECTOR = /data-theme\s*=\s*["']?dark["']?|\.dark\b/i
+const CUSTOM_PROP = /(--[a-zA-Z0-9-]+)\s*:\s*([^;}{]+)/g
+const HSL_TRIPLET = /^(-?[\d.]+)\s+([\d.]+)%\s+([\d.]+)%$/
+const HEX_VALUE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+const VAR_REF = /^var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,\s*([^)]+))?\s*\)$/i
+
+function hslTripletToHex(h: number, sPct: number, lPct: number): string {
+  const s = sPct / 100
+  const l = lPct / 100
+  const a = s * Math.min(l, 1 - l)
+  const channel = (n: number) => {
+    const k = (n + h / 30) % 12
+    return Math.round(255 * (l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)))
+  }
+  const hex = (n: number) => n.toString(16).padStart(2, '0')
+  return `#${hex(channel(0))}${hex(channel(8))}${hex(channel(4))}`
+}
+
+function collectLightThemeVars(css: string): Map<string, string> {
+  const vars = new Map<string, string>()
+  const blockRe = /([^{}]+)\{([^{}]+)\}/g
+  let match
+  while ((match = blockRe.exec(css)) !== null) {
+    const selector = match[1]
+    if (DARK_THEME_SELECTOR.test(selector)) continue
+    if (!LIGHT_THEME_SELECTOR.test(selector) && !/(?:^|,)\s*:root\s*(?:,|$)/i.test(selector)) {
+      continue
+    }
+    CUSTOM_PROP.lastIndex = 0
+    let prop
+    while ((prop = CUSTOM_PROP.exec(match[2])) !== null) {
+      vars.set(prop[1], prop[2].trim())
+    }
+  }
+  return vars
+}
+
+function resolveThemeValue(raw: string, vars: Map<string, string>, depth = 0): string | null {
+  if (depth > 6) return null
+  const value = raw.trim()
+  if (!value) return null
+
+  const hex = HEX_VALUE.exec(value)
+  if (hex) return normaliseHex(hex[0])
+
+  const hsl = HSL_TRIPLET.exec(value)
+  if (hsl) {
+    return hslTripletToHex(Number(hsl[1]), Number(hsl[2]), Number(hsl[3]))
+  }
+
+  const ref = VAR_REF.exec(value)
+  if (ref) {
+    const next = vars.get(ref[1])
+    if (next) return resolveThemeValue(next, vars, depth + 1)
+    if (ref[2]) return resolveThemeValue(ref[2], vars, depth + 1)
+    return null
+  }
+
+  return null
+}
+
+function firstResolved(
+  vars: Map<string, string>,
+  names: readonly string[],
+): string | null {
+  for (const name of names) {
+    const raw = vars.get(name)
+    if (!raw) continue
+    const resolved = resolveThemeValue(raw, vars)
+    if (resolved) return resolved
+  }
+  return null
+}
+
+/**
+ * Read the light-theme brand roles off named CSS variables. Returns null when
+ * the sheet has no usable `--primary` / `--accent` / `--surface` tokens, so
+ * the caller can fall through to frequency ranking.
+ */
+export function extractNamedThemePalette(css: string): Record<string, string> | null {
+  const vars = collectLightThemeVars(css)
+  if (!vars.size) return null
+
+  const primary = firstResolved(vars, ['--primary', '--accent', '--copper-400'])
+  const accent = firstResolved(vars, ['--accent', '--copper-400', '--amber'])
+  const background = firstResolved(vars, ['--surface', '--background', '--cream-100'])
+  const text = firstResolved(vars, ['--ink', '--ink-900', '--foreground'])
+  const secondary = firstResolved(vars, ['--copper-300', '--secondary', '--amber-light'])
+
+  if (!primary && !accent) return null
+
+  const palette: Record<string, string> = {}
+  if (primary) palette.primary = primary
+  if (accent) palette.accent = accent
+  if (secondary) palette.secondary = secondary
+  if (background) palette.background = background
+  if (text) palette.text = text
+  return Object.keys(palette).length ? palette : null
+}
+
+/**
  * Gather brand colour candidates from inline `<style>` blocks and the linked
  * stylesheets, ranked by how often each appears. Frequency is the useful
  * signal: a brand's primary is painted far more often than a one-off border.
@@ -437,7 +546,9 @@ ${bodyText}`
         // them a palette would be inferred from the industry — plausible, wrong,
         // and then silently driving every design brief and generated asset. An
         // empty palette is honest and visibly needs filling.
-        const palette = assignPaletteRoles(cssColours)
+        // Named light-theme tokens beat frequency. A compiled copper scale
+        // repeats the pale mid-step far more often than the button colour.
+        const palette = extractNamedThemePalette(siteCss) ?? assignPaletteRoles(cssColours)
         const coloursAreGrounded = palette !== null
         if (palette) {
           updatePayload.brand_colours = { ...existingColours, ...palette }
