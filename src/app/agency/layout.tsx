@@ -11,6 +11,10 @@ import { ThemeToggle } from '@/components/agency/ThemeToggle'
 import { UserMenu } from '@/components/agency/UserMenu'
 import { BrandThemeSync } from '@/components/agency/shell/BrandThemeSync'
 import { ReloadAppButton } from '@/components/agency/shell/ReloadAppButton'
+import {
+  brandHasSurfacePalette,
+  brandThemeVars,
+} from '@/components/agency/shell/brand-theme'
 import type { Brand } from '@/types/database'
 
 /**
@@ -53,102 +57,11 @@ import type { Brand } from '@/types/database'
 /** The shell root. Everything below it reads `var(--brand)` and retints free. */
 const SHELL = '[data-nrs-shell]'
 
-/**
- * THE RAMP. Fixed lightness, chroma scaled from whatever the business stored,
- * hue taken from it — carried from .mockups/dept-social.html:25-27 and :56-58
- * and identical to the table in `shell/brand-theme.ts`, which is the source of
- * truth for the same derivation on the client.
- *
- * The business supplies the HUE. The system supplies the LIGHTNESS. Passing a
- * pale brand's own lightness through would make its buttons unreadable and
- * nobody would find out until it was live. Light and dark are separate ramps
- * rather than one inverted, because `--brand-deep` is the high-contrast fill
- * in BOTH themes — L 0.33 in light, L 0.87 in dark.
- */
-const REFERENCE_CHROMA = 0.115
-const FALLBACK_HUE = 240
-const FALLBACK_CHROMA = 0.03
-
-interface Step {
-  /** Fixed lightness, never taken from the business's colour. */
-  l: number
-  /** Chroma at the reference — the fraction of the resolved chroma to use. */
-  c: number
-}
-
-const RAMPS: Record<'light' | 'dark', Record<string, Step>> = {
-  light: {
-    '--brand': { l: 0.545, c: 0.115 },
-    '--brand-deep': { l: 0.33, c: 0.08 },
-    '--brand-wash': { l: 0.966, c: 0.026 },
-    // Text and icons sitting ON a brand fill. White in light mode; in dark the
-    // fills are light, so white on them is very nearly invisible.
-    '--brand-ink': { l: 1, c: 0 },
-  },
-  dark: {
-    '--brand': { l: 0.74, c: 0.11 },
-    '--brand-deep': { l: 0.87, c: 0.08 },
-    '--brand-wash': { l: 0.272, c: 0.038 },
-    '--brand-ink': { l: 0.17, c: 0.02 },
-  },
-}
-
-/**
- * `brand_colours` is owner-supplied text on its way into a `<style>` element.
- * Only characters a colour can be written with survive; anything else is
- * dropped and that business simply keeps the house silver. Escaping would be
- * cleverer and less safe.
- */
-const SAFE_COLOUR = /^[#a-z0-9\s().,%/-]{1,64}$/i
-
-/**
- * Slots are independently optional — BrandColoursEditor never saves one the
- * owner left alone — so a business may well have set `accent` and nothing
- * else. Order mirrors `brandAccentColour` in shell/brand-theme.ts.
- */
-const ACCENT_SLOTS = ['primary', 'accent', 'secondary'] as const
-
-function accentColour(brand: Brand): string | null {
-  const colours = brand.brand_colours
-  if (!colours) return null
-  for (const slot of ACCENT_SLOTS) {
-    const value = (colours[slot] ?? '').trim()
-    if (value && SAFE_COLOUR.test(value)) return value
-  }
-  return null
-}
-
-/** House silver/chrome, for a business that has chosen nothing. */
-function literalStep({ l, c }: Step): string {
-  if (c === 0) return `oklch(${l} 0 0)`
-  const chroma = Math.round((FALLBACK_CHROMA * (c / REFERENCE_CHROMA)) * 10000) / 10000
-  return `oklch(${l} ${chroma} ${FALLBACK_HUE})`
-}
-
-/**
- * CSS does the colour conversion, not this file.
- *
- * `brand_colours` holds hex, `rgba(30,41,59,.9)` and the odd `oklch(...)`, and
- * a stylesheet parses all three natively — so relative colour syntax gets the
- * hue out without a second copy of the sRGB→OKLab matrices living in the
- * layout, drifting away from shell/brand-theme.ts. The chroma is capped rather
- * than passed through: a fully saturated brand would otherwise push
- * `--brand-wash`, which carries body text, past the point where it is a wash.
- * `/ 1` discards alpha — a half-transparent `--brand` would let whatever is
- * behind it change the tint.
- *
- * If a browser cannot parse it the property is simply invalid, and every
- * consumer reads `var(--brand, <house silver>)`. The failure mode is the
- * fallback, not a broken page.
- */
-function derivedStep({ l, c }: Step, source: string): string {
-  if (c === 0) return `oklch(${l} 0 0)`
-  const fraction = Math.round((c / REFERENCE_CHROMA) * 10000) / 10000
-  const chroma =
-    fraction === 1
-      ? `min(c,${REFERENCE_CHROMA})`
-      : `calc(min(c,${REFERENCE_CHROMA}) * ${fraction})`
-  return `oklch(from ${source} ${l} ${chroma} h / 1)`
+function cssDecls(vars: Record<string, unknown>): string {
+  return Object.entries(vars)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+    .map(([name, value]) => `${name}:${value}`)
+    .join(';')
 }
 
 function brandThemeStyles(brands: Brand[]): string {
@@ -158,28 +71,22 @@ function brandThemeStyles(brands: Brand[]): string {
     if (decls) rules.push(`${selector}{${decls}}`)
   }
 
-  const block = (mode: 'light' | 'dark', render: (step: Step) => string) =>
-    Object.entries(RAMPS[mode])
-      .map(([name, step]) => `${name}:${render(step)}`)
-      .join(';')
-
-  // The house default, and the honest answer for a business that has set no
-  // colour. Emitted first so the per-business rules below win on order.
-  rule(SHELL, block('light', literalStep))
-  rule(`.dark ${SHELL}`, block('dark', literalStep))
+  const fallbackLight = cssDecls(brandThemeVars(null, { dark: false }))
+  const fallbackDark = cssDecls(brandThemeVars(null, { dark: true }))
+  rule(SHELL, fallbackLight)
+  rule(`.dark ${SHELL}`, fallbackDark)
 
   for (const brand of brands) {
-    // Ids are Supabase uuids. Anything else never reaches a selector.
     if (!/^[A-Za-z0-9_-]+$/.test(brand.id)) continue
 
-    const colour = accentColour(brand)
-    // No colour chosen means no colour invented — the default above stands.
-    if (!colour) continue
-
     const scoped = `${SHELL}[data-brand-id="${brand.id}"]`
-    const source = 'var(--nrs-brand-source)'
-    rule(scoped, `--nrs-brand-source:${colour};${block('light', (s) => derivedStep(s, source))}`)
-    rule(`.dark ${scoped}`, block('dark', (s) => derivedStep(s, source)))
+    const lightVars = brandThemeVars(brand, { dark: false })
+    const darkVars = brandHasSurfacePalette(brand)
+      ? lightVars
+      : brandThemeVars(brand, { dark: true })
+
+    rule(scoped, cssDecls(lightVars))
+    rule(`.dark ${scoped}`, cssDecls(darkVars))
   }
 
   return rules.join('\n')

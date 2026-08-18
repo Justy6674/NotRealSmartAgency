@@ -303,6 +303,96 @@ function step({ l, f }: Step, accent: ResolvedAccent): string {
   return `oklch(${l} ${c} ${h})`
 }
 
+function clampL(l: number): number {
+  return Math.max(0, Math.min(1, l))
+}
+
+function formatOklch(l: number, c: number, h?: number): string {
+  const lr = Math.round(l * 1000) / 1000
+  const cr = Math.round(c * 10000) / 10000
+  if (cr === 0 || h === undefined || Number.isNaN(h)) return `oklch(${lr} 0 0)`
+  const hr = Math.round(h * 10) / 10
+  return `oklch(${lr} ${cr} ${hr})`
+}
+
+/** Stored website background — drives desk paper when present. */
+export function brandBackgroundColour(brand: BrandColourSource): string | null {
+  const value = (brand?.brand_colours?.background ?? '').trim()
+  return value || null
+}
+
+/** Stored body text colour — drives ink when present. */
+export function brandTextColour(brand: BrandColourSource): string | null {
+  const value = (brand?.brand_colours?.text ?? '').trim()
+  return value || null
+}
+
+/** True when the business stored a background the desk should paint from. */
+export function brandHasSurfacePalette(brand: BrandColourSource): boolean {
+  return readColour(brandBackgroundColour(brand)) !== null
+}
+
+/**
+ * Surfaces from the stored background and text tokens. Unlike accent ramps,
+ * lightness comes from the brand here — Scent Sell's cream paper is the point.
+ */
+function brandSurfaceVarsFromBackground(
+  background: Oklch,
+  text: Oklch | null,
+): Record<string, string> {
+  const { l, c, h } = background
+  const ink =
+    text ??
+    ({
+      l: 0.2,
+      c: 0.014,
+      h: c >= ACHROMATIC_THRESHOLD ? h : FALLBACK_HUE,
+    } satisfies Oklch)
+
+  return {
+    '--bg': formatOklch(l, c, h),
+    '--panel': l >= 0.92 ? formatOklch(1, 0) : formatOklch(clampL(l + 0.015), c * 0.6, h),
+    '--panel-2': formatOklch(clampL(l - 0.01), Math.max(c * 0.8, 0.004), h),
+    '--line': formatOklch(clampL(l - 0.07), Math.max(c * 0.7, 0.007), h),
+    '--line-soft': formatOklch(clampL(l - 0.035), Math.max(c * 0.5, 0.005), h),
+    '--ink': formatOklch(ink.l, ink.c, ink.h),
+    '--ink-2': formatOklch(clampL(ink.l + 0.26), Math.max(ink.c * 0.85, 0.012), ink.h),
+    '--ink-3': formatOklch(clampL(ink.l + 0.42), Math.max(ink.c * 0.78, 0.011), ink.h),
+  }
+}
+
+/**
+ * Primary actions on a light brand desk use the stored primary as the fill —
+ * copper buttons on cream paper, not a hue-shifted chip on black chrome.
+ */
+function brandActionVarsFromPrimary(primary: Oklch): Record<string, string> {
+  const h = primary.h
+  const c = Math.min(primary.c, CHROMA_CEILING)
+  const deepL = clampL(primary.l)
+
+  return {
+    '--brand': formatOklch(clampL(deepL + 0.06), c, h),
+    '--brand-deep': formatOklch(deepL, c, h),
+    '--brand-wash': formatOklch(0.966, Math.max(c * 0.22, 0.006), h),
+    '--brand-ink': deepL < 0.62 ? formatOklch(1, 0) : formatOklch(0.17, 0.02, h),
+  }
+}
+
+function brandAccentVars(
+  colour: string | null | undefined,
+  dark: boolean,
+): Record<string, string> {
+  const accent = resolveAccent(colour)
+  const ramp = dark ? RAMPS.dark : RAMPS.light
+
+  return {
+    '--brand': step(ramp.brand, accent),
+    '--brand-deep': step(ramp.deep, accent),
+    '--brand-wash': step(ramp.wash, accent),
+    '--brand-ink': step(ramp.ink, accent),
+  }
+}
+
 export interface BrandThemeOptions {
   /** Which side of the theme to build for. */
   dark?: boolean
@@ -312,20 +402,37 @@ export interface BrandThemeOptions {
  * The style object the shell spreads onto its root element. Everything below
  * it — sidebar, department header, Director rail — reads `var(--brand)` and
  * retints for free.
+ *
+ * Pass a full brand for surface + accent tokens, or a raw colour string for
+ * accent-only (tests and legacy callers).
  */
 export function brandThemeVars(
-  colour: string | null | undefined,
+  source: BrandColourSource | string | null | undefined,
   { dark = false }: BrandThemeOptions = {},
 ): CSSProperties {
-  const accent = resolveAccent(colour)
-  const ramp = dark ? RAMPS.dark : RAMPS.light
+  const brand =
+    typeof source === 'string' || source === null || source === undefined ? null : source
+  const accentRaw =
+    typeof source === 'string' ? source : brandAccentColour(source)
 
-  return {
-    '--brand': step(ramp.brand, accent),
-    '--brand-deep': step(ramp.deep, accent),
-    '--brand-wash': step(ramp.wash, accent),
-    '--brand-ink': step(ramp.ink, accent),
-  } as unknown as CSSProperties
+  const background = brand ? readColour(brandBackgroundColour(brand)) : null
+  const text = brand ? readColour(brandTextColour(brand)) : null
+  const primaryRaw = (brand?.brand_colours?.primary ?? '').trim()
+  const primary = primaryRaw ? readColour(primaryRaw) : null
+
+  const useBrandSurfaces = background !== null
+  const accentDark = useBrandSurfaces ? false : dark
+
+  const accentVars =
+    useBrandSurfaces && primary
+      ? brandActionVarsFromPrimary(primary)
+      : brandAccentVars(accentRaw, accentDark)
+
+  const surfaceVars = useBrandSurfaces
+    ? brandSurfaceVarsFromBackground(background, text)
+    : {}
+
+  return { ...surfaceVars, ...accentVars } as unknown as CSSProperties
 }
 
 // ─── Which theme is on ───────────────────────────────────────────────────────
@@ -371,5 +478,7 @@ export function useIsDarkTheme(): boolean {
  */
 export function useBrandTheme(brand: BrandColourSource): CSSProperties {
   const dark = useIsDarkTheme()
-  return brandThemeVars(brandAccentColour(brand), { dark })
+  // Brand paper wins over the global dark toggle when a background is stored.
+  const effectiveDark = brandHasSurfacePalette(brand) ? false : dark
+  return brandThemeVars(brand, { dark: effectiveDark })
 }

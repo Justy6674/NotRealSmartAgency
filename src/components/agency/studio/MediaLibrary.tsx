@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { Tag, Images, Plus, Palette, Sparkles, Loader2, CheckSquare, Square, Trash2, ImageIcon, Film } from 'lucide-react'
 import { useAgencyStore } from '@/stores/agency-store'
 import { useStudioData } from '@/hooks/useStudioData'
@@ -25,6 +26,8 @@ type ViewMode = 'library' | 'collection'
 type SourceTab = 'library' | 'gifs' | 'stock'
 
 export function MediaLibrary() {
+  const router = useRouter()
+  const pathname = usePathname() ?? ''
   const { activeBrandId, setPendingMediaId } = useAgencyStore()
   const studioData = useStudioData(activeBrandId)
   const brandName = studioData.brand?.name ?? 'this brand'
@@ -400,6 +403,15 @@ export function MediaLibrary() {
     if (!confirm('Delete this collection? Media items will not be deleted.')) return
     await fetch(`/api/collections?id=${id}`, { method: 'DELETE' })
     fetchCollections()
+  }
+
+  const handleCreatePost = (id: string) => {
+    if (pathname.includes('/agency/social')) {
+      router.push(`/agency/social/compose?media=${id}`)
+      return
+    }
+    setPendingMediaId(id)
+    router.push(`/agency/studio/create?media=${id}`)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -778,7 +790,7 @@ export function MediaLibrary() {
               onGenerate={handleGenerate}
               generating={generatingId === item.id}
               onRepurpose={handleRepurpose}
-              onCreatePost={(id) => setPendingMediaId(id)}
+              onCreatePost={handleCreatePost}
               onRegenerateThumb={handleRegenerateThumb}
               regeneratingThumb={regeneratingThumbId === item.id}
               availableTags={availableTags}

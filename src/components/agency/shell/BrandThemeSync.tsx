@@ -6,16 +6,11 @@ import { useBrandTheme } from '@/components/agency/shell/brand-theme'
 import type { Brand } from '@/types/database'
 
 /**
- * Paints `--brand` / `--brand-deep` / `--brand-wash` from the selected
- * business using the numeric ramp in brand-theme.ts.
+ * Paints `--bg` / `--panel` / `--ink` from stored website colours and
+ * `--brand*` from the business primary, using the same math as brand-theme.ts.
  *
- * The layout already emits the same ramp as CSS `oklch(from … min(c,…) …)`.
- * That relative-colour form is invalid in some installed-app WebViews
- * (Safari Add to Dock, Chrome "Install app"), so `--brand` never overrides
- * the house silver and the desk looks like nobody picked a colour. Setting
- * the properties from the same math the mockups were locked to always works.
- * data-brand-id is kept in step with the store so the CSS rules stay honest
- * even if this effect has not run yet.
+ * The layout already emits the same values as CSS on first paint. BrandThemeSync
+ * re-applies them for WebViews that ignore `oklch(from …)` in stylesheets.
  */
 export function BrandThemeSync({ brands }: { brands: Brand[] }) {
   const activeBrandId = useAgencyStore((s) => s.activeBrandId)
