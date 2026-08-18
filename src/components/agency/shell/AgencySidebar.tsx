@@ -43,17 +43,19 @@ import {
   activeChildId,
   CREATE_POST_HREF,
   isHealthcareBusiness,
-  isReadyNavSection,
   isSectionActive,
+  NAV_DIM_UNREADY_LEGACY_KEY,
+  NAV_SECTION_OFF_KEY,
+  parseNavOffIds,
+  serializeNavOffIds,
+  toggleNavOff,
   visibleChildren,
   visibleSections,
   type NavCounts,
   type NavFilterState,
   type NavSection,
+  type NavSectionId,
 } from './nav-sections'
-
-/** Remembered on this browser so the rest stay greyed after a refresh. */
-const DIM_UNREADY_KEY = 'nrs-nav-dim-unready'
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
@@ -168,23 +170,26 @@ export function AgencySidebar({
     brands?.find((brand) => brand.id === activeBrandId)?.compliance_flags ?? complianceFlags
   const healthcare = isHealthcareBusiness(liveFlags)
   const sections = visibleSections(healthcare)
-  const [dimUnready, setDimUnready] = useState(true)
+  const [offIds, setOffIds] = useState<Set<NavSectionId>>(() => parseNavOffIds(null))
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(DIM_UNREADY_KEY)
-      if (stored === '0') setDimUnready(false)
-      if (stored === '1') setDimUnready(true)
+      setOffIds(
+        parseNavOffIds(
+          localStorage.getItem(NAV_SECTION_OFF_KEY),
+          localStorage.getItem(NAV_DIM_UNREADY_LEGACY_KEY),
+        ),
+      )
     } catch {
-      // Private mode can refuse storage. Default stays greyed.
+      // Private mode can refuse storage. Default stays Social On, the rest Off.
     }
   }, [])
 
-  function toggleDimUnready() {
-    setDimUnready((current) => {
-      const next = !current
+  function toggleSection(id: NavSectionId) {
+    setOffIds((current) => {
+      const next = toggleNavOff(current, id)
       try {
-        localStorage.setItem(DIM_UNREADY_KEY, next ? '1' : '0')
+        localStorage.setItem(NAV_SECTION_OFF_KEY, serializeNavOffIds(next))
       } catch {
         // Same private-mode case as the read. The click still takes this session.
       }
@@ -228,15 +233,6 @@ export function AgencySidebar({
         Create post
       </Link>
 
-      <button
-        type="button"
-        onClick={toggleDimUnready}
-        aria-pressed={dimUnready}
-        className="mx-3 mb-1 text-left text-[11px] font-medium text-[var(--nrs-ink-3)] hover:text-[var(--nrs-ink)]"
-      >
-        {dimUnready ? 'Show the rest' : 'Grey out the rest'}
-      </button>
-
       <nav aria-label="Sections" className="px-2 pb-1.5">
         {sections.map((section) => (
           <Section
@@ -247,7 +243,8 @@ export function AgencySidebar({
             counts={counts}
             activeFilters={filters}
             onNavigate={onNavigate}
-            dimmed={dimUnready && !isReadyNavSection(section.id)}
+            dimmed={offIds.has(section.id)}
+            onToggle={() => toggleSection(section.id)}
           />
         ))}
       </nav>
@@ -366,6 +363,7 @@ function Section({
   activeFilters,
   onNavigate,
   dimmed,
+  onToggle,
 }: {
   section: NavSection
   pathname: string
@@ -373,7 +371,8 @@ function Section({
   counts?: NavCounts
   activeFilters?: NavFilterState | null
   onNavigate?: () => void
-  dimmed?: boolean
+  dimmed: boolean
+  onToggle: () => void
 }) {
   const active = isSectionActive(section, pathname)
   const children = visibleChildren(section, healthcare)
@@ -383,40 +382,62 @@ function Section({
   const currentChildId = activeChildId(children, pathname, activeFilters)
 
   return (
-    <div className={cn(dimmed && 'opacity-[0.38] grayscale')}>
+    <div>
       {section.groupLabel ? (
         <div className="px-[9px] pt-[14px] pb-[5px] text-[10.5px] font-[650] tracking-[0.09em] text-[var(--nrs-ink-3)] uppercase">
           {section.groupLabel}
         </div>
       ) : null}
 
-      <Link
-        href={section.href}
-        onClick={onNavigate}
-        aria-current={active ? 'page' : undefined}
-        className={cn(
-          'mt-0.5 flex items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13.5px] no-underline',
-          active
-            ? 'bg-[var(--nrs-brand-wash)] font-[650] text-[var(--nrs-brand-deep)]'
-            : 'font-[560] text-[var(--nrs-ink)] hover:bg-[var(--nrs-panel-2)]'
-        )}
-      >
-        <Icon
+      <div className="mt-0.5 flex items-center gap-0.5">
+        <Link
+          href={section.href}
+          onClick={onNavigate}
+          aria-current={active ? 'page' : undefined}
           className={cn(
-            'size-4 shrink-0',
-            active ? 'text-[var(--nrs-brand-deep)]' : 'text-[var(--nrs-ink-3)]'
+            'flex min-w-0 flex-1 items-center gap-[9px] rounded-lg px-[9px] py-[7px] text-[13.5px] no-underline',
+            dimmed && 'opacity-[0.38] grayscale',
+            active
+              ? 'bg-[var(--nrs-brand-wash)] font-[650] text-[var(--nrs-brand-deep)]'
+              : 'font-[560] text-[var(--nrs-ink)] hover:bg-[var(--nrs-panel-2)]'
           )}
-          strokeWidth={1.9}
-          aria-hidden
-        />
-        <span className="min-w-0 flex-1 truncate">{section.label}</span>
-        {count === undefined ? null : <CountBadge count={count} />}
-      </Link>
+        >
+          <Icon
+            className={cn(
+              'size-4 shrink-0',
+              active ? 'text-[var(--nrs-brand-deep)]' : 'text-[var(--nrs-ink-3)]'
+            )}
+            strokeWidth={1.9}
+            aria-hidden
+          />
+          <span className="min-w-0 flex-1 truncate">{section.label}</span>
+          {count === undefined ? null : <CountBadge count={count} />}
+        </Link>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-pressed={!dimmed}
+          aria-label={dimmed ? `Turn ${section.label} on` : `Turn ${section.label} off`}
+          className={cn(
+            'shrink-0 rounded-md px-1.5 py-1 text-[10.5px] font-semibold',
+            dimmed
+              ? 'text-[var(--nrs-ink-3)] hover:bg-[var(--nrs-panel-2)] hover:text-[var(--nrs-ink)]'
+              : 'text-[var(--nrs-brand-deep)] hover:bg-[var(--nrs-brand-wash)]'
+          )}
+        >
+          {dimmed ? 'Off' : 'On'}
+        </button>
+      </div>
 
       {children.length > 0 ? (
         // items-stretch matters: centring the rows in a column flex container
         // staircases every one of them toward the middle.
-        <div className="mt-px mb-[5px] ml-[34px] flex flex-col items-stretch gap-px text-left">
+        <div
+          className={cn(
+            'mt-px mb-[5px] ml-[34px] flex flex-col items-stretch gap-px text-left',
+            dimmed && 'opacity-[0.38] grayscale'
+          )}
+        >
           {children.map((child) =>
             child.kind === 'group' ? (
               <span

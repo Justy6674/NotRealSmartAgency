@@ -384,6 +384,51 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ]
 
+/**
+ * Which sections the owner has turned Off. Stored as a JSON array of ids.
+ * Default: Social is On, everything else is Off — unfinished rooms start grey
+ * until he clicks On on that row.
+ */
+export const NAV_SECTION_OFF_KEY = 'nrs-nav-section-off'
+/** Previous one-switch key. Read once so a "show all" click is not thrown away. */
+export const NAV_DIM_UNREADY_LEGACY_KEY = 'nrs-nav-dim-unready'
+
+export function defaultNavOffIds(): Set<NavSectionId> {
+  return new Set(
+    NAV_SECTIONS.map((section) => section.id).filter((id) => id !== READY_NAV_SECTION_ID),
+  )
+}
+
+export function parseNavOffIds(raw: string | null, legacyAllDimmed?: string | null): Set<NavSectionId> {
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return defaultNavOffIds()
+      const known = new Set(NAV_SECTIONS.map((section) => section.id))
+      return new Set(
+        parsed.filter((id: unknown): id is NavSectionId =>
+          typeof id === 'string' && known.has(id as NavSectionId),
+        ),
+      )
+    } catch {
+      return defaultNavOffIds()
+    }
+  }
+  if (legacyAllDimmed === '0') return new Set()
+  return defaultNavOffIds()
+}
+
+export function serializeNavOffIds(ids: Set<NavSectionId>): string {
+  return JSON.stringify([...ids])
+}
+
+export function toggleNavOff(ids: Set<NavSectionId>, id: NavSectionId): Set<NavSectionId> {
+  const next = new Set(ids)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  return next
+}
+
 // ─── Visibility ───────────────────────────────────────────────────────────────
 
 /**
