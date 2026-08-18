@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Sparkles, ImageIcon, Upload, Palette, Wand2, Eye, Film, Lightbulb, AlertTriangle } from 'lucide-react'
+import { Sparkles, Palette, Wand2, Film, Lightbulb, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { useAgencyStore } from '@/stores/agency-store'
@@ -11,16 +11,14 @@ import { useStrategyContext } from '@/hooks/useStrategyContext'
 
 // Layout
 import { ComposerLayout } from './ComposerLayout'
-
-// New components (Scent Sell patterns)
-import { StudioCard } from './StudioCard'
+import { ComposeDeskCard } from './ComposeDeskCard'
+import { ComposeMediaStrip } from './ComposeMediaStrip'
+import { ContentTypeCompact } from './ContentTypeCompact'
 import { CreatorModeBar, type CreatorMode } from './CreatorModeBar'
 import { CreatorActionBar } from './CreatorActionBar'
-import { MediaSlots } from './MediaSlots'
-import { StrategyContextBar } from './StrategyContextBar'
 
 // Existing components (reused as-is)
-import { ContentTypeSection, type ContentType } from './ContentTypeSection'
+import { type ContentType } from './ContentTypeSection'
 import { PlatformSection } from './PlatformSection'
 import { RichCaptionEditor } from './RichCaptionEditor'
 import { PostContentValidator } from './PostContentValidator'
@@ -199,7 +197,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   const [creatorMode, setCreatorMode] = useState<CreatorMode>('fresh')
   const [showMediaLibrary, setShowMediaLibrary] = useState(false)
   const [showComposeUpload, setShowComposeUpload] = useState(false)
-  const [showMobilePreview, setShowMobilePreview] = useState(false)
+  const [showPerPlatformVersions, setShowPerPlatformVersions] = useState(false)
   const [platformOptions, setPlatformOptions] = useState<Record<string, Record<string, unknown>>>({})
   const [nextSlotIso, setNextSlotIso] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<string | null>(null)
@@ -454,11 +452,6 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
       'Use Content & Copy. Return ONLY the caption text + 5-8 lowercase hashtags. I will paste it into the composer.',
     ].filter(Boolean).join('\n\n')
     sendToDirector(message)
-  }
-
-  const handleAiAction = (action: string) => {
-    if (!caption.trim()) return
-    sendToDirector(`${action} this caption for ${brandName}:\n\n"${caption}"\n\nReturn only the improved caption text.`)
   }
 
   // ── Caption + Hashtag Updates ──────────────────────────────────────────────
@@ -829,7 +822,7 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   if (!activeBrandId) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-sm text-muted-foreground">Select a brand from the sidebar to start creating content.</p>
+        <p className="text-sm" style={{ color: 'var(--ink-3)' }}>Select a brand from the sidebar to start creating content.</p>
       </div>
     )
   }
@@ -854,134 +847,245 @@ export function PostCreator({ draftId, mediaId, onDone, initialScheduleDate, des
   // ══════════════════════════════════════════════════════════════════════════
 
   const editorPane = (
-    <div className="space-y-4">
-      {/* ─── Strategy Context (Director's intelligence) ───────────────────── */}
-      {strategyContext && (
-        <StrategyContextBar
-          brandName={brandName}
-          postsThisWeek={strategyContext.postsThisWeek ?? 0}
-          postsTarget={strategyContext.postsTarget ?? 3}
-          suggestedPlatform={strategyContext.suggestedPlatform ?? null}
-          suggestedPillar={strategyContext.suggestedPillar ?? null}
-          suggestedContentType={strategyContext.suggestedContentType ?? null}
-          suggestion={strategyContext.suggestion ?? ''}
-          isHealthBrand={isHealthBrand}
+    <div className="mx-auto flex max-w-[920px] flex-col gap-[13px]">
+      <PlatformSection
+        contentType={contentType}
+        selected={selectedPlatforms}
+        onChange={handlePlatformsChange}
+        selectedAccountIds={selectedAccountIds}
+        onAccountIdsChange={setSelectedAccountIds}
+        brandName={brandName}
+      />
+
+      <ContentTypeCompact value={contentType} onChange={setContentType} />
+
+      <ComposeMediaStrip
+        contentType={contentType}
+        selectedMedia={selectedMedia}
+        onReplace={() => setShowMediaLibrary(true)}
+        onChooseLibrary={() => {
+          setShowComposeUpload(false)
+          setShowMediaLibrary(true)
+        }}
+        onRemove={handleMediaRemove}
+        onUpload={() => {
+          setShowMediaLibrary(false)
+          setShowComposeUpload(true)
+        }}
+      />
+
+      {showComposeUpload && activeBrandId && (
+        <ComposeDeskCard header="Upload">
+          <ComposeMediaUpload
+            brandId={activeBrandId}
+            accept={acceptTypes.includes('video') ? 'video' : 'image'}
+            onUploaded={(mediaItemId) => {
+              setSelectedMediaIds((prev) =>
+                maxMedia === 1 ? [mediaItemId] : [...prev, mediaItemId].slice(0, maxMedia),
+              )
+              void fetchMedia()
+              setShowComposeUpload(false)
+            }}
+          />
+        </ComposeDeskCard>
+      )}
+
+      {showMediaLibrary && (
+        <ComposeDeskCard header="Media Library">
+          <MediaSelector
+            brandId={activeBrandId}
+            selectedIds={selectedMediaIds}
+            onChange={handleMediaSelect}
+            maxCount={maxMedia}
+            acceptTypes={acceptTypes}
+            items={mediaItems}
+          />
+        </ComposeDeskCard>
+      )}
+
+      <ComposeDeskCard flush>
+        <div className="space-y-0">
+          <div className="px-4 pt-3">
+            <CreatorModeBar mode={creatorMode} onModeChange={setCreatorMode} />
+            {creatorMode === 'template' && (
+              <div className="mt-3 rounded-[8px] border p-3" style={{ borderColor: 'var(--line)', background: 'var(--panel-2)' }}>
+                <PostTemplatePicker
+                  brandId={activeBrandId}
+                  brandName={brandName}
+                  onApply={handleTemplateApply}
+                />
+              </div>
+            )}
+          </div>
+
+          <RichCaptionEditor
+            desk
+            value={caption}
+            onChange={(text) => handleCaptionChange(text)}
+            placeholder="Write your post here…"
+            brandName={brandName}
+            platforms={selectedPlatforms}
+          />
+
+          <div
+            className="flex flex-wrap items-center gap-2 border-t px-[11px] py-2"
+            style={{ borderColor: 'var(--line-soft)', background: 'var(--panel-2)' }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                sendToDirector(
+                  `Write a CAPTION (text only) for a ${contentType.replace('_', ' ')} for ${brandName} on ${selectedPlatforms.join(', ') || 'social media'}.`,
+                )
+              }
+              className="inline-flex items-center gap-1.5 rounded-[8px] px-[11px] py-1.5 text-[12px] font-semibold"
+              style={{ color: 'var(--brand-deep)' }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Ask the Director
+            </button>
+            <button
+              type="button"
+              onClick={handleAiGenerate}
+              disabled={selectedPlatforms.length === 0}
+              className="rounded-[8px] px-2 py-1.5 text-[12px] font-semibold disabled:opacity-40"
+              style={{ color: 'var(--brand-deep)' }}
+            >
+              Write caption
+            </button>
+          </div>
+        </div>
+      </ComposeDeskCard>
+
+      {selectedPlatforms.length > 0 && (
+        <PostContentValidator
+          caption={caption}
+          platforms={selectedPlatforms as PlatformKey[]}
         />
       )}
 
-      {/* ─── Section 1: Content Type ──────────────────────────────────────── */}
-      <StudioCard
-        directorAssist={{
-          prompt: `What type of content should ${brandName} create right now? Consider our strategy, what's performing well, and what we haven't posted recently. Suggest a content type and explain why.`,
-          label: 'What should I create?',
-        }}
+      <ComposeDeskCard
+        header="How it will look"
+        headerRight={
+          <span className="text-[12.5px]" style={{ color: 'var(--ink-3)' }}>
+            {selectedAccountIds.length > 0
+              ? `${selectedAccountIds.length} account${selectedAccountIds.length === 1 ? '' : 's'} ticked`
+              : 'Tick accounts above'}
+          </span>
+        }
+        bodyClassName="p-[13px_15px]"
       >
-        <ContentTypeSection value={contentType} onChange={setContentType} />
-      </StudioCard>
-
-      {/* ─── Section 2: Platforms (pills) ─────────────────────────────────── */}
-      <StudioCard
-        title="Where to publish?"
-        subtitle="Select one or more platforms. Greyed-out platforms don't support this content type."
-        directorAssist={{
-          prompt: `Which platforms need content most for ${brandName} right now? Look at our posting frequency, engagement, and strategy. Tell me where to focus.`,
-          label: 'Where should I post?',
-        }}
-      >
-        <PlatformSection
-          contentType={contentType}
-          selected={selectedPlatforms}
-          onChange={handlePlatformsChange}
-          selectedAccountIds={selectedAccountIds}
-          onAccountIdsChange={setSelectedAccountIds}
+        <MultiPlatformPreview
+          platforms={selectedPlatforms}
+          masterCaption={caption}
+          masterHashtags={hashtags}
+          versions={versions}
+          mediaUrl={mediaUrl}
+          mediaUrls={mediaUrls}
           brandName={brandName}
         />
-      </StudioCard>
+      </ComposeDeskCard>
 
-      {/* ─── Section 3: Media (Scent Sell slots) ──────────────────────────── */}
-      <StudioCard
-        title="Media"
-        required={['carousel', 'short_video', 'long_video', 'ad'].includes(contentType)}
-        directorAssist={{
-          prompt: `I'm building a ${contentType.replace('_', ' ')} for ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}.
-
-Call query_media with mode="analysis" and limit=20 to load my full media library with transcriptions and AI descriptions. Then do a STRATEGIC content review:
-
-1. For each item, look at what's ACTUALLY in it — the AI description, the transcript text, the tags. Don't guess from the filename.
-2. Map each item to our content pillars and target audience. Which items align with which pillar?
-3. Recommend the best combination for this ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'}, with reasoning based on the actual content (not the filename).
-4. Suggest the story angle and hook each item supports.
-5. Reference items by their UUIDs so I can pick them.
-
-If any items have no AI description or transcription yet, name them and offer to run /api/media/process so we can do a proper review next time. Never recommend an item based on its filename alone.`,
-          label: 'Review my media',
-        }}
-      >
-        {/* Scent Sell-style media slots */}
-        <MediaSlots
-          contentType={contentType}
-          selectedMedia={selectedMedia}
-          onRemove={handleMediaRemove}
-          onAddClick={() => setShowMediaLibrary(!showMediaLibrary)}
+      <ComposeDeskCard header="Hashtags">
+        <HashtagSection
+          embedded
+          brandId={activeBrandId}
+          hashtags={hashtags}
+          onChange={handleHashtagsChange}
+          selectedPlatforms={selectedPlatforms}
+          caption={caption}
         />
+      </ComposeDeskCard>
 
-        {/* Source buttons — outline/copper family, not competing primaries */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          {(
-            [
-              {
-                key: 'library',
-                active: showMediaLibrary,
-                onClick: () => setShowMediaLibrary(!showMediaLibrary),
-                icon: ImageIcon,
-                label: 'Library',
-              },
-              {
-                key: 'upload',
-                active: showComposeUpload,
-                onClick: () => {
-                  setShowComposeUpload((open) => !open)
-                  setShowMediaLibrary(false)
-                },
-                icon: Upload,
-                label: 'Upload',
-              },
-            ] as const
-          ).map(({ key, active, onClick, icon: Icon, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={onClick}
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
-              style={
-                active
-                  ? {
-                      borderColor: 'var(--brand-deep, oklch(0.33 0.08 240))',
-                      background: 'var(--brand-wash, oklch(0.965 0.018 240))',
-                      color: 'var(--brand-deep, oklch(0.33 0.08 240))',
-                    }
-                  : {
-                      borderColor: 'var(--line, oklch(0.915 0.007 240))',
-                      color: 'var(--ink-2, oklch(0.46 0.012 240))',
-                    }
-              }
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </button>
+      {selectedPlatforms.length >= 2 && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowPerPlatformVersions((open) => !open)}
+            className="bg-transparent p-0 text-[12.5px] font-semibold"
+            style={{ color: 'var(--brand-deep)' }}
+          >
+            {showPerPlatformVersions ? 'Hide per-account versions' : 'Write a different version per account'}
+          </button>
+        </div>
+      )}
+
+      {showPerPlatformVersions && selectedPlatforms.length >= 2 && (
+        <ComposeDeskCard header="Per-account captions">
+          <PlatformVersionEditor
+            platforms={selectedPlatforms}
+            masterCaption={caption}
+            masterHashtags={hashtags}
+            versions={versions}
+            onMasterChange={(c, h) => {
+              setCaption(c)
+              setHashtags(h)
+            }}
+            onVersionsChange={setVersions}
+            platformOptions={platformOptions}
+            onPlatformOptionsChange={setPlatformOptions}
+          />
+        </ComposeDeskCard>
+      )}
+
+      {isHealthBrand && (
+        <div
+          className="rounded-[11px] border border-l-[3px] px-[14px] py-3"
+          style={{
+            borderColor: 'var(--line)',
+            borderLeftColor: 'var(--care)',
+            background: 'var(--care-wash)',
+          }}
+        >
+          {complianceTargets.map((target) => (
+            <div key={target.platforms.join('|') || 'master'}>
+              {complianceTargets.length > 1 && (
+                <p className="mb-2 text-[10px] font-medium" style={{ color: 'var(--ink-3)' }}>
+                  {listPlatforms(target.platforms)}
+                </p>
+              )}
+              <ComplianceSection
+                caption={target.caption}
+                brandName={brandName}
+                isHealthBrand={isHealthBrand}
+                onResult={(result) => handleComplianceResult(target.caption, result)}
+              />
+            </div>
           ))}
+        </div>
+      )}
+
+      {selectedMediaIds.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              const mediaCount = selectedMediaIds.length
+              const platformList = selectedPlatforms.length > 0 ? selectedPlatforms.join(', ') : 'instagram'
+              const platformForTool = selectedPlatforms[0] ?? 'instagram'
+              const mediaIdList = selectedMediaIds.join(', ')
+              sendToDirector(
+                `I've selected ${mediaCount} media item${mediaCount === 1 ? '' : 's'} for a ${contentType.replace('_', ' ')} on ${platformList} for ${brandName}.\n\nMedia IDs: ${mediaIdList}\n\nUse propose_post_from_media (platform="${platformForTool}", media_ids=[${selectedMediaIds.map((id) => `"${id}"`).join(', ')}]) to give me a proposal — hook, caption, hashtags, post type, rationale.`,
+              )
+            }}
+            className="inline-flex items-center gap-2 rounded-[8px] px-4 py-2 text-[12.5px] font-semibold"
+            style={{
+              background: 'var(--brand-deep)',
+              color: 'var(--brand-ink)',
+            }}
+          >
+            <Lightbulb className="h-4 w-4" />
+            Ask Director for an idea
+          </button>
           <button
             type="button"
             onClick={() =>
               sendToDirector(
-                `Import designs from Canva for ${brandName}. Show me my recent Canva designs so I can pick ones for this ${contentType.replace('_', ' ')}.`,
+                `Import designs from Canva for ${brandName}. Show me recent designs I can use for this ${contentType.replace('_', ' ')}.`,
               )
             }
-            className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
-            style={{
-              borderColor: 'var(--line, oklch(0.915 0.007 240))',
-              color: 'var(--ink-2, oklch(0.46 0.012 240))',
-            }}
+            className="inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12px] font-medium"
+            style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
           >
             <Palette className="h-3.5 w-3.5" />
             Canva
@@ -991,14 +1095,11 @@ If any items have no AI description or transcription yet, name them and offer to
               type="button"
               onClick={() =>
                 sendToDirector(
-                  `Generate an image for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}. Make it eye-catching and on-brand.`,
+                  `Generate an image for my next ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ') || 'social media'} for ${brandName}.`,
                 )
               }
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
-              style={{
-                borderColor: 'var(--line, oklch(0.915 0.007 240))',
-                color: 'var(--ink-2, oklch(0.46 0.012 240))',
-              }}
+              className="inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12px] font-medium"
+              style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
             >
               <Wand2 className="h-3.5 w-3.5" />
               AI Generate
@@ -1007,288 +1108,19 @@ If any items have no AI description or transcription yet, name them and offer to
           {['short_video', 'long_video', 'story', 'ad'].includes(contentType) && (
             <button
               type="button"
-              onClick={() => {
-                const aspectHint =
-                  contentType === 'short_video'
-                    ? '9:16 for Reels/TikTok/Shorts'
-                    : contentType === 'long_video'
-                      ? '16:9 long-form'
-                      : '9:16'
+              onClick={() =>
                 sendToDirector(
-                  `Prepare a ${contentType.replace('_', ' ')} production brief for ${brandName}. Format: ${aspectHint}. Use Video & Scripting to write the script, timed shot list, captions, asset checklist, and compliance review. Use NRS-owned video tooling only where it is configured; otherwise return the brief ready for recording or editing.`,
+                  `Prepare a ${contentType.replace('_', ' ')} production brief for ${brandName}. Use Video & Scripting for script, shot list, and compliance review.`,
                 )
-              }}
-              className="inline-flex items-center gap-1.5 rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-all"
-              style={{
-                borderColor: 'var(--line, oklch(0.915 0.007 240))',
-                color: 'var(--ink-2, oklch(0.46 0.012 240))',
-              }}
+              }
+              className="inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12px] font-medium"
+              style={{ borderColor: 'var(--line)', color: 'var(--ink-2)' }}
             >
               <Film className="h-3.5 w-3.5" />
-              Build video plan
+              Video plan
             </button>
           )}
         </div>
-
-        {showComposeUpload && activeBrandId && (
-          <ComposeMediaUpload
-            brandId={activeBrandId}
-            accept={acceptTypes.includes('video') ? 'video' : 'image'}
-            className="mt-3"
-            onUploaded={(mediaItemId) => {
-              setSelectedMediaIds((prev) =>
-                maxMedia === 1 ? [mediaItemId] : [...prev, mediaItemId].slice(0, maxMedia),
-              )
-              void fetchMedia()
-            }}
-          />
-        )}
-
-        {/* Expandable media library grid — uses the Creator's own fetched
-            mediaItems as the source of truth so the slot card and the picker
-            never go out of sync. */}
-        {showMediaLibrary && (
-          <div
-            className="mt-3 rounded-lg border p-3"
-            style={{
-              borderColor: 'var(--line, oklch(0.915 0.007 240))',
-              background: 'var(--panel, oklch(1 0 0))',
-            }}
-          >
-            <MediaSelector
-              brandId={activeBrandId}
-              selectedIds={selectedMediaIds}
-              onChange={handleMediaSelect}
-              maxCount={maxMedia}
-              acceptTypes={acceptTypes}
-              items={mediaItems}
-            />
-          </div>
-        )}
-
-        {/* ── Ask Director for an idea ─────────────────────────────────────
-            When the user has picked media, they can ask Content & Copy
-            (via the Director) for a full creative proposal: hook, caption,
-            hashtags, post type. The prompt sends the selected media_ids
-            verbatim so Director calls propose_post_from_media with real
-            visual context, not hallucinated descriptions. */}
-        {selectedMediaIds.length > 0 && (
-          <div className="mt-3 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-            <button
-              type="button"
-              onClick={() => {
-                const mediaCount = selectedMediaIds.length
-                const platformList = selectedPlatforms.length > 0 ? selectedPlatforms.join(', ') : 'instagram'
-                const platformForTool = selectedPlatforms[0] ?? 'instagram'
-                const mediaIdList = selectedMediaIds.join(', ')
-                sendToDirector(
-                  `I've selected ${mediaCount} media item${mediaCount === 1 ? '' : 's'} for a ${contentType.replace('_', ' ')} on ${platformList} for ${brandName}.\n\nMedia IDs: ${mediaIdList}\n\nUse propose_post_from_media (platform="${platformForTool}", media_ids=[${selectedMediaIds.map((id) => `"${id}"`).join(', ')}]) to give me a proposal — hook, caption, hashtags, post type, rationale. Don't write anything yourself — that's Content & Copy's job. Read the visual_analysis already stored on each media item; don't re-analyse. When I respond with feedback, iterate by calling propose_post_from_media again with the previous JSON + my feedback.`,
-                )
-              }}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all"
-              style={{
-                background: 'var(--brand-deep, oklch(0.33 0.08 240))',
-                color: 'var(--brand-ink, oklch(1 0 0))',
-              }}
-            >
-              <Lightbulb className="h-4 w-4" />
-              Ask Director for an idea ({selectedMediaIds.length} {selectedMediaIds.length === 1 ? 'item' : 'items'})
-            </button>
-          </div>
-        )}
-      </StudioCard>
-
-      {/* ─── Section 4: Caption + AI ──────────────────────────────────────── */}
-      <StudioCard
-        title="Caption"
-        directorAssist={{
-          prompt: `Write a CAPTION (text only) for a ${contentType.replace('_', ' ')} post for ${brandName} on ${selectedPlatforms.join(', ') || 'social media'}.${aiPrompt ? ` Topic: ${aiPrompt}` : ''}${selectedMedia.length > 0 ? ` I already have ${selectedMedia.length} media item${selectedMedia.length === 1 ? '' : 's'} selected — write the caption that pairs with them. Do not generate new media.` : ' Text only — do not generate media.'} Use Content & Copy and Brand if needed. Return only the caption + 5-8 lowercase hashtags.`,
-          label: 'Write my caption',
-        }}
-      >
-        <div className="space-y-3">
-          {/* Template / Fresh toggle */}
-          <CreatorModeBar mode={creatorMode} onModeChange={setCreatorMode} />
-
-          {/* Template picker (shows when template mode) */}
-          {creatorMode === 'template' && (
-            <div
-              className="rounded-lg border p-3"
-              style={{
-                borderColor: 'var(--line, oklch(0.915 0.007 240))',
-                background: 'var(--panel-2, oklch(0.975 0.004 240))',
-              }}
-            >
-              <PostTemplatePicker
-                brandId={activeBrandId}
-                brandName={brandName}
-                onApply={handleTemplateApply}
-              />
-            </div>
-          )}
-
-          {/* AI Prompt */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={aiPrompt}
-              onChange={e => setAiPrompt(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleAiGenerate() }}
-              placeholder={strategyContext?.suggestion ?? 'What should this post be about?'}
-              className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none transition-colours"
-              style={{
-                borderColor: 'var(--line, oklch(0.915 0.007 240))',
-                background: 'var(--panel, oklch(1 0 0))',
-                color: 'var(--ink, oklch(0.20 0.014 240))',
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleAiGenerate}
-              disabled={selectedPlatforms.length === 0}
-              title="Director writes the caption text only — never generates new media"
-              className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colours disabled:opacity-40"
-              style={{
-                background: 'var(--brand-deep, oklch(0.33 0.08 240))',
-                color: 'var(--brand-ink, oklch(1 0 0))',
-              }}
-            >
-              <Sparkles className="h-4 w-4" />
-              Write caption
-            </button>
-          </div>
-
-          {/* Phase 3 Mixpost UI port — RichCaptionEditor replaces PostEditor
-              with TipTap formatting toolbar + emoji picker.
-              PostContentValidator shows per-platform character rings
-              below the editor, replacing the old inline char counter. */}
-          <RichCaptionEditor
-            value={caption}
-            onChange={(text) => handleCaptionChange(text)}
-            placeholder="Write your post here…"
-            brandName={brandName}
-            platforms={selectedPlatforms}
-          />
-          <PostContentValidator
-            caption={caption}
-            platforms={selectedPlatforms as PlatformKey[]}
-          />
-
-          {/* AI action pills */}
-          <div className="flex flex-wrap gap-2">
-            {['Make punchier', 'Add a hook', 'Shorten it', 'Make longer', 'More professional'].map(action => (
-              <button
-                key={action}
-                type="button"
-                onClick={() => handleAiAction(action)}
-                disabled={!caption.trim()}
-                className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/80 disabled:opacity-30 transition-colours"
-              >
-                {action}
-              </button>
-            ))}
-          </div>
-        </div>
-      </StudioCard>
-
-      {/* ─── Section 5: Per-Platform Versions ─────────────────────────────── */}
-      {selectedPlatforms.length >= 2 && (
-        <StudioCard title="Platform Versions" subtitle="Customise captions per platform, or keep the master version.">
-          <PlatformVersionEditor
-            platforms={selectedPlatforms}
-            masterCaption={caption}
-            masterHashtags={hashtags}
-            versions={versions}
-            onMasterChange={(c, h) => { setCaption(c); setHashtags(h) }}
-            onVersionsChange={setVersions}
-            platformOptions={platformOptions}
-            onPlatformOptionsChange={setPlatformOptions}
-          />
-        </StudioCard>
-      )}
-
-      {/* ─── Section 6: Hashtags ──────────────────────────────────────────── */}
-      <StudioCard
-        title="Hashtags"
-        directorAssist={{
-          prompt: `Suggest the best hashtags for this ${contentType.replace('_', ' ')} on ${selectedPlatforms.join(', ')} for ${brandName}.${caption ? ` The caption is: "${caption.slice(0, 200)}"` : ''} Get the SEO team involved if needed.`,
-          label: 'Director picks hashtags',
-        }}
-      >
-        <HashtagSection
-          brandId={activeBrandId}
-          hashtags={hashtags}
-          onChange={handleHashtagsChange}
-          selectedPlatforms={selectedPlatforms}
-          caption={caption}
-        />
-      </StudioCard>
-
-      {/* ─── Section 7: Compliance (health brands only) ───────────────────── */}
-      {isHealthBrand && (
-        <StudioCard
-          title="Compliance Check"
-          subtitle="AHPRA/TGA auto-check — $60K per offence"
-          required={true}
-          directorAssist={{
-            // Every version, under its own heading. Handing the Director the
-            // master alone asked it to review words that were not going out,
-            // which is the same fault as the tick below and reads just as
-            // convincingly when it comes back clean.
-            prompt: [
-              `Review this post for ${brandName} before I publish it. Check for AHPRA/TGA compliance, brand voice, and anything that could get us in trouble.`,
-              ...complianceTargets.map((target) =>
-                target.platforms.length > 0
-                  ? `--- ${listPlatforms(target.platforms)} ---\n"${target.caption}"`
-                  : `"${target.caption}"`,
-              ),
-              `Hashtags: ${hashtags.map(h => `#${h}`).join(' ')}`,
-              'Bring in the Compliance team if needed.',
-            ].join('\n\n'),
-            label: 'Full review',
-          }}
-        >
-          <div className="space-y-4">
-            {complianceTargets.map((target) => (
-              // Keyed by the platforms, not by the caption: keying by the text
-              // would remount this on every keystroke, resetting the health-
-              // claims tickbox inside it and restarting its debounce from
-              // scratch each time. The grouping only changes when a version
-              // genuinely starts or stops differing from the master.
-              <div key={target.platforms.join('|') || 'master'} className="space-y-2">
-                {complianceTargets.length > 1 && (
-                  <p className="text-[10px] font-medium text-muted-foreground">
-                    {listPlatforms(target.platforms)}
-                  </p>
-                )}
-                <ComplianceSection
-                  caption={target.caption}
-                  brandName={brandName}
-                  isHealthBrand={isHealthBrand}
-                  onResult={result => handleComplianceResult(target.caption, result)}
-                />
-              </div>
-            ))}
-          </div>
-        </StudioCard>
-      )}
-    </div>
-  )
-
-  const previewPane = (
-    <div>
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Live Preview</h3>
-      <MultiPlatformPreview
-        platforms={selectedPlatforms}
-        masterCaption={caption}
-        masterHashtags={hashtags}
-        versions={versions}
-        mediaUrl={mediaUrl}
-        mediaUrls={mediaUrls}
-        brandName={brandName}
-      />
-      {selectedPlatforms.length === 0 && (
-        <p className="text-xs text-muted-foreground text-center py-8">Select platforms to see previews.</p>
       )}
     </div>
   )
@@ -1331,34 +1163,6 @@ If any items have no AI description or transcription yet, name them and offer to
   )
 
   return (
-    <>
-      <ComposerLayout
-        editor={editorPane}
-        preview={previewPane}
-        actionBar={actionBar}
-      />
-
-      {/* Mobile preview floating button */}
-      <button
-        type="button"
-        onClick={() => setShowMobilePreview(!showMobilePreview)}
-        className="fixed bottom-20 right-4 lg:hidden z-50 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center"
-      >
-        <Eye className="h-5 w-5" />
-      </button>
-
-      {/* Mobile preview sheet */}
-      {showMobilePreview && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobilePreview(false)} />
-          <div className="absolute bottom-0 left-0 right-0 max-h-[70vh] overflow-y-auto rounded-t-2xl bg-card border-t border-border p-4">
-            <div className="flex justify-center mb-3">
-              <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
-            </div>
-            {previewPane}
-          </div>
-        </div>
-      )}
-    </>
+    <ComposerLayout editor={editorPane} actionBar={actionBar} />
   )
 }

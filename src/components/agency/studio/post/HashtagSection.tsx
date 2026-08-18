@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { X, Plus, Sparkles, Hash } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { sendToDirector } from '@/lib/chat-dispatch'
 import { HashtagGroupPicker } from '../hashtags/HashtagGroupPicker'
 import { PLATFORM_CHAR_LIMITS } from '@/lib/post-versions'
@@ -23,9 +22,18 @@ interface HashtagSectionProps {
   onChange: (hashtags: string[]) => void
   selectedPlatforms: PostPlatform[]
   caption?: string
+  /** Parent card already supplies the section title */
+  embedded?: boolean
 }
 
-export function HashtagSection({ brandId, hashtags, onChange, selectedPlatforms, caption }: HashtagSectionProps) {
+export function HashtagSection({
+  brandId,
+  hashtags,
+  onChange,
+  selectedPlatforms,
+  caption,
+  embedded = false,
+}: HashtagSectionProps) {
   const [inputValue, setInputValue] = useState('')
 
   const addTag = (tag: string) => {
@@ -69,12 +77,29 @@ export function HashtagSection({ brandId, hashtags, onChange, selectedPlatforms,
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-foreground">Hashtags</h3>
-        <span className={cn('text-xs', isOverLimit ? 'text-red-400' : 'text-muted-foreground')}>
-          {hashtags.length} / {tightestLimit}
-        </span>
-      </div>
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+            Hashtags
+          </h3>
+          <span
+            className="text-xs"
+            style={{ color: isOverLimit ? 'var(--care)' : 'var(--ink-3)' }}
+          >
+            {hashtags.length} / {tightestLimit}
+          </span>
+        </div>
+      )}
+      {embedded && (
+        <div className="flex justify-end">
+          <span
+            className="text-[11px] tabular-nums"
+            style={{ color: isOverLimit ? 'var(--care)' : 'var(--ink-3)' }}
+          >
+            {hashtags.length} / {tightestLimit}
+          </span>
+        </div>
+      )}
 
       {/* Current tags as pills */}
       {hashtags.length > 0 && (
@@ -82,10 +107,18 @@ export function HashtagSection({ brandId, hashtags, onChange, selectedPlatforms,
           {hashtags.map(tag => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+              style={{
+                background: 'var(--brand-wash)',
+                color: 'var(--brand-deep)',
+              }}
             >
               #{tag}
-              <button onClick={() => removeTag(tag)} className="hover:text-red-400 transition-colors">
+              <button
+                onClick={() => removeTag(tag)}
+                className="transition-colors"
+                style={{ color: 'var(--ink-3)' }}
+              >
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -96,20 +129,30 @@ export function HashtagSection({ brandId, hashtags, onChange, selectedPlatforms,
       {/* Input + actions */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Hash className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Hash className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: 'var(--ink-3)' }} />
           <input
             type="text"
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type and press Enter..."
-            className="w-full rounded-lg border border-border bg-background py-2 pl-8 pr-3 text-xs outline-none focus:border-primary"
+            className="w-full rounded-lg border py-2 pl-8 pr-3 text-xs outline-none"
+            style={{
+              borderColor: 'var(--line)',
+              background: 'var(--panel-2)',
+              color: 'var(--ink)',
+            }}
           />
         </div>
         <button
           type="button"
           onClick={handleAiSuggest}
-          className="inline-flex items-center gap-1 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"
+          className="inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors"
+          style={{
+            borderColor: 'var(--line)',
+            background: 'var(--panel)',
+            color: 'var(--ink)',
+          }}
         >
           <Sparkles className="h-3.5 w-3.5" />
           Suggest
@@ -121,7 +164,16 @@ export function HashtagSection({ brandId, hashtags, onChange, selectedPlatforms,
       {selectedPlatforms.length > 1 && (
         <div className="flex flex-wrap gap-x-3 gap-y-1">
           {selectedPlatforms.map(p => (
-            <span key={p} className={cn('text-[10px]', hashtags.length > (PLATFORM_HASHTAG_LIMITS[p] ?? 30) ? 'text-red-400' : 'text-muted-foreground')}>
+            <span
+              key={p}
+              className="text-[10px]"
+              style={{
+                color:
+                  hashtags.length > (PLATFORM_HASHTAG_LIMITS[p] ?? 30)
+                    ? 'var(--care)'
+                    : 'var(--ink-3)',
+              }}
+            >
               {p}: {hashtags.length}/{PLATFORM_HASHTAG_LIMITS[p] ?? 30}
             </span>
           ))}

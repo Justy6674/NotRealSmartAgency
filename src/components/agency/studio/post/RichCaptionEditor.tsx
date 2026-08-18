@@ -8,6 +8,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import { Bold, Italic, Underline as UnderlineIcon, Link as LinkIcon, List, ListOrdered, Undo, Redo, Sparkles } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
+import { cn } from '@/lib/utils'
 import { EmojiPickerPopover } from './EmojiPickerPopover'
 import { AiSpotlight } from './AiSpotlight'
 
@@ -19,6 +20,8 @@ interface RichCaptionEditorProps {
   characterLimit?: number
   /** Compact mode strips some toolbar buttons for dense UIs */
   compact?: boolean
+  /** Desk compose — borderless on brand paper, no shadcn greys */
+  desk?: boolean
   /** Brand name passed through to AI Spotlight */
   brandName?: string
   /** Selected platforms passed through to AI Spotlight */
@@ -49,6 +52,7 @@ export function RichCaptionEditor({
   placeholder = 'What do you want to say?',
   characterLimit,
   compact = false,
+  desk = false,
   brandName,
   platforms,
 }: RichCaptionEditorProps) {
@@ -81,8 +85,15 @@ export function RichCaptionEditor({
     content: value,
     editorProps: {
       attributes: {
-        class:
-          'min-h-[140px] max-h-[420px] overflow-y-auto rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring prose prose-sm dark:prose-invert max-w-none',
+        class: desk
+          ? 'min-h-[140px] max-h-[420px] overflow-y-auto px-4 py-3 text-[14.5px] leading-[1.55] focus:outline-none max-w-none'
+          : 'min-h-[140px] max-h-[420px] overflow-y-auto rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring prose prose-sm dark:prose-invert max-w-none',
+        ...(desk
+          ? {
+              style:
+                'color: var(--ink); background: var(--panel); font-family: var(--font-sans), system-ui, sans-serif;',
+            }
+          : {}),
       },
     },
     onUpdate: ({ editor }) => {
@@ -107,7 +118,12 @@ export function RichCaptionEditor({
   }, [value, editor])
 
   if (!editor) {
-    return <div className="h-[140px] rounded-lg border border-border bg-muted/20 animate-pulse" />
+    return (
+      <div
+        className="h-[140px] animate-pulse rounded-lg"
+        style={{ background: 'var(--panel-2)' }}
+      />
+    )
   }
 
   const setLink = () => {
@@ -124,8 +140,12 @@ export function RichCaptionEditor({
   return (
     <div className="space-y-1.5">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 flex-wrap">
+      <div
+        className={cn('flex flex-wrap items-center gap-1', desk && 'border-b px-4 py-2')}
+        style={desk ? { borderColor: 'var(--line-soft)' } : undefined}
+      >
         <ToolbarButton
+          desk={desk}
           active={editor.isActive('bold')}
           onClick={() => editor.chain().focus().toggleBold().run()}
           label="Bold"
@@ -133,6 +153,7 @@ export function RichCaptionEditor({
           <Bold className="h-3.5 w-3.5" />
         </ToolbarButton>
         <ToolbarButton
+          desk={desk}
           active={editor.isActive('italic')}
           onClick={() => editor.chain().focus().toggleItalic().run()}
           label="Italic"
@@ -140,6 +161,7 @@ export function RichCaptionEditor({
           <Italic className="h-3.5 w-3.5" />
         </ToolbarButton>
         <ToolbarButton
+          desk={desk}
           active={editor.isActive('underline')}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           label="Underline"
@@ -147,6 +169,7 @@ export function RichCaptionEditor({
           <UnderlineIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
         <ToolbarButton
+          desk={desk}
           active={editor.isActive('link')}
           onClick={setLink}
           label="Link"
@@ -156,8 +179,12 @@ export function RichCaptionEditor({
 
         {!compact && (
           <>
-            <div className="mx-1 h-4 w-px bg-border" />
+            <div
+              className={cn('mx-1 h-4 w-px', !desk && 'bg-border')}
+              style={desk ? { background: 'var(--line)' } : undefined}
+            />
             <ToolbarButton
+              desk={desk}
               active={editor.isActive('bulletList')}
               onClick={() => editor.chain().focus().toggleBulletList().run()}
               label="Bullet list"
@@ -165,14 +192,19 @@ export function RichCaptionEditor({
               <List className="h-3.5 w-3.5" />
             </ToolbarButton>
             <ToolbarButton
+              desk={desk}
               active={editor.isActive('orderedList')}
               onClick={() => editor.chain().focus().toggleOrderedList().run()}
               label="Numbered list"
             >
               <ListOrdered className="h-3.5 w-3.5" />
             </ToolbarButton>
-            <div className="mx-1 h-4 w-px bg-border" />
+            <div
+              className={cn('mx-1 h-4 w-px', !desk && 'bg-border')}
+              style={desk ? { background: 'var(--line)' } : undefined}
+            />
             <ToolbarButton
+              desk={desk}
               onClick={() => editor.chain().focus().undo().run()}
               label="Undo"
               disabled={!editor.can().undo()}
@@ -180,6 +212,7 @@ export function RichCaptionEditor({
               <Undo className="h-3.5 w-3.5" />
             </ToolbarButton>
             <ToolbarButton
+              desk={desk}
               onClick={() => editor.chain().focus().redo().run()}
               label="Redo"
               disabled={!editor.can().redo()}
@@ -194,6 +227,7 @@ export function RichCaptionEditor({
             onSelect={(emoji) => editor.chain().focus().insertContent(emoji).run()}
           />
           <ToolbarButton
+            desk={desk}
             onClick={() => setSpotlightOpen(true)}
             label="AI Spotlight"
           >
@@ -224,13 +258,42 @@ function ToolbarButton({
   onClick,
   label,
   children,
+  desk = false,
 }: {
   active?: boolean
   disabled?: boolean
   onClick: () => void
   label: string
   children: React.ReactNode
+  desk?: boolean
 }) {
+  if (desk) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        title={label}
+        className={cn(
+          'inline-flex items-center justify-center rounded-md border border-transparent px-1.5 py-1 transition-colors',
+          disabled && 'cursor-not-allowed opacity-40',
+        )}
+        style={
+          active
+            ? {
+                background: 'var(--brand-wash)',
+                color: 'var(--brand-deep)',
+                borderColor: 'var(--line)',
+              }
+            : { color: 'var(--ink-3)' }
+        }
+      >
+        {children}
+      </button>
+    )
+  }
+
   return (
     <button
       type="button"

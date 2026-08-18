@@ -25,7 +25,14 @@ export function PostContentValidator({ caption, platforms }: PostContentValidato
 
   if (platforms.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+      <div
+        className="rounded-lg border border-dashed px-3 py-2 text-[11px]"
+        style={{
+          borderColor: 'var(--line)',
+          background: 'var(--panel-2)',
+          color: 'var(--ink-3)',
+        }}
+      >
         Select at least one platform to see character limits.
       </div>
     )

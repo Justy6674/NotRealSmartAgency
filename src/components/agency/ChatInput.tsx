@@ -18,6 +18,8 @@ interface ChatInputProps {
   agentType?: AgentType
   showChips?: boolean
   allowAttachments?: boolean
+  /** Rail uses mockup askbox — panel-2 well, not shadcn muted slab */
+  variant?: 'default' | 'rail'
 }
 
 /** Read a File as base64 data (no data: prefix) */
@@ -132,6 +134,7 @@ export function ChatInput({
   agentType,
   showChips = false,
   allowAttachments = true,
+  variant = 'default',
 }: ChatInputProps) {
   const [input, setInput] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -342,13 +345,28 @@ export function ChatInput({
   }
 
   const chips = agentType ? (AGENT_CHIPS[agentType] ?? DEFAULT_CHIPS) : DEFAULT_CHIPS
+  const isRail = variant === 'rail'
 
   return (
-    <div className="border-t bg-background px-4 py-3">
-      {/* Main input -- large, inviting, Claude-style */}
-      <div className="mx-auto max-w-3xl">
+    <div
+      className={isRail ? 'px-3 py-[11px]' : 'border-t bg-background px-4 py-3'}
+      style={isRail ? { background: 'var(--panel, oklch(1 0 0))' } : undefined}
+    >
+      <div className={isRail ? undefined : 'mx-auto max-w-3xl'}>
         <div
-          className={`relative rounded-2xl border bg-muted/30 shadow-sm transition-all focus-within:shadow-md focus-within:ring-2 focus-within:ring-primary/20 ${dragOver ? 'border-primary border-dashed ring-2 ring-primary/30' : ''}`}
+          className={
+            isRail
+              ? `relative flex items-end gap-[9px] rounded-[11px] border px-[11px] py-[9px] transition-colors duration-150 ${dragOver ? 'border-[var(--brand)]' : ''}`
+              : `relative rounded-2xl border bg-muted/30 shadow-sm transition-all focus-within:shadow-md focus-within:ring-2 focus-within:ring-primary/20 ${dragOver ? 'border-primary border-dashed ring-2 ring-primary/30' : ''}`
+          }
+          style={
+            isRail
+              ? {
+                  borderColor: 'var(--line, oklch(0.915 0.007 240))',
+                  background: 'var(--panel-2, oklch(0.975 0.004 240))',
+                }
+              : undefined
+          }
           onDragOver={(e) => { e.preventDefault(); if (allowAttachments) setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
@@ -429,9 +447,14 @@ export function ChatInput({
             onKeyDown={onKeyDown}
             onPaste={handlePaste}
             placeholder={placeholder}
-            rows={1}
+            rows={isRail ? 2 : 1}
             disabled={isLoading || isUploading}
-            className="w-full resize-none rounded-2xl bg-transparent px-4 pb-12 pt-4 text-sm placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50"
+            className={
+              isRail
+                ? 'min-h-[34px] flex-1 resize-none bg-transparent text-[13px] placeholder:text-[var(--ink-3)] focus:outline-none disabled:opacity-50'
+                : 'w-full resize-none rounded-2xl bg-transparent px-4 pb-12 pt-4 text-sm placeholder:text-muted-foreground/60 focus:outline-none disabled:opacity-50'
+            }
+            style={isRail ? { color: 'var(--ink)' } : undefined}
           />
           {/* Hidden file input */}
           {allowAttachments && (
@@ -443,43 +466,63 @@ export function ChatInput({
               onChange={handleFileSelect}
             />
           )}
-          {/* Bottom bar inside the input box */}
-          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              {allowAttachments && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg p-2 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
-                  title="Attach file"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              )}
-              {/* Slash hint — visible when input is empty */}
-              {!input && (
-                <span className="select-none pl-1 text-[11px] text-muted-foreground/40">
-                  Type <kbd className="rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[10px]">/</kbd> for shortcuts
-                </span>
-              )}
-            </div>
+          {isRail ? (
             <button
               type="button"
               disabled={(!input.trim() && !selectedFile) || isLoading || isUploading}
               onClick={handleSend}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity disabled:opacity-30"
+              className="flex h-[27px] w-[27px] shrink-0 items-center justify-center rounded-[7px] transition-opacity disabled:opacity-30"
+              style={{
+                background: 'var(--brand-deep)',
+                color: 'var(--brand-ink)',
+              }}
             >
               {isUploading ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : (
-                <SendHorizontal className="h-4 w-4" />
+                <SendHorizontal className="h-3.5 w-3.5" />
               )}
             </button>
-          </div>
+          ) : (
+            <>
+              {/* Bottom bar inside the input box */}
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                <div className="flex items-center gap-1">
+                  {allowAttachments && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-lg p-2 text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                      title="Attach file"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
+                  {!input && (
+                    <span className="select-none pl-1 text-[11px] text-muted-foreground/40">
+                      Type <kbd className="rounded border border-border/50 bg-muted/50 px-1 py-0.5 font-mono text-[10px]">/</kbd> for shortcuts
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={(!input.trim() && !selectedFile) || isLoading || isUploading}
+                  onClick={handleSend}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity disabled:opacity-30"
+                >
+                  {isUploading ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  ) : (
+                    <SendHorizontal className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Quick action chips — shown when no messages */}
-        {showChips && (
+        {showChips && !isRail && (
           <div className="mt-3 flex flex-wrap justify-center gap-2">
             {chips.map((chip) => (
               <button
@@ -494,10 +537,12 @@ export function ChatInput({
           </div>
         )}
 
+        {!isRail && (
         <p className="mt-2 text-center text-[10px] text-muted-foreground/50">
           Shift + Enter for new line. AI outputs should be reviewed before publishing.
           {' '}<a href="https://help.notrealsmart.com.au" target="_blank" rel="noopener noreferrer" className="text-primary/60 hover:text-primary underline">Help Centre</a>
         </p>
+        )}
       </div>
     </div>
   )

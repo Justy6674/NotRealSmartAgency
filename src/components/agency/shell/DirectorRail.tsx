@@ -999,6 +999,8 @@ export function DirectorRail({
         placeholder={placeholder}
         agentType="overall"
         showChips={false}
+        variant="rail"
+        allowAttachments={false}
       />
       <div
         className="flex items-center gap-1.5 px-3 pb-2.5 text-[11px]"

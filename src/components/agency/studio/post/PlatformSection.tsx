@@ -76,11 +76,6 @@ function initials(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase()
 }
 
-function handleLabel(account: SocialAccount): string {
-  const handle = account.username?.replace(/^@/, '') ?? account.name
-  return handle.length > 12 ? `${handle.slice(0, 11)}…` : handle
-}
-
 interface PlatformSectionProps {
   contentType: ContentType
   selected: PostPlatform[]
@@ -194,13 +189,15 @@ export function PlatformSection({
 
   return (
     <div
-      className="rounded-[14px] border p-3.5"
+      className="overflow-hidden rounded-[12px] border px-[15px] py-[13px]"
       style={{
         borderColor: 'var(--line)',
         background: 'var(--panel)',
+        boxShadow:
+          '0 1px 2px oklch(0.2 0.02 240 / 0.05), 0 8px 24px -16px oklch(0.2 0.02 240 / 0.28)',
       }}
     >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-[11px] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span
             className="text-[11px] font-semibold uppercase tracking-[0.08em]"
@@ -209,7 +206,7 @@ export function PlatformSection({
             Post to
           </span>
           <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em]"
+            className="rounded-[5px] px-[6px] py-[2px] text-[10px] font-semibold tracking-[0.04em]"
             style={{
               background: 'var(--brand-wash)',
               color: 'var(--brand-deep)',
@@ -218,11 +215,11 @@ export function PlatformSection({
             {onlyLabel}
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[11.5px] font-semibold">
+        <div className="flex items-center gap-3 text-[11.5px] font-semibold tabular-nums">
           <button
             type="button"
             onClick={tickAll}
-            className="bg-transparent p-0"
+            className="bg-transparent p-0 font-semibold"
             style={{ color: 'var(--brand-deep)' }}
           >
             Tick all
@@ -230,18 +227,18 @@ export function PlatformSection({
           <button
             type="button"
             onClick={tickNone}
-            className="bg-transparent p-0"
+            className="bg-transparent p-0 font-semibold"
             style={{ color: 'var(--brand-deep)' }}
           >
             None
           </button>
-          <span style={{ color: 'var(--brand-deep)' }}>
+          <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>
             {ticked} of {total} ticked
           </span>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-[9px]">
         {accounts.map((account) => {
           const platform = canonicalSocialPlatform(account.platform)
           const def = PLATFORMS.find((p) => p.value === platform)
@@ -249,6 +246,7 @@ export function PlatformSection({
           const isTicked = selectedAccountIds.includes(account.id)
           const Icon = PLATFORM_ICON_MAP[platform] ?? Facebook
           const badge = PLATFORM_BRAND_COLOURS[platform as PlatformKey] ?? 'oklch(0.45 0.02 240)'
+          const platformLabel = def?.label ?? platform
           return (
             <button
               key={account.id}
@@ -258,48 +256,58 @@ export function PlatformSection({
               title={
                 compatible
                   ? account.name
-                  : `${def?.label ?? platform} does not take this kind of post`
+                  : `${platformLabel} does not take this kind of post`
               }
-              className="flex w-[72px] flex-col items-center gap-1.5 bg-transparent p-0 disabled:cursor-not-allowed"
-              style={{ opacity: compatible ? 1 : 0.35 }}
+              className="flex max-w-full items-center gap-[9px] rounded-[10px] border px-[9px] py-[7px] text-left transition-colors duration-150 disabled:cursor-not-allowed"
+              style={{
+                opacity: compatible ? 1 : 0.45,
+                borderColor: isTicked ? 'var(--brand)' : 'var(--line)',
+                background: isTicked ? 'var(--brand-wash)' : 'var(--panel-2)',
+              }}
             >
-              <span className="relative">
+              <span
+                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[11px]"
+                style={{
+                  borderColor: isTicked ? 'transparent' : 'var(--line)',
+                  background: isTicked ? 'var(--brand-deep)' : 'var(--panel)',
+                  color: isTicked ? 'var(--brand-ink)' : 'transparent',
+                }}
+              >
+                {isTicked ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
+              </span>
+              <span className="relative shrink-0">
                 <span
-                  className="flex size-[52px] items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold"
+                  className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border text-[10.5px] font-semibold"
                   style={{
-                    background: 'var(--panel-2)',
-                    color: 'var(--ink)',
-                    boxShadow: isTicked ? '0 0 0 3px var(--brand)' : '0 0 0 1px var(--line)',
-                    filter: isTicked ? 'none' : 'grayscale(0.35)',
+                    borderColor: 'var(--line)',
+                    background: 'var(--panel)',
+                    color: 'var(--ink-2)',
                   }}
                 >
                   {account.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={account.image} alt="" className="size-full object-cover" />
+                    <img src={account.image} alt="" className="h-full w-full object-cover" />
                   ) : (
                     initials(account.name)
                   )}
                 </span>
-                {isTicked && (
-                  <span
-                    className="absolute -left-0.5 -top-0.5 flex size-[16px] items-center justify-center rounded-[4px]"
-                    style={{ background: 'var(--brand-deep)', color: 'var(--brand-ink)' }}
-                  >
-                    <Check className="size-2.5" strokeWidth={3} />
-                  </span>
-                )}
                 <span
-                  className="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full text-white"
-                  style={{ background: badge }}
+                  className="absolute -bottom-[3px] -right-[3px] flex h-4 w-4 items-center justify-center rounded-full border-2 text-white"
+                  style={{ background: badge, borderColor: 'var(--panel)' }}
                 >
-                  <Icon className="size-[10px]" />
+                  <Icon className="h-[10px] w-[10px]" />
                 </span>
               </span>
-              <span
-                className="w-full truncate text-center text-[11px] font-medium"
-                style={{ color: isTicked ? 'var(--ink)' : 'var(--ink-3)' }}
-              >
-                {handleLabel(account)}
+              <span className="min-w-0">
+                <span
+                  className="block truncate text-[12.5px] font-semibold"
+                  style={{ color: isTicked ? 'var(--ink)' : 'var(--ink-2)' }}
+                >
+                  {account.name}
+                </span>
+                <span className="block truncate text-[10.5px]" style={{ color: 'var(--ink-3)' }}>
+                  {platformLabel}
+                </span>
               </span>
             </button>
           )

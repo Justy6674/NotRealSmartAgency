@@ -36,7 +36,7 @@ function tabIdFromPath(pathname: string, searchParams: URLSearchParams): SocialT
     pathname.includes('/social/posts') &&
     searchParams.get(WAITING_ON_YOU_FILTER.param) === WAITING_ON_YOU_FILTER.value
   ) {
-    return 'waiting'
+    return 'posts'
   }
   const slug = pathname.split('/').filter(Boolean).at(-1) ?? ''
   const map: Record<string, SocialTabId> = {
@@ -106,13 +106,11 @@ function SocialDepartmentChromeInner({ children }: { children: React.ReactNode }
 
   const tabs: DepartmentTab[] = [
     { id: 'compose', label: 'Compose' },
-    { id: 'posts', label: 'Posts' },
     {
-      id: 'waiting',
-      label: 'Waiting on you',
+      id: 'posts',
+      label: 'Posts',
       count: waitingCount,
-      attention: true,
-      care: isHealthBrand && waitingCount !== undefined,
+      attention: waitingCount !== undefined,
     },
     { id: 'calendar', label: 'Calendar' },
     { id: 'media', label: 'Media library' },

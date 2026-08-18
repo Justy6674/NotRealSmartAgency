@@ -14,13 +14,6 @@ import { PLATFORM_BRAND_COLOURS } from '@/lib/mixpost/ui-tokens'
 const ST_DRAFT   = 'oklch(0.62 0.012 240)'
 const ST_SENDING = 'oklch(0.72 0.15 70)'
 
-/** care-wash — shown when compliance has explicitly failed */
-const CARE_WASH   = 'oklch(0.965 0.028 25)'
-const CARE_LINE   = 'oklch(0.89 0.050 25)'
-const CARE_INK    = 'oklch(0.52 0.150 25)'
-const INK_2       = 'oklch(0.46 0.012 240)'
-const INK_3       = 'oklch(0.615 0.011 240)'
-
 /** Fallback if --brand-deep / --brand / --brand-ink are not yet in the cascade */
 const BD_FALLBACK  = 'oklch(0.33 0.08 240)'
 const B_FALLBACK   = 'oklch(0.545 0.115 240)'
@@ -65,10 +58,9 @@ function toLocalInputValue(iso: string): string {
  * on the left, four buttons on the right. Health gate strip sits above the
  * row when compliance has explicitly failed.
  *
- * Tokens: --brand-deep / --brand / --brand-ink come from the shell layout
- * (always present). House tokens (--border, --card, --foreground) are the
- * shadcn-compat set from globals.css, which closely match the NRS design
- * tokens at these lightness values.
+ * Tokens: desk surfaces (--bg, --panel, --line, --ink*) and brand accents
+ * (--brand-deep, --brand, --brand-ink) come from the shell layout and retint
+ * with the selected business's stored website palette. Never shadcn --border.
  */
 export function CreatorActionBar({
   platforms,
@@ -98,14 +90,14 @@ export function CreatorActionBar({
         <div
           className="flex items-center gap-[9px] px-[26px] py-[8px] text-[12px]"
           style={{
-            background: CARE_WASH,
-            borderBottom: `1px solid ${CARE_LINE}`,
-            color: INK_2,
+            background: 'var(--care-wash, oklch(0.965 0.028 25))',
+            borderBottom: '1px solid var(--care-line, oklch(0.89 0.050 25))',
+            color: 'var(--ink-2, oklch(0.46 0.012 240))',
           }}
         >
-          <span style={{ color: CARE_INK, flexShrink: 0 }} aria-hidden>⚕</span>
+          <span style={{ color: 'var(--care, oklch(0.52 0.150 25))', flexShrink: 0 }} aria-hidden>⚕</span>
           <span>
-            <b style={{ color: CARE_INK, fontWeight: 650 }}>
+            <b style={{ color: 'var(--care, oklch(0.52 0.150 25))', fontWeight: 650 }}>
               Health rules apply — this wording needs to pass before it can go out.
             </b>{' '}
             Fix the flagged text or image and it will be checked again.
@@ -119,7 +111,7 @@ export function CreatorActionBar({
         {/* Left — state indicator */}
         <div
           className="flex flex-1 min-w-0 items-center gap-[8px] overflow-hidden whitespace-nowrap text-[12px]"
-          style={{ color: INK_3 }}
+          style={{ color: 'var(--ink-3, oklch(0.615 0.011 240))' }}
         >
           {/* 9 px status dot — draft or sending */}
           <span
@@ -127,7 +119,7 @@ export function CreatorActionBar({
             aria-hidden
             style={{ background: saving ? ST_SENDING : ST_DRAFT }}
           />
-          <b style={{ color: INK_2, fontWeight: 600 }}>
+          <b style={{ color: 'var(--ink-2, oklch(0.46 0.012 240))', fontWeight: 600 }}>
             {saving ? 'Saving…' : 'Draft'}
           </b>
           {!saving && (
@@ -169,13 +161,15 @@ export function CreatorActionBar({
             disabled={disabled}
             className={cn(
               'inline-flex shrink-0 items-center gap-[6px]',
-              'rounded-[8px] border border-[var(--border)] bg-[var(--card,oklch(1_0_0))]',
-              'px-[14px] py-[9px] text-[13px] font-[500]',
-              'text-[var(--foreground)]',
+              'rounded-[8px] border px-[14px] py-[9px] text-[13px] font-[500]',
               'transition-colors duration-150',
-              'hover:border-[var(--brand,oklch(0.545_0.115_240))] hover:text-[var(--brand-deep,oklch(0.33_0.08_240))]',
               'disabled:cursor-not-allowed disabled:opacity-40',
             )}
+            style={{
+              borderColor: 'var(--line, oklch(0.915 0.007 240))',
+              background: 'var(--panel, oklch(1 0 0))',
+              color: 'var(--ink, oklch(0.20 0.014 240))',
+            }}
           >
             {saving ? <Loader2 className="h-[14px] w-[14px] animate-spin" /> : null}
             {editMode ? 'Update draft' : 'Save draft'}
@@ -193,17 +187,19 @@ export function CreatorActionBar({
             }
             className={cn(
               'inline-flex shrink-0 items-center gap-[6px]',
-              'rounded-[8px] border border-[var(--border)] bg-[var(--card,oklch(1_0_0))]',
-              'px-[14px] py-[9px] text-[13px] font-[500]',
-              'text-[var(--foreground)]',
+              'rounded-[8px] border px-[14px] py-[9px] text-[13px] font-[500]',
               'transition-colors duration-150',
-              'hover:border-[var(--brand,oklch(0.545_0.115_240))] hover:text-[var(--brand-deep,oklch(0.33_0.08_240))]',
               'disabled:cursor-not-allowed disabled:opacity-40',
             )}
+            style={{
+              borderColor: 'var(--line, oklch(0.915 0.007 240))',
+              background: 'var(--panel, oklch(1 0 0))',
+              color: 'var(--ink, oklch(0.20 0.014 240))',
+            }}
           >
             Add to next free time
             {nextSlotIso && (
-              <span className="text-[11px] font-normal" style={{ color: INK_3 }}>
+              <span className="text-[11px] font-normal" style={{ color: 'var(--ink-3)' }}>
                 {slotLabel(nextSlotIso)}
               </span>
             )}
@@ -219,10 +215,20 @@ export function CreatorActionBar({
               'rounded-[8px] border px-[14px] py-[9px] text-[13px] font-[500]',
               'transition-colors duration-150',
               'disabled:cursor-not-allowed disabled:opacity-40',
-              pickingTime
-                ? 'border-[var(--brand,oklch(0.545_0.115_240))] bg-[var(--card,oklch(1_0_0))] text-[var(--brand-deep,oklch(0.33_0.08_240))]'
-                : 'border-[var(--border)] bg-[var(--card,oklch(1_0_0))] text-[var(--foreground)] hover:border-[var(--brand,oklch(0.545_0.115_240))] hover:text-[var(--brand-deep,oklch(0.33_0.08_240))]',
             )}
+            style={
+              pickingTime
+                ? {
+                    borderColor: 'var(--brand)',
+                    background: 'var(--panel)',
+                    color: 'var(--brand-deep)',
+                  }
+                : {
+                    borderColor: 'var(--line)',
+                    background: 'var(--panel)',
+                    color: 'var(--ink)',
+                  }
+            }
           >
             Choose a time
           </button>
@@ -259,18 +265,24 @@ export function CreatorActionBar({
       {/* ── Choose-a-time expansion ─────────────────────────────────────── */}
       {pickingTime && (
         <div
-          className="flex flex-wrap items-center gap-[9px] border-t border-[var(--border)] px-[26px] py-[10px]"
+          className="flex flex-wrap items-center gap-[9px] border-t px-[26px] py-[10px]"
+          style={{ borderColor: 'var(--line)' }}
         >
           <label
             className="flex items-center gap-[8px] text-[12px]"
-            style={{ color: INK_3 }}
+            style={{ color: 'var(--ink-3)' }}
           >
             When
             <input
               type="datetime-local"
               value={when}
               onChange={(event) => setWhen(event.target.value)}
-              className="rounded-[8px] border border-[var(--border)] bg-[var(--card,oklch(1_0_0))] px-[8px] py-[5px] text-[12.5px] text-[var(--foreground)]"
+              className="rounded-[8px] border px-[8px] py-[5px] text-[12.5px]"
+              style={{
+                borderColor: 'var(--line)',
+                background: 'var(--panel-2)',
+                color: 'var(--ink)',
+              }}
             />
           </label>
           <button
@@ -293,8 +305,8 @@ export function CreatorActionBar({
           <button
             type="button"
             onClick={() => setPickingTime(false)}
-            className="text-[12.5px] font-[500] transition-colors hover:text-[var(--brand-deep,oklch(0.33_0.08_240))]"
-            style={{ color: INK_3 }}
+            className="text-[12.5px] font-[500] transition-colors"
+            style={{ color: 'var(--ink-3)' }}
           >
             Cancel
           </button>
