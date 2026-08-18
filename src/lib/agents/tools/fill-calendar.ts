@@ -108,9 +108,9 @@ function buildPostSlots(
 
   candidates.sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))
   const counts = new Map<number, number>()
-  return candidates.filter((slot) => {
+  return candidates.filter((candidate) => {
     const week = Math.floor(
-      (new Date(slot.scheduledAt).getTime() - now.getTime()) / (7 * 86_400_000),
+      (new Date(candidate.scheduledAt).getTime() - now.getTime()) / (7 * 86_400_000),
     )
     const count = counts.get(week) ?? 0
     if (count >= postsPerWeek) return false
